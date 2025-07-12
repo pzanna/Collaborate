@@ -3,7 +3,8 @@
 import os
 import sys
 from xai_sdk import Client
-from typing import List, Dict, Any, Optional
+from xai_sdk.chat import user, system, assistant
+from typing import List, Optional
 
 # Import models
 try:
@@ -23,43 +24,37 @@ class XAIClient:
     def get_response(self, messages: List[Message], system_prompt: Optional[str] = None) -> str:
         """Get response from xAI."""
         try:
-            # Convert messages to xAI format
-            xai_messages = self._convert_messages_to_xai_format(messages, system_prompt)
+            # Create a chat instance
+            chat = self.client.chat.create(model=self.config.model)
             
-            # Make the API call
-            response = self.client.chat.completions.create(
-                model=self.config.model,
-                messages=xai_messages,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens
-            )
+            # Add system prompt if provided
+            if system_prompt:
+                chat.append(system(system_prompt))
+            elif self.config.system_prompt:
+                chat.append(system(self.config.system_prompt))
             
-            return response.choices[0].message.content or ""
+            # Add messages in chronological order
+            for message in messages:
+                if message.participant == "user":
+                    chat.append(user(message.content))
+                elif message.participant == "xai":
+                    chat.append(assistant(message.content))
+                elif message.participant == "openai":
+                    # Include OpenAI responses as user messages for context
+                    chat.append(user(f"[OpenAI]: {message.content}"))
+            
+            # Get response from the chat
+            response = chat.sample()
+            
+            # Extract content from response
+            if hasattr(response, 'content'):
+                return response.content or ""
+            
+            # If we can't find content, return the string representation
+            return str(response)
         
         except Exception as e:
             raise Exception(f"xAI API error: {str(e)}")
-    
-    def _convert_messages_to_xai_format(self, messages: List[Message], system_prompt: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Convert internal messages to xAI format."""
-        xai_messages = []
-        
-        # Add system prompt
-        if system_prompt:
-            xai_messages.append({"role": "system", "content": system_prompt})
-        elif self.config.system_prompt:
-            xai_messages.append({"role": "system", "content": self.config.system_prompt})
-        
-        # Convert messages
-        for message in messages:
-            if message.participant == "user":
-                xai_messages.append({"role": "user", "content": message.content})
-            elif message.participant == "xai":
-                xai_messages.append({"role": "assistant", "content": message.content})
-            elif message.participant == "openai":
-                # Include OpenAI responses as user messages for context
-                xai_messages.append({"role": "user", "content": f"[OpenAI]: {message.content}"})
-        
-        return xai_messages
     
     def estimate_tokens(self, messages: List[Message]) -> int:
         """Estimate token count for messages."""
