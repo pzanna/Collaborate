@@ -1,0 +1,27 @@
+ai_providers:
+  openai:
+    model: "gpt-4.1-mini"
+    temperature: 0.7
+    max_tokens: 2000
+    system_prompt: "You are a helpful research assistant participating in a collaborative discussion."
+    role_adaptation: true
+
+  xai:
+    model: "grok-3-mini"
+    temperature: 0.7
+    max_tokens: 2000
+    system_prompt: "You are a knowledgeable AI assistant contributing to collaborative research."
+    role_adaptation: true
+
+conversation:
+  max_context_tokens: 8000
+  auto_save: true
+  response_coordination: true
+
+storage:
+  database_path: "data/collaborate.db"
+  export_path: "exports/"
+
+logging:
+  level: "INFO"
+  file: "logs/collaborate.log"
