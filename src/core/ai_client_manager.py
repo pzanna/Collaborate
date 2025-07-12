@@ -10,20 +10,23 @@ try:
     from ..config.config_manager import ConfigManager
     from ..ai_clients.openai_client import OpenAIClient
     from ..ai_clients.xai_client import XAIClient
+    from .response_coordinator import ResponseCoordinator
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
     from models.data_models import Message, AIConfig
     from config.config_manager import ConfigManager
     from ai_clients.openai_client import OpenAIClient
     from ai_clients.xai_client import XAIClient
+    from core.response_coordinator import ResponseCoordinator
 
 
 class AIClientManager:
-    """Manages multiple AI clients."""
+    """Manages multiple AI clients with intelligent response coordination."""
     
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.clients: Dict[str, Any] = {}
+        self.response_coordinator = ResponseCoordinator(config_manager)
         self._initialize_clients()
     
     def _initialize_clients(self) -> None:
@@ -54,8 +57,37 @@ class AIClientManager:
         client = self.clients[provider]
         return client.get_response(messages, system_prompt)
     
+    def get_smart_responses(self, messages: List[Message], system_prompt: Optional[str] = None) -> Dict[str, str]:
+        """Get responses from AI providers using smart response logic."""
+        if not messages:
+            return {}
+        
+        # Get the latest user message and context
+        user_message = messages[-1]
+        context = messages[:-1] if len(messages) > 1 else []
+        
+        # Determine which AIs should respond
+        available_providers = self.get_available_providers()
+        responding_providers = self.response_coordinator.coordinate_responses(
+            user_message, context, available_providers
+        )
+        
+        responses = {}
+        
+        for provider in responding_providers:
+            try:
+                # Adapt system prompt based on context
+                adapted_prompt = self.adapt_system_prompt(provider, user_message.content)
+                response = self.get_response(provider, messages, adapted_prompt)
+                responses[provider] = response
+            except Exception as e:
+                print(f"Error getting response from {provider}: {e}")
+                responses[provider] = f"Error: {str(e)}"
+        
+        return responses
+    
     def get_all_responses(self, messages: List[Message], system_prompt: Optional[str] = None) -> Dict[str, str]:
-        """Get responses from all available AI providers."""
+        """Get responses from all available AI providers (legacy method)."""
         responses = {}
         
         for provider, client in self.clients.items():
@@ -114,3 +146,11 @@ class AIClientManager:
             return f"{base_prompt} Think creatively and explore innovative solutions."
         else:
             return base_prompt
+    
+    def get_response_stats(self, session) -> Dict[str, Any]:
+        """Get response statistics for a conversation session."""
+        return self.response_coordinator.get_response_stats(session)
+    
+    def update_response_settings(self, **kwargs) -> None:
+        """Update response coordinator settings."""
+        self.response_coordinator.update_settings(**kwargs)

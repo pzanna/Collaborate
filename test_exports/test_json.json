@@ -1,0 +1,73 @@
+{
+  "metadata": {
+    "export_timestamp": "2025-07-12T22:02:28.104768",
+    "export_format": "json",
+    "exporter": "Collaborate v1.0"
+  },
+  "project": {
+    "id": "06ad6855-10ef-40ee-9ad8-6dda0283158c",
+    "name": "Export Test Project",
+    "description": "Testing export functionality"
+  },
+  "conversation": {
+    "id": "a2d99aa2-a28b-434e-8007-da109a992541",
+    "title": "Sample AI Ethics Discussion",
+    "created_at": "2025-07-12T22:02:28.104177",
+    "updated_at": "2025-07-12T22:02:28.104178",
+    "participants": [
+      "user",
+      "openai",
+      "xai"
+    ],
+    "status": "active"
+  },
+  "messages": [
+    {
+      "id": "5c0614e8-c70b-4e5a-861a-f1bf93eb409f",
+      "participant": "user",
+      "content": "What are the main ethical considerations when developing AI systems?",
+      "timestamp": "2025-07-12T22:02:28.104211",
+      "message_type": "text",
+      "metadata": {}
+    },
+    {
+      "id": "f0365963-d7b3-4e7f-bde2-7354a2044be6",
+      "participant": "openai",
+      "content": "Key ethical considerations include fairness, transparency, accountability, privacy protection, and ensuring AI systems benefit humanity while minimizing potential harm.",
+      "timestamp": "2025-07-12T22:02:28.104245",
+      "message_type": "text",
+      "metadata": {}
+    },
+    {
+      "id": "73923414-514d-41eb-b5db-57ca784fc3ce",
+      "participant": "xai",
+      "content": "I'd add that we should also consider the long-term societal impact, potential job displacement, algorithmic bias, and ensuring AI development is inclusive and representative of diverse perspectives.",
+      "timestamp": "2025-07-12T22:02:28.104257",
+      "message_type": "text",
+      "metadata": {}
+    },
+    {
+      "id": "f6906122-7d42-4375-b3c3-12ec91914be5",
+      "participant": "user",
+      "content": "How can we ensure transparency in AI decision-making?",
+      "timestamp": "2025-07-12T22:02:28.104262",
+      "message_type": "text",
+      "metadata": {}
+    },
+    {
+      "id": "6ad91d8b-c0ff-4b10-b13b-ee8f41e9be51",
+      "participant": "openai",
+      "content": "Transparency can be achieved through explainable AI techniques, clear documentation of model capabilities and limitations, open-source development where possible, and providing users with insights into how decisions are made.",
+      "timestamp": "2025-07-12T22:02:28.104267",
+      "message_type": "text",
+      "metadata": {}
+    }
+  ],
+  "statistics": {
+    "total_messages": 5,
+    "user_messages": 2,
+    "openai_messages": 2,
+    "xai_messages": 1,
+    "conversation_duration": "0s"
+  }
+}
