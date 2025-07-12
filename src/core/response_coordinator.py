@@ -48,29 +48,37 @@ class ResponseCoordinator:
         if self._is_response_redundant(message, provider, context):
             return False
         
+        # Check if response would be repetitive
+        if self._prevent_repetition(message, provider, context):
+            return False
+        
         return True
     
     def coordinate_responses(self, message: Message, context: List[Message], 
                            available_providers: List[str]) -> List[str]:
-        """Return all AI providers to respond to every message."""
-        return available_providers
+        """Return only mentioned AI if a mention is detected, else all providers."""
+        mentioned = [p for p in available_providers if self._is_ai_mentioned(message, p)]
+        if mentioned:
+            print(f"🔍 Mention detected for: {mentioned}")
+            return mentioned
+        
+        # Check for repetition prevention
+        responding_providers = []
+        for provider in available_providers:
+            if not self._prevent_repetition(message, provider, context):
+                responding_providers.append(provider)
+        
+        if not responding_providers:
+            responding_providers = available_providers  # Fallback to all if none pass filter
+        
+        print(f"🔍 No mentions detected, providers after repetition filter: {responding_providers}")
+        return responding_providers
     
     def _is_ai_mentioned(self, message: Message, provider: str) -> bool:
-        """Check if the AI provider is directly mentioned in the message."""
+        """Check if the AI provider is directly mentioned with @ symbol."""
         content = message.content.lower()
         
-        # Check for direct mentions
-        provider_keywords = {
-            'openai': ['openai', 'gpt', 'chatgpt', 'assistant'],
-            'xai': ['xai', 'grok', 'x.ai']
-        }
-        
-        if provider in provider_keywords:
-            for keyword in provider_keywords[provider]:
-                if keyword in content:
-                    return True
-        
-        # Check for @mentions
+        # Only check for @mentions (remove keyword-based detection)
         if f'@{provider}' in content:
             return True
         
@@ -217,3 +225,46 @@ class ResponseCoordinator:
             "max_consecutive_responses": self.max_consecutive_responses,
             "response_coordination": True
         }
+    
+    def _prevent_repetition(self, message: Message, provider: str, context: List[Message]) -> bool:
+        """Check if the AI's response would be repetitive."""
+        if len(context) < 2:
+            return False
+        
+        # Get recent AI responses
+        recent_ai_responses = [m for m in context[-4:] if m.participant != "user"]
+        if not recent_ai_responses:
+            return False
+        
+        # Check for repetitive patterns
+        user_content = message.content.lower()
+        for ai_msg in recent_ai_responses:
+            ai_content = ai_msg.content.lower()
+            # If the user message is very similar to recent AI response, skip
+            similarity = self._calculate_text_similarity(user_content, ai_content)
+            if similarity > 0.7:
+                return True
+        
+        return False
+    
+    def _calculate_text_similarity(self, text1: str, text2: str) -> float:
+        """Calculate similarity between two texts (simple word overlap)."""
+        words1 = set(text1.split())
+        words2 = set(text2.split())
+        if not words1 or not words2:
+            return 0.0
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        return len(intersection) / len(union) if union else 0.0
+    
+    def _add_collaboration_context(self, provider: str, context: List[Message]) -> str:
+        """Generate context about what other AIs have already said."""
+        if not context:
+            return ""
+        
+        recent_ai_messages = [m for m in context[-3:] if m.participant != "user" and m.participant != provider]
+        if not recent_ai_messages:
+            return ""
+        
+        other_ai = recent_ai_messages[-1].participant
+        return f"Note: {other_ai} just responded. Build upon their response rather than repeating similar points."

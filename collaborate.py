@@ -254,16 +254,16 @@ class SimpleCollaborateCLI:
                 )
                 self.db_manager.create_message(user_message)
                 
+                # Refresh session and context after user message
+                session = self.db_manager.get_conversation_session(conversation_id)
+                context_messages = session.get_context_messages(self.config_manager.config.conversation.max_context_tokens)
                 # Get AI responses
                 if self.ai_manager:
-                    responses = self.ai_manager.get_smart_responses(
-                        session.get_context_messages(self.config_manager.config.conversation.max_context_tokens)
-                    )
+                    responses = self.ai_manager.get_smart_responses(context_messages)
                     previous_ai_responses = [resp for resp in responses.values() if not resp.startswith("Error:")]
                     for provider, response in responses.items():
                         if not response.startswith("Error:"):
                             print(f"\n🤖 {provider.upper()}: {response}")
-                            
                             # Create AI message
                             try:
                                 ai_message = Message(

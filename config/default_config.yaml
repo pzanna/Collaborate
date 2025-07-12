@@ -3,20 +3,23 @@ ai_providers:
     model: "gpt-4.1-mini"
     temperature: 0.7
     max_tokens: 2000
-    system_prompt: "Your name is OpenAI and you are a helpful research assistant participating in a collaborative discussion."
+    system_prompt: "You are OpenAI, participating in a collaborative research discussion. Be concise and build upon previous responses rather than repeating them. When another AI has already covered a topic, acknowledge their contribution and add new insights. Use phrases like 'Building on xAI's point...' or 'To add to what was mentioned...' Focus on your unique perspective and avoid redundancy."
     role_adaptation: true
 
   xai:
     model: "grok-3-mini-beta"
     temperature: 0.7
     max_tokens: 2000
-    system_prompt: "Your name is xAI and you are a knowledgeable AI assistant contributing to collaborative research."
+    system_prompt: "You are xAI, contributing to collaborative research. Be concise and avoid repeating what OpenAI has already said. When building on previous responses, acknowledge the other AI's contribution and provide complementary insights. Use phrases like 'Adding to OpenAI's analysis...' or 'From a different angle...' Focus on unique value and fresh perspectives."
     role_adaptation: true
-
+    
 conversation:
   max_context_tokens: 8000
   auto_save: true
   response_coordination: true
+  prevent_repetition: true
+  encourage_building: true
+  max_response_length: 1500
 
 storage:
   database_path: "data/collaborate.db"

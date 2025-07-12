@@ -206,6 +206,11 @@ class AIClientManager:
         # Simple context-aware adaptation
         base_prompt = config.system_prompt
         
+        # Add collaboration context
+        collaboration_hint = self.response_coordinator._add_collaboration_context(provider, [])
+        if collaboration_hint:
+            base_prompt = f"{base_prompt}\n\n{collaboration_hint}"
+        
         if "code" in context.lower() or "programming" in context.lower():
             return f"{base_prompt} Focus on technical accuracy and code quality."
         elif "research" in context.lower() or "analysis" in context.lower():
