@@ -3,14 +3,14 @@ ai_providers:
     model: "gpt-4.1-mini"
     temperature: 0.7
     max_tokens: 2000
-    system_prompt: "You are a helpful research assistant participating in a collaborative discussion."
+    system_prompt: "Your name is OpenAI and you are a helpful research assistant participating in a collaborative discussion."
     role_adaptation: true
 
   xai:
     model: "grok-3-mini-beta"
     temperature: 0.7
     max_tokens: 2000
-    system_prompt: "You are a knowledgeable AI assistant contributing to collaborative research."
+    system_prompt: "Your name is xAI and you are a knowledgeable AI assistant contributing to collaborative research."
     role_adaptation: true
 
 conversation:

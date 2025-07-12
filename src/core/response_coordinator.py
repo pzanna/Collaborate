@@ -52,20 +52,8 @@ class ResponseCoordinator:
     
     def coordinate_responses(self, message: Message, context: List[Message], 
                            available_providers: List[str]) -> List[str]:
-        """Return list of AI providers that should respond to the message."""
-        responding_providers = []
-        
-        for provider in available_providers:
-            if self.should_ai_respond(provider, message, context):
-                responding_providers.append(provider)
-        
-        # Ensure at least one AI responds if none are selected
-        if not responding_providers and available_providers:
-            # Select the most relevant AI or default to first available
-            best_provider = self._select_best_provider(message, context, available_providers)
-            responding_providers = [best_provider]
-        
-        return responding_providers
+        """Return all AI providers to respond to every message."""
+        return available_providers
     
     def _is_ai_mentioned(self, message: Message, provider: str) -> bool:
         """Check if the AI provider is directly mentioned in the message."""
@@ -221,3 +209,11 @@ class ResponseCoordinator:
             self.response_threshold = float(kwargs['response_threshold'])
         if 'max_consecutive_responses' in kwargs:
             self.max_consecutive_responses = int(kwargs['max_consecutive_responses'])
+    
+    def get_configuration(self) -> Dict[str, Any]:
+        """Get current response coordination configuration."""
+        return {
+            "relevance_threshold": self.response_threshold,
+            "max_consecutive_responses": self.max_consecutive_responses,
+            "response_coordination": True
+        }
