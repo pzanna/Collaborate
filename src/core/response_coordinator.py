@@ -55,24 +55,51 @@ class ResponseCoordinator:
         return True
     
     def coordinate_responses(self, message: Message, context: List[Message], 
-                           available_providers: List[str]) -> List[str]:
-        """Return only mentioned AI if a mention is detected, else all providers."""
+                            available_providers: List[str]) -> List[str]:
+        """Return ordered list of responding providers (mentioned first, then by relevance)."""
         mentioned = [p for p in available_providers if self._is_ai_mentioned(message, p)]
         if mentioned:
-            print(f"🔍 Mention detected for: {mentioned}")
-            return mentioned
+            # Preserve mention order from message content
+            mentioned_order = [p for p in re.findall(r'@(\w+)', message.content.lower()) if p in available_providers]
+            return list(dict.fromkeys(mentioned_order))  # Dedup preserving order
         
-        # Check for repetition prevention
-        responding_providers = []
-        for provider in available_providers:
-            if not self._prevent_repetition(message, provider, context):
-                responding_providers.append(provider)
+        # Else, sort by relevance descending
+        providers_with_scores = [(p, self._calculate_relevance(message, p, context)) for p in available_providers]
+        sorted_providers = [p for p, score in sorted(providers_with_scores, key=lambda x: x[1], reverse=True) if score >= self.response_threshold]
         
-        if not responding_providers:
-            responding_providers = available_providers  # Fallback to all if none pass filter
+        # Apply repetition filter
+        filtered = [p for p in sorted_providers if not self._prevent_repetition(message, p, context)]
+        if not filtered:
+            filtered = sorted_providers  # Fallback
         
-        print(f"🔍 No mentions detected, providers after repetition filter: {responding_providers}")
-        return responding_providers
+        print(f"🔍 Providers ordered by relevance: {filtered}")
+        return filtered
+
+    def _add_collaboration_context(self, provider: str, context: List[Message]) -> str:
+        """Generate context about other AIs' recent responses."""
+        if not context:
+            return ""
+        
+        recent_ai_messages = [m for m in context[-5:] if m.participant != "user" and m.participant != provider]
+        if not recent_ai_messages:
+            return ""
+        
+        summaries = []
+        for msg in recent_ai_messages:
+            other_ai = msg.participant
+            # Simple summary: first 100 chars
+            summary = msg.content[:100].strip() + ("..." if len(msg.content) > 100 else "")
+            summaries.append(f"{other_ai} said: {summary}")
+        
+        return f"Collaboration note: Build upon or reference these recent points from others:\n" + "\n".join(summaries) + "\nAvoid repetition."
+
+    def detect_chaining_cue(self, response: str, available_providers: List[str]) -> Optional[str]:
+        """Detect if response cues another AI (e.g., '@xai, what do you think?'). Return target provider if found."""
+        lower_response = response.lower()
+        for p in available_providers:
+            if f'@{p}' in lower_response or f'what does {p} think' in lower_response or f'build on {p}' in lower_response:
+                return p
+        return None
     
     def _is_ai_mentioned(self, message: Message, provider: str) -> bool:
         """Check if the AI provider is directly mentioned with @ symbol."""
@@ -127,7 +154,12 @@ class ResponseCoordinator:
                 # If AI was recently active in this topic, slightly increase relevance
                 score += 0.2
         
-        # Normalize score
+        # Boost if previous AI cued this provider
+        if context and context[-1].participant != "user":
+            prev_response = context[-1].content
+            if self.detect_chaining_cue(prev_response, [provider]) == provider:
+                score += 0.5
+            
         return min(score, 1.0)
     
     def _has_too_many_consecutive_responses(self, provider: str, context: List[Message]) -> bool:
@@ -257,14 +289,3 @@ class ResponseCoordinator:
         union = words1.union(words2)
         return len(intersection) / len(union) if union else 0.0
     
-    def _add_collaboration_context(self, provider: str, context: List[Message]) -> str:
-        """Generate context about what other AIs have already said."""
-        if not context:
-            return ""
-        
-        recent_ai_messages = [m for m in context[-3:] if m.participant != "user" and m.participant != provider]
-        if not recent_ai_messages:
-            return ""
-        
-        other_ai = recent_ai_messages[-1].participant
-        return f"Note: {other_ai} just responded. Build upon their response rather than repeating similar points."

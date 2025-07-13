@@ -1,3 +1,4 @@
+# ai_client_manager.py
 """AI Client Manager for coordinating multiple AI providers."""
 
 import os
@@ -102,44 +103,73 @@ class AIClientManager:
     
     @handle_errors(context="get_smart_responses", reraise=False, fallback_return={})
     def get_smart_responses(self, messages: List[Message], 
-                           system_prompt: Optional[str] = None) -> Dict[str, str]:
-        """Get responses from AI providers using smart response logic with error handling."""
+                            system_prompt: Optional[str] = None) -> Dict[str, str]:
         if not messages:
             return {}
         
-        # Get the latest user message and context
         user_message = messages[-1]
-        context = messages[:-1] if len(messages) > 1 else []
+        context = messages[:-1]  # Base context
         
-        # Determine which AIs should respond
         available_providers = self.get_available_providers()
         if not available_providers:
-            print("⚠️ No AI providers available")
             return {}
         
+        # Get ordered providers
         responding_providers = self.response_coordinator.coordinate_responses(
             user_message, context, available_providers
         )
         
         responses = {}
-        successful_responses = 0
+        temp_history = context[:]  # Copy to build shared history
+        temp_history.append(user_message)  # Include current user message
         
+        # Sequential querying
         for provider in responding_providers:
             try:
-                # Adapt system prompt based on context
-                adapted_prompt = self.adapt_system_prompt(provider, user_message.content)
-                response = self.get_response(provider, messages, adapted_prompt)
+                # Adapt prompt with FULL temp_history (now includes prior AI responses)
+                adapted_prompt = self.adapt_system_prompt(provider, user_message.content, temp_history)
+                response = self.get_response(provider, temp_history, adapted_prompt)  # Pass temp_history
                 
                 if response and not response.startswith("Error:"):
                     responses[provider] = response
-                    successful_responses += 1
-                    
+                    # Append to temp_history as a Message
+                    temp_history.append(Message(
+                        conversation_id=user_message.conversation_id,
+                        participant=provider,
+                        content=response
+                    ))
             except Exception as e:
-                error_msg = f"Error getting response from {provider}: {str(e)}"
-                print(f"❌ {error_msg}")
+                print(f"❌ Error from {provider}: {e}")
                 responses[provider] = f"Error: {str(e)}"
         
+        # Optional chaining: Check for cues in last response
+        max_chains = 2
+        chain_count = 0
+        while chain_count < max_chains:
+            if not responses:
+                break
+            last_provider = list(responses.keys())[-1]
+            last_response = responses[last_provider]
+            cue_target = self.response_coordinator.detect_chaining_cue(last_response, available_providers)
+            if cue_target and cue_target != last_provider:
+                chain_count += 1
+                print(f"🔗 Detected cue to {cue_target} from {last_provider}")
+                try:
+                    adapted_prompt = self.adapt_system_prompt(cue_target, last_response, temp_history)
+                    chain_response = self.get_response(cue_target, temp_history, adapted_prompt)
+                    responses[cue_target + "_chain"] = chain_response  # Or append to existing
+                    temp_history.append(Message(
+                        conversation_id=user_message.conversation_id,
+                        participant=cue_target,
+                        content=chain_response
+                    ))
+                except Exception as e:
+                    print(f"❌ Chain error: {e}")
+            else:
+                break
+        
         # If no responses were successful, try to get at least one
+        successful_responses = len([r for r in responses.values() if r and not r.startswith("Error:")])
         if successful_responses == 0 and available_providers:
             print("⚠️ No successful responses, trying backup provider...")
             backup_provider = available_providers[0]
@@ -197,21 +227,20 @@ class AIClientManager:
             return self.config_manager.config.ai_providers[provider]
         return None
     
-    def adapt_system_prompt(self, provider: str, context: str) -> str:
-        """Adapt system prompt based on context (for role adaptation)."""
+    def adapt_system_prompt(self, provider: str, context: str, history: Optional[List[Message]] = None) -> str:
         config = self.get_provider_config(provider)
-        if not config or not config.role_adaptation:
-            return config.system_prompt if config else ""
+        if not config:
+            return ""
         
-        # Simple context-aware adaptation
         base_prompt = config.system_prompt
         
-        # Add collaboration context
-        collaboration_hint = self.response_coordinator._add_collaboration_context(provider, [])
+        # Add collaboration context with actual history
+        collaboration_hint = self.response_coordinator._add_collaboration_context(provider, history or [])
         if collaboration_hint:
-            base_prompt = f"{base_prompt}\n\n{collaboration_hint}"
+            base_prompt += f"\n\n{collaboration_hint}"
         
-        if "code" in context.lower() or "programming" in context.lower():
+        # Existing role adaptation...
+        if "code" in context.lower():
             return f"{base_prompt} Focus on technical accuracy and code quality."
         elif "research" in context.lower() or "analysis" in context.lower():
             return f"{base_prompt} Provide detailed analysis and cite relevant information."
