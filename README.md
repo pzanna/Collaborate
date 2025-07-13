@@ -16,6 +16,7 @@ An advanced Python platform for intelligent AI collaboration featuring multi-pro
 ## 📚 Documentation
 
 **👉 [Complete Documentation](docs/COMPREHENSIVE_DOCUMENTATION.md)**
+* [Turn-Taking Guidelines](docs/TURN_TAKING_GUIDE.md)
 
 The comprehensive guide covers:
 
