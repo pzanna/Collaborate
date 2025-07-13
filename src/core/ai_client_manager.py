@@ -3,7 +3,9 @@
 
 import os
 import sys
-from typing import Dict, List, Optional, Any
+import time
+import asyncio
+from typing import Dict, List, Optional, Any, AsyncGenerator, Generator
 
 # Import models and config
 try:
@@ -184,6 +186,125 @@ class AIClientManager:
         
         return responses
     
+    @handle_errors(context="get_collaborative_responses", reraise=False, fallback_return={})
+    def get_collaborative_responses(self, messages: List[Message], 
+                                   max_rounds: int = 2, 
+                                   system_prompt: Optional[str] = None) -> Dict[str, Any]:
+        """Get responses through multiple collaborative rounds with iteration."""
+        if not messages:
+            return {}
+
+        user_message = messages[-1]
+        context = messages[:-1]
+        available_providers = self.get_available_providers()
+        
+        if not available_providers:
+            return {}
+
+        all_responses = {}
+        current_context = context[:]
+        current_context.append(user_message)
+        
+        print(f"🔄 Starting collaborative conversation with {max_rounds} rounds...")
+        
+        for round_num in range(max_rounds):
+            print(f"📍 Round {round_num + 1}/{max_rounds}")
+            
+            # Get responses for this round
+            round_responses = self.get_smart_responses(current_context, system_prompt)
+            
+            if not round_responses:
+                print(f"⚠️ No responses in round {round_num + 1}, ending iteration")
+                break
+            
+            # Store responses by round
+            for provider, response in round_responses.items():
+                if provider not in all_responses:
+                    all_responses[provider] = []
+                all_responses[provider].append({
+                    'round': round_num + 1,
+                    'content': response,
+                    'timestamp': time.time()
+                })
+                
+                # Add to context for next round
+                current_context.append(Message(
+                    conversation_id=user_message.conversation_id,
+                    participant=provider,
+                    content=response
+                ))
+            
+            # Check if iteration should continue
+            if not self._should_continue_iteration(round_responses, round_num, current_context):
+                print(f"✓ Collaboration completed after {round_num + 1} rounds")
+                break
+        
+        # Format final results
+        final_responses = {}
+        for provider, rounds in all_responses.items():
+            final_responses[provider] = {
+                'responses': rounds,
+                'final_response': rounds[-1]['content'] if rounds else "",
+                'round_count': len(rounds)
+            }
+        
+        return final_responses
+    
+    def _should_continue_iteration(self, round_responses: Dict[str, str], 
+                                 round_num: int, context: List[Message]) -> bool:
+        """Determine if another iteration round would be valuable."""
+        # Don't continue if no responses
+        if not round_responses:
+            return False
+        
+        # Check for explicit continuation cues
+        for response in round_responses.values():
+            if any(cue in response.lower() for cue in [
+                'let me build on', 'i would add', 'alternatively', 
+                'another perspective', 'to expand on', '@'
+            ]):
+                return True
+        
+        # Check for questions or incomplete thoughts
+        question_indicators = ['?', 'what if', 'consider', 'thoughts on']
+        for response in round_responses.values():
+            if any(indicator in response.lower() for indicator in question_indicators):
+                return True
+        
+        # Don't continue if responses are too similar (convergence)
+        if len(round_responses) > 1:
+            response_texts = list(round_responses.values())
+            similarity = self._calculate_response_similarity(response_texts)
+            if similarity > 0.8:  # High similarity suggests convergence
+                return False
+        
+        # Continue if responses are substantial and diverse
+        avg_length = sum(len(r) for r in round_responses.values()) / len(round_responses)
+        return avg_length > 50  # Continue if responses are substantial
+    
+    def _calculate_response_similarity(self, responses: List[str]) -> float:
+        """Calculate average similarity between responses."""
+        if len(responses) < 2:
+            return 0.0
+        
+        from itertools import combinations
+        similarities = []
+        
+        for r1, r2 in combinations(responses, 2):
+            words1 = set(r1.lower().split())
+            words2 = set(r2.lower().split())
+            
+            if not words1 or not words2:
+                similarity = 0.0
+            else:
+                intersection = words1.intersection(words2)
+                union = words1.union(words2)
+                similarity = len(intersection) / len(union) if union else 0.0
+            
+            similarities.append(similarity)
+        
+        return sum(similarities) / len(similarities)
+
     def get_all_responses(self, messages: List[Message], system_prompt: Optional[str] = None) -> Dict[str, str]:
         """Get responses from all available AI providers (legacy method)."""
         responses = {}
@@ -300,3 +421,148 @@ class AIClientManager:
             
         except Exception:
             return False
+    
+    async def get_streaming_responses(self, messages: List[Message], 
+                                     system_prompt: Optional[str] = None) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream responses as they become available with real-time updates."""
+        if not messages:
+            return
+
+        user_message = messages[-1]
+        context = messages[:-1]
+        available_providers = self.get_available_providers()
+        
+        if not available_providers:
+            return
+
+        # Get ordered providers
+        responding_providers = self.response_coordinator.coordinate_responses(
+            user_message, context, available_providers
+        )
+        
+        yield {
+            'type': 'providers_selected',
+            'providers': responding_providers,
+            'timestamp': time.time()
+        }
+
+        temp_history = context[:]
+        temp_history.append(user_message)
+        
+        # Stream responses sequentially
+        for provider_idx, provider in enumerate(responding_providers):
+            yield {
+                'type': 'provider_started',
+                'provider': provider,
+                'index': provider_idx,
+                'total': len(responding_providers),
+                'timestamp': time.time()
+            }
+            
+            try:
+                # Adapt prompt with current context
+                adapted_prompt = self.adapt_system_prompt(provider, user_message.content, temp_history)
+                
+                # Stream the response from this provider
+                response_chunks = []
+                async for chunk in self._stream_provider_response(provider, temp_history, adapted_prompt):
+                    response_chunks.append(chunk)
+                    yield {
+                        'type': 'response_chunk',
+                        'provider': provider,
+                        'chunk': chunk,
+                        'partial_response': ''.join(response_chunks),
+                        'timestamp': time.time()
+                    }
+                
+                # Complete response for this provider
+                full_response = ''.join(response_chunks)
+                if full_response and not full_response.startswith("Error:"):
+                    temp_history.append(Message(
+                        conversation_id=user_message.conversation_id,
+                        participant=provider,
+                        content=full_response
+                    ))
+                    
+                    yield {
+                        'type': 'provider_completed',
+                        'provider': provider,
+                        'response': full_response,
+                        'timestamp': time.time()
+                    }
+                
+            except Exception as e:
+                yield {
+                    'type': 'provider_error',
+                    'provider': provider,
+                    'error': str(e),
+                    'timestamp': time.time()
+                }
+        
+        yield {
+            'type': 'conversation_completed',
+            'total_providers': len(responding_providers),
+            'timestamp': time.time()
+        }
+    
+    async def _stream_provider_response(self, provider: str, messages: List[Message], 
+                                       system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
+        """Stream response from a specific provider (simulated for now)."""
+        # This is a simulation of streaming - in real implementation, 
+        # you would integrate with actual streaming APIs
+        
+        try:
+            # Get the full response first (actual implementation would stream from API)
+            response = await asyncio.get_event_loop().run_in_executor(
+                None, self.get_response, provider, messages, system_prompt
+            )
+            
+            if not response or response.startswith("Error:"):
+                yield response or f"Error: No response from {provider}"
+                return
+            
+            # Simulate streaming by yielding chunks
+            words = response.split()
+            chunk_size = max(1, len(words) // 10)  # Stream in ~10 chunks
+            
+            for i in range(0, len(words), chunk_size):
+                chunk = ' '.join(words[i:i + chunk_size])
+                if i + chunk_size < len(words):
+                    chunk += ' '
+                
+                yield chunk
+                await asyncio.sleep(0.1)  # Simulate network delay
+                
+        except Exception as e:
+            yield f"Error streaming from {provider}: {str(e)}"
+    
+    def get_streaming_responses_sync(self, messages: List[Message], 
+                                   system_prompt: Optional[str] = None) -> Generator[Dict[str, Any], None, None]:
+        """Synchronous version of streaming responses for non-async contexts."""
+        try:
+            import asyncio
+            
+            # Create event loop if none exists
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Run the async generator
+            async def run_streaming():
+                results = []
+                async for update in self.get_streaming_responses(messages, system_prompt):
+                    results.append(update)
+                return results
+            
+            updates = loop.run_until_complete(run_streaming())
+            for update in updates:
+                yield update
+                
+        except Exception as e:
+            yield {
+                'type': 'error',
+                'error': f"Streaming error: {str(e)}",
+                'timestamp': time.time()
+            }

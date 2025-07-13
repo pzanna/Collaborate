@@ -1,35 +1,47 @@
-# Collaborate
+# Collaborate - AI Collaboration Platform
 
-A Python application for three-way AI collaboration between yourself, OpenAI, and 2. **Run the application**:
+An advanced Python platform for intelligent AI collaboration featuring multi-provider coordination, streaming responses, and sophisticated conversation management.
 
-   ```bash
-   python collaborate.py
-   ```latform enables coordinated conversations where multiple AI systems can work together on research, problem-solving, and creative projects.
+## 🌟 Key Features
 
-## 🚀 Features
+- **🤖 Multi-AI Coordination**: Smart provider selection with OpenAI and xAI
+- **🔄 Multi-Round Collaboration**: Extended AI conversations with iteration logic
+- **🌊 Streaming Responses**: Real-time response generation with live updates
+- **💬 Mention System**: Direct AI targeting with `@openai` and `@xai` syntax
+- **🧠 Context Awareness**: AIs build upon each other's responses
+- **🛡️ Robust Error Handling**: Automatic retries and intelligent fallbacks
+- **📊 Performance Monitoring**: Provider health tracking and optimization
+- **💾 Persistent Storage**: Conversation history with export capabilities
 
-- **Three-way conversations** between you, OpenAI, and xAI
-- **Project-based organization** for different research topics
-- **Persistent conversation history** with local storage
-- **Configurable AI models** and parameters
-- **Context-aware responses** with role adaptation
-- **Export capabilities** (JSON, Markdown, PDF, HTML)
-- **Command-line interface** for easy interaction
+## 📚 Documentation
 
-## 📋 Prerequisites
+**👉 [Complete Documentation](docs/COMPREHENSIVE_DOCUMENTATION.md)**
 
-- Python 3.8 or higher
-- OpenAI API key (optional)
-- xAI API key (optional)
+The comprehensive guide covers:
 
-## 🛠️ Installation
+- Architecture overview and core components
+- Usage examples and best practices
+- Configuration and setup instructions
+- Advanced features (streaming, multi-round)
+- API reference and development guides
 
-1. **Clone the repository**:
+## 🚀 Quick Start
 
-   ```bash
-   git clone <repository-url>
+### Installation
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd Collaborate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment variables
+export OPENAI_API_KEY="your_openai_key"
+export XAI_API_KEY="your_xai_key"
    cd Collaborate
-   ```
+```
 
 2. **Set up Python environment**:
 
@@ -160,11 +172,11 @@ Within a conversation:
 └── requirements.txt    # Python dependencies
 ```
 
-├── exports/             # Exported conversations
-├── tests/               # Test files
-└── requirements.txt     # Python dependencies
+├── exports/ # Exported conversations
+├── tests/ # Test files
+└── requirements.txt # Python dependencies
 
-```
+````
 
 ## 🧪 Testing
 
@@ -179,7 +191,7 @@ python tests/test_full_functionality.py
 
 # Test with pytest
 pytest tests/
-```
+````
 
 ## 🔄 API Usage
 
