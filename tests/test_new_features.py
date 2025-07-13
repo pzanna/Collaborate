@@ -7,11 +7,11 @@ import sys
 from pathlib import Path
 
 # Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from core.ai_client_manager import AIClientManager
-from config.config_manager import ConfigManager
-from models.data_models import Message
+from src.core.ai_client_manager import AIClientManager
+from src.config.config_manager import ConfigManager
+from src.models.data_models import Message
 
 
 def test_new_features():
@@ -58,7 +58,7 @@ def test_new_features():
     coordinator_features = [
         ('coordinate_responses', 'Provider coordination'),
         ('detect_chaining_cue', 'AI-to-AI chaining'),
-        ('_calculate_relevance', 'Relevance scoring'),
+        ('_calculate_semantic_relevance', 'Semantic relevance scoring'),
         ('_add_collaboration_context', 'Collaboration context')
     ]
     
@@ -92,7 +92,7 @@ def test_new_features():
         
         # Test relevance calculation
         for provider in available_providers:
-            relevance = coordinator._calculate_relevance(messages[0], provider, [])
+            relevance = coordinator._calculate_semantic_relevance(messages[0], provider, [])
             print(f"  📊 {provider} relevance: {relevance:.2f}")
         
         # Test mention detection
