@@ -220,12 +220,14 @@ class ResponseCoordinator:
                 phrase in content_lower
                 for phrase in ["what do you think", "your turn", "thoughts", "input", "perspective"]
             ):
+
                 hints.append(
                     f"Build upon or respond directly to {last_ai_msg.participant}'s previous message."
                 )
                 hints.append(
                     "Address them by name and continue the thread for a natural flow."
                 )
+
             else:
                 snippet = self._short_snippet(last_ai_msg.content)
                 hints.append(

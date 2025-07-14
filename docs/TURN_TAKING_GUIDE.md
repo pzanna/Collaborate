@@ -37,3 +37,4 @@ Following these guidelines helps maintain a smooth three‑way conversation wher
 ## Encouraging Cross-Talk
 
 Each AI's system prompt now includes a **COLLABORATION CONTEXT** hint generated from the most recent responses. This hint nudges the models to address each other by name, summarize the last point in a sentence, and continue the thread with agreement, disagreement, or follow‑up questions. The result is an exchange that feels more like real dialogue among three people instead of isolated replies.
+
