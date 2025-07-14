@@ -215,17 +215,26 @@ class ResponseCoordinator:
         if last_ai_msg:
             content_lower = last_ai_msg.content.lower()
             provider_mentioned = f"@{provider}" in content_lower or provider in content_lower
-            
+
             if provider_mentioned or any(phrase in content_lower for phrase in [
                 "what do you think", "your turn", "thoughts", "input", "perspective"
             ]):
-                hints.append(f"Build upon or respond to {last_ai_msg.participant}'s previous message.")
+                hints.append(
+                    f"Build upon or respond directly to {last_ai_msg.participant}'s previous message."
+                )
+                hints.append(
+                    "Address them by name and continue the thread for a natural flow."
+                )
         
         # Encourage building on previous ideas
         if len(other_ai_messages) >= 2:
-            hints.append("Consider the previous AI responses and add your unique perspective.")
+            hints.append(
+                "Consider the previous AI responses, and feel free to agree, disagree, or ask questions."
+            )
         elif other_ai_messages:
-            hints.append(f"You can reference or build upon {other_ai_messages[-1].participant}'s response if relevant.")
+            hints.append(
+                f"You can reference or build upon {other_ai_messages[-1].participant}'s response if relevant."
+            )
         
         # Provider-specific collaboration style
         if provider == "openai":
@@ -345,44 +354,51 @@ class ResponseCoordinator:
     ) -> List[str]:
         """Build the speaking queue according to V3 algorithm."""
         
-        # All providers where base >= threshold AND not vetoed
+        queue: List[str] = []
+
+        # ------------------------------------------------------------------
+        # 1. Current speaker selects next (explicit mention / baton cue)
+        # ------------------------------------------------------------------
+        for provider in explicit_mentions:
+            if provider in available_providers and provider not in vetoed_providers:
+                queue.append(provider)
+
+        # ------------------------------------------------------------------
+        # 2. Self‑selection by providers meeting relevance threshold
+        # ------------------------------------------------------------------
         qualified_providers = {
-            provider: score for provider, score in provider_scores.items()
+            provider: score
+            for provider, score in provider_scores.items()
             if score >= self.base_threshold and provider not in vetoed_providers
         }
-        
-        # If queue empty → pick provider with highest base (no veto)
-        if not qualified_providers:
-            # Find highest scoring non-vetoed provider
-            non_vetoed_scores = {
-                provider: provider_scores.get(provider, 0.0)
-                for provider in available_providers
-                if provider not in vetoed_providers
-            }
-            if non_vetoed_scores:
-                best_provider = max(non_vetoed_scores.keys(), 
-                                  key=lambda p: non_vetoed_scores[p])
-                return [best_provider]
-            else:
-                # Emergency fallback - return first available provider
-                return available_providers[:1] if available_providers else []
-        
-        # Sort: (explicitly‑mentioned order) + (descending base score)
-        queue = []
-        
-        # First, add explicitly mentioned providers in order
-        for provider in explicit_mentions:
-            if provider in qualified_providers:
-                queue.append(provider)
-        
-        # Then add remaining qualified providers sorted by score
-        remaining_providers = [
-            provider for provider in qualified_providers.keys()
-            if provider not in queue
-        ]
-        remaining_providers.sort(key=lambda p: qualified_providers[p], reverse=True)
-        queue.extend(remaining_providers)
-        
+
+        # Remove already queued explicit mentions
+        for provider in queue:
+            qualified_providers.pop(provider, None)
+
+        if queue:
+            # Add remaining qualified providers sorted by score
+            remaining = sorted(
+                qualified_providers.keys(),
+                key=lambda p: qualified_providers[p],
+                reverse=True,
+            )
+            queue.extend(remaining)
+            return queue
+
+        # ------------------------------------------------------------------
+        # 3. If no one self‑selects, choose highest scoring available provider
+        # ------------------------------------------------------------------
+        if qualified_providers:
+            best_provider = max(qualified_providers.keys(),
+                                key=lambda p: qualified_providers[p])
+            queue.append(best_provider)
+        else:
+            # Fallback to any non‑vetoed provider
+            non_vetoed = [p for p in available_providers if p not in vetoed_providers]
+            if non_vetoed:
+                queue.append(non_vetoed[0])
+
         return queue
 
     # ---------------------------------------------------------------------
