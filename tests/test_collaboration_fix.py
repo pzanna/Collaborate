@@ -47,8 +47,9 @@ def test_collaboration_context_integration():
         
         if "COLLABORATION CONTEXT" in prompt:
             context_start = prompt.find("COLLABORATION CONTEXT")
-            context_part = prompt[context_start:context_start+150]
+            context_part = prompt[context_start:context_start+180]
             print(f"🔍 Context preview: {context_part}...")
+            assert "recently said" in context_part
         
     except AttributeError as e:
         if "_add_collaboration_context" in str(e):

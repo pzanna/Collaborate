@@ -9,7 +9,7 @@ An advanced Python platform for intelligent AI collaboration featuring multi-pro
 - **🌊 Streaming Responses**: Real-time response generation with live updates
 - **💬 Mention System**: Direct AI targeting with `@openai` and `@xai` syntax
 - **🧠 Context Awareness**: AIs build upon each other's responses
-- **🤝 Cross-Talk Hints**: Models are prompted to address each other directly
+- **🤝 Cross-Talk Hints**: Models are prompted to address each other directly and summarize recent points
 - **🛡️ Robust Error Handling**: Automatic retries and intelligent fallbacks
 - **📊 Performance Monitoring**: Provider health tracking and optimization
 - **💾 Persistent Storage**: Conversation history with export capabilities

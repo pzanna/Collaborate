@@ -216,14 +216,22 @@ class ResponseCoordinator:
             content_lower = last_ai_msg.content.lower()
             provider_mentioned = f"@{provider}" in content_lower or provider in content_lower
 
-            if provider_mentioned or any(phrase in content_lower for phrase in [
-                "what do you think", "your turn", "thoughts", "input", "perspective"
-            ]):
+            if provider_mentioned or any(
+                phrase in content_lower
+                for phrase in ["what do you think", "your turn", "thoughts", "input", "perspective"]
+            ):
+
                 hints.append(
                     f"Build upon or respond directly to {last_ai_msg.participant}'s previous message."
                 )
                 hints.append(
                     "Address them by name and continue the thread for a natural flow."
+                )
+
+            else:
+                snippet = self._short_snippet(last_ai_msg.content)
+                hints.append(
+                    f"{last_ai_msg.participant} recently said: '{snippet}'. Respond and mention them by name."
                 )
         
         # Encourage building on previous ideas
@@ -425,6 +433,14 @@ class ResponseCoordinator:
         if not words1 or not words2:
             return 0.0
         return len(words1 & words2) / len(words1 | words2)
+
+    def _short_snippet(self, text: str, word_limit: int = 12) -> str:
+        """Return a short snippet of text for context hints."""
+        words = re.findall(r"\w+", text)
+        snippet = " ".join(words[:word_limit])
+        if len(words) > word_limit:
+            snippet += "..."
+        return snippet
 
     # ---------------------------------------------------------------------
     # Conversation state helpers

@@ -10,11 +10,11 @@ Sacks, Schegloff, and Jefferson describe a set of rules for how conversational t
 2. **Self-selection**: if no selection is made, any other participant may start speaking; the first to do so gains the turn.
 3. **Current speaker continues**: if no one self-selects, the current speaker may continue with another turn-constructional unit.
 
-These rules are intended to minimize gaps and overlaps while allowing flexible participation【F:/tmp/sacks.txt†L1988-L2022】.
+These rules are intended to minimize gaps and overlaps while allowing flexible participation【F:docs/Sacks_1974_simplest_systematics.pdf】.
 
 ## Multi-Party Considerations
 
-With more than two participants, turn distribution becomes important. Sacks notes that once a third party is involved, "next turn" is no longer guaranteed for any waiting participant. To avoid leaving someone out, turn sizes tend to shrink and participants often rely on explicit selection or self‑selection to claim the floor【F:/tmp/sacks.txt†L4160-L4188】.
+With more than two participants, turn distribution becomes important. Sacks notes that once a third party is involved, "next turn" is no longer guaranteed for any waiting participant. To avoid leaving someone out, turn sizes tend to shrink and participants often rely on explicit selection or self‑selection to claim the floor【F:docs/Sacks_1974_simplest_systematics.pdf】.
 
 ## Application in Collaborate
 
@@ -36,6 +36,5 @@ Following these guidelines helps maintain a smooth three‑way conversation wher
 
 ## Encouraging Cross-Talk
 
-Each AI's system prompt now includes a **COLLABORATION CONTEXT** hint generated from the most recent responses. This hint nudges the models to address each other by name, build on or challenge earlier points, and ask clarifying questions when appropriate. The result is an exchange that feels more like real dialogue among three people instead of isolated replies.
+Each AI's system prompt now includes a **COLLABORATION CONTEXT** hint generated from the most recent responses. This hint nudges the models to address each other by name, summarize the last point in a sentence, and continue the thread with agreement, disagreement, or follow‑up questions. The result is an exchange that feels more like real dialogue among three people instead of isolated replies.
 
-=========
