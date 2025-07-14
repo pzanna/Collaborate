@@ -215,17 +215,26 @@ class ResponseCoordinator:
         if last_ai_msg:
             content_lower = last_ai_msg.content.lower()
             provider_mentioned = f"@{provider}" in content_lower or provider in content_lower
-            
+
             if provider_mentioned or any(phrase in content_lower for phrase in [
                 "what do you think", "your turn", "thoughts", "input", "perspective"
             ]):
-                hints.append(f"Build upon or respond to {last_ai_msg.participant}'s previous message.")
+                hints.append(
+                    f"Build upon or respond directly to {last_ai_msg.participant}'s previous message."
+                )
+                hints.append(
+                    "Address them by name and continue the thread for a natural flow."
+                )
         
         # Encourage building on previous ideas
         if len(other_ai_messages) >= 2:
-            hints.append("Consider the previous AI responses and add your unique perspective.")
+            hints.append(
+                "Consider the previous AI responses, and feel free to agree, disagree, or ask questions."
+            )
         elif other_ai_messages:
-            hints.append(f"You can reference or build upon {other_ai_messages[-1].participant}'s response if relevant.")
+            hints.append(
+                f"You can reference or build upon {other_ai_messages[-1].participant}'s response if relevant."
+            )
         
         # Provider-specific collaboration style
         if provider == "openai":

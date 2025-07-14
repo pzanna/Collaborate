@@ -33,3 +33,9 @@ See `ResponseCoordinator._build_speaking_queue()` for the updated logic implemen
 - **Allow self‑selection** by occasionally asking open questions to invite responses from either AI.
 
 Following these guidelines helps maintain a smooth three‑way conversation where all participants get a fair chance to contribute.
+
+## Encouraging Cross-Talk
+
+Each AI's system prompt now includes a **COLLABORATION CONTEXT** hint generated from the most recent responses. This hint nudges the models to address each other by name, build on or challenge earlier points, and ask clarifying questions when appropriate. The result is an exchange that feels more like real dialogue among three people instead of isolated replies.
+
+=========
