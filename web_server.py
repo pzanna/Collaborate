@@ -281,6 +281,21 @@ async def create_conversation(conversation: ConversationCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation and all its messages."""
+    try:
+        success = db_manager.delete_conversation(conversation_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        return {"success": True, "message": "Conversation deleted successfully"}
+    except CollaborateError as e:
+        raise HTTPException(status_code=400, detail=format_error_for_user(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 async def get_conversation_messages(conversation_id: str):
     """Get all messages in a conversation."""
@@ -311,7 +326,7 @@ class ConnectionManager:
         self.active_connections: List[WebSocket] = []
         self.conversation_connections: Dict[str, List[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, conversation_id: str = None):
+    async def connect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
         await websocket.accept()
         self.active_connections.append(websocket)
         
@@ -320,7 +335,7 @@ class ConnectionManager:
                 self.conversation_connections[conversation_id] = []
             self.conversation_connections[conversation_id].append(websocket)
 
-    def disconnect(self, websocket: WebSocket, conversation_id: str = None):
+    def disconnect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
         
@@ -344,13 +359,28 @@ manager = ConnectionManager()
 @app.websocket("/api/chat/stream/{conversation_id}")
 async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
     """WebSocket endpoint for real-time chat streaming."""
-    await manager.connect(websocket, conversation_id)
+    try:
+        await manager.connect(websocket, conversation_id)
+        print(f"✓ WebSocket connected for conversation: {conversation_id}")
+    except Exception as e:
+        print(f"✗ Failed to establish WebSocket connection: {e}")
+        raise
     
     try:
         while True:
             # Receive message from client
             data = await websocket.receive_text()
             message_data = json.loads(data)
+            
+            # Handle connection initialization
+            if message_data.get("type") == "connection_init":
+                print(f"WebSocket connection initialized for conversation {conversation_id}")
+                # Send a welcome message or confirmation
+                await manager.send_to_conversation(conversation_id, {
+                    "type": "connection_confirmed",
+                    "conversation_id": conversation_id
+                })
+                continue
             
             if message_data.get("type") == "user_message":
                 content = message_data.get("content", "").strip()

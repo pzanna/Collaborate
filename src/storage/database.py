@@ -307,6 +307,37 @@ class DatabaseManager:
                 )
             return None
     
+    @handle_errors(context="delete_conversation", reraise=False, fallback_return=False)
+    def delete_conversation(self, conversation_id: str) -> bool:
+        """Delete a conversation and all its messages."""
+        try:
+            if not conversation_id or not conversation_id.strip():
+                raise ValidationError("Conversation ID cannot be empty", "conversation_id", conversation_id)
+            
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if conversation exists
+                cursor.execute("SELECT COUNT(*) FROM conversations WHERE id = ?", (conversation_id,))
+                if cursor.fetchone()[0] == 0:
+                    raise ValidationError(f"Conversation with ID '{conversation_id}' not found", 
+                                        "conversation_id", conversation_id)
+                
+                # Delete all messages in the conversation first (due to foreign key constraints)
+                cursor.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+                
+                # Delete the conversation
+                cursor.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+                
+                conn.commit()
+                return True
+                
+        except ValidationError:
+            raise  # Re-raise validation errors
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete conversation: {str(e)}", "delete_conversation", 
+                              {"conversation_id": conversation_id}, e)
+    
     def list_conversations(self, project_id: Optional[str] = None) -> List[Conversation]:
         """List conversations, optionally filtered by project."""
         with self.get_connection() as conn:

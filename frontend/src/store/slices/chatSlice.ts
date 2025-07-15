@@ -24,7 +24,7 @@ export interface StreamingUpdate {
   provider?: string;
   content?: string;
   chunk?: string;
-  message?: string;
+  message?: Message | string;
   queue?: string[];
   total_providers?: number;
 }
@@ -61,6 +61,18 @@ const chatSlice = createSlice({
     addConversation: (state, action: PayloadAction<Conversation>) => {
       state.conversations.unshift(action.payload);
     },
+    removeConversation: (state, action: PayloadAction<string>) => {
+      const conversationId = action.payload;
+      state.conversations = state.conversations.filter(conv => conv.id !== conversationId);
+      
+      // Remove messages for this conversation
+      delete state.messages[conversationId];
+      
+      // If this was the current conversation, clear it
+      if (state.currentConversationId === conversationId) {
+        state.currentConversationId = null;
+      }
+    },
     setCurrentConversation: (state, action: PayloadAction<string>) => {
       state.currentConversationId = action.payload;
     },
@@ -81,6 +93,24 @@ const chatSlice = createSlice({
       const update = action.payload;
       
       switch (update.type) {
+        case 'user_message':
+          // Handle user message from WebSocket
+          if (update.message && typeof update.message === 'object' && state.currentConversationId) {
+            const userMessage: Message = {
+              id: update.message.id,
+              conversation_id: update.message.conversation_id,
+              participant: update.message.participant as 'user',
+              content: update.message.content,
+              timestamp: update.message.timestamp,
+            };
+            
+            if (!state.messages[state.currentConversationId]) {
+              state.messages[state.currentConversationId] = [];
+            }
+            state.messages[state.currentConversationId].push(userMessage);
+          }
+          break;
+          
         case 'queue_determined':
           state.providerQueue = update.queue || [];
           state.isStreaming = true;
@@ -151,6 +181,7 @@ const chatSlice = createSlice({
 export const {
   setConversations,
   addConversation,
+  removeConversation,
   setCurrentConversation,
   setMessages,
   addMessage,

@@ -208,3 +208,4 @@ __marimo__/
 /data
 /exports
 .DS_Store
+/frontend/node_modules

@@ -18,15 +18,18 @@ An advanced Python platform for intelligent AI collaboration featuring multi-pro
 ## 🖥️ Interfaces
 
 ### 🌐 Web UI (Recommended)
+
 Modern chat interface with real-time AI streaming, project management, and system health monitoring.
 
 ### 🖥️ Command Line Interface (CLI)
+
 Full-featured terminal interface for power users and automation.
 
 ## 📚 Documentation
 
 **👉 [Complete Documentation](docs/COMPREHENSIVE_DOCUMENTATION.md)**
-* [Turn-Taking Guidelines](docs/TURN_TAKING_GUIDE.md)
+
+- [Turn-Taking Guidelines](docs/TURN_TAKING_GUIDE.md)
 
 The comprehensive guide covers:
 
