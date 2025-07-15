@@ -53,11 +53,18 @@ class ResponseCoordinator:
         # Tunable parameters
         self.base_threshold = 0.30          # baseline relevance threshold
         self.inactivity_boost = 0.25        # added to score if provider silent > inactivity_turns
-        self.inactivity_turns = 4           # turns since provider last spoke to be considered inactive
+        self.inactivity_turns = 2           # turns since provider last spoke to be considered inactive
         self.baton_bonus = 0.50            # bonus for @mentioned or cued providers
         self.max_consecutive_responses = 2  # cap streaks from the same provider
         self.random_jitter = 0.05           # ± jitter for non‑determinism
         self.context_limit = 50             # max messages to consider for context limit
+        
+        # Natural conversation flow parameters
+        self.close_score_threshold = 0.15   # threshold for allowing multiple responses
+        self.urgent_response_threshold = 0.6 # threshold for urgent/interruption responses
+        self.conversation_energy_weight = 0.3 # weight for conversation momentum
+        self.enable_interruptions = True    # allow conversational interruptions
+        self.enable_multi_response = True   # allow multiple AIs to respond when appropriate
 
         # Speaking queue for multi-turn conversations
         self.speaking_queue: List[str] = []
@@ -94,31 +101,48 @@ class ResponseCoordinator:
         context: List[Message],
         available_providers: List[str],
     ) -> List[str]:
-        """Return an ordered list of providers using V3 workflow algorithm."""
+        """Return an ordered list of providers using enhanced natural flow algorithm."""
         
-        # Step 1: Analyze user message - classify intent & detect @mentions/baton cues
+        # Step 1: Check for immediate conversation repair needs
+        repair_provider = self.detect_conversation_repair_needs(context)
+        if repair_provider and repair_provider in available_providers:
+            return [repair_provider]
+        
+        # Step 2: Analyze user message - classify intent & detect @mentions/baton cues
         intent = self._classify_intent(message.content)
         explicit_mentions = self._extract_mentions(message.content, available_providers)
         
-        # Step 2: Score each provider
+        # Step 3: Check for interruption opportunities
+        interruption_scores = self.detect_interruption_opportunity(message, context)
+        
+        # Step 4: Calculate conversational momentum
+        momentum_scores = self.calculate_conversational_momentum(message, context)
+        
+        # Step 5: Score each provider with enhanced natural flow factors
         provider_scores: Dict[str, float] = {}
         vetoed_providers: set[str] = set()
         
         for provider in available_providers:
-            # 2a: Base semantic relevance score
+            # 5a: Base semantic relevance score
             base_score = self._calculate_semantic_relevance(message, provider, context)
             
-            # 2b: Add inactivity boost
+            # 5b: Add inactivity boost
             base_score += self._calculate_inactivity_boost(provider, context)
             
-            # 2c: Add baton bonus if @mentioned or cued
+            # 5c: Add baton bonus if @mentioned or cued
             if provider in explicit_mentions:
                 base_score += self.baton_bonus
             
-            # 2d: Add random jitter
-            base_score += random.uniform(-self.random_jitter, self.random_jitter)
+            # 5d: Add interruption opportunity score
+            base_score += interruption_scores.get(provider, 0.0)
             
-            # 2e: Check veto conditions
+            # 5e: Add conversational momentum
+            base_score += momentum_scores.get(provider, 0.0) * 0.3
+            
+            # 5f: Add random jitter (reduced to allow for more natural factors)
+            base_score += random.uniform(-self.random_jitter/2, self.random_jitter/2)
+            
+            # 5g: Check veto conditions
             veto = (
                 self._check_repetition_veto(message, provider, context) or
                 self._check_context_limit_veto(provider, context)
@@ -129,9 +153,10 @@ class ResponseCoordinator:
             else:
                 provider_scores[provider] = max(0.0, min(1.0, base_score))
         
-        # Step 3: Build speaking queue
-        speaking_queue = self._build_speaking_queue(
-            provider_scores, explicit_mentions, available_providers, vetoed_providers
+        # Step 6: Build speaking queue with natural flow considerations
+        speaking_queue = self._build_natural_speaking_queue(
+            provider_scores, explicit_mentions, available_providers, 
+            vetoed_providers, context, intent
         )
         
         return speaking_queue
@@ -186,75 +211,136 @@ class ResponseCoordinator:
     def _add_collaboration_context(
         self, provider: str, history: List[Message]
     ) -> str:
-        """Generate collaboration context hints for AI providers.
+        """Generate natural collaboration context hints for AI providers.
         
         Args:
             provider: The provider that will receive this context
             history: Recent conversation history including AI responses
             
         Returns:
-            Collaboration hint string to append to system prompt
+            Natural collaboration hint string to append to system prompt
         """
         if not history:
             return ""
         
-        # Find recent AI messages from other providers
+        # Analyze conversation dynamics
         other_ai_messages = []
+        user_messages = []
         for msg in history[-5:]:  # Look at last 5 messages
             if msg.participant not in ("user", provider) and msg.participant in ["openai", "xai"]:
                 other_ai_messages.append(msg)
+            elif msg.participant == "user":
+                user_messages.append(msg)
         
-        if not other_ai_messages:
+        if not other_ai_messages and not user_messages:
             return ""
         
-        # Generate collaboration hints based on context
+        # Generate natural collaboration hints
         hints = []
         
-        # Check if other AI asked for this provider's input
+        # Analyze the conversation energy and flow
+        conversation_energy = self._assess_conversation_energy(history)
+        
+        # Check what the other AI recently said
         last_ai_msg = other_ai_messages[-1] if other_ai_messages else None
         if last_ai_msg:
             content_lower = last_ai_msg.content.lower()
             provider_mentioned = f"@{provider}" in content_lower or provider in content_lower
-
+            
+            # Detect conversation patterns
             if provider_mentioned or any(
                 phrase in content_lower
                 for phrase in ["what do you think", "your turn", "thoughts", "input", "perspective"]
             ):
-
                 hints.append(
-                    f"Build upon or respond directly to {last_ai_msg.participant}'s previous message."
+                    f"Respond directly to {last_ai_msg.participant}'s question or comment."
                 )
+                if conversation_energy == "high":
+                    hints.append("Keep your response concise since the conversation is moving quickly.")
+                
+            elif re.search(r'\b(disagree|different|alternative|however|but)\b', content_lower):
                 hints.append(
-                    "Address them by name and continue the thread for a natural flow."
+                    f"{last_ai_msg.participant} offered a different perspective. You can agree, disagree, or add nuance."
                 )
-
+                
+            elif re.search(r'\b(build|expand|add|furthermore|also)\b', content_lower):
+                hints.append(
+                    f"Build upon {last_ai_msg.participant}'s ideas with your own insights."
+                )
+                
             else:
+                # General response to other AI
                 snippet = self._short_snippet(last_ai_msg.content)
                 hints.append(
-                    f"{last_ai_msg.participant} recently said: '{snippet}'. Respond and mention them by name."
+                    f"{last_ai_msg.participant} said: '{snippet}'. Feel free to respond naturally as you would in a conversation."
                 )
         
-        # Encourage building on previous ideas
-        if len(other_ai_messages) >= 2:
-            hints.append(
-                "Consider the previous AI responses, and feel free to agree, disagree, or ask questions."
-            )
-        elif other_ai_messages:
-            hints.append(
-                f"You can reference or build upon {other_ai_messages[-1].participant}'s response if relevant."
-            )
+        # Check user's recent patterns
+        if user_messages:
+            last_user_msg = user_messages[-1]
+            if re.search(r'\b(confused|unclear|don\'t understand)\b', last_user_msg.content.lower()):
+                hints.append("The user seems confused - provide clear, helpful clarification.")
+            elif "?" in last_user_msg.content and len(last_user_msg.content.split()) < 10:
+                hints.append("This is a direct question - give a focused, direct answer.")
+        
+        # Conversation flow guidance
+        if conversation_energy == "low":
+            hints.append("Feel free to ask follow-up questions to engage the conversation.")
+        elif conversation_energy == "high":
+            hints.append("The conversation is active - be responsive and build on what's been said.")
+        
+        # Natural conversation behaviors
+        natural_behaviors = [
+            "Use the other AI's name when directly responding to them",
+            "Feel free to disagree respectfully or offer alternative perspectives",
+            "Ask questions if something needs clarification",
+            "Acknowledge good points made by others"
+        ]
         
         # Provider-specific collaboration style
         if provider == "openai":
-            hints.append("Focus on technical accuracy and provide analytical insights to complement creative ideas.")
+            hints.append("Bring analytical rigor and technical depth to complement creative insights.")
+            if last_ai_msg and "creative" in last_ai_msg.content.lower():
+                hints.append("Help evaluate or implement the creative ideas being discussed.")
         elif provider == "xai":
-            hints.append("Bring creative perspectives and innovative approaches to technical discussions.")
+            hints.append("Offer innovative angles and creative approaches to complement analytical insights.")
+            if last_ai_msg and any(word in last_ai_msg.content.lower() for word in ["technical", "code", "algorithm"]):
+                hints.append("Consider the broader implications or alternative approaches to the technical discussion.")
+        
+        # Add one natural behavior tip
+        hints.append(random.choice(natural_behaviors))
         
         if hints:
             collaboration_hint = "COLLABORATION CONTEXT: " + " ".join(hints)
             return collaboration_hint
         
         return ""
+
+    def _assess_conversation_energy(self, history: List[Message]) -> str:
+        """Assess the energy level of the conversation."""
+        if len(history) < 3:
+            return "low"
+        
+        recent_messages = history[-6:]  # Look at last 6 messages
+        
+        # Count different participants in recent messages
+        participants = set(msg.participant for msg in recent_messages)
+        
+        # Count rapid exchanges (messages within short intervals)
+        rapid_exchanges = 0
+        for i in range(1, len(recent_messages)):
+            # Simple heuristic - short messages or frequent participant changes
+            if (len(recent_messages[i].content.split()) < 15 or 
+                recent_messages[i].participant != recent_messages[i-1].participant):
+                rapid_exchanges += 1
+        
+        # Determine energy level
+        if len(participants) >= 3 and rapid_exchanges >= 3:
+            return "high"
+        elif len(participants) >= 2 and rapid_exchanges >= 2:
+            return "medium"
+        else:
+            return "low"
 
     # ---------------------------------------------------------------------
     # V3 Workflow Helper Methods
@@ -298,12 +384,20 @@ class ResponseCoordinator:
         # Provider-specific boosts
         if provider == "openai":
             # Technical content boost
-            if re.search(r'\b(code|program|function|algorithm|debug|error)', content_lower):
+            if re.search(r'\b(code|program|function|algorithm|debug|error|implementation|technical)', content_lower):
                 keyword_score += 0.2
         elif provider == "xai":
             # Creative content boost  
-            if re.search(r'\b(creative|idea|design|innovative|brainstorm)', content_lower):
+            if re.search(r'\b(creative|idea|design|innovative|brainstorm|user|experience)', content_lower):
                 keyword_score += 0.2
+        
+        # Multi-expertise detection - boost both if request explicitly asks for multiple perspectives
+        if re.search(r'\b(both|different|multiple|various|all|perspectives|approaches|viewpoints)\b', content_lower):
+            keyword_score += 0.25
+        
+        # Questions asking for comparison or pros/cons
+        if re.search(r'\b(pros? and cons?|compare|versus|vs|trade-?offs?|advantages?)\b', content_lower):
+            keyword_score += 0.3
         
         return min(1.0, keyword_score + question_boost)
 
@@ -536,6 +630,292 @@ class ResponseCoordinator:
             "max_consecutive_responses": self.max_consecutive_responses,
             "random_jitter": self.random_jitter,
             "context_limit": self.context_limit,
+            "close_score_threshold": self.close_score_threshold,
+            "urgent_response_threshold": self.urgent_response_threshold,
+            "conversation_energy_weight": self.conversation_energy_weight,
+            "enable_interruptions": self.enable_interruptions,
+            "enable_multi_response": self.enable_multi_response,
             "response_coordination": True,
-            "workflow_version": "V3",
+            "workflow_version": "V3-Natural",
         }
+
+    # ---------------------------------------------------------------------
+    # Conversational Dynamics - Natural Flow Enhancements
+    # ---------------------------------------------------------------------
+    
+    def detect_interruption_opportunity(
+        self, message: Message, context: List[Message]
+    ) -> Dict[str, float]:
+        """Detect if message creates natural interruption opportunities."""
+        content_lower = message.content.lower()
+        
+        interruption_scores = {}
+        
+        # Strong interruption cues
+        strong_cues = [
+            r'wait', r'actually', r'hold on', r'but', r'however',
+            r'on the other hand', r'i disagree', r'that\'s not right'
+        ]
+        
+        # Question that begs immediate response
+        urgent_question_patterns = [
+            r'what do you think\?', r'right\?', r'correct\?', 
+            r'am i wrong\?', r'does that make sense\?'
+        ]
+        
+        # Incomplete thought patterns
+        incomplete_patterns = [
+            r'\.\.\.', r'but i think', r'although', r'unless'
+        ]
+        
+        for provider in ["openai", "xai"]:
+            score = 0.0
+            
+            # Check for strong interruption cues
+            for pattern in strong_cues:
+                if re.search(pattern, content_lower):
+                    score += 0.3
+            
+            # Check for urgent questions
+            for pattern in urgent_question_patterns:
+                if re.search(pattern, content_lower):
+                    score += 0.4
+                    
+            # Check for incomplete thoughts
+            for pattern in incomplete_patterns:
+                if re.search(pattern, content_lower):
+                    score += 0.2
+            
+            # Reduce score if provider was last speaker (avoid immediate back-and-forth)
+            if context and context[-1].participant == provider:
+                score *= 0.5
+            
+            interruption_scores[provider] = min(1.0, score)
+        
+        return interruption_scores
+
+    def detect_conversation_repair_needs(
+        self, context: List[Message]
+    ) -> Optional[str]:
+        """Detect if conversation needs repair (clarification, misunderstanding)."""
+        if len(context) < 2:
+            return None
+            
+        recent_messages = context[-3:]
+        
+        # Look for confusion indicators
+        confusion_patterns = [
+            r'i don\'t understand', r'unclear', r'confusing',
+            r'what do you mean', r'could you clarify', r'lost me',
+            r'confused', r'explain.*more.*clearly', r'don\'t get it'
+        ]
+        
+        for msg in recent_messages:
+            content_lower = msg.content.lower()
+            for pattern in confusion_patterns:
+                if re.search(pattern, content_lower):
+                    # Find who can best clarify
+                    if msg.participant == "user":
+                        # User is confused - get the AI who last explained something technical
+                        for prev_msg in reversed(context[:-1]):
+                            if prev_msg.participant in ["openai", "xai"]:
+                                # Prefer the one who was explaining the confusing topic
+                                return prev_msg.participant
+                    elif msg.participant in ["openai", "xai"]:
+                        # AI is confused - get the other AI to help
+                        return "xai" if msg.participant == "openai" else "openai"
+        
+        return None
+
+    def calculate_conversational_momentum(
+        self, message: Message, context: List[Message]
+    ) -> Dict[str, float]:
+        """Calculate natural conversation momentum for each provider."""
+        momentum_scores = {}
+        
+        for provider in ["openai", "xai"]:
+            score = 0.0
+            
+            # Check if provider was mentioned in last few messages
+            for msg in context[-3:]:
+                if f"@{provider}" in msg.content.lower() or provider in msg.content.lower():
+                    score += 0.3
+            
+            # Check for topic continuity
+            if self._has_topic_continuity(message, provider, context):
+                score += 0.2
+            
+            # Check for unanswered questions directed at provider
+            if self._has_unanswered_questions(provider, context):
+                score += 0.4
+            
+            # Check conversation energy - rapid back-and-forth indicates high engagement
+            if self._has_high_conversation_energy(context):
+                score += 0.1
+            
+            momentum_scores[provider] = min(1.0, score)
+            
+        return momentum_scores
+
+    def _has_topic_continuity(
+        self, message: Message, provider: str, context: List[Message]
+    ) -> bool:
+        """Check if provider's expertise aligns with ongoing topic thread."""
+        if provider not in self.provider_profiles:
+            return False
+            
+        profile_keywords = self.provider_profiles[provider]["keywords"]
+        
+        # Check current message and last 2 messages for topic keywords
+        recent_content = message.content.lower()
+        for msg in context[-2:]:
+            recent_content += " " + msg.content.lower()
+        
+        keyword_matches = sum(1 for keyword in profile_keywords if keyword in recent_content)
+        return keyword_matches >= 2
+
+    def _has_unanswered_questions(self, provider: str, context: List[Message]) -> bool:
+        """Check if there are questions directed at provider that remain unanswered."""
+        for msg in reversed(context[-5:]):  # Check last 5 messages
+            content_lower = msg.content.lower()
+            if (f"@{provider}" in content_lower or provider in content_lower) and "?" in content_lower:
+                # Found a question for this provider, check if answered
+                msg_index = context.index(msg)
+                subsequent_messages = context[msg_index + 1:]
+                
+                # Check if provider responded after this question
+                provider_responded = any(m.participant == provider for m in subsequent_messages)
+                if not provider_responded:
+                    return True
+        return False
+
+    def _has_high_conversation_energy(self, context: List[Message]) -> bool:
+        """Detect if conversation has high energy (rapid exchanges)."""
+        if len(context) < 4:
+            return False
+            
+        # Check if last 4 messages were from different participants
+        participants = [msg.participant for msg in context[-4:]]
+        unique_participants = len(set(participants))
+        
+        # High energy if multiple participants are actively engaged
+        return unique_participants >= 2 and len(participants) >= 3
+
+    def _build_natural_speaking_queue(
+        self,
+        provider_scores: Dict[str, float],
+        explicit_mentions: List[str],
+        available_providers: List[str],
+        vetoed_providers: set[str],
+        context: List[Message],
+        intent: str
+    ) -> List[str]:
+        """Build speaking queue using natural conversation flow principles."""
+        
+        queue: List[str] = []
+
+        # ------------------------------------------------------------------
+        # 1. Explicit mentions always take priority (as in human conversation)
+        # ------------------------------------------------------------------
+        for provider in explicit_mentions:
+            if provider in available_providers and provider not in vetoed_providers:
+                queue.append(provider)
+
+        # ------------------------------------------------------------------
+        # 2. Natural self-selection based on conversation flow
+        # ------------------------------------------------------------------
+        if not queue:  # Only if no explicit mentions
+            
+            # Check for urgent response needs (questions, interruptions)
+            urgent_threshold = 0.6
+            urgent_providers = [
+                provider for provider, score in provider_scores.items()
+                if score >= urgent_threshold and provider not in vetoed_providers
+            ]
+            
+            if urgent_providers:
+                # Sort by score for urgent responses
+                urgent_providers.sort(key=lambda p: provider_scores[p], reverse=True)
+                queue.extend(urgent_providers[:1])  # Take only the most urgent
+            
+            else:
+                # Normal conversation flow - allow multiple responses if scores are close
+                qualified_providers = {
+                    provider: score
+                    for provider, score in provider_scores.items()
+                    if score >= self.base_threshold and provider not in vetoed_providers
+                }
+                
+                if qualified_providers:
+                    # Sort by score
+                    sorted_providers = sorted(
+                        qualified_providers.keys(),
+                        key=lambda p: qualified_providers[p],
+                        reverse=True
+                    )
+                    
+                    # Allow both providers if scores are close (natural conversation)
+                    top_score = qualified_providers[sorted_providers[0]]
+                    for provider in sorted_providers:
+                        score = qualified_providers[provider]
+                        # Include if within close_score_threshold of top score OR if both scores are decent
+                        if (top_score - score <= self.close_score_threshold) or (score >= 0.4):
+                            queue.append(provider)
+                        elif len(queue) == 0:  # Ensure at least one provider
+                            queue.append(provider)
+                        else:
+                            break
+                    
+                    # Limit to 2 providers max to avoid overwhelming the user
+                    queue = queue[:2]
+
+        # ------------------------------------------------------------------
+        # 3. Fallback - ensure someone responds
+        # ------------------------------------------------------------------
+        if not queue:
+            non_vetoed = [p for p in available_providers if p not in vetoed_providers]
+            if non_vetoed:
+                # Choose based on context if available
+                if context and len(context) > 0:
+                    last_speaker = context[-1].participant
+                    other_providers = [p for p in non_vetoed if p != last_speaker]
+                    queue.append(other_providers[0] if other_providers else non_vetoed[0])
+                else:
+                    queue.append(non_vetoed[0])
+
+        # ------------------------------------------------------------------
+        # 4. Apply conversation-specific ordering
+        # ------------------------------------------------------------------
+        if len(queue) > 1:
+            queue = self._apply_natural_ordering(queue, context, intent)
+
+        return queue
+
+    def _apply_natural_ordering(
+        self, providers: List[str], context: List[Message], intent: str
+    ) -> List[str]:
+        """Apply natural conversation ordering principles."""
+        
+        if len(providers) <= 1:
+            return providers
+        
+        # For questions, let the most relevant provider go first
+        if intent == "question":
+            # Keep current ordering (already sorted by relevance)
+            return providers
+        
+        # For discussions, encourage back-and-forth
+        if intent == "discussion" and context:
+            last_speaker = context[-1].participant if context else None
+            if last_speaker in ["openai", "xai"]:
+                # Put the other AI first to encourage dialogue
+                other_ai = "xai" if last_speaker == "openai" else "openai"
+                if other_ai in providers:
+                    providers = [other_ai] + [p for p in providers if p != other_ai]
+        
+        # For requests, let the most capable provider respond first
+        if intent == "request":
+            # Reorder based on provider strengths for the request type
+            return providers  # Keep relevance-based ordering
+        
+        return providers

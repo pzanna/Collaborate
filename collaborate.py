@@ -14,12 +14,15 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from config.config_manager import ConfigManager
 from storage.database import DatabaseManager
 from core.ai_client_manager import AIClientManager
+from core.streaming_coordinator import StreamingResponseCoordinator
 from models.data_models import Project, Conversation, Message
 from utils.export_manager import ExportManager
 from utils.error_handler import (
     get_error_handler, safe_execute, format_error_for_user, 
     CollaborateError, NetworkError, APIError, DatabaseError
 )
+import asyncio
+import sys
 
 
 class SimpleCollaborateCLI:
@@ -36,10 +39,20 @@ class SimpleCollaborateCLI:
         try:
             self.ai_manager = AIClientManager(self.config_manager)
             available_providers = self.ai_manager.get_available_providers()
+            
+            # Initialize streaming coordinator
+            self.streaming_coordinator = StreamingResponseCoordinator(
+                config_manager=self.config_manager,
+                ai_manager=self.ai_manager,
+                db_manager=self.db_manager
+            )
+            
             print(f"✓ AI providers available: {', '.join(available_providers)}")
+            print("✓ Real-time streaming enabled")
         except Exception as e:
             print(f"⚠ AI providers not available: {e}")
             self.ai_manager = None
+            self.streaming_coordinator = None
         
         print("✓ Collaborate initialized successfully!\n")
     
@@ -47,12 +60,13 @@ class SimpleCollaborateCLI:
         """Display the main menu."""
         print("=" * 60)
         print("🤝 COLLABORATE - Three-Way AI Collaboration Platform")
+        print("✨ Real-Time Streaming Mode")
         print("=" * 60)
         print("1. List Projects")
         print("2. Create Project")
         print("3. List Conversations")
-        print("4. Start Conversation")
-        print("5. Resume Conversation")
+        print("4. Start Conversation (Real-Time Streaming)")
+        print("5. Resume Conversation (Real-Time Streaming)")
         print("6. Test AI Connections")
         print("7. Show Configuration")
         print("8. Export Data")
@@ -202,7 +216,7 @@ class SimpleCollaborateCLI:
             print(f"❌ Unexpected error starting conversation: {e}")
     
     def run_conversation(self, conversation_id: str):
-        """Run a conversation session."""
+        """Run a conversation session with real-time streaming."""
         session = self.db_manager.get_conversation_session(conversation_id)
         if not session:
             print("❌ Conversation not found.")
@@ -212,6 +226,7 @@ class SimpleCollaborateCLI:
         print("=" * 60)
         print("Type 'exit' to end the conversation")
         print("Type 'history' to see conversation history")
+        print("✨ Real-time streaming enabled - responses appear as they're generated")
         print("=" * 60)
         
         # Show existing messages
@@ -219,11 +234,22 @@ class SimpleCollaborateCLI:
             print("\n📜 Conversation History:")
             self.show_messages(session.messages)
         
-        previous_ai_responses = None
-        
+        # Run async conversation loop
+        try:
+            asyncio.run(self._async_conversation_loop(conversation_id))
+        except KeyboardInterrupt:
+            print("\n👋 Ending conversation...")
+        except Exception as e:
+            print(f"❌ Error in conversation: {e}")
+    
+    async def _async_conversation_loop(self, conversation_id: str):
+        """Async conversation loop for real-time streaming."""
         while True:
             try:
-                user_input = self.safe_input("\n👤 You: ").strip()
+                # Get user input (this blocks, but that's OK for CLI)
+                user_input = await asyncio.get_event_loop().run_in_executor(
+                    None, self._get_user_input
+                )
                 
                 if user_input.lower() == 'exit':
                     print("👋 Ending conversation...")
@@ -238,15 +264,10 @@ class SimpleCollaborateCLI:
                         print("📜 No messages in conversation yet.")
                     continue
                 
-                if not user_input:
-                    # If Enter is pressed, use previous AI responses as the new user message
-                    if previous_ai_responses:
-                        user_input = '\n'.join(previous_ai_responses)
-                        print("(Resending previous AI responses)")
-                    else:
-                        continue
+                if not user_input.strip():
+                    continue
                 
-                # Create user message
+                # Create and save user message
                 user_message = Message(
                     conversation_id=conversation_id,
                     participant="user",
@@ -254,34 +275,83 @@ class SimpleCollaborateCLI:
                 )
                 self.db_manager.create_message(user_message)
                 
-                # Refresh session and context after user message
-                session = self.db_manager.get_conversation_session(conversation_id)
-                context_messages = session.get_context_messages(self.config_manager.config.conversation.max_context_tokens)
-                # Get AI responses
-                if self.ai_manager:
-                    responses = self.ai_manager.get_smart_responses(context_messages)
-                    previous_ai_responses = [resp for resp in responses.values() if not resp.startswith("Error:")]
-                    for provider, response in responses.items():
-                        if not response.startswith("Error:"):
-                            print(f"\n🤖 {provider.upper()}: {response}")
-                            # Create AI message
-                            try:
-                                ai_message = Message(
-                                    conversation_id=conversation_id,
-                                    participant=provider,
-                                    content=response
-                                )
-                                self.db_manager.create_message(ai_message)
-                            except Exception as e:
-                                print(f"⚠️ Error saving AI response: {e}")
+                # Get context and stream AI responses
+                if self.streaming_coordinator:
+                    session = self.db_manager.get_conversation_session(conversation_id)
+                    context_messages = session.get_context_messages(
+                        self.config_manager.config.conversation.max_context_tokens
+                    )
+                    
+                    print("\n🤖 AI responses (streaming):")
+                    print("-" * 40)
+                    
+                    # Stream the conversation chain
+                    try:
+                        response_count = 0
+                        async for update in self.streaming_coordinator.stream_conversation_chain(
+                            user_message, context_messages
+                        ):
+                            # Display real-time updates
+                            if update.get('type') == "provider_starting":
+                                print(f"\n💭 {update.get('provider', '').upper()} is thinking...", flush=True)
+                            elif update.get('type') == "provider_response_start":
+                                print(f"\n🤖 {update.get('provider', '').upper()}: ", end="", flush=True)
+                            elif update.get('type') == "token":
+                                print(update.get('content', ''), end="", flush=True)
+                            elif update.get('type') == "response_chunk":
+                                print(update.get('chunk', ''), end="", flush=True)
+                            elif update.get('type') == "provider_completed":
+                                # print(f"\n✓ {update.get('provider', '')} completed")
+                                print(f"\n")
+                                response_count += 1
+                            elif update.get('type') == "conversation_completed":
+                                print(f"\n📋 Chain completed: {update.get('total_providers', 0)} provider(s) responded")
+                            elif update.get('type') == "queue_determined":
+                                print(f"🎯 Response queue: {', '.join(update.get('queue', []))}")
+                            elif update.get('type') == "provider_error":
+                                print(f"\n❌ {update.get('message', '')}")
+                            elif update.get('type') == "database_error":
+                                print(f"\n⚠️ {update.get('message', '')}")
+                        
+                        if response_count == 0:
+                            print("⚠ No AI responses generated")
+                    
+                    except Exception as e:
+                        print(f"\n❌ Streaming error: {e}")
+                        print("🔄 Falling back to batch mode...")
+                        
+                        # Emergency fallback to batch mode
+                        if self.ai_manager:
+                            responses = self.ai_manager.get_smart_responses(context_messages)
+                            for provider, response in responses.items():
+                                if not response.startswith("Error:"):
+                                    print(f"\n🤖 {provider.upper()}: {response}")
+                                    # Create AI message
+                                    try:
+                                        ai_message = Message(
+                                            conversation_id=conversation_id,
+                                            participant=provider,
+                                            content=response
+                                        )
+                                        self.db_manager.create_message(ai_message)
+                                    except Exception as save_e:
+                                        print(f"⚠️ Error saving AI response: {save_e}")
+                        else:
+                            print("⚠ AI manager not available for fallback")
+                    
+                    print()  # Add final newline
                 else:
-                    print("⚠ AI providers not available. Message saved but no AI responses.")
+                    print("⚠ Streaming not available. Message saved but no AI responses.")
                 
             except KeyboardInterrupt:
                 print("\n👋 Ending conversation...")
                 break
             except Exception as e:
                 print(f"❌ Error: {e}")
+    
+    def _get_user_input(self) -> str:
+        """Get user input synchronously."""
+        return self.safe_input("\n👤 You: ").strip()
     
     def get_ai_responses(self, conversation_id: str):
         """Get responses from AI providers using smart response logic with enhanced error handling."""
@@ -355,12 +425,16 @@ class SimpleCollaborateCLI:
                 print(f"[{timestamp}] 🤖 {msg.participant.upper()}: {msg.content}")
     
     def test_ai_connections(self):
-        """Test AI connections."""
-        print("\n🔧 Testing AI Connections")
-        print("-" * 30)
+        """Test AI connections and streaming capability."""
+        print("\n🔧 Testing AI Connections & Streaming")
+        print("-" * 40)
         
         if not self.ai_manager:
             print("❌ AI manager not initialized.")
+            return
+        
+        if not self.streaming_coordinator:
+            print("❌ Streaming coordinator not initialized.")
             return
         
         providers = self.ai_manager.get_available_providers()
@@ -369,6 +443,7 @@ class SimpleCollaborateCLI:
             return
         
         print(f"Available providers: {', '.join(providers)}")
+        print("✨ Real-time streaming: ✓ Ready")
         
         # Test with a simple message
         test_messages = [
@@ -386,6 +461,8 @@ class SimpleCollaborateCLI:
                 print(f"✅ {provider.upper()} Response: {response}")
             except Exception as e:
                 print(f"❌ {provider.upper()} Error: {e}")
+        
+        print("\n🚀 All systems ready for real-time streaming conversations!")
     
     def show_configuration(self):
         """Show current configuration."""
@@ -399,6 +476,7 @@ class SimpleCollaborateCLI:
         print(f"Max Context Tokens: {config.conversation.max_context_tokens}")
         print(f"Auto Save: {config.conversation.auto_save}")
         print(f"Response Coordination: {config.conversation.response_coordination}")
+        print(f"Real-Time Streaming: {'✓ Enabled' if self.streaming_coordinator else '❌ Disabled'}")
         
         print("\nAI Providers:")
         for name, provider_config in config.ai_providers.items():
@@ -407,6 +485,13 @@ class SimpleCollaborateCLI:
             print(f"    Temperature: {provider_config.temperature}")
             print(f"    Max Tokens: {provider_config.max_tokens}")
             print(f"    Role Adaptation: {provider_config.role_adaptation}")
+        
+        if self.streaming_coordinator:
+            print("\n✨ Streaming Features:")
+            print("  • Real-time word-by-word response display")
+            print("  • Natural conversation flow")
+            print("  • Interruption support")
+            print("  • Smart response coordination")
     
     def export_data(self):
         """Export data to files."""

@@ -3,14 +3,14 @@ ai_providers:
     model: "gpt-4.1-mini"
     temperature: 0.7
     max_tokens: 2000
-    system_prompt: "You are OpenAI, participating in a collaborative research discussion. Be concise and build upon previous responses rather than repeating them. When another AI has already covered a topic, acknowledge their contribution and add new insights. Use phrases like 'Building on xAI's point...' or 'To add to what was mentioned...' Focus on your unique perspective and avoid redundancy."
+    system_prompt: "You are OpenAI, participating in a collaborative research discussion. Be concise and build upon previous responses rather than repeating them. When another AI has already covered a topic, acknowledge their contribution and add new insights. If you have a different perspective, feel free to share it and question OpenAI's opinions directly by asking them for clarification using the @xai tag. Focus on your unique perspective and avoid redundancy."
     role_adaptation: true
 
   xai:
     model: "grok-3-mini-beta"
     temperature: 0.7
     max_tokens: 2000
-    system_prompt: "You are xAI, contributing to collaborative research. Be concise and avoid repeating what OpenAI has already said. When building on previous responses, acknowledge the other AI's contribution and provide complementary insights. Use phrases like 'Adding to OpenAI's analysis...' or 'From a different angle...' Focus on unique value and fresh perspectives."
+    system_prompt: "You are xAI, contributing to collaborative research. Be concise and avoid repeating what OpenAI has already said. When building on previous responses, acknowledge the other AI's contribution and provide complementary insights. If you have a different perspective, feel free to share it and question OpenAI's opinions directly by asking them for clarification using the @openai tag. Focus on unique value and fresh perspectives."
     role_adaptation: true
     
 conversation:
