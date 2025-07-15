@@ -13,6 +13,15 @@ An advanced Python platform for intelligent AI collaboration featuring multi-pro
 - **🛡️ Robust Error Handling**: Automatic retries and intelligent fallbacks
 - **📊 Performance Monitoring**: Provider health tracking and optimization
 - **💾 Persistent Storage**: Conversation history with export capabilities
+- **🌐 Web UI**: Modern Slack/Teams-style chat interface with real-time streaming
+
+## 🖥️ Interfaces
+
+### 🌐 Web UI (Recommended)
+Modern chat interface with real-time AI streaming, project management, and system health monitoring.
+
+### 🖥️ Command Line Interface (CLI)
+Full-featured terminal interface for power users and automation.
 
 ## 📚 Documentation
 
@@ -29,21 +38,41 @@ The comprehensive guide covers:
 
 ## 🚀 Quick Start
 
-### Installation
+### 🌐 Web UI Setup (Recommended)
 
-```bash
-# Clone repository
-git clone <repository-url>
-cd Collaborate
+1. **Clone and setup**:
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up environment variables
-export OPENAI_API_KEY="your_openai_key"
-export XAI_API_KEY="your_xai_key"
+   ```bash
+   git clone <repository-url>
    cd Collaborate
-```
+   ./setup_web.sh
+   ```
+
+2. **Configure API keys**:
+
+   ```bash
+   export OPENAI_API_KEY="your_openai_key"
+   export XAI_API_KEY="your_xai_key"
+   ```
+
+3. **Start the web interface**:
+
+   ```bash
+   ./start_web.sh
+   ```
+
+4. **Open your browser**:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+
+### 🖥️ CLI Setup
+
+1. **Clone repository**:
+
+   ```bash
+   git clone <repository-url>
+   cd Collaborate
+   ```
 
 2. **Set up Python environment**:
 
@@ -69,6 +98,12 @@ export XAI_API_KEY="your_xai_key"
    ```bash
    cp .env.example .env
    # Edit .env and add your API keys
+   ```
+
+6. **Run the web interface**:
+
+   ```bash
+   streamlit run app.py
    ```
 
 ## 🔧 Configuration
@@ -124,6 +159,10 @@ ai_providers:
    ```bash
    python run_collaborate.py
    ```
+
+4. **Access the web interface**:
+
+   Open `http://localhost:8501` in your web browser.
 
 ### Basic Workflow
 
