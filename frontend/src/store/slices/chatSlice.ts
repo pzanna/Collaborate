@@ -1,4 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { apiService, CreateConversationRequest } from '../../services/api';
 
 export interface Message {
   id: string;
@@ -50,6 +51,31 @@ const initialState: ChatState = {
   connectionStatus: 'disconnected',
   currentStreamingMessage: '',
 };
+
+// Async thunks
+export const createNewConversation = createAsyncThunk(
+  'chat/createNewConversation',
+  async (data: CreateConversationRequest) => {
+    const response = await apiService.createConversation(data);
+    // Convert API response to Conversation interface
+    return {
+      id: response.id,
+      project_id: response.project_id,
+      title: response.title,
+      status: response.status,
+      created_at: response.created_at,
+      updated_at: response.updated_at,
+      message_count: response.message_count,
+    } as Conversation;
+  }
+);
+
+export const loadConversations = createAsyncThunk(
+  'chat/loadConversations',
+  async (projectId?: string) => {
+    return await apiService.getConversations(projectId);
+  }
+);
 
 const chatSlice = createSlice({
   name: 'chat',
@@ -175,6 +201,16 @@ const chatSlice = createSlice({
           break;
       }
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(createNewConversation.fulfilled, (state, action) => {
+        state.conversations.unshift(action.payload);
+        state.currentConversationId = action.payload.id;
+      })
+      .addCase(loadConversations.fulfilled, (state, action) => {
+        state.conversations = action.payload;
+      });
   },
 });
 

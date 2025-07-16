@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { useNavigate } from "react-router-dom"
-import { RootState } from "../../store/store"
+import { RootState, AppDispatch } from "../../store/store"
 import {
-  setConversations,
+  loadConversations,
   setCurrentConversation,
   removeConversation,
 } from "../../store/slices/chatSlice"
 import { setProjects } from "../../store/slices/projectsSlice"
+import { apiService } from "../../services/api"
 import { formatDistanceToNow } from "date-fns"
 import {
   ChatBubbleLeftIcon,
@@ -21,7 +22,7 @@ import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid"
 import NewConversationModal from "../modals/NewConversationModal"
 
 const Sidebar: React.FC = () => {
-  const dispatch = useDispatch()
+  const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
   const [isNewConversationModalOpen, setIsNewConversationModalOpen] =
     useState(false)
@@ -39,24 +40,21 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     // Load initial data
     loadProjects()
-    loadConversations()
+    loadConversationsData()
   }, [])
 
   const loadProjects = async () => {
     try {
-      const response = await fetch("/api/projects")
-      const projects = await response.json()
+      const projects = await apiService.getProjects()
       dispatch(setProjects(projects))
     } catch (error) {
       console.error("Failed to load projects:", error)
     }
   }
 
-  const loadConversations = async () => {
+  const loadConversationsData = async () => {
     try {
-      const response = await fetch("/api/conversations")
-      const conversations = await response.json()
-      dispatch(setConversations(conversations))
+      await dispatch(loadConversations())
     } catch (error) {
       console.error("Failed to load conversations:", error)
     }

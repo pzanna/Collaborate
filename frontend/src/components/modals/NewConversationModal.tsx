@@ -1,7 +1,7 @@
 import React, { useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
-import { RootState } from "../../store/store"
-import { addConversation } from "../../store/slices/chatSlice"
+import { RootState, AppDispatch } from "../../store/store"
+import { createNewConversation } from "../../store/slices/chatSlice"
 import { XMarkIcon } from "@heroicons/react/24/outline"
 
 interface NewConversationModalProps {
@@ -15,7 +15,7 @@ const NewConversationModal: React.FC<NewConversationModalProps> = ({
   onClose,
   onConversationCreated,
 }) => {
-  const dispatch = useDispatch()
+  const dispatch = useDispatch<AppDispatch>()
   const { projects, selectedProjectId } = useSelector(
     (state: RootState) => state.projects
   )
@@ -41,35 +41,29 @@ const NewConversationModal: React.FC<NewConversationModalProps> = ({
     setError(null)
 
     try {
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const result = await dispatch(
+        createNewConversation({
           title: title.trim(),
           project_id: projectId,
-        }),
-      })
+        })
+      )
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Failed to create conversation")
+      if (createNewConversation.fulfilled.match(result)) {
+        // Reset form
+        setTitle("")
+        setError(null)
+
+        // Call callback if provided
+        if (onConversationCreated) {
+          onConversationCreated(result.payload.id)
+        }
+
+        onClose()
+      } else {
+        throw new Error(
+          result.error?.message || "Failed to create conversation"
+        )
       }
-
-      const newConversation = await response.json()
-      dispatch(addConversation(newConversation))
-
-      // Reset form
-      setTitle("")
-      setError(null)
-
-      // Call callback if provided
-      if (onConversationCreated) {
-        onConversationCreated(newConversation.id)
-      }
-
-      onClose()
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to create conversation"
