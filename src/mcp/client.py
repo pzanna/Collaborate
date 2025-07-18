@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, Callable, List, Union
 from datetime import datetime
 import uuid
 
-from mcp.protocols import ResearchAction, AgentResponse, serialize_message, deserialize_message
+from .protocols import ResearchAction, AgentResponse, serialize_message, deserialize_message
 
 logger = logging.getLogger(__name__)
 

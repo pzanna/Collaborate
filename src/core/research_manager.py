@@ -101,30 +101,54 @@ class ResearchManager:
         
         self.logger.info("Research Manager initialized")
     
-    async def initialize(self) -> bool:
+    async def _ensure_mcp_client_initialized(self) -> None:
+        """
+        Ensure MCP client is initialized (lazy initialization).
+        """
+        if self.mcp_client is None:
+            try:
+                # Initialize MCP client
+                mcp_config = self.config.get_mcp_config()
+                self.mcp_client = MCPClient(
+                    host=mcp_config.get('host', 'localhost'),
+                    port=mcp_config.get('port', 8765)
+                )
+                
+                # Connect to MCP server
+                await self.mcp_client.connect()
+                
+                # Register message handlers
+                self.mcp_client.add_message_handler('agent_response', self._handle_agent_response)
+                self.mcp_client.add_message_handler('agent_registration', self._handle_agent_registration)
+                self.mcp_client.add_message_handler('task_update', self._handle_task_update)
+                
+                self.logger.info("MCP client initialized successfully")
+                
+            except Exception as e:
+                self.logger.error(f"Failed to initialize MCP client: {e}")
+                self.error_handler.handle_error(e, "mcp_client_init")
+                # Set to None to allow retries
+                self.mcp_client = None
+                raise
+    
+    async def initialize(self, external_mcp_client: Optional[MCPClient] = None) -> bool:
         """
         Initialize the Research Manager and establish MCP connection.
+        
+        Args:
+            external_mcp_client: Optional external MCP client to use
         
         Returns:
             bool: True if initialization successful
         """
         try:
-            # Initialize MCP client
-            mcp_config = self.config.get_mcp_config()
-            self.mcp_client = MCPClient(
-                host=mcp_config.get('host', 'localhost'),
-                port=mcp_config.get('port', 8765)
-            )
-            
-            # Connect to MCP server
-            await self.mcp_client.connect()
-            
-            # Register message handlers
-            self.mcp_client.add_message_handler('agent_response', self._handle_agent_response)
-            self.mcp_client.add_message_handler('agent_registration', self._handle_agent_registration)
-            self.mcp_client.add_message_handler('task_update', self._handle_task_update)
-            
-            self.logger.info("Research Manager initialized successfully")
+            if external_mcp_client:
+                # Use external MCP client
+                self.mcp_client = external_mcp_client
+                self.logger.info("Research Manager initialized with external MCP client")
+            else:
+                # Use internal initialization
+                await self._ensure_mcp_client_initialized()
             return True
             
         except Exception as e:
@@ -154,6 +178,9 @@ class ResearchManager:
         task_id = str(uuid.uuid4())
         
         try:
+            # Ensure MCP client is initialized
+            await self._ensure_mcp_client_initialized()
+            
             # Create research context
             context = ResearchContext(
                 task_id=task_id,
