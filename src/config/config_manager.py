@@ -2,6 +2,7 @@
 
 import os
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -37,6 +38,9 @@ class LoggingConfig(BaseModel):
     """Configuration for logging."""
     level: str = "INFO"
     file: str = "logs/collaborate.log"
+    enable_ai_api_logging: bool = True
+    ai_api_log_file: str = "logs/ai_api.log"
+    ai_api_log_level: str = "INFO"
 
 
 class CoordinationConfig(BaseModel):
@@ -181,4 +185,84 @@ class ConfigManager:
             'reasoner': {'enabled': True, 'model': 'gpt-4'},
             'executor': {'enabled': True, 'timeout': 60},
             'memory': {'enabled': True, 'max_entries': 1000}
+        }
+    
+    def setup_logging(self) -> None:
+        """Set up logging configuration based on config settings."""
+        try:
+            # Get logging configuration
+            logging_config = self.config.logging
+            
+            # Ensure logs directory exists
+            log_file_path = Path(logging_config.file)
+            log_file_path.parent.mkdir(exist_ok=True)
+            
+            # Configure logging
+            logging.basicConfig(
+                level=getattr(logging, logging_config.level.upper()),
+                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                handlers=[
+                    logging.FileHandler(logging_config.file),
+                    logging.StreamHandler()
+                ],
+                force=True  # Override any existing configuration
+            )
+            
+            # Set up AI API logging if enabled
+            if logging_config.enable_ai_api_logging:
+                ai_api_log_path = Path(logging_config.ai_api_log_file)
+                ai_api_log_path.parent.mkdir(exist_ok=True)
+                
+                # Create dedicated logger for AI API calls
+                ai_api_logger = logging.getLogger('ai_api')
+                ai_api_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
+                
+                # Create file handler for AI API logs
+                ai_api_handler = logging.FileHandler(logging_config.ai_api_log_file)
+                ai_api_handler.setFormatter(logging.Formatter(
+                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                ))
+                ai_api_logger.addHandler(ai_api_handler)
+                
+                # Prevent propagation to root logger to avoid duplicate logs
+                ai_api_logger.propagate = False
+                
+                # Also set up individual AI client loggers
+                for client_name in ['ai_clients.openai_client', 'ai_clients.xai_client', 'core.ai_client_manager']:
+                    client_logger = logging.getLogger(client_name)
+                    client_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
+                    client_logger.addHandler(ai_api_handler)
+                    client_logger.propagate = False
+            
+            # Set up MCP task logging if enabled
+            if hasattr(self.config, 'mcp_server') and self.config.mcp_server.enable_task_logging:
+                task_log_path = Path(self.config.mcp_server.task_log_file)
+                task_log_path.parent.mkdir(exist_ok=True)
+                
+                # Create a separate logger for MCP tasks
+                mcp_logger = logging.getLogger('mcp_tasks')
+                mcp_handler = logging.FileHandler(self.config.mcp_server.task_log_file)
+                mcp_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+                mcp_logger.addHandler(mcp_handler)
+                mcp_logger.setLevel(getattr(logging, self.config.mcp_server.log_level.upper()))
+                mcp_logger.propagate = False
+            
+            logging.getLogger(__name__).info("Logging configuration set up successfully")
+            
+        except Exception as e:
+            # If logging setup fails, at least ensure basic console logging
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                force=True
+            )
+            logging.getLogger(__name__).error(f"Failed to set up logging: {e}")
+    
+    def get_logging_config(self) -> Dict[str, Any]:
+        """Get logging configuration."""
+        if hasattr(self.config, 'logging') and self.config.logging:
+            return self.config.logging if isinstance(self.config.logging, dict) else self.config.logging.dict()
+        return {
+            'level': 'INFO',
+            'file': 'logs/collaborate.log'
         }

@@ -3,6 +3,8 @@
 import openai
 import os
 import sys
+import logging
+import time
 from typing import List, Dict, Any, Optional
 
 # Import models
@@ -19,9 +21,18 @@ class OpenAIClient:
     def __init__(self, api_key: str, config: AIConfig):
         self.client = openai.OpenAI(api_key=api_key)
         self.config = config
+        self.logger = logging.getLogger(__name__)
     
     def get_response(self, messages: List[Message], system_prompt: Optional[str] = None) -> str:
         """Get response from OpenAI."""
+        start_time = time.time()
+        estimated_tokens = self.estimate_tokens(messages)
+        
+        # Log API request details
+        self.logger.info(f"OpenAI API Request - Model: {self.config.model}, "
+                        f"Messages: {len(messages)}, Estimated tokens: {estimated_tokens}, "
+                        f"Temperature: {self.config.temperature}, Max tokens: {self.config.max_tokens}")
+        
         try:
             # Convert messages to OpenAI format
             openai_messages = self._convert_messages_to_openai_format(messages, system_prompt)
@@ -34,10 +45,29 @@ class OpenAIClient:
                 max_tokens=self.config.max_tokens
             )
             
-            return response.choices[0].message.content or ""
+            response_time = time.time() - start_time
+            response_content = response.choices[0].message.content or ""
+            
+            # Log successful response details
+            self.logger.info(f"OpenAI API Response - Success: Content length: {len(response_content)}, "
+                           f"Response time: {response_time:.2f}s, "
+                           f"Usage: {getattr(response, 'usage', 'N/A')}")
+            
+            # Log response content (truncated for readability)
+            content_preview = response_content[:200] + "..." if len(response_content) > 200 else response_content
+            self.logger.debug(f"OpenAI Response content preview: {content_preview}")
+            
+            return response_content
         
         except Exception as e:
-            raise Exception(f"OpenAI API error: {str(e)}")
+            response_time = time.time() - start_time
+            error_msg = f"OpenAI API error: {str(e)}"
+            
+            # Log error details
+            self.logger.error(f"OpenAI API Error - Model: {self.config.model}, "
+                            f"Response time: {response_time:.2f}s, Error: {error_msg}")
+            
+            raise Exception(error_msg)
     
     def _convert_messages_to_openai_format(self, messages: List[Message], system_prompt: Optional[str] = None) -> List[Dict[str, Any]]:
         """Convert internal messages to OpenAI format."""

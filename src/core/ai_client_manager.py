@@ -4,6 +4,7 @@
 import os
 import sys
 import time
+import logging
 import asyncio
 from typing import Dict, List, Optional, Any, AsyncGenerator, Generator
 from datetime import datetime
@@ -35,6 +36,7 @@ class AIClientManager:
         self.coordinator = SimplifiedCoordinator()
         self.failed_providers: Dict[str, int] = {}  # Track failed providers
         self.max_retries = 3
+        self.logger = logging.getLogger(__name__)
         
         # Apply coordination settings from config
         self._apply_coordination_config()
@@ -89,11 +91,19 @@ class AIClientManager:
                     system_prompt: Optional[str] = None, retry_count: int = 0) -> str:
         """Get response from a specific AI provider with error handling and retries."""
         if provider not in self.clients:
-            raise APIError(f"Provider '{provider}' not available", provider)
+            error_msg = f"Provider '{provider}' not available"
+            self.logger.error(f"AI Manager Error: {error_msg}")
+            raise APIError(error_msg, provider)
         
         # Check if provider has failed too many times
         if self.failed_providers.get(provider, 0) >= self.max_retries:
-            raise APIError(f"Provider '{provider}' has failed too many times", provider)
+            error_msg = f"Provider '{provider}' has failed too many times"
+            self.logger.error(f"AI Manager Error: {error_msg}")
+            raise APIError(error_msg, provider)
+        
+        # Log the request
+        self.logger.info(f"AI Manager: Requesting response from {provider} "
+                        f"(retry: {retry_count}, messages: {len(messages)})")
         
         try:
             client = self.clients[provider]
@@ -102,16 +112,22 @@ class AIClientManager:
             # Reset failure count on success
             if provider in self.failed_providers:
                 self.failed_providers[provider] = 0
+                self.logger.info(f"AI Manager: Reset failure count for {provider}")
             
+            self.logger.info(f"AI Manager: Successfully received response from {provider}")
             return response
             
         except Exception as e:
             # Track failure
             self.failed_providers[provider] = self.failed_providers.get(provider, 0) + 1
             
+            self.logger.warning(f"AI Manager: {provider} failed (count: {self.failed_providers[provider]}), "
+                              f"Error: {str(e)}")
+            
             # Retry logic
             if retry_count < self.max_retries:
-                print(f"⚠️ Retrying {provider} request (attempt {retry_count + 1}/{self.max_retries})...")
+                self.logger.info(f"AI Manager: Retrying {provider} request "
+                               f"(attempt {retry_count + 1}/{self.max_retries})")
                 return self.get_response(provider, messages, system_prompt, retry_count + 1)
             
             # Convert to appropriate error type
@@ -126,6 +142,7 @@ class AIClientManager:
         """Get responses from participating AIs using simplified coordination"""
         
         if not messages:
+            self.logger.info("AI Manager: No messages provided for smart responses")
             return {}
             
         user_message = messages[-1]
@@ -133,6 +150,7 @@ class AIClientManager:
         available_providers = self.get_available_providers()
         
         if not available_providers:
+            self.logger.warning("AI Manager: No available providers for smart responses")
             return {}
         
         # Determine participants using simple rules
@@ -140,7 +158,8 @@ class AIClientManager:
             user_message.content, available_providers, conversation_history
         )
         
-        print(f"🎯 Participants: {', '.join(participants)}")
+        self.logger.info(f"AI Manager: Coordination decision - Participants: {', '.join(participants)} "
+                        f"(from available: {', '.join(available_providers)})")
         
         responses = {}
         shared_context = messages  # All AIs see the same context

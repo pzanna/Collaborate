@@ -13,11 +13,20 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from mcp.client import MCPClient
-from mcp.protocols import ResearchAction, AgentResponse, TaskStatus
-from config.config_manager import ConfigManager
-from utils.error_handler import ErrorHandler
-from utils.performance import PerformanceMonitor
+try:
+    # Try relative imports first (when imported from within src package)
+    from ..mcp.client import MCPClient
+    from ..mcp.protocols import ResearchAction, AgentResponse, TaskStatus
+    from ..config.config_manager import ConfigManager
+    from ..utils.error_handler import ErrorHandler
+    from ..utils.performance import PerformanceMonitor
+except ImportError:
+    # Fall back to absolute imports (when imported from outside src package)
+    from mcp.client import MCPClient
+    from mcp.protocols import ResearchAction, AgentResponse, TaskStatus
+    from config.config_manager import ConfigManager
+    from utils.error_handler import ErrorHandler
+    from utils.performance import PerformanceMonitor
 
 
 class ResearchStage(Enum):

@@ -472,10 +472,18 @@ class MCPServer:
 
 async def main():
     """Main entry point for MCP server"""
+    # Ensure logs directory exists
+    from pathlib import Path
+    Path('logs').mkdir(exist_ok=True)
+    
     # Setup logging
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('logs/mcp_server.log'),
+            logging.StreamHandler()
+        ]
     )
     
     # Load configuration

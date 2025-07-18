@@ -28,7 +28,10 @@
     },
     "logging": {
         "level": "INFO",
-        "file": "logs/collaborate.log"
+        "file": "logs/collaborate.log",
+        "enable_ai_api_logging": true,
+        "ai_api_log_file": "logs/ai_api.log",
+        "ai_api_log_level": "DEBUG"
     },
     "mcp_server": {
         "host": "127.0.0.1",

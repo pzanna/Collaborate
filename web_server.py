@@ -117,14 +117,19 @@ async def lifespan(app: FastAPI):
     
     # Initialize components (same as CLI)
     config_manager = ConfigManager()
+    
+    # Set up logging first
+    config_manager.setup_logging()
+    
     db_manager = DatabaseManager(config_manager.config.storage.database_path)
     export_manager = ExportManager(config_manager.config.storage.export_path)
     
     # Initialize MCP client
     try:
+        mcp_config = config_manager.get_mcp_config()
         mcp_client = MCPClient(
-            host=config_manager.config.mcp_server.get('host', '127.0.0.1'),
-            port=config_manager.config.mcp_server.get('port', 9000)
+            host=mcp_config.get('host', '127.0.0.1'),
+            port=mcp_config.get('port', 9000)
         )
         
         # Try to connect to MCP server

@@ -2,6 +2,8 @@
 
 import os
 import sys
+import logging
+import time
 from xai_sdk import Client
 from xai_sdk.chat import user, system, assistant
 from typing import List, Optional
@@ -20,9 +22,18 @@ class XAIClient:
     def __init__(self, api_key: str, config: AIConfig):
         self.client = Client(api_key=api_key)
         self.config = config
+        self.logger = logging.getLogger(__name__)
     
     def get_response(self, messages: List[Message], system_prompt: Optional[str] = None) -> str:
         """Get response from xAI."""
+        start_time = time.time()
+        estimated_tokens = self.estimate_tokens(messages)
+        
+        # Log API request details
+        self.logger.info(f"xAI API Request - Model: {self.config.model}, "
+                        f"Messages: {len(messages)}, Estimated tokens: {estimated_tokens}, "
+                        f"Temperature: {self.config.temperature}, Max tokens: {self.config.max_tokens}")
+        
         try:
             # Create a chat instance
             chat = self.client.chat.create(model=self.config.model)
@@ -46,15 +57,33 @@ class XAIClient:
             # Get response from the chat
             response = chat.sample()
             
+            response_time = time.time() - start_time
+            
             # Extract content from response
             if hasattr(response, 'content'):
-                return response.content or ""
+                response_content = response.content or ""
+            else:
+                response_content = str(response)
             
-            # If we can't find content, return the string representation
-            return str(response)
+            # Log successful response details
+            self.logger.info(f"xAI API Response - Success: Content length: {len(response_content)}, "
+                           f"Response time: {response_time:.2f}s")
+            
+            # Log response content (truncated for readability)
+            content_preview = response_content[:200] + "..." if len(response_content) > 200 else response_content
+            self.logger.debug(f"xAI Response content preview: {content_preview}")
+            
+            return response_content
         
         except Exception as e:
-            raise Exception(f"xAI API error: {str(e)}")
+            response_time = time.time() - start_time
+            error_msg = f"xAI API error: {str(e)}"
+            
+            # Log error details
+            self.logger.error(f"xAI API Error - Model: {self.config.model}, "
+                            f"Response time: {response_time:.2f}s, Error: {error_msg}")
+            
+            raise Exception(error_msg)
     
     def estimate_tokens(self, messages: List[Message]) -> int:
         """Estimate token count for messages."""

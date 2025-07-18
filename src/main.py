@@ -24,6 +24,9 @@ def main():
     # Initialize configuration
     config_manager = ConfigManager()
     
+    # Set up logging
+    config_manager.setup_logging()
+    
     # Initialize database
     db_manager = DatabaseManager(config_manager.config.storage.database_path)
     
