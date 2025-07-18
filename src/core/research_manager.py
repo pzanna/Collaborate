@@ -599,11 +599,20 @@ class ResearchManager:
                 'updated_at': context.updated_at.isoformat()
             }
             
+            # Call global progress callbacks
             for callback in self.progress_callbacks:
                 try:
                     await callback(progress_data)
                 except Exception as e:
                     self.logger.error(f"Progress callback error: {e}")
+            
+            # Call task-specific progress callbacks
+            task_callbacks = context.metadata.get('progress_callbacks', [])
+            for callback in task_callbacks:
+                try:
+                    await callback(progress_data)
+                except Exception as e:
+                    self.logger.error(f"Task progress callback error: {e}")
             
         except Exception as e:
             self.logger.error(f"Error notifying progress: {e}")
@@ -719,6 +728,72 @@ class ResearchManager:
                 active_tasks.append(status)
         return active_tasks
     
+    def get_task_context(self, task_id: str) -> Optional[ResearchContext]:
+        """
+        Get the research context for a task.
+        
+        Args:
+            task_id: Task ID to get context for
+            
+        Returns:
+            Optional[ResearchContext]: Research context if found
+        """
+        return self.active_contexts.get(task_id)
+    
+    def calculate_task_progress(self, task_id: str) -> float:
+        """
+        Calculate progress percentage for a task.
+        
+        Args:
+            task_id: Task ID to calculate progress for
+            
+        Returns:
+            float: Progress percentage (0.0 to 100.0)
+        """
+        context = self.active_contexts.get(task_id)
+        if not context:
+            return 0.0
+        
+        total_stages = 5  # planning, retrieval, reasoning, execution, synthesis
+        completed_stages = len(context.completed_stages)
+        
+        if context.stage == ResearchStage.COMPLETE:
+            return 100.0
+        elif context.stage == ResearchStage.FAILED:
+            return (completed_stages / total_stages) * 100.0
+        else:
+            # Add partial progress for current stage
+            return ((completed_stages + 0.5) / total_stages) * 100.0
+    
+    def add_progress_callback(self, task_id: str, callback: Callable) -> None:
+        """
+        Add a progress callback for a specific task.
+        
+        Args:
+            task_id: Task ID to add callback for
+            callback: Callback function to add
+        """
+        context = self.active_contexts.get(task_id)
+        if context:
+            if 'progress_callbacks' not in context.metadata:
+                context.metadata['progress_callbacks'] = []
+            context.metadata['progress_callbacks'].append(callback)
+    
+    def remove_progress_callback(self, task_id: str) -> None:
+        """
+        Remove progress callbacks for a specific task.
+        
+        Args:
+            task_id: Task ID to remove callbacks for
+        """
+        context = self.active_contexts.get(task_id)
+        if context and 'progress_callbacks' in context.metadata:
+            context.metadata['progress_callbacks'] = []
+    
+    async def cleanup(self) -> None:
+        """Clean up the research manager (alias for shutdown)."""
+        await self.shutdown()
+
     async def cancel_task(self, task_id: str) -> bool:
         """
         Cancel an active research task.

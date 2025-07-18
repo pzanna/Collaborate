@@ -123,8 +123,8 @@ async def lifespan(app: FastAPI):
     # Initialize MCP client
     try:
         mcp_client = MCPClient(
-            host=config_manager.config.mcp.get('host', '127.0.0.1'),
-            port=config_manager.config.mcp.get('port', 9000)
+            host=config_manager.config.mcp_server.get('host', '127.0.0.1'),
+            port=config_manager.config.mcp_server.get('port', 9000)
         )
         
         # Try to connect to MCP server
@@ -422,12 +422,19 @@ async def start_research_task(request: ResearchRequest):
         raise HTTPException(status_code=503, detail="Research system not available")
     
     try:
-        # Create research task
+        # Create options dict from request parameters
+        options = {
+            'research_mode': request.research_mode,
+            'max_results': request.max_results,
+            'metadata': {}
+        }
+        
+        # Create research task with proper parameters
         task_id = await research_manager.start_research_task(
             query=request.query,
+            user_id="web_user",  # Default user ID for web requests
             conversation_id=request.conversation_id,
-            research_mode=request.research_mode,
-            max_results=request.max_results
+            options=options
         )
         
         # Get task details
@@ -686,11 +693,19 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                             # Extract query (remove prefix)
                             query = content.split(':', 1)[1].strip()
                             
+                            # Create options for research task
+                            options = {
+                                'research_mode': "comprehensive",
+                                'max_results': 10,
+                                'metadata': {}
+                            }
+                            
                             # Start research task
                             task_id = await research_manager.start_research_task(
                                 query=query,
+                                user_id="web_user",
                                 conversation_id=conversation_id,
-                                research_mode="comprehensive"
+                                options=options
                             )
                             
                             # Notify client about research task
