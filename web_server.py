@@ -9,7 +9,7 @@ import sys
 import asyncio
 import json
 from pathlib import Path
-from typing import List, Dict, Optional, AsyncGenerator
+from typing import List, Dict, Optional, AsyncGenerator, Any
 from contextlib import asynccontextmanager
 
 # Add src directory to path
@@ -27,12 +27,14 @@ from config.config_manager import ConfigManager
 from storage.database import DatabaseManager
 from core.ai_client_manager import AIClientManager
 from core.streaming_coordinator import StreamingResponseCoordinator
+from core.research_manager import ResearchManager
 from models.data_models import Project, Conversation, Message
 from utils.export_manager import ExportManager
 from utils.error_handler import (
     get_error_handler, format_error_for_user, 
     CollaborateError, NetworkError, APIError, DatabaseError
 )
+from mcp.client import MCPClient
 
 
 # Pydantic models for API requests/responses
@@ -47,6 +49,22 @@ class ConversationCreate(BaseModel):
 class MessageCreate(BaseModel):
     conversation_id: str
     content: str
+
+class ResearchRequest(BaseModel):
+    conversation_id: str
+    query: str
+    research_mode: str = "comprehensive"  # comprehensive, quick, deep
+    max_results: int = 10
+    
+class ResearchTaskResponse(BaseModel):
+    task_id: str
+    conversation_id: str
+    query: str
+    status: str
+    created_at: str
+    updated_at: str
+    progress: float = 0.0
+    results: Optional[Dict[str, Any]] = None
 
 class MessageResponse(BaseModel):
     id: str
@@ -76,6 +94,7 @@ class HealthResponse(BaseModel):
     status: str
     database: Dict
     ai_providers: Dict
+    research_system: Dict
     errors: Dict
 
 
@@ -84,13 +103,15 @@ config_manager: ConfigManager = None
 db_manager: DatabaseManager = None
 ai_manager: AIClientManager = None
 streaming_coordinator: StreamingResponseCoordinator = None
+research_manager: ResearchManager = None
+mcp_client: MCPClient = None
 export_manager: ExportManager = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
-    global config_manager, db_manager, ai_manager, streaming_coordinator, export_manager
+    global config_manager, db_manager, ai_manager, streaming_coordinator, research_manager, mcp_client, export_manager
     
     print("🚀 Initializing Collaborate Web Server...")
     
@@ -98,6 +119,31 @@ async def lifespan(app: FastAPI):
     config_manager = ConfigManager()
     db_manager = DatabaseManager(config_manager.config.storage.database_path)
     export_manager = ExportManager(config_manager.config.storage.export_path)
+    
+    # Initialize MCP client
+    try:
+        mcp_client = MCPClient(
+            host=config_manager.config.mcp.get('host', '127.0.0.1'),
+            port=config_manager.config.mcp.get('port', 9000)
+        )
+        
+        # Try to connect to MCP server
+        if await mcp_client.connect():
+            print("✓ MCP client connected successfully")
+            
+            # Initialize research manager with MCP client
+            research_manager = ResearchManager(config_manager)
+            await research_manager.initialize(mcp_client)
+            print("✓ Research manager initialized")
+        else:
+            print("⚠ MCP server not available, research features disabled")
+            mcp_client = None
+            research_manager = None
+            
+    except Exception as e:
+        print(f"⚠ Failed to initialize MCP client: {e}")
+        mcp_client = None
+        research_manager = None
     
     try:
         ai_manager = AIClientManager(config_manager)
@@ -123,6 +169,14 @@ async def lifespan(app: FastAPI):
     
     # Cleanup on shutdown
     print("👋 Shutting down Collaborate Web Server...")
+    
+    # Disconnect MCP client
+    if mcp_client:
+        await mcp_client.disconnect()
+    
+    # Cleanup research manager
+    if research_manager:
+        await research_manager.cleanup()
 
 
 # Create FastAPI app
@@ -148,26 +202,51 @@ app.add_middleware(
 async def get_health():
     """Get system health status."""
     try:
-        # Database health
-        db_stats = db_manager.get_database_stats()
+        # Check database
+        db_status = {"status": "healthy", "tables": 0}
+        try:
+            # Simple DB check
+            projects = db_manager.list_projects()
+            db_status["tables"] = len(projects) if projects else 0
+        except Exception as e:
+            db_status = {"status": "error", "error": str(e)}
         
-        # AI providers health
-        ai_health = {}
+        # Check AI providers
+        ai_status = {"status": "disabled", "providers": []}
         if ai_manager:
-            ai_health = ai_manager.get_provider_health()
+            try:
+                providers = ai_manager.get_available_providers()
+                ai_status = {"status": "healthy", "providers": providers}
+            except Exception as e:
+                ai_status = {"status": "error", "error": str(e)}
         
-        # Error statistics
-        error_handler = get_error_handler()
-        error_stats = error_handler.get_error_stats()
+        # Check research system
+        research_status = {"status": "disabled", "mcp_connected": False}
+        if research_manager and mcp_client:
+            try:
+                research_status = {
+                    "status": "healthy",
+                    "mcp_connected": mcp_client.is_connected,
+                    "active_tasks": len(research_manager.active_contexts)
+                }
+            except Exception as e:
+                research_status = {"status": "error", "error": str(e)}
         
         return HealthResponse(
-            status="healthy" if db_stats.get("status") == "healthy" else "degraded",
-            database=db_stats,
-            ai_providers=ai_health,
-            errors=error_stats
+            status="healthy",
+            database=db_status,
+            ai_providers=ai_status,
+            research_system=research_status,
+            errors={}
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HealthResponse(
+            status="error",
+            database={"status": "error"},
+            ai_providers={"status": "error"},
+            research_system={"status": "error"},
+            errors={"general": str(e)}
+        )
 
 
 # Projects endpoints
@@ -335,11 +414,106 @@ async def get_conversation_messages(conversation_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Research endpoints
+@app.post("/api/research/start", response_model=ResearchTaskResponse)
+async def start_research_task(request: ResearchRequest):
+    """Start a new research task."""
+    if not research_manager:
+        raise HTTPException(status_code=503, detail="Research system not available")
+    
+    try:
+        # Create research task
+        task_id = await research_manager.start_research_task(
+            query=request.query,
+            conversation_id=request.conversation_id,
+            research_mode=request.research_mode,
+            max_results=request.max_results
+        )
+        
+        # Get task details
+        task_context = research_manager.get_task_context(task_id)
+        
+        return ResearchTaskResponse(
+            task_id=task_id,
+            conversation_id=request.conversation_id,
+            query=request.query,
+            status=task_context.stage.value,
+            created_at=task_context.created_at.isoformat(),
+            updated_at=task_context.updated_at.isoformat(),
+            progress=0.0
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start research task: {str(e)}")
+
+
+@app.get("/api/research/task/{task_id}", response_model=ResearchTaskResponse)
+async def get_research_task(task_id: str):
+    """Get status and results of a research task."""
+    if not research_manager:
+        raise HTTPException(status_code=503, detail="Research system not available")
+    
+    try:
+        task_context = research_manager.get_task_context(task_id)
+        if not task_context:
+            raise HTTPException(status_code=404, detail="Research task not found")
+        
+        # Calculate progress
+        progress = research_manager.calculate_task_progress(task_id)
+        
+        # Prepare results
+        results = None
+        if task_context.stage == task_context.stage.COMPLETE:
+            results = {
+                "search_results": task_context.search_results,
+                "reasoning_output": task_context.reasoning_output,
+                "execution_results": task_context.execution_results,
+                "synthesis": task_context.synthesis,
+                "metadata": task_context.metadata
+            }
+        
+        return ResearchTaskResponse(
+            task_id=task_id,
+            conversation_id=task_context.conversation_id,
+            query=task_context.query,
+            status=task_context.stage.value,
+            created_at=task_context.created_at.isoformat(),
+            updated_at=task_context.updated_at.isoformat(),
+            progress=progress,
+            results=results
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get research task: {str(e)}")
+
+
+@app.delete("/api/research/task/{task_id}")
+async def cancel_research_task(task_id: str):
+    """Cancel a research task."""
+    if not research_manager:
+        raise HTTPException(status_code=503, detail="Research system not available")
+    
+    try:
+        success = await research_manager.cancel_task(task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Research task not found")
+        
+        return {"success": True, "message": "Research task cancelled successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to cancel research task: {str(e)}")
+
+
 # WebSocket manager for real-time connections
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
         self.conversation_connections: Dict[str, List[WebSocket]] = {}
+        self.research_connections: Dict[str, List[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
         await websocket.accept()
@@ -350,6 +524,14 @@ class ConnectionManager:
                 self.conversation_connections[conversation_id] = []
             self.conversation_connections[conversation_id].append(websocket)
 
+    async def connect_research(self, websocket: WebSocket, task_id: str):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        
+        if task_id not in self.research_connections:
+            self.research_connections[task_id] = []
+        self.research_connections[task_id].append(websocket)
+
     def disconnect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
@@ -357,6 +539,14 @@ class ConnectionManager:
         if conversation_id and conversation_id in self.conversation_connections:
             if websocket in self.conversation_connections[conversation_id]:
                 self.conversation_connections[conversation_id].remove(websocket)
+
+    def disconnect_research(self, websocket: WebSocket, task_id: str):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        
+        if task_id in self.research_connections:
+            if websocket in self.research_connections[task_id]:
+                self.research_connections[task_id].remove(websocket)
 
     async def send_to_conversation(self, conversation_id: str, message: dict):
         if conversation_id in self.conversation_connections:
@@ -367,8 +557,62 @@ class ConnectionManager:
                     # Remove dead connections
                     self.conversation_connections[conversation_id].remove(connection)
 
+    async def send_to_research(self, task_id: str, message: dict):
+        if task_id in self.research_connections:
+            for connection in self.research_connections[task_id]:
+                try:
+                    await connection.send_text(json.dumps(message))
+                except:
+                    # Remove dead connections
+                    self.research_connections[task_id].remove(connection)
+
 
 manager = ConnectionManager()
+
+
+@app.websocket("/api/research/stream/{task_id}")
+async def research_websocket(websocket: WebSocket, task_id: str):
+    """WebSocket endpoint for real-time research task streaming."""
+    if not research_manager:
+        await websocket.close(code=4503, reason="Research system not available")
+        return
+    
+    try:
+        await manager.connect_research(websocket, task_id)
+        print(f"✓ Research WebSocket connected for task: {task_id}")
+        
+        # Set up progress callback for this WebSocket
+        async def progress_callback(update):
+            await manager.send_to_research(task_id, update)
+        
+        # Register callback with research manager
+        research_manager.add_progress_callback(task_id, progress_callback)
+        
+        try:
+            while True:
+                # Keep connection alive and handle any client messages
+                try:
+                    data = await websocket.receive_text()
+                    message_data = json.loads(data)
+                    
+                    # Handle client messages (e.g., cancel request)
+                    if message_data.get("type") == "cancel_task":
+                        await research_manager.cancel_task(task_id)
+                        
+                except asyncio.TimeoutError:
+                    # Send keepalive ping
+                    await websocket.send_text(json.dumps({"type": "ping"}))
+                    
+        except WebSocketDisconnect:
+            pass
+        
+    except Exception as e:
+        print(f"Research WebSocket error: {e}")
+    finally:
+        # Clean up
+        if research_manager:
+            research_manager.remove_progress_callback(task_id)
+        manager.disconnect_research(websocket, task_id)
 
 
 @app.websocket("/api/chat/stream/{conversation_id}")
@@ -434,8 +678,48 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                     }
                 })
                 
+                # Check if this is a research query
+                if content.lower().startswith(('research:', 'find:', 'search:', 'analyze:')):
+                    # Handle research mode
+                    if research_manager:
+                        try:
+                            # Extract query (remove prefix)
+                            query = content.split(':', 1)[1].strip()
+                            
+                            # Start research task
+                            task_id = await research_manager.start_research_task(
+                                query=query,
+                                conversation_id=conversation_id,
+                                research_mode="comprehensive"
+                            )
+                            
+                            # Notify client about research task
+                            await manager.send_to_conversation(conversation_id, {
+                                "type": "research_started",
+                                "task_id": task_id,
+                                "query": query
+                            })
+                            
+                            # Set up progress callback
+                            async def research_progress_callback(update):
+                                await manager.send_to_conversation(conversation_id, update)
+                            
+                            research_manager.add_progress_callback(task_id, research_progress_callback)
+                            
+                        except Exception as e:
+                            print(f"❌ Research task error: {e}")
+                            await manager.send_to_conversation(conversation_id, {
+                                "type": "error",
+                                "message": f"Research error: {str(e)}"
+                            })
+                    else:
+                        await manager.send_to_conversation(conversation_id, {
+                            "type": "error",
+                            "message": "Research system not available"
+                        })
+                
                 # Stream AI responses if streaming coordinator available
-                if streaming_coordinator:
+                elif streaming_coordinator:
                     try:
                         session = db_manager.get_conversation_session(conversation_id)
                         context_messages = session.get_context_messages(
@@ -507,6 +791,7 @@ def main():
     print(f"🌐 Starting Collaborate Web Server on http://{args.host}:{args.port}")
     print("📱 Web UI will be available once frontend is built")
     print("🔌 WebSocket streaming enabled for real-time chat")
+    print("🔬 Research system integration enabled")
     
     uvicorn.run(
         "web_server:app",

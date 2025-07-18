@@ -13,11 +13,11 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ..mcp.client import MCPClient
-from ..mcp.protocols import ResearchAction, AgentResponse, TaskStatus
-from ..config.config_manager import ConfigManager
-from ..utils.error_handler import ErrorHandler
-from ..utils.performance import PerformanceMonitor
+from mcp.client import MCPClient
+from mcp.protocols import ResearchAction, AgentResponse, TaskStatus
+from config.config_manager import ConfigManager
+from utils.error_handler import ErrorHandler
+from utils.performance import PerformanceMonitor
 
 
 class ResearchStage(Enum):

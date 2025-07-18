@@ -44,5 +44,11 @@ selenium>=4.15.0
 # Additional Security
 cryptography>=41.0.0
 
+# Agent Framework - Async File Operations
+aiofiles>=23.2.1
+
+# Agent Framework - XML/HTML Processing
+lxml>=4.9.3
+
 
 

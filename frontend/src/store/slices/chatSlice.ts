@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiService, CreateConversationRequest } from '../../services/api';
+import { apiService, CreateConversationRequest, ResearchTaskResponse, ResearchProgressUpdate } from '../../services/api';
 
 export interface Message {
   id: string;
@@ -28,6 +28,25 @@ export interface StreamingUpdate {
   message?: Message | string;
   queue?: string[];
   total_providers?: number;
+  // Research-specific fields
+  task_id?: string;
+  research_query?: string;
+  research_stage?: string;
+  research_progress?: number;
+  research_results?: any;
+  research_error?: string;
+}
+
+export interface ResearchTask {
+  task_id: string;
+  conversation_id: string;
+  query: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  progress: number;
+  results?: any;
+  error?: string;
 }
 
 interface ChatState {
@@ -39,6 +58,11 @@ interface ChatState {
   providerQueue: string[];
   connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
   currentStreamingMessage: string;
+  // Research-related state
+  researchTasks: { [conversationId: string]: ResearchTask[] };
+  activeResearchTask: ResearchTask | null;
+  isResearchMode: boolean;
+  researchConnectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
 }
 
 const initialState: ChatState = {
@@ -50,6 +74,11 @@ const initialState: ChatState = {
   providerQueue: [],
   connectionStatus: 'disconnected',
   currentStreamingMessage: '',
+  // Research-related state
+  researchTasks: {},
+  activeResearchTask: null,
+  isResearchMode: false,
+  researchConnectionStatus: 'disconnected',
 };
 
 // Async thunks
@@ -74,6 +103,27 @@ export const loadConversations = createAsyncThunk(
   'chat/loadConversations',
   async (projectId?: string) => {
     return await apiService.getConversations(projectId);
+  }
+);
+
+export const startResearchTask = createAsyncThunk(
+  'chat/startResearchTask',
+  async (data: { conversationId: string; query: string; researchMode: 'comprehensive' | 'quick' | 'deep' }) => {
+    const response = await apiService.startResearchTask({
+      conversation_id: data.conversationId,
+      query: data.query,
+      research_mode: data.researchMode,
+      max_results: 10,
+    });
+    return response;
+  }
+);
+
+export const cancelResearchTask = createAsyncThunk(
+  'chat/cancelResearchTask',
+  async (taskId: string) => {
+    await apiService.cancelResearchTask(taskId);
+    return taskId;
   }
 );
 
@@ -114,6 +164,74 @@ const chatSlice = createSlice({
     },
     setConnectionStatus: (state, action: PayloadAction<ChatState['connectionStatus']>) => {
       state.connectionStatus = action.payload;
+    },
+    setResearchConnectionStatus: (state, action: PayloadAction<ChatState['researchConnectionStatus']>) => {
+      state.researchConnectionStatus = action.payload;
+    },
+    setResearchMode: (state, action: PayloadAction<boolean>) => {
+      state.isResearchMode = action.payload;
+    },
+    setActiveResearchTask: (state, action: PayloadAction<ResearchTask | null>) => {
+      state.activeResearchTask = action.payload;
+    },
+    addResearchTask: (state, action: PayloadAction<ResearchTask>) => {
+      const task = action.payload;
+      if (!state.researchTasks[task.conversation_id]) {
+        state.researchTasks[task.conversation_id] = [];
+      }
+      state.researchTasks[task.conversation_id].push(task);
+    },
+    updateResearchTask: (state, action: PayloadAction<Partial<ResearchTask> & { task_id: string }>) => {
+      const update = action.payload;
+      Object.values(state.researchTasks).forEach(tasks => {
+        const task = tasks.find(t => t.task_id === update.task_id);
+        if (task) {
+          Object.assign(task, update);
+        }
+      });
+      
+      // Update active task if it matches
+      if (state.activeResearchTask?.task_id === update.task_id) {
+        Object.assign(state.activeResearchTask, update);
+      }
+    },
+    removeResearchTask: (state, action: PayloadAction<string>) => {
+      const taskId = action.payload;
+      Object.values(state.researchTasks).forEach(tasks => {
+        const index = tasks.findIndex(t => t.task_id === taskId);
+        if (index >= 0) {
+          tasks.splice(index, 1);
+        }
+      });
+      
+      // Clear active task if it matches
+      if (state.activeResearchTask?.task_id === taskId) {
+        state.activeResearchTask = null;
+      }
+    },
+    handleResearchProgress: (state, action: PayloadAction<ResearchProgressUpdate>) => {
+      const update = action.payload;
+      
+      // Update the research task
+      if (update.task_id) {
+        Object.values(state.researchTasks).forEach(tasks => {
+          const task = tasks.find(t => t.task_id === update.task_id);
+          if (task) {
+            if (update.progress !== undefined) task.progress = update.progress;
+            if (update.message) task.status = update.message;
+            if (update.results) task.results = update.results;
+            if (update.error) task.error = update.error;
+          }
+        });
+        
+        // Update active task if it matches
+        if (state.activeResearchTask?.task_id === update.task_id) {
+          if (update.progress !== undefined) state.activeResearchTask.progress = update.progress;
+          if (update.message) state.activeResearchTask.status = update.message;
+          if (update.results) state.activeResearchTask.results = update.results;
+          if (update.error) state.activeResearchTask.error = update.error;
+        }
+      }
     },
     handleStreamingUpdate: (state, action: PayloadAction<StreamingUpdate>) => {
       const update = action.payload;
@@ -199,6 +317,92 @@ const chatSlice = createSlice({
           state.streamingProvider = null;
           state.currentStreamingMessage = '';
           break;
+          
+        case 'research_started':
+          // Handle research task started
+          state.isResearchMode = true;
+          if (update.task_id && update.research_query && state.currentConversationId) {
+            const newTask: ResearchTask = {
+              task_id: update.task_id,
+              conversation_id: state.currentConversationId,
+              query: update.research_query,
+              status: 'starting',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              progress: 0,
+            };
+            
+            if (!state.researchTasks[state.currentConversationId]) {
+              state.researchTasks[state.currentConversationId] = [];
+            }
+            state.researchTasks[state.currentConversationId].push(newTask);
+            state.activeResearchTask = newTask;
+          }
+          break;
+          
+        case 'research_progress':
+          // Handle research progress updates
+          if (update.task_id && update.research_progress !== undefined) {
+            Object.values(state.researchTasks).forEach(tasks => {
+              const task = tasks.find(t => t.task_id === update.task_id);
+              if (task) {
+                task.progress = update.research_progress!;
+                task.status = update.research_stage || task.status;
+                task.updated_at = new Date().toISOString();
+              }
+            });
+            
+            if (state.activeResearchTask?.task_id === update.task_id) {
+              state.activeResearchTask.progress = update.research_progress!;
+              state.activeResearchTask.status = update.research_stage || state.activeResearchTask.status;
+              state.activeResearchTask.updated_at = new Date().toISOString();
+            }
+          }
+          break;
+          
+        case 'research_completed':
+          // Handle research completion
+          if (update.task_id) {
+            Object.values(state.researchTasks).forEach(tasks => {
+              const task = tasks.find(t => t.task_id === update.task_id);
+              if (task) {
+                task.status = 'completed';
+                task.progress = 100;
+                task.results = update.research_results;
+                task.updated_at = new Date().toISOString();
+              }
+            });
+            
+            if (state.activeResearchTask?.task_id === update.task_id) {
+              state.activeResearchTask.status = 'completed';
+              state.activeResearchTask.progress = 100;
+              state.activeResearchTask.results = update.research_results;
+              state.activeResearchTask.updated_at = new Date().toISOString();
+            }
+          }
+          state.isResearchMode = false;
+          break;
+          
+        case 'research_error':
+          // Handle research errors
+          if (update.task_id) {
+            Object.values(state.researchTasks).forEach(tasks => {
+              const task = tasks.find(t => t.task_id === update.task_id);
+              if (task) {
+                task.status = 'failed';
+                task.error = update.research_error || 'Unknown error';
+                task.updated_at = new Date().toISOString();
+              }
+            });
+            
+            if (state.activeResearchTask?.task_id === update.task_id) {
+              state.activeResearchTask.status = 'failed';
+              state.activeResearchTask.error = update.research_error || 'Unknown error';
+              state.activeResearchTask.updated_at = new Date().toISOString();
+            }
+          }
+          state.isResearchMode = false;
+          break;
       }
     },
   },
@@ -210,6 +414,42 @@ const chatSlice = createSlice({
       })
       .addCase(loadConversations.fulfilled, (state, action) => {
         state.conversations = action.payload;
+      })
+      .addCase(startResearchTask.fulfilled, (state, action) => {
+        const task = action.payload;
+        const researchTask: ResearchTask = {
+          task_id: task.task_id,
+          conversation_id: task.conversation_id,
+          query: task.query,
+          status: task.status,
+          created_at: task.created_at,
+          updated_at: task.updated_at,
+          progress: task.progress,
+          results: task.results,
+        };
+        
+        if (!state.researchTasks[task.conversation_id]) {
+          state.researchTasks[task.conversation_id] = [];
+        }
+        state.researchTasks[task.conversation_id].push(researchTask);
+        state.activeResearchTask = researchTask;
+        state.isResearchMode = true;
+      })
+      .addCase(cancelResearchTask.fulfilled, (state, action) => {
+        const taskId = action.payload;
+        Object.values(state.researchTasks).forEach(tasks => {
+          const task = tasks.find(t => t.task_id === taskId);
+          if (task) {
+            task.status = 'cancelled';
+            task.updated_at = new Date().toISOString();
+          }
+        });
+        
+        if (state.activeResearchTask?.task_id === taskId) {
+          state.activeResearchTask.status = 'cancelled';
+          state.activeResearchTask.updated_at = new Date().toISOString();
+        }
+        state.isResearchMode = false;
       });
   },
 });
@@ -222,6 +462,13 @@ export const {
   setMessages,
   addMessage,
   setConnectionStatus,
+  setResearchConnectionStatus,
+  setResearchMode,
+  setActiveResearchTask,
+  addResearchTask,
+  updateResearchTask,
+  removeResearchTask,
+  handleResearchProgress,
   handleStreamingUpdate,
 } = chatSlice.actions;
 

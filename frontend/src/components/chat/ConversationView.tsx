@@ -1,24 +1,40 @@
 import React, { useEffect, useRef, useCallback } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { useParams } from "react-router-dom"
-import { RootState } from "../../store/store"
+import { RootState, AppDispatch } from "../../store/store"
 import {
   setMessages,
   setCurrentConversation,
   setConnectionStatus,
+  setResearchConnectionStatus,
   handleStreamingUpdate,
+  handleResearchProgress,
 } from "../../store/slices/chatSlice"
 import MessageList from "./MessageList"
 import MessageInput from "./MessageInput"
 import ChatWebSocket from "../../services/ChatWebSocket"
+import ResearchWebSocket from "../../services/ResearchWebSocket"
+import ResearchModeIndicator from "./research/ResearchModeIndicator"
+import ResearchProgress from "./research/ResearchProgress"
+import ResearchTaskList from "./research/ResearchTaskList"
+import ResearchInput from "./research/ResearchInput"
 
 const ConversationView: React.FC = () => {
-  const dispatch = useDispatch()
+  const dispatch = useDispatch<AppDispatch>()
   const { conversationId } = useParams<{ conversationId: string }>()
   const wsRef = useRef<ChatWebSocket | null>(null)
+  const researchWsRef = useRef<ResearchWebSocket | null>(null)
 
-  const { currentConversationId, messages, connectionStatus, isStreaming } =
-    useSelector((state: RootState) => state.chat)
+  const {
+    currentConversationId,
+    messages,
+    connectionStatus,
+    researchConnectionStatus,
+    isStreaming,
+    isResearchMode,
+    activeResearchTask,
+    researchTasks,
+  } = useSelector((state: RootState) => state.chat)
 
   const loadConversationMessages = useCallback(
     async (convId: string) => {
@@ -58,6 +74,9 @@ const ConversationView: React.FC = () => {
         if (newWs) {
           newWs.disconnect()
         }
+        if (researchWsRef.current) {
+          researchWsRef.current.disconnect()
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,7 +88,26 @@ const ConversationView: React.FC = () => {
     }
   }
 
+  const handleResearchStarted = (taskId: string) => {
+    // Create research WebSocket connection for this task
+    if (researchWsRef.current) {
+      researchWsRef.current.disconnect()
+    }
+
+    const newResearchWs = new ResearchWebSocket(
+      taskId,
+      (update) => dispatch(handleResearchProgress(update)),
+      (status) => dispatch(setResearchConnectionStatus(status))
+    )
+
+    researchWsRef.current = newResearchWs
+    newResearchWs.connect()
+  }
+
   const currentMessages = conversationId ? messages[conversationId] || [] : []
+  const currentResearchTasks = conversationId
+    ? researchTasks[conversationId] || []
+    : []
 
   if (!conversationId) {
     return (
@@ -119,9 +157,31 @@ const ConversationView: React.FC = () => {
         </div>
       )}
 
+      {/* Research mode indicator */}
+      {isResearchMode && <ResearchModeIndicator className="mx-4 mt-4" />}
+
+      {/* Research progress */}
+      {activeResearchTask && <ResearchProgress className="mx-4 mt-2" />}
+
       {/* Messages area */}
       <div className="flex-1 overflow-hidden">
         <MessageList messages={currentMessages} isStreaming={isStreaming} />
+      </div>
+
+      {/* Research tasks */}
+      {currentResearchTasks.length > 0 && (
+        <div className="border-t border-gray-200 bg-gray-50 p-4 max-h-80 overflow-y-auto">
+          <ResearchTaskList conversationId={conversationId!} />
+        </div>
+      )}
+
+      {/* Research input */}
+      <div className="border-t border-gray-200 bg-white p-4">
+        <ResearchInput
+          conversationId={conversationId!}
+          onResearchStarted={handleResearchStarted}
+          className="mb-4"
+        />
       </div>
 
       {/* Message input */}

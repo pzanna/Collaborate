@@ -32,6 +32,45 @@ export interface Project {
   conversation_count: number;
 }
 
+export interface ResearchRequest {
+  conversation_id: string;
+  query: string;
+  research_mode: 'comprehensive' | 'quick' | 'deep';
+  max_results: number;
+}
+
+export interface ResearchTaskResponse {
+  task_id: string;
+  conversation_id: string;
+  query: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  progress: number;
+  results?: {
+    search_results: Array<{
+      title: string;
+      url: string;
+      snippet: string;
+      relevance_score: number;
+    }>;
+    reasoning_output?: string;
+    execution_results: Array<any>;
+    synthesis?: string;
+    metadata: Record<string, any>;
+  };
+}
+
+export interface ResearchProgressUpdate {
+  type: 'research_started' | 'research_progress' | 'research_stage_complete' | 'research_completed' | 'research_error';
+  task_id: string;
+  stage?: string;
+  progress?: number;
+  message?: string;
+  results?: any;
+  error?: string;
+}
+
 class ApiService {
   private async request<T>(
     endpoint: string,
@@ -88,6 +127,35 @@ class ApiService {
     return this.request<{ success: boolean; message: string }>(`/projects/${projectId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Research methods
+  async startResearchTask(data: ResearchRequest): Promise<ResearchTaskResponse> {
+    return this.request<ResearchTaskResponse>('/research/start', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getResearchTask(taskId: string): Promise<ResearchTaskResponse> {
+    return this.request<ResearchTaskResponse>(`/research/task/${taskId}`);
+  }
+
+  async cancelResearchTask(taskId: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/research/task/${taskId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Health check
+  async getHealth(): Promise<{
+    status: string;
+    database: Record<string, any>;
+    ai_providers: Record<string, any>;
+    research_system: Record<string, any>;
+    errors: Record<string, any>;
+  }> {
+    return this.request('/health');
   }
 }
 
