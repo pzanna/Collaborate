@@ -1,18 +1,20 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { RootState, AppDispatch } from "../../store/store"
 import {
   setProjects,
   setLoading,
   setError,
+  removeProject,
+  addProject,
 } from "../../store/slices/projectsSlice"
 import { apiService } from "../../services/api"
 import { formatDistanceToNow } from "date-fns"
 import {
   FolderIcon,
   PlusIcon,
-  EllipsisVerticalIcon,
   ChatBubbleLeftIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline"
 
 const ProjectsView: React.FC = () => {
@@ -21,12 +23,16 @@ const ProjectsView: React.FC = () => {
     (state: RootState) => state.projects
   )
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
+    null
+  )
+  const [createFormData, setCreateFormData] = useState({
+    name: "",
+    description: "",
+  })
+  const [isCreating, setIsCreating] = useState(false)
 
-  useEffect(() => {
-    loadProjects()
-  }, [])
-
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     dispatch(setLoading(true))
     try {
       const projectsData = await apiService.getProjects()
@@ -36,6 +42,66 @@ const ProjectsView: React.FC = () => {
         err instanceof Error ? err.message : "Failed to load projects"
       dispatch(setError(errorMessage))
     }
+  }, [dispatch])
+
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
+
+  const handleDeleteProject = async (
+    projectId: string,
+    projectName: string
+  ) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete the project "${projectName}"? This will also delete all conversations and messages in this project. This action cannot be undone.`
+      )
+    ) {
+      return
+    }
+
+    setDeletingProjectId(projectId)
+
+    try {
+      await apiService.deleteProject(projectId)
+      dispatch(removeProject(projectId))
+    } catch (error) {
+      console.error("Failed to delete project:", error)
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete project"
+      dispatch(setError(errorMessage))
+    } finally {
+      setDeletingProjectId(null)
+    }
+  }
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!createFormData.name.trim()) {
+      return
+    }
+
+    setIsCreating(true)
+
+    try {
+      const newProject = await apiService.createProject(createFormData)
+      dispatch(addProject(newProject))
+      setShowCreateModal(false)
+      setCreateFormData({ name: "", description: "" })
+    } catch (error) {
+      console.error("Failed to create project:", error)
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to create project"
+      dispatch(setError(errorMessage))
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleCloseCreateModal = () => {
+    setShowCreateModal(false)
+    setCreateFormData({ name: "", description: "" })
   }
 
   if (isLoading) {
@@ -88,7 +154,7 @@ const ProjectsView: React.FC = () => {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 p-6"
+              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 p-6 group relative"
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center space-x-3">
@@ -99,8 +165,17 @@ const ProjectsView: React.FC = () => {
                     </h3>
                   </div>
                 </div>
-                <button className="text-gray-400 hover:text-gray-600">
-                  <EllipsisVerticalIcon className="h-5 w-5" />
+                <button
+                  onClick={() => handleDeleteProject(project.id, project.name)}
+                  disabled={deletingProjectId === project.id}
+                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition-all disabled:opacity-50"
+                  title="Delete project"
+                >
+                  {deletingProjectId === project.id ? (
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                  ) : (
+                    <TrashIcon className="h-5 w-5" />
+                  )}
                 </button>
               </div>
 
@@ -124,24 +199,82 @@ const ProjectsView: React.FC = () => {
         </div>
       )}
 
-      {/* Create Project Modal placeholder */}
+      {/* Create Project Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Create New Project
             </h2>
-            <p className="text-gray-600 mb-4">
-              Project creation functionality coming soon...
-            </p>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              >
-                Close
-              </button>
-            </div>
+            <form onSubmit={handleCreateProject}>
+              <div className="mb-4">
+                <label
+                  htmlFor="projectName"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  id="projectName"
+                  value={createFormData.name}
+                  onChange={(e) =>
+                    setCreateFormData({
+                      ...createFormData,
+                      name: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter project name"
+                  required
+                />
+              </div>
+              <div className="mb-6">
+                <label
+                  htmlFor="projectDescription"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="projectDescription"
+                  value={createFormData.description}
+                  onChange={(e) =>
+                    setCreateFormData({
+                      ...createFormData,
+                      description: e.target.value,
+                    })
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter project description (optional)"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={handleCloseCreateModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                  disabled={isCreating}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreating || !createFormData.name.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isCreating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <span>Create Project</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

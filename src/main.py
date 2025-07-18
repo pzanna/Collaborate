@@ -9,9 +9,9 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from cli.interface import cli
-from config.config_manager import ConfigManager
-from storage.database import DatabaseManager
+from .cli.interface import cli
+from .config.config_manager import ConfigManager
+from .storage.database import DatabaseManager
 
 
 def main():

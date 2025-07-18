@@ -83,6 +83,12 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  async deleteProject(projectId: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/projects/${projectId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const apiService = new ApiService();

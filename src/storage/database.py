@@ -242,7 +242,45 @@ class DatabaseManager:
                  json.dumps(project.metadata), project.id)
             )
             conn.commit()
-    
+
+    @handle_errors(context="delete_project", reraise=False, fallback_return=False)
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project and all its conversations and messages."""
+        try:
+            if not project_id or not project_id.strip():
+                raise ValidationError("Project ID cannot be empty", "project_id", project_id)
+            
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if project exists
+                cursor.execute("SELECT COUNT(*) FROM projects WHERE id = ?", (project_id,))
+                if cursor.fetchone()[0] == 0:
+                    raise ValidationError(f"Project with ID '{project_id}' not found", 
+                                        "project_id", project_id)
+                
+                # Get all conversations for this project
+                cursor.execute("SELECT id FROM conversations WHERE project_id = ?", (project_id,))
+                conversation_ids = [row[0] for row in cursor.fetchall()]
+                
+                # Delete all messages in conversations for this project
+                for conversation_id in conversation_ids:
+                    cursor.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+                
+                # Delete all conversations for this project
+                cursor.execute("DELETE FROM conversations WHERE project_id = ?", (project_id,))
+                
+                # Delete the project
+                cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+                
+                conn.commit()
+                return True
+                
+        except ValidationError:
+            raise  # Re-raise validation errors
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete project: {str(e)}", "delete_project", 
+                              {"project_id": project_id}, e)
     # Conversation operations
     @handle_errors(context="create_conversation", reraise=False, fallback_return=None)
     def create_conversation(self, conversation: Conversation) -> Optional[Conversation]:

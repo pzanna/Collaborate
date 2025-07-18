@@ -17,6 +17,7 @@ class ChatWebSocket {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private messageQueue: string[] = []; // Queue for messages sent before connection
 
   constructor(
     conversationId: string,
@@ -71,6 +72,9 @@ class ChatWebSocket {
           type: 'connection_init',
           conversation_id: this.conversationId
         }));
+        
+        // Send any queued messages
+        this.flushMessageQueue();
       }
     };
 
@@ -105,25 +109,39 @@ class ChatWebSocket {
       this.ws.close(1000, 'Client disconnect');
       this.ws = null;
     }
+    this.messageQueue = []; // Clear any queued messages
     this.onStatusChange('disconnected');
   }
 
   sendMessage(content: string) {
+    const message = {
+      type: 'user_message',
+      content: content.trim(),
+    };
+    
     if (this.ws?.readyState === WebSocket.OPEN) {
-      const message = {
-        type: 'user_message',
-        content: content.trim(),
-      };
       console.log('📤 Sending message:', message);
       this.ws.send(JSON.stringify(message));
     } else {
-      console.error('✗ WebSocket is not connected. Current state:', this.getConnectionState());
-      this.onStatusChange('error');
+      console.log('⏳ WebSocket not connected, queuing message:', message);
+      this.messageQueue.push(JSON.stringify(message));
+      this.onStatusChange('connecting');
+      
       // Attempt to reconnect if we have a valid conversation
       if (this.conversationId && this.reconnectAttempts < this.maxReconnectAttempts) {
-        console.log('🔄 Attempting to reconnect before sending message...');
+        console.log('🔄 Attempting to reconnect to send queued message...');
         this.connect();
       }
+    }
+  }
+
+  private flushMessageQueue() {
+    if (this.messageQueue.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
+      console.log(`📤 Sending ${this.messageQueue.length} queued messages`);
+      this.messageQueue.forEach(message => {
+        this.ws!.send(message);
+      });
+      this.messageQueue = [];
     }
   }
 

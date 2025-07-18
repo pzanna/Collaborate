@@ -35,6 +35,13 @@ const projectsSlice = createSlice({
     addProject: (state, action: PayloadAction<Project>) => {
       state.projects.unshift(action.payload);
     },
+    removeProject: (state, action: PayloadAction<string>) => {
+      state.projects = state.projects.filter(project => project.id !== action.payload);
+      // Clear selection if the deleted project was selected
+      if (state.selectedProjectId === action.payload) {
+        state.selectedProjectId = null;
+      }
+    },
     setSelectedProject: (state, action: PayloadAction<string>) => {
       state.selectedProjectId = action.payload;
     },
@@ -51,6 +58,7 @@ const projectsSlice = createSlice({
 export const {
   setProjects,
   addProject,
+  removeProject,
   setSelectedProject,
   setLoading,
   setError,

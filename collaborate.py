@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 """
-Simple CLI for testing the Collaborate application
+Enhanced Collaborate - Three-Way AI Collaboration Platform with Real-Time Streaming
+
+This CLI application provides a comprehensive interface for AI collaboration
+with enhanced real-time streaming capabilities for natural conversations.
+
+Features:
+- Real-time word-by-word streaming responses
+- Natural AI-to-AI conversation handoffs
+- Interruption detection and handling
+- Smart response coordination
+- Conversation repair mechanics
+- Full database management
+- Export capabilities
+- Health monitoring
+
+Usage:
+    python collaborate.py              # Interactive CLI
+    python collaborate.py --demo       # Show streaming improvements demo
+    python collaborate.py --health     # Check system health
 """
 
 import os
@@ -23,6 +41,132 @@ from utils.error_handler import (
 )
 import asyncio
 import sys
+from typing import List
+
+
+class EnhancedCollaborationManager:
+    """Enhanced collaboration manager with real-time streaming support."""
+    
+    def __init__(self, config_manager, db_manager, ai_manager):
+        self.config_manager = config_manager
+        self.db_manager = db_manager
+        self.ai_manager = ai_manager
+        self.streaming_coordinator = StreamingResponseCoordinator(
+            config_manager=config_manager,
+            ai_manager=ai_manager,
+            db_manager=db_manager
+        )
+        
+    async def stream_conversation_response(
+        self, 
+        user_message: Message, 
+        context: List[Message],
+        conversation_id: str
+    ):
+        """Stream AI responses in real-time for a more natural conversation flow."""
+        
+        available_providers = self.ai_manager.get_available_providers()
+        if not available_providers:
+            print("❌ No AI providers available")
+            return
+        
+        print(f"\n💭 Processing: '{user_message.content[:50]}{'...' if len(user_message.content) > 50 else ''}'")
+        
+        # Track responses for database storage
+        completed_responses = {}
+        
+        try:
+            async for update in self.streaming_coordinator.stream_conversation_chain(
+                user_message, context
+            ):
+                update_type = update.get('type')
+                
+                if update_type == 'queue_determined':
+                    providers = update.get('queue', [])
+                    print(f"🎯 Response queue: {' → '.join(providers)}")
+                    
+                elif update_type == 'interruption_detected':
+                    providers = update.get('providers', [])
+                    print(f"🚨 Interruption! Prioritizing: {', '.join(providers)}")
+                    
+                elif update_type == 'repair_needed':
+                    provider = update.get('provider', '')
+                    print(f"🔧 Routing clarification to {provider.upper()}")
+                    
+                elif update_type == 'provider_starting':
+                    provider = update.get('provider', '')
+                    position = update.get('position', 0)
+                    total = update.get('total', 0)
+                    print(f"\n🤖 {provider.upper()} ({position}/{total}): ", end='', flush=True)
+                    
+                elif update_type == 'response_chunk':
+                    chunk = update.get('chunk', '')
+                    print(chunk, end='', flush=True)
+                    
+                elif update_type == 'token':
+                    content = update.get('content', '')
+                    print(content, end='', flush=True)
+                    
+                elif update_type == 'provider_completed':
+                    provider = update.get('provider', '')
+                    response = update.get('response', '')
+                    completed_responses[provider] = response
+                    print(f"\n✅ {provider.upper()} completed and saved")
+                    
+                elif update_type == 'chain_detected':
+                    from_provider = update.get('from_provider', '')
+                    to_provider = update.get('to_provider', '')
+                    print(f"\n🔗 {from_provider.upper()} is calling on {to_provider.upper()}")
+                    
+                elif update_type == 'queue_updated':
+                    added_provider = update.get('added_provider', '')
+                    print(f"📝 Added {added_provider.upper()} to speaking queue")
+                    
+                elif update_type == 'provider_error':
+                    provider = update.get('provider', '')
+                    error = update.get('error', '')
+                    print(f"\n❌ Error from {provider.upper()}: {error}")
+                    
+                elif update_type == 'conversation_completed':
+                    total_providers = update.get('total_providers', 0)
+                    print(f"\n🎉 Conversation chain completed ({total_providers} responses)")
+                    
+                # Small delay for readability
+                await asyncio.sleep(0.01)
+                
+        except Exception as e:
+            print(f"\n❌ Streaming error: {e}")
+            
+        return completed_responses
+    
+    def get_streaming_vs_batch_comparison(self):
+        """Return comparison data for streaming vs batch processing."""
+        return {
+            'batch_processing': {
+                'flow': 'User → Wait → All responses at once',
+                'user_experience': 'Long wait, then information dump',
+                'conversation_feel': 'Robotic, disconnected',
+                'chaining': 'No real-time chaining',
+                'interruptions': 'Cannot handle mid-conversation interruptions',
+                'typical_wait_time': '10-30 seconds'
+            },
+            'streaming_processing': {
+                'flow': 'User → Immediate response stream → Chain continues',
+                'user_experience': 'Immediate feedback, natural progression',
+                'conversation_feel': 'Slack-like, engaging',
+                'chaining': 'Real-time AI-to-AI handoffs',
+                'interruptions': 'Can detect and respond to interruptions',
+                'typical_wait_time': '1-3 seconds to first response'
+            },
+            'benefits': [
+                'More engaging conversation experience',
+                'Natural AI-to-AI collaboration in real-time',
+                'Better handling of conversational interruptions',
+                'Immediate visual feedback on progress',
+                'Feels like chatting with real people on Slack',
+                'Enables true conversation repair mechanics'
+            ]
+        }
 
 
 class SimpleCollaborateCLI:
@@ -47,12 +191,21 @@ class SimpleCollaborateCLI:
                 db_manager=self.db_manager
             )
             
+            # Initialize enhanced collaboration manager
+            self.enhanced_manager = EnhancedCollaborationManager(
+                self.config_manager, 
+                self.db_manager, 
+                self.ai_manager
+            )
+            
             print(f"✓ AI providers available: {', '.join(available_providers)}")
             print("✓ Real-time streaming enabled")
+            print("✓ Enhanced collaboration features enabled")
         except Exception as e:
             print(f"⚠ AI providers not available: {e}")
             self.ai_manager = None
             self.streaming_coordinator = None
+            self.enhanced_manager = None
         
         print("✓ Collaborate initialized successfully!\n")
     
@@ -73,6 +226,8 @@ class SimpleCollaborateCLI:
         print("9. View Response Statistics")
         print("10. Configure Smart Responses")
         print("11. System Health & Diagnostics")
+        print("12. Enhanced Streaming Demo")
+        print("13. Streaming vs Batch Comparison")
         print("0. Exit")
         print("=" * 60)
     
@@ -907,6 +1062,10 @@ class SimpleCollaborateCLI:
                     self.configure_smart_responses()
                 elif choice == '11':
                     self.show_system_health()
+                elif choice == '12':
+                    self.enhanced_streaming_demo()
+                elif choice == '13':
+                    self.show_streaming_comparison()
                 else:
                     print("❌ Invalid option. Please try again.")
                 
@@ -956,17 +1115,177 @@ class SimpleCollaborateCLI:
         except Exception as e:
             print(f"❌ Error resuming conversation: {e}")
     
-    # ...existing code...
+    def enhanced_streaming_demo(self):
+        """Demonstrate enhanced streaming capabilities with a sample conversation."""
+        print("\n🚀 Enhanced Streaming Demo")
+        print("-" * 40)
+        
+        if not self.enhanced_manager:
+            print("❌ Enhanced streaming not available.")
+            return
+            
+        print("This demo shows the enhanced real-time streaming capabilities.")
+        print("It demonstrates how AI responses flow naturally in real-time.")
+        print("\nFeatures demonstrated:")
+        print("• Real-time word-by-word streaming")
+        print("• Natural conversation flow")
+        print("• AI-to-AI handoffs")
+        print("• Interruption handling")
+        print("• Conversation repair mechanics")
+        
+        proceed = self.safe_input("\nRun demo conversation? (y/n): ")
+        if not proceed.lower().startswith('y'):
+            return
+            
+        # Create a demo conversation
+        demo_project = None
+        projects = self.db_manager.list_projects()
+        
+        # Find or create a demo project
+        for project in projects:
+            if project.name == "Demo Project":
+                demo_project = project
+                break
+        
+        if not demo_project:
+            demo_project = Project(name="Demo Project", description="For streaming demos")
+            demo_project = self.db_manager.create_project(demo_project)
+        
+        # Create demo conversation
+        demo_conversation = Conversation(
+            project_id=demo_project.id,
+            title="Enhanced Streaming Demo"
+        )
+        demo_conversation = self.db_manager.create_conversation(demo_conversation)
+        
+        # Demo message
+        demo_message = Message(
+            conversation_id=demo_conversation.id,
+            participant="user",
+            content="Please demonstrate how you all work together to solve complex problems. Show me your collaboration in action!"
+        )
+        self.db_manager.create_message(demo_message)
+        
+        print(f"\n💬 Demo conversation created: {demo_conversation.title}")
+        print("=" * 50)
+        
+        # Run the enhanced streaming demo
+        try:
+            asyncio.run(self._run_enhanced_demo(demo_conversation.id, demo_message))
+        except Exception as e:
+            print(f"❌ Demo error: {e}")
+    
+    async def _run_enhanced_demo(self, conversation_id: str, user_message: Message):
+        """Run the enhanced streaming demo."""
+        session = self.db_manager.get_conversation_session(conversation_id)
+        context_messages = session.get_context_messages(
+            self.config_manager.config.conversation.max_context_tokens
+        )
+        
+        print(f"👤 Demo User: {user_message.content}")
+        
+        # Use enhanced streaming
+        responses = await self.enhanced_manager.stream_conversation_response(
+            user_message, context_messages, conversation_id
+        )
+        
+        response_count = len(responses) if responses else 0
+        print(f"\n🎉 Demo completed with {response_count} AI responses!")
+        print("This demonstrates the natural flow of real-time AI collaboration.")
+    
+    def show_streaming_comparison(self):
+        """Show comparison between streaming and batch processing."""
+        print("\n📊 Streaming vs Batch Processing Comparison")
+        print("-" * 50)
+        
+        if not self.enhanced_manager:
+            print("❌ Enhanced streaming not available.")
+            return
+            
+        comparison = self.enhanced_manager.get_streaming_vs_batch_comparison()
+        
+        print("\n🐌 OLD BATCH PROCESSING:")
+        print("-" * 25)
+        batch = comparison['batch_processing']
+        for key, value in batch.items():
+            print(f"  • {key.replace('_', ' ').title()}: {value}")
+        
+        print("\n⚡ NEW STREAMING PROCESSING:")
+        print("-" * 27)
+        streaming = comparison['streaming_processing']
+        for key, value in streaming.items():
+            print(f"  • {key.replace('_', ' ').title()}: {value}")
+        
+        print("\n🎯 KEY BENEFITS:")
+        print("-" * 15)
+        for benefit in comparison['benefits']:
+            print(f"  ✓ {benefit}")
+        
+        print("\n💡 USAGE TIPS:")
+        print("-" * 13)
+        print("  • Use option 4 or 5 to experience real-time streaming")
+        print("  • Try interrupting with 'wait' or 'actually' during responses")
+        print("  • Ask for clarification to see conversation repair in action")
+        print("  • Watch how AIs naturally hand off to each other")
+        print("  • Notice the immediate feedback vs waiting for batch responses")
+
+
+def demonstrate_realtime_improvements():
+    """Demonstrate the real-time streaming improvements."""
+    print("🚀 REAL-TIME CONVERSATION STREAMING")
+    print("=" * 50)
+    
+    try:
+        cli = SimpleCollaborateCLI()
+        if cli.enhanced_manager:
+            comparison = cli.enhanced_manager.get_streaming_vs_batch_comparison()
+            
+            print("\n📊 BATCH vs STREAMING COMPARISON")
+            print("-" * 30)
+            
+            print("\n🐌 OLD BATCH PROCESSING:")
+            batch = comparison['batch_processing']
+            for key, value in batch.items():
+                print(f"  • {key.replace('_', ' ').title()}: {value}")
+            
+            print("\n⚡ NEW STREAMING PROCESSING:")
+            streaming = comparison['streaming_processing']
+            for key, value in streaming.items():
+                print(f"  • {key.replace('_', ' ').title()}: {value}")
+            
+            print("\n🎯 KEY BENEFITS:")
+            for benefit in comparison['benefits']:
+                print(f"  ✓ {benefit}")
+                
+            print("\n💡 HOW TO USE:")
+            print("  1. Run: python collaborate.py")
+            print("  2. Choose option 12 for enhanced streaming demo")
+            print("  3. Choose option 13 for detailed comparison")
+            print("  4. Use options 4 or 5 for real streaming conversations")
+            print("  5. Try interrupting with 'wait' or 'actually' to see interruption handling")
+            print("  6. Ask for clarification to see conversation repair in action")
+        else:
+            print("❌ Enhanced streaming not available. Check your configuration.")
+    except Exception as e:
+        print(f"❌ Error demonstrating improvements: {e}")
+
+
 def main():
     """Main entry point with command-line argument support."""
     parser = argparse.ArgumentParser(description='Collaborate - Three-Way AI Collaboration Platform')
     parser.add_argument('--health', action='store_true', 
                        help='Check system health and exit')
+    parser.add_argument('--demo', action='store_true',
+                       help='Show real-time streaming improvements demo')
     parser.add_argument('--version', action='version', version='Collaborate 1.0.0')
     
     args = parser.parse_args()
     
     try:
+        if args.demo:
+            demonstrate_realtime_improvements()
+            return
+            
         cli = SimpleCollaborateCLI()
         
         if args.health:
@@ -981,4 +1300,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Support both direct execution and module import
+    if len(sys.argv) > 1 and sys.argv[1] == "--demo-only":
+        # For backward compatibility with enhanced_collaboration.py
+        try:
+            demonstrate_realtime_improvements()
+        except Exception as e:
+            print(f"❌ Demo error: {e}")
+    else:
+        main()

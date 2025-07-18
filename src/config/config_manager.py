@@ -24,7 +24,7 @@ class ConversationConfig(BaseModel):
     """Configuration for conversation management."""
     max_context_tokens: int = 8000
     auto_save: bool = True
-    response_coordination: bool = True
+    max_response_length: int = 1500
 
 
 class StorageConfig(BaseModel):
@@ -39,12 +39,22 @@ class LoggingConfig(BaseModel):
     file: str = "logs/collaborate.log"
 
 
+class CoordinationConfig(BaseModel):
+    """Configuration for AI coordination."""
+    base_participation_chance: float = 0.4
+    max_consecutive_turns: int = 2
+    mention_boost: float = 0.8
+    question_boost: float = 0.3
+    engagement_boost: float = 0.2
+
+
 class Config(BaseModel):
     """Main configuration class."""
     ai_providers: Dict[str, AIProviderConfig] = Field(default_factory=dict)
     conversation: ConversationConfig = Field(default_factory=ConversationConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    coordination: CoordinationConfig = Field(default_factory=CoordinationConfig)
 
 
 class ConfigManager:
@@ -83,16 +93,32 @@ class ConfigManager:
                     model="gpt-4.1-mini",
                     temperature=0.7,
                     max_tokens=2000,
-                    system_prompt="You are a helpful research assistant participating in a collaborative discussion.",
-                    role_adaptation=True
+                    system_prompt="""You are participating in a group brainstorming conversation with other AIs and a human user.
+      
+Keep your responses:
+- Conversational and natural
+- Building on what others have said when relevant
+- Concise but helpful (aim for 2-4 sentences)
+- Focused on adding value to the discussion
+
+You can reference other participants by name if responding to them directly.
+Be yourself - don't try to play a specific role or follow rigid rules."""
                 ),
                 "xai": AIProviderConfig(
                     provider="xai",
-                    model="grok-3-mini",
+                    model="grok-3-mini-beta",
                     temperature=0.7,
                     max_tokens=2000,
-                    system_prompt="You are a knowledgeable AI assistant contributing to collaborative research.",
-                    role_adaptation=True
+                    system_prompt="""You are participating in a group brainstorming conversation with other AIs and a human user.
+      
+Keep your responses:
+- Conversational and natural
+- Building on what others have said when relevant
+- Concise but helpful (aim for 2-4 sentences)
+- Focused on adding value to the discussion
+
+You can reference other participants by name if responding to them directly.
+Be yourself - don't try to play a specific role or follow rigid rules."""
                 )
             }
         )

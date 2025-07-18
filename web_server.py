@@ -222,6 +222,21 @@ async def create_project(project: ProjectCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: str):
+    """Delete a project and all its conversations and messages."""
+    try:
+        success = db_manager.delete_project(project_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        return {"success": True, "message": "Project deleted successfully"}
+    except CollaborateError as e:
+        raise HTTPException(status_code=400, detail=format_error_for_user(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Conversations endpoints
 @app.get("/api/conversations", response_model=List[ConversationResponse])
 async def list_conversations(project_id: Optional[str] = None):
@@ -387,13 +402,25 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                 if not content:
                     continue
                 
+                print(f"📝 Processing user message: {content[:50]}...")
+                
                 # Create and save user message
                 user_message = Message(
                     conversation_id=conversation_id,
                     participant="user",
                     content=content
                 )
-                db_manager.create_message(user_message)
+                
+                try:
+                    db_manager.create_message(user_message)
+                    print(f"✅ User message saved to database: {user_message.id}")
+                except Exception as e:
+                    print(f"❌ Failed to save user message: {e}")
+                    await manager.send_to_conversation(conversation_id, {
+                        "type": "error",
+                        "message": f"Failed to save message: {str(e)}"
+                    })
+                    continue
                 
                 # Broadcast user message to all connected clients
                 await manager.send_to_conversation(conversation_id, {
@@ -409,17 +436,38 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                 
                 # Stream AI responses if streaming coordinator available
                 if streaming_coordinator:
-                    session = db_manager.get_conversation_session(conversation_id)
-                    context_messages = session.get_context_messages(
-                        config_manager.config.conversation.max_context_tokens
-                    )
-                    
-                    # Stream the conversation chain
-                    async for update in streaming_coordinator.stream_conversation_chain(
-                        user_message, context_messages
-                    ):
-                        # Forward streaming updates to all connected clients
-                        await manager.send_to_conversation(conversation_id, update)
+                    try:
+                        session = db_manager.get_conversation_session(conversation_id)
+                        context_messages = session.get_context_messages(
+                            config_manager.config.conversation.max_context_tokens
+                        )
+                        
+                        print(f"🤖 Starting AI streaming for conversation {conversation_id}")
+                        
+                        # Stream the conversation chain
+                        async for update in streaming_coordinator.stream_conversation_chain(
+                            user_message, context_messages
+                        ):
+                            # Forward streaming updates to all connected clients
+                            await manager.send_to_conversation(conversation_id, update)
+                            
+                        print(f"✅ AI streaming completed for conversation {conversation_id}")
+                        
+                    except Exception as e:
+                        print(f"❌ AI streaming error for conversation {conversation_id}: {e}")
+                        # Send error message to client
+                        await manager.send_to_conversation(conversation_id, {
+                            "type": "error",
+                            "message": f"AI response error: {str(e)}"
+                        })
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print("⚠️ No streaming coordinator available")
+                    await manager.send_to_conversation(conversation_id, {
+                        "type": "error",
+                        "message": "AI streaming not available"
+                    })
                 
     except WebSocketDisconnect:
         manager.disconnect(websocket, conversation_id)

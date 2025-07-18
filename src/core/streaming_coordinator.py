@@ -1,4 +1,4 @@
-"""Real-time Streaming Response Coordinator
+"""Simplified Real-time Streaming Response Coordinator
 
 Enables real-time display of AI responses as they're generated, creating a more
 natural conversation flow similar to Slack where responses appear immediately.
@@ -15,283 +15,148 @@ from datetime import datetime
 try:
     from ..models.data_models import Message
     from ..config.config_manager import ConfigManager
-    from .response_coordinator import ResponseCoordinator
+    from .simplified_coordinator import SimplifiedCoordinator
 except ImportError:
     # Allow standalone execution when run outside package
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
     from models.data_models import Message
     from config.config_manager import ConfigManager
-    from core.response_coordinator import ResponseCoordinator
+    from core.simplified_coordinator import SimplifiedCoordinator
 
 
-class StreamingResponseCoordinator:
-    """Coordinates real-time streaming responses for natural conversation flow."""
+class SimplifiedStreamingCoordinator:
+    """Simplified streaming for real-time responses"""
     
-    def __init__(self, config_manager: ConfigManager, response_coordinator: Optional[ResponseCoordinator] = None,
-                 ai_manager=None, db_manager=None):
-        """Initialize streaming coordinator.
+    def __init__(self, ai_manager, db_manager=None):
+        self.ai_manager = ai_manager
+        self.db_manager = db_manager
+    
+    async def stream_group_conversation(self, user_message, conversation_history):
+        """Stream group responses in real-time"""
         
-        Args:
-            config_manager: Configuration manager instance
-            response_coordinator: Response coordinator instance (optional, will be created if not provided)
-            ai_manager: AI client manager (optional, for alternative constructor)
-            db_manager: Database manager (optional, for alternative constructor)
-        """
-        self.config_manager = config_manager
+        available_providers = self.ai_manager.get_available_providers()
         
-        # Handle different constructor patterns
-        if response_coordinator is not None:
-            # Enhanced collaboration manager pattern
-            self.response_coordinator = response_coordinator
-            self.ai_manager = ai_manager
-            self.db_manager = db_manager
-        else:
-            # Main application pattern
-            self.ai_manager = ai_manager
-            self.db_manager = db_manager
-            # Create response coordinator if not provided
-            self.response_coordinator = ResponseCoordinator(config_manager)
-            
-        self.active_streams = {}
-        
-    async def stream_conversation_chain(
-        self, 
-        user_message: Message, 
-        context: List[Message]
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Stream conversation responses in real-time as they're generated.
-        
-        Yields updates as each AI responds, enabling real-time display.
-        """
-        
-        # Get available providers from ai_manager
-        available_providers = self.ai_manager.get_available_providers() if self.ai_manager else []
         if not available_providers:
-            yield {
-                'type': 'error',
-                'message': 'No AI providers available',
-                'timestamp': time.time()
-            }
+            yield {'type': 'error', 'message': 'No providers available'}
             return
         
-        # Get initial speaking queue
-        speaking_queue = self.response_coordinator.coordinate_responses(
-            user_message, context, available_providers
+        # Get participants
+        participants = self.ai_manager.coordinator.get_participating_providers(
+            user_message.content, available_providers, conversation_history
         )
         
         yield {
             'type': 'queue_determined',
-            'queue': speaking_queue,
-            'timestamp': time.time(),
-            'message': f"🎯 Response queue: {', '.join(speaking_queue)}"
+            'queue': participants,
+            'message': f"🎯 {', '.join(participants)} will respond"
         }
         
-        # Build temporary conversation history for chaining
-        temp_history = context[:]
-        temp_history.append(user_message)
+        # Stream responses from each participant
+        shared_context = conversation_history + [user_message]
         
-        # Process each provider in the queue
-        for i, provider in enumerate(speaking_queue):
+        for i, provider in enumerate(participants):
             yield {
                 'type': 'provider_starting',
                 'provider': provider,
                 'position': i + 1,
-                'total': len(speaking_queue),
-                'timestamp': time.time(),
-                'message': f"🤖 {provider.upper()} is thinking..."
+                'total': len(participants),
+                'message': f"🤖 {provider.upper()} is responding..."
             }
             
             try:
-                # Signal that provider is about to start streaming response
-                yield {
-                    'type': 'provider_response_start',
-                    'provider': provider,
-                    'timestamp': time.time()
-                }
+                # Get response (in real implementation, this would stream)
+                group_prompt = self.ai_manager._create_group_prompt(provider)
                 
-                # Stream the response from this provider
-                response_chunks = []
-                async for chunk in self._stream_provider_response(
-                    provider, temp_history
-                ):
-                    response_chunks.append(chunk)
-                    
+                # Simulate streaming by getting full response then chunking
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, self.ai_manager.get_response, 
+                    provider, shared_context, group_prompt
+                )
+                
+                if response and not response.startswith("Error:"):
+                    # Signal that provider is about to start streaming
                     yield {
-                        'type': 'response_chunk',
+                        'type': 'provider_response_start',
                         'provider': provider,
-                        'chunk': chunk,
-                        'partial_response': ''.join(response_chunks),
-                        'timestamp': time.time()
+                        'message': f"🤖 {provider.upper()} is responding..."
                     }
-                
-                # Complete response
-                full_response = ''.join(response_chunks)
-                if full_response and not full_response.startswith("Error:"):
-                    # Create AI message for database storage
-                    ai_message = Message(
-                        conversation_id=user_message.conversation_id,
-                        participant=provider,
-                        content=full_response,
-                        timestamp=datetime.now()
-                    )
+                    
+                    # Simulate streaming chunks
+                    words = response.split()
+                    chunk_size = max(1, len(words) // 8)
+                    
+                    partial_response = ""
+                    for j in range(0, len(words), chunk_size):
+                        chunk = ' '.join(words[j:j + chunk_size])
+                        if j + chunk_size < len(words):
+                            chunk += ' '
+                        
+                        partial_response += chunk
+                        
+                        yield {
+                            'type': 'response_chunk',
+                            'provider': provider,
+                            'chunk': chunk,
+                            'content': chunk,
+                            'partial_response': partial_response
+                        }
+                        
+                        await asyncio.sleep(0.1)  # Simulate typing
                     
                     # Save to database if available
                     if self.db_manager:
+                        ai_message = Message(
+                            conversation_id=user_message.conversation_id,
+                            participant=provider,
+                            content=response,
+                            timestamp=datetime.now()
+                        )
                         try:
                             self.db_manager.create_message(ai_message)
                         except Exception as e:
-                            yield {
-                                'type': 'database_error',
-                                'provider': provider,
-                                'error': str(e),
-                                'timestamp': time.time(),
-                                'message': f"⚠️ Database save error for {provider.upper()}: {str(e)}"
-                            }
+                            print(f"Database error: {e}")
                     
-                    # Add to temp history for next provider
-                    temp_history.append(ai_message)
+                    # Add to shared context for next provider
+                    ai_message = Message(
+                        conversation_id=user_message.conversation_id,
+                        participant=provider,
+                        content=response,
+                        timestamp=datetime.now()
+                    )
+                    shared_context.append(ai_message)
                     
                     yield {
                         'type': 'provider_completed',
                         'provider': provider,
-                        'response': full_response,
-                        'timestamp': time.time(),
+                        'response': response,
                         'message': f"✅ {provider.upper()} completed"
                     }
                     
-                    # Check for chaining cues in this response
-                    cued_provider = self.response_coordinator.detect_chaining_cue(
-                        full_response, available_providers
-                    )
-                    
-                    if cued_provider and cued_provider not in speaking_queue:
-                        yield {
-                            'type': 'chain_detected',
-                            'from_provider': provider,
-                            'to_provider': cued_provider,
-                            'timestamp': time.time(),
-                            'message': f"🔗 {provider.upper()} is calling on {cued_provider.upper()}"
-                        }
-                        
-                        # Add chained provider to queue
-                        speaking_queue.append(cued_provider)
-                        
-                        yield {
-                            'type': 'queue_updated',
-                            'queue': speaking_queue,
-                            'added_provider': cued_provider,
-                            'timestamp': time.time(),
-                            'message': f"📝 Added {cued_provider.upper()} to speaking queue"
-                        }
-                
             except Exception as e:
                 yield {
                     'type': 'provider_error',
                     'provider': provider,
                     'error': str(e),
-                    'timestamp': time.time(),
                     'message': f"❌ Error from {provider.upper()}: {str(e)}"
                 }
         
         yield {
             'type': 'conversation_completed',
-            'total_providers': len(speaking_queue),
-            'timestamp': time.time(),
-            'message': "🎉 Conversation chain completed"
+            'total_responses': len(participants),
+            'message': "🎉 Group conversation completed"
         }
+
+# Backward compatibility - keep the original class name
+class StreamingResponseCoordinator(SimplifiedStreamingCoordinator):
+    """Backward compatibility class"""
     
-    async def _stream_provider_response(
-        self, 
-        provider: str, 
-        messages: List[Message]
-    ) -> AsyncGenerator[str, None]:
-        """Stream response from a specific provider.
+    def __init__(self, config_manager: ConfigManager, response_coordinator=None,
+                 ai_manager=None, db_manager=None):
+        """Initialize with backward compatibility"""
+        super().__init__(ai_manager, db_manager)
+        self.config_manager = config_manager
         
-        This simulates streaming by breaking the response into chunks.
-        In a real implementation, you'd integrate with actual streaming APIs.
-        """
-        try:
-            if not self.ai_manager:
-                yield "Error: AI manager not available"
-                return
-                
-            # Adapt system prompt (includes collaboration context generation)
-            adapted_prompt = self.ai_manager.adapt_system_prompt(
-                provider, messages[-1].content, messages
-            )
-            
-            # Get the full response (in real implementation, this would be streaming)
-            response = await asyncio.get_event_loop().run_in_executor(
-                None, self.ai_manager.get_response, provider, messages, adapted_prompt
-            )
-            
-            if not response or response.startswith("Error:"):
-                yield response or f"Error: No response from {provider}"
-                return
-            
-            # Simulate streaming by yielding word chunks
-            words = response.split()
-            chunk_size = max(1, len(words) // 8)  # Stream in ~8 chunks
-            
-            for i in range(0, len(words), chunk_size):
-                chunk = ' '.join(words[i:i + chunk_size])
-                if i + chunk_size < len(words):
-                    chunk += ' '
-                
-                yield chunk
-                await asyncio.sleep(0.2)  # Simulate typing delay
-                
-        except Exception as e:
-            yield f"Error streaming from {provider}: {str(e)}"
-    
-    async def stream_with_interruption_support(
-        self,
-        user_message: Message,
-        context: List[Message],
-        available_providers: List[str],
-        ai_client_manager
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Stream responses with support for interruptions and conversation repair."""
-        
-        # Check for interruption opportunities first
-        interruption_scores = self.response_coordinator.detect_interruption_opportunity(
-            user_message, context
-        )
-        
-        high_interruption_providers = [
-            provider for provider, score in interruption_scores.items()
-            if score > 0.5
-        ]
-        
-        if high_interruption_providers:
-            yield {
-                'type': 'interruption_detected',
-                'providers': high_interruption_providers,
-                'scores': interruption_scores,
-                'timestamp': time.time(),
-                'message': f"🚨 Interruption detected! Prioritizing: {', '.join(high_interruption_providers)}"
-            }
-        
-        # Check for conversation repair needs
-        repair_provider = self.response_coordinator.detect_conversation_repair_needs(context)
-        if repair_provider:
-            yield {
-                'type': 'repair_needed',
-                'provider': repair_provider,
-                'timestamp': time.time(),
-                'message': f"🔧 Routing clarification to {repair_provider.upper()}"
-            }
-        
-        # Stream the conversation
-        async for update in self.stream_conversation_chain(
-            user_message, context
-        ):
+    async def stream_conversation_chain(self, user_message, context, **kwargs):
+        """Backward compatibility method"""
+        async for update in self.stream_group_conversation(user_message, context):
             yield update
-    
-    def get_stream_status(self) -> Dict[str, Any]:
-        """Get current status of all active streams."""
-        return {
-            'active_streams': len(self.active_streams),
-            'stream_ids': list(self.active_streams.keys()),
-            'timestamp': time.time()
-        }

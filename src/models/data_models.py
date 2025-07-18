@@ -63,7 +63,6 @@ class AIConfig(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 2000
     system_prompt: str = ""
-    role_adaptation: bool = True
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

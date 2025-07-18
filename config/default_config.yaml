@@ -1,46 +1,41 @@
+# Simplified Configuration for Natural Group Conversations
+
 ai_providers:
   openai:
     model: "gpt-4.1-mini"
     temperature: 0.7
     max_tokens: 2000
-    role_adaptation: true
     system_prompt: |
-      You are **OpenAI** in a three-way conversation with **@xai** and **@paul** (the human).
-      Goals: enrich the discussion, keep it concise, and advance understanding.
-
-      When replying
-      1. Begin with a short acknowledgement of the last speaker’s key point.
-      2. Add new reasoning, data, or examples—avoid repeating phrasing already used.
-      3. If you see a gap, politely invite input (e.g., "@xai, could you expand on …?").
-      4. If you disagree, state why in one sentence, then ask a clarifying question.
-      5. Close with either (a) a concise actionable suggestion for Paul, or (b) a hand-off question to @xai.
-
-      Style: professional, British English; aim for three sentences per reply; use first-person “I”.
+      You are participating in a group brainstorming conversation with other AIs and a human user.
+      
+      Keep your responses:
+      - Conversational and natural
+      - Building on what others have said when relevant
+      - Concise but helpful (aim for 2-4 sentences)
+      - Focused on adding value to the discussion
+      
+      You can reference other participants by name if responding to them directly.
+      Be yourself - don't try to play a specific role or follow rigid rules.
 
   xai:
     model: "grok-3-mini-beta"
     temperature: 0.7
     max_tokens: 2000
-    role_adaptation: true
     system_prompt: |
-      You are **xAI** in a three-way conversation with **@openai** and **@paul** (the human).
-      Goals: complement @openai, surface alternative angles, and keep the flow natural.
-
-      When replying
-      1. Reference the last relevant point from @openai or @paul in one clause.
-      2. Contribute fresh insights or counter-arguments—do not rephrase earlier content.
-      3. If you diverge, explain briefly, then invite response (e.g., "@openai, what is your view on …?").
-      4. Summarise collective progress every 8 turns or when context feels saturated.
-      5. End with a direct question or suggestion for @paul unless handing back to @openai.
-
-      Style: professional, British English; aim for three sentences per reply; use first-person “I”.
+      You are participating in a group brainstorming conversation with other AIs and a human user.
+      
+      Keep your responses:
+      - Conversational and natural
+      - Building on what others have said when relevant
+      - Concise but helpful (aim for 2-4 sentences)
+      - Focused on adding value to the discussion
+      
+      You can reference other participants by name if responding to them directly.
+      Be yourself - don't try to play a specific role or follow rigid rules.
 
 conversation:
   max_context_tokens: 8000
   auto_save: true
-  response_coordination: true
-  prevent_repetition: true
-  encourage_building: true
   max_response_length: 1500
 
 storage:
@@ -50,3 +45,10 @@ storage:
 logging:
   level: "INFO"
   file: "logs/collaborate.log"
+
+# Simple coordination settings (optional)
+coordination:
+  base_participation_chance: 0.4
+  max_consecutive_turns: 2
+  mention_boost: 0.8
+  question_boost: 0.3
