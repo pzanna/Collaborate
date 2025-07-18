@@ -149,3 +149,36 @@ class ConfigManager:
         for key, value in kwargs.items():
             if hasattr(self.config.ai_providers[provider], key):
                 setattr(self.config.ai_providers[provider], key, value)
+    
+    def get_mcp_config(self) -> Dict[str, Any]:
+        """Get MCP server configuration."""
+        if hasattr(self.config, 'mcp_server') and self.config.mcp_server:
+            return self.config.mcp_server if isinstance(self.config.mcp_server, dict) else self.config.mcp_server.dict()
+        return {
+            'host': 'localhost',
+            'port': 9000,
+            'max_connections': 50,
+            'heartbeat_interval': 30
+        }
+    
+    def get_research_config(self) -> Dict[str, Any]:
+        """Get research task configuration."""
+        if hasattr(self.config, 'research_tasks') and self.config.research_tasks:
+            return self.config.research_tasks if isinstance(self.config.research_tasks, dict) else self.config.research_tasks.dict()
+        return {
+            'max_concurrent_tasks': 5,
+            'task_timeout': 300,
+            'retry_attempts': 3,
+            'search_depth': 'comprehensive'
+        }
+    
+    def get_agent_config(self) -> Dict[str, Any]:
+        """Get agent configuration."""
+        if hasattr(self.config, 'agents') and self.config.agents:
+            return self.config.agents if isinstance(self.config.agents, dict) else self.config.agents.dict()
+        return {
+            'retriever': {'enabled': True, 'max_results': 10},
+            'reasoner': {'enabled': True, 'model': 'gpt-4'},
+            'executor': {'enabled': True, 'timeout': 60},
+            'memory': {'enabled': True, 'max_entries': 1000}
+        }
