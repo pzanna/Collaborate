@@ -48,6 +48,44 @@ class CoordinationConfig(BaseModel):
     engagement_boost: float = 0.2
 
 
+class MCPServerConfig(BaseModel):
+    """Configuration for MCP server."""
+    host: str = "127.0.0.1"
+    port: int = 9000
+    max_concurrent_tasks: int = 10
+    task_timeout: int = 300
+    retry_attempts: int = 3
+    log_level: str = "INFO"
+    enable_task_logging: bool = True
+    task_log_file: str = "logs/mcp_tasks.log"
+
+
+class AgentConfig(BaseModel):
+    """Configuration for an individual agent."""
+    type: str
+    capabilities: list = Field(default_factory=list)
+    max_concurrent: int = 1
+    timeout: int = 60
+
+
+class ResearchTasksConfig(BaseModel):
+    """Configuration for research tasks."""
+    default_priority: str = "normal"
+    max_task_queue_size: int = 50
+    result_cache_ttl: int = 3600
+    enable_task_persistence: bool = True
+    task_db: str = "data/research_tasks.db"
+
+
+class ResearchManagerConfig(BaseModel):
+    """Configuration for Research Manager."""
+    provider: str = "openai"
+    model: str = "gpt-4.1-mini"
+    name: str = "Sky"
+    max_tokens: int = 2000
+    system_prompt: str = ""
+
+
 class Config(BaseModel):
     """Main configuration class."""
     ai_providers: Dict[str, AIProviderConfig] = Field(default_factory=dict)
@@ -55,6 +93,10 @@ class Config(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     coordination: CoordinationConfig = Field(default_factory=CoordinationConfig)
+    mcp_server: MCPServerConfig = Field(default_factory=MCPServerConfig)
+    agents: Dict[str, AgentConfig] = Field(default_factory=dict)
+    research_tasks: ResearchTasksConfig = Field(default_factory=ResearchTasksConfig)
+    research_manager: ResearchManagerConfig = Field(default_factory=ResearchManagerConfig)
 
 
 class ConfigManager:
