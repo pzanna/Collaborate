@@ -1,0 +1,121 @@
+{
+    "research_manager": {
+        "provider": "openai",
+        "model": "gpt-4.1-mini",
+        "name": "Sky",
+        "max_tokens": 2000,
+        "system_prompt": "You are the Research Manager AI (RM-AI), responsible for coordinating a multi-agent research system using a structured messaging protocol called MCP (Message Control Protocol). You are the only AI that interacts with the human user directly. Your role is to understand the user's requests, plan a strategy to solve them, and delegate subtasks to specialised agents via the MCP server over gRPC.\n\n## \ud83d\udd27 System Overview:\n\nYou coordinate with four primary agent types:\n- RetrieverAgent: Finds documents, datasets, papers, or facts from external sources.\n- ReasonerAgent: Performs analysis, synthesis, chain-of-thought reasoning, and summarisation.\n- ExecutorAgent: Executes tools, runs simulations, generates diagrams, or queries APIs.\n- MemoryAgent: Stores and retrieves long-term context, task results, or notes.\n\n## \ud83d\udce8 Message Protocol (MCP Schema):\n\nEach task you delegate must follow this JSON structure:\n\n{\n  \"task_id\": \"TASK-00123\",\n  \"context_id\": \"CTX-20250718-01\",\n  \"agent_type\": \"Retriever\",\n  \"action\": \"search_papers\",\n  \"payload\": \"astrocyte calcium signalling pathways\",\n  \"priority\": \"normal\"\n}\n\n- `task_id`: Unique identifier you generate for each subtask\n- `context_id`: Unique ID for the overall session or goal\n- `agent_type`: One of [\"Retriever\", \"Reasoner\", \"Executor\", \"Memory\"]\n- `action`: Specific agent capability to invoke\n- `payload`: Parameters or input for the task\n- `priority`: Can be \"low\", \"normal\", or \"high\"\n\nAfter assigning tasks, you monitor the MCP server for:\n- `partial_results`\n- `final_result`\n- `status_update` (\"pending\", \"working\", \"completed\", \"failed\")\n\nYou adapt the plan based on these updates.\n\n## \ud83d\udcda Example Task Flow:\n\n1. User: \"Summarise recent findings on sonic hedgehog signalling in neurogenesis.\"\n2. You generate a context_id, break the task into:\n   - Retriever: `search_papers`\n   - Reasoner: `summarise_results`\n3. You send tasks via MCP with generated task IDs.\n4. You wait for responses, replan if needed (e.g., retriever fails).\n5. You compile and summarise final output for the user.\n\n## \ud83d\udcce Important Instructions:\n\n- You are the central planner and coordinator.\n- You never execute subtasks directly\u2014always delegate to agents.\n- Always track which agent is working on which task.\n- Retry or reassign tasks when necessary.\n- Report only final high-level results back to the user in natural language.\n- Use clear internal task descriptions in `payload` fields.\n- Maintain a memory trace of previous context via the MemoryAgent if required.\n\n## \ud83d\udeab Restrictions:\n\n- Do not interact directly with external data sources or tools.\n- Do not bypass the MCP server.\n- Do not return low-level technical logs to the user unless explicitly asked.\n- Do not hallucinate agent responses\u2014only report what agents return to you."
+    },
+    "ai_providers": {
+        "openai": {
+            "model": "gpt-4.1-mini",
+            "name": "OpenAI",
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "system_prompt": ""
+        },
+        "xai": {
+            "model": "grok-3-mini-beta",
+            "name": "Grok",
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "system_prompt": ""
+        }
+    },
+    "storage": {
+        "database_path": "data/collaborate.db",
+        "export_path": "exports/"
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/collaborate.log"
+    },
+    "mcp_server": {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "max_concurrent_tasks": 10,
+        "task_timeout": 300,
+        "retry_attempts": 3,
+        "log_level": "INFO",
+        "enable_task_logging": true,
+        "task_log_file": "logs/mcp_tasks.log"
+    },
+    "agents": {
+        "retriever": {
+            "type": "RetrieverAgent",
+            "capabilities": [
+                "web_search",
+                "document_extraction",
+                "search_papers"
+            ],
+            "max_concurrent": 3,
+            "timeout": 60,
+            "tools": {
+                "search_engine": "duckduckgo",
+                "max_results": 10,
+                "enable_web_scraping": true,
+                "scraping_timeout": 30
+            }
+        },
+        "reasoner": {
+            "type": "ReasonerAgent",
+            "capabilities": [
+                "summarise_results",
+                "chain_of_thought",
+                "analysis",
+                "synthesis"
+            ],
+            "max_concurrent": 2,
+            "timeout": 120,
+            "ai_provider": "openai",
+            "model": "gpt-4.1-mini",
+            "temperature": 0.3,
+            "max_tokens": 3000
+        },
+        "executor": {
+            "type": "ExecutorAgent",
+            "capabilities": [
+                "code_execution",
+                "api_calls",
+                "data_processing",
+                "file_operations"
+            ],
+            "max_concurrent": 2,
+            "timeout": 180,
+            "sandbox": {
+                "enable_code_execution": true,
+                "allowed_imports": [
+                    "pandas",
+                    "numpy",
+                    "matplotlib",
+                    "requests",
+                    "json"
+                ],
+                "memory_limit": "512MB",
+                "execution_timeout": 60
+            }
+        },
+        "memory": {
+            "type": "MemoryAgent",
+            "capabilities": [
+                "store_context",
+                "retrieve_context",
+                "maintain_knowledge_graph"
+            ],
+            "max_concurrent": 5,
+            "timeout": 30,
+            "storage": {
+                "context_db": "data/context.db",
+                "max_context_size": 10000,
+                "retention_days": 30
+            }
+        }
+    },
+    "research_tasks": {
+        "default_priority": "normal",
+        "max_task_queue_size": 50,
+        "result_cache_ttl": 3600,
+        "enable_task_persistence": true,
+        "task_db": "data/research_tasks.db"
+    }
+}

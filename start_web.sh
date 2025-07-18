@@ -8,7 +8,7 @@ echo "🚀 Starting Collaborate Web UI..."
 # Function to handle cleanup on exit
 cleanup() {
     echo "Stopping services..."
-    kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
+    kill $MCP_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null
     exit 0
 }
 
@@ -17,6 +17,14 @@ trap cleanup SIGINT SIGTERM
 
 # Activate Python virtual environment
 source .venv/bin/activate
+
+# Start MCP server
+echo "🔧 Starting MCP server..."
+python -m src.mcp.server &
+MCP_PID=$!
+
+# Wait a moment for MCP server to start
+sleep 2
 
 # Start backend server
 echo "🖥️  Starting backend server..."
@@ -34,7 +42,8 @@ FRONTEND_PID=$!
 
 # Wait for user to stop
 echo ""
-echo "✅ Both servers are running!"
+echo "✅ All services are running!"
+echo "🔧 MCP Server:  http://localhost:9000"
 echo "🌐 Backend API: http://localhost:8000"
 echo "🌐 Frontend:    http://localhost:3000"
 echo ""

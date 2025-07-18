@@ -1,7 +1,7 @@
 """Configuration management for the Collaborate application."""
 
 import os
-import yaml
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -66,14 +66,14 @@ class ConfigManager:
     
     def _get_default_config_path(self) -> str:
         """Get the default configuration file path."""
-        return os.getenv("COLLABORATE_CONFIG_PATH", "config/default_config.yaml")
+        return os.getenv("COLLABORATE_CONFIG_PATH", "config/default_config.json")
     
     def _load_config(self) -> Config:
         """Load configuration from file or create default."""
         if os.path.exists(self.config_path):
             with open(self.config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
-            
+                config_data = json.load(f)
+
             # Fix provider field in ai_providers
             if 'ai_providers' in config_data:
                 for provider_name, provider_config in config_data['ai_providers'].items():
@@ -82,52 +82,13 @@ class ConfigManager:
             
             return Config(**config_data)
         else:
-            return self._create_default_config()
-    
-    def _create_default_config(self) -> Config:
-        """Create default configuration."""
-        return Config(
-            ai_providers={
-                "openai": AIProviderConfig(
-                    provider="openai",
-                    model="gpt-4.1-mini",
-                    temperature=0.7,
-                    max_tokens=2000,
-                    system_prompt="""You are participating in a group brainstorming conversation with other AIs and a human user.
-      
-Keep your responses:
-- Conversational and natural
-- Building on what others have said when relevant
-- Concise but helpful (aim for 2-4 sentences)
-- Focused on adding value to the discussion
-
-You can reference other participants by name if responding to them directly.
-Be yourself - don't try to play a specific role or follow rigid rules."""
-                ),
-                "xai": AIProviderConfig(
-                    provider="xai",
-                    model="grok-3-mini-beta",
-                    temperature=0.7,
-                    max_tokens=2000,
-                    system_prompt="""You are participating in a group brainstorming conversation with other AIs and a human user.
-      
-Keep your responses:
-- Conversational and natural
-- Building on what others have said when relevant
-- Concise but helpful (aim for 2-4 sentences)
-- Focused on adding value to the discussion
-
-You can reference other participants by name if responding to them directly.
-Be yourself - don't try to play a specific role or follow rigid rules."""
-                )
-            }
-        )
+            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
     
     def save_config(self) -> None:
         """Save current configuration to file."""
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         with open(self.config_path, 'w') as f:
-            yaml.dump(self.config.model_dump(), f, default_flow_style=False)
+            json.dump(self.config.model_dump(), f, indent=4)
     
     def get_api_key(self, provider: str) -> str:
         """Get API key for a provider from environment variables."""
