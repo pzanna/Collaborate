@@ -16,9 +16,12 @@ import {
   BeakerIcon,
   FolderIcon,
   PlusIcon,
+  StarIcon,
   TrashIcon,
+  EllipsisVerticalIcon,
   Bars3Icon,
 } from "@heroicons/react/24/outline"
+import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid"
 import NewConversationModal from "../modals/NewConversationModal"
 
 const Sidebar: React.FC = () => {
@@ -34,7 +37,9 @@ const Sidebar: React.FC = () => {
   const { conversations, currentConversationId } = useSelector(
     (state: RootState) => state.chat
   )
-  const { projects } = useSelector((state: RootState) => state.projects)
+  const { projects, selectedProjectId } = useSelector(
+    (state: RootState) => state.projects
+  )
   const { sidebarOpen } = useSelector((state: RootState) => state.ui)
 
   const navigationItems = [
@@ -44,6 +49,7 @@ const Sidebar: React.FC = () => {
   ]
 
   useEffect(() => {
+    // Load initial data
     loadProjects()
     loadConversationsData()
   }, [])
@@ -93,6 +99,7 @@ const Sidebar: React.FC = () => {
 
       dispatch(removeConversation(conversationId))
 
+      // If this was the current conversation, navigate away
       if (currentConversationId === conversationId) {
         navigate("/chat")
       }
@@ -121,6 +128,7 @@ const Sidebar: React.FC = () => {
   if (!sidebarOpen) {
     return (
       <div className="flex flex-col h-full">
+        {/* Collapsed header */}
         <div className="p-4 border-b border-gray-200">
           <button
             onClick={() => dispatch(toggleSidebar())}
@@ -130,6 +138,7 @@ const Sidebar: React.FC = () => {
           </button>
         </div>
 
+        {/* Navigation icons */}
         <div className="flex-1 flex flex-col items-center space-y-2 py-4">
           {navigationItems.map((item) => (
             <button
@@ -233,13 +242,16 @@ const Sidebar: React.FC = () => {
                           {conversation.message_count} messages •{" "}
                           {formatDistanceToNow(
                             new Date(conversation.updated_at),
-                            { addSuffix: true }
+                            {
+                              addSuffix: true,
+                            }
                           )}
                         </p>
                       </div>
                     </div>
                   </button>
 
+                  {/* Delete button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -283,6 +295,7 @@ const Sidebar: React.FC = () => {
               <button
                 key={project.id}
                 onClick={() => {
+                  // TODO: Filter conversations by project
                   console.log("Select project:", project.id)
                 }}
                 className="w-full text-left p-2 rounded-md hover:bg-gray-100 transition-colors"
@@ -329,6 +342,19 @@ const Sidebar: React.FC = () => {
               <div className="w-2 h-2 bg-green-500 rounded-full" />
               <span className="text-xs text-gray-500">online</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* New Conversation Modal */}
+      <NewConversationModal
+        isOpen={isNewConversationModalOpen}
+        onClose={() => setIsNewConversationModalOpen(false)}
+        onConversationCreated={handleConversationCreated}
+      />
+    </div>
+  )
+}
           </div>
         </div>
       </div>

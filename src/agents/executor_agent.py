@@ -535,8 +535,7 @@ class ExecutorAgent(BaseAgent):
     
     def _setup_security_restrictions(self) -> None:
         """Set up security restrictions for code execution."""
-        # This would implement security restrictions
-        # For now, we'll just log that security is enabled
+        # TODO: Implement comprehensive security restrictions
         self.logger.info("Security restrictions enabled for code execution")
     
     def _is_safe_path(self, path: Path) -> bool:

@@ -519,16 +519,9 @@ class ResearchManager:
             success = await self.mcp_client.send_task(action)
             
             if success:
-                # Wait for response (simplified for now)
-                # In a real implementation, we'd wait for the actual response
-                # For now, return a mock successful response
-                return AgentResponse(
-                    task_id=action.task_id,
-                    context_id=action.context_id,
-                    agent_type=agent_type,
-                    status="completed",
-                    result={"success": True}
-                )
+                # Wait for response - this would be handled by the MCP queue system
+                # TODO: Implement proper response waiting mechanism
+                return None
             
             return None
             

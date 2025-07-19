@@ -9,6 +9,7 @@ import {
   Bars3Icon,
   XMarkIcon,
   ChatBubbleLeftIcon,
+  BeakerIcon,
   FolderIcon,
   HeartIcon,
   PlusIcon,
@@ -29,18 +30,33 @@ const Header: React.FC = () => {
 
   const handleConversationCreated = (conversationId: string) => {
     dispatch(setCurrentConversation(conversationId))
-    navigate("/") // Navigate to chat page
+    navigate(`/chat/${conversationId}`)
   }
 
   const getPageTitle = () => {
-    switch (location.pathname) {
-      case "/projects":
-        return "Projects"
-      case "/health":
-        return "System Health"
-      default:
-        return "AI Chat"
+    if (location.pathname.startsWith("/chat")) {
+      return "Chat Workspace"
+    } else if (location.pathname.startsWith("/research")) {
+      return "Research Workspace"
+    } else if (location.pathname.startsWith("/projects")) {
+      return "Projects"
+    } else if (location.pathname.startsWith("/health")) {
+      return "System Health"
     }
+    return "Collaborate AI"
+  }
+
+  const getPageIcon = () => {
+    if (location.pathname.startsWith("/chat")) {
+      return ChatBubbleLeftIcon
+    } else if (location.pathname.startsWith("/research")) {
+      return BeakerIcon
+    } else if (location.pathname.startsWith("/projects")) {
+      return FolderIcon
+    } else if (location.pathname.startsWith("/health")) {
+      return HeartIcon
+    }
+    return ChatBubbleLeftIcon
   }
 
   const getConnectionStatusColor = () => {
@@ -71,10 +87,15 @@ const Header: React.FC = () => {
           )}
         </button>
 
-        {/* Page title */}
-        <h1 className="text-xl font-semibold text-gray-900">
-          {getPageTitle()}
-        </h1>
+        {/* Page title with icon */}
+        <div className="flex items-center space-x-2">
+          {React.createElement(getPageIcon(), {
+            className: "h-6 w-6 text-blue-600",
+          })}
+          <h1 className="text-xl font-semibold text-gray-900">
+            {getPageTitle()}
+          </h1>
+        </div>
 
         {/* Connection status */}
         <div className="flex items-center space-x-2">
@@ -90,26 +111,37 @@ const Header: React.FC = () => {
       <div className="flex items-center space-x-3">
         {/* Quick actions */}
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/chat")}
           className={`p-2 rounded-md transition-colors ${
-            location.pathname === "/" ||
-            location.pathname.startsWith("/conversation")
+            location.pathname.startsWith("/chat")
               ? "text-blue-600 bg-blue-50"
               : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
           }`}
-          title="Chat"
+          title="Chat Workspace"
         >
           <ChatBubbleLeftIcon className="h-5 w-5" />
         </button>
 
         <button
-          onClick={() => navigate("/projects")}
+          onClick={() => navigate("/research")}
           className={`p-2 rounded-md transition-colors ${
-            location.pathname === "/projects"
+            location.pathname.startsWith("/research")
               ? "text-blue-600 bg-blue-50"
               : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
           }`}
-          title="View Projects"
+          title="Research Workspace"
+        >
+          <BeakerIcon className="h-5 w-5" />
+        </button>
+
+        <button
+          onClick={() => navigate("/projects")}
+          className={`p-2 rounded-md transition-colors ${
+            location.pathname.startsWith("/projects")
+              ? "text-blue-600 bg-blue-50"
+              : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+          }`}
+          title="Projects"
         >
           <FolderIcon className="h-5 w-5" />
         </button>
@@ -117,7 +149,7 @@ const Header: React.FC = () => {
         <button
           onClick={() => navigate("/health")}
           className={`p-2 rounded-md transition-colors ${
-            location.pathname === "/health"
+            location.pathname.startsWith("/health")
               ? "text-blue-600 bg-blue-50"
               : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
           }`}
@@ -130,10 +162,10 @@ const Header: React.FC = () => {
         <button
           onClick={handleNewConversation}
           className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-medium flex items-center space-x-2 transition-colors"
-          title="Create New Conversation"
+          title="Create New Chat"
         >
           <PlusIcon className="h-4 w-4" />
-          <span>New Conversation</span>
+          <span>New Chat</span>
         </button>
       </div>
 

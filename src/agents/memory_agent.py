@@ -779,14 +779,12 @@ class MemoryAgent(BaseAgent):
     
     async def _prune_memories(self) -> int:
         """Prune low-importance memories."""
-        # Implementation would prune memories based on importance and access patterns
-        # For now, return 0 as a placeholder
+        # TODO: Implement memory pruning based on importance and access patterns
         return 0
     
     async def _decay_edge_strengths(self) -> int:
         """Decay knowledge graph edge strengths."""
-        # Implementation would decay edge strengths over time
-        # For now, return 0 as a placeholder
+        # TODO: Implement edge strength decay over time
         return 0
     
     async def _get_memory_from_db(self, memory_id: str) -> Optional[MemoryRecord]:
