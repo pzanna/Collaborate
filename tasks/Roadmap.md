@@ -43,10 +43,10 @@
 
 ### Tasks
 
-- [ ] Enhance MemoryAgent with storage + query
-- [ ] Teach RM AI to avoid redundant agent calls
-- [ ] Add cost-aware decision making to prompt
-- [ ] Store context traces with context_id
+- [x] Enhance MemoryAgent with storage + query ✅
+- [x] Teach RM AI to avoid redundant agent calls ✅
+- [x] Add cost-aware decision making to prompt ✅
+- [x] Store context traces with context_id ✅
 
 ---
 

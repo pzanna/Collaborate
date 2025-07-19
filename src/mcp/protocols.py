@@ -237,6 +237,69 @@ class TimeoutEvent:
         return cls(**data)
 
 
+@dataclass
+class StoreMemoryRequest:
+    """Request to store memory data with structured metadata"""
+    context_id: str
+    memory_type: str  # "task_result", "finding", "insight", "context"
+    content: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    importance: float = 0.5
+    tags: List[str] = field(default_factory=list)
+    source_task_id: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'context_id': self.context_id,
+            'memory_type': self.memory_type,
+            'content': self.content,
+            'metadata': self.metadata,
+            'importance': self.importance,
+            'tags': self.tags,
+            'source_task_id': self.source_task_id,
+            'timestamp': self.timestamp.isoformat()
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'StoreMemoryRequest':
+        """Create from dictionary"""
+        data = data.copy()
+        if 'timestamp' in data and isinstance(data['timestamp'], str):
+            data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        return cls(**data)
+
+
+@dataclass
+class QueryMemoryRequest:
+    """Request to query stored memories"""
+    context_id: Optional[str] = None
+    memory_type: Optional[str] = None
+    query: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
+    limit: int = 10
+    min_importance: float = 0.0
+    time_range: Optional[Dict[str, str]] = None  # {"start": "2024-01-01", "end": "2024-01-02"}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'context_id': self.context_id,
+            'memory_type': self.memory_type,
+            'query': self.query,
+            'tags': self.tags,
+            'limit': self.limit,
+            'min_importance': self.min_importance,
+            'time_range': self.time_range
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'QueryMemoryRequest':
+        """Create from dictionary"""
+        return cls(**data)
+
+
 # Message type mapping for serialization
 MESSAGE_TYPES = {
     'research_action': ResearchAction,
@@ -244,7 +307,9 @@ MESSAGE_TYPES = {
     'agent_registration': AgentRegistration,
     'task_update': TaskUpdate,
     'register_capabilities': RegisterCapabilities,
-    'timeout_event': TimeoutEvent
+    'timeout_event': TimeoutEvent,
+    'store_memory_request': StoreMemoryRequest,
+    'query_memory_request': QueryMemoryRequest
 }
 
 

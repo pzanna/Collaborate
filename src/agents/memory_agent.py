@@ -9,28 +9,31 @@ import asyncio
 import logging
 import json
 import sqlite3
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
 from pathlib import Path
 import aiosqlite
 from dataclasses import dataclass, field
 
 from .base_agent import BaseAgent, AgentStatus
-from ..mcp.protocols import ResearchAction
+from ..mcp.protocols import ResearchAction, StoreMemoryRequest, QueryMemoryRequest
 from ..config.config_manager import ConfigManager
 
 
 @dataclass
 class MemoryRecord:
-    """Memory record structure."""
+    """Enhanced memory record structure."""
     id: str
     context_id: str
     content: str
+    memory_type: str = "general"  # "task_result", "finding", "insight", "context"
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
     importance: float = 0.5
     access_count: int = 0
     last_accessed: Optional[datetime] = None
+    tags: List[str] = field(default_factory=list)
+    source_task_id: Optional[str] = None
 
 
 @dataclass
@@ -112,7 +115,9 @@ class MemoryAgent(BaseAgent):
             'add_knowledge',
             'query_knowledge',
             'find_connections',
-            'consolidate_memory'
+            'consolidate_memory',
+            'store_structured_memory',  # New enhanced capability
+            'query_structured_memory'   # New enhanced capability
         ]
     
     async def _initialize_agent(self) -> None:
@@ -178,6 +183,10 @@ class MemoryAgent(BaseAgent):
             return await self._find_connections(payload)
         elif action == 'consolidate_memory':
             return await self._consolidate_memory(payload)
+        elif action == 'store_structured_memory':
+            return await self._store_structured_memory(payload)
+        elif action == 'query_structured_memory':
+            return await self._query_structured_memory(payload)
         else:
             raise ValueError(f"Unknown action: {action}")
     
@@ -568,21 +577,208 @@ class MemoryAgent(BaseAgent):
                 'edges_decayed': 0
             }
     
+    async def _store_structured_memory(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Store structured memory with enhanced metadata and categorization.
+        
+        Args:
+            payload: Enhanced memory storage parameters
+            
+        Returns:
+            Dict[str, Any]: Storage results
+        """
+        try:
+            # Parse payload - support both direct dict and StoreMemoryRequest
+            if isinstance(payload, dict):
+                context_id = payload.get('context_id', '')
+                memory_type = payload.get('memory_type', 'general')
+                content = payload.get('content', '')
+                metadata = payload.get('metadata', {})
+                importance = payload.get('importance', 0.5)
+                tags = payload.get('tags', [])
+                source_task_id = payload.get('source_task_id')
+            else:
+                # Assume it's a StoreMemoryRequest object
+                context_id = payload.context_id
+                memory_type = payload.memory_type
+                content = payload.content
+                metadata = payload.metadata
+                importance = payload.importance
+                tags = payload.tags
+                source_task_id = payload.source_task_id
+            
+            if not content:
+                raise ValueError("Content is required for memory storage")
+            
+            # Generate memory ID with type prefix
+            timestamp = datetime.now()
+            memory_id = f"{memory_type}_{int(timestamp.timestamp())}_{hash(content) % 10000}"
+            
+            # Create enhanced memory record
+            record = MemoryRecord(
+                id=memory_id,
+                context_id=context_id,
+                content=content,
+                memory_type=memory_type,
+                metadata=metadata,
+                importance=importance,
+                timestamp=timestamp,
+                tags=tags,
+                source_task_id=source_task_id
+            )
+            
+            # Store in database
+            await self._insert_memory_record(record)
+            
+            # Add to cache if important enough
+            if importance >= self.importance_threshold:
+                self.memory_cache[memory_id] = record
+            
+            self.logger.info(f"Stored structured memory: {memory_type} - {memory_id}")
+            
+            return {
+                'success': True,
+                'memory_id': memory_id,
+                'memory_type': memory_type,
+                'importance': importance,
+                'cached': importance >= self.importance_threshold,
+                'tags': tags
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to store structured memory: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'memory_id': None
+            }
+    
+    async def _query_structured_memory(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Query memories with structured filters and enhanced search.
+        
+        Args:
+            payload: Query parameters
+            
+        Returns:
+            Dict[str, Any]: Query results
+        """
+        try:
+            # Parse query parameters
+            context_id = payload.get('context_id')
+            memory_type = payload.get('memory_type')
+            query = payload.get('query', '')
+            tags = payload.get('tags', [])
+            limit = payload.get('limit', 10)
+            min_importance = payload.get('min_importance', 0.0)
+            time_range = payload.get('time_range')
+            
+            # Build SQL query dynamically
+            where_conditions = []
+            params = []
+            
+            if context_id:
+                where_conditions.append("context_id = ?")
+                params.append(context_id)
+            
+            if memory_type:
+                where_conditions.append("memory_type = ?")
+                params.append(memory_type)
+            
+            if query:
+                where_conditions.append("(content LIKE ? OR metadata LIKE ?)")
+                params.extend([f'%{query}%', f'%{query}%'])
+            
+            if min_importance > 0:
+                where_conditions.append("importance >= ?")
+                params.append(min_importance)
+            
+            if time_range:
+                if time_range.get('start'):
+                    where_conditions.append("timestamp >= ?")
+                    params.append(time_range['start'])
+                if time_range.get('end'):
+                    where_conditions.append("timestamp <= ?")
+                    params.append(time_range['end'])
+            
+            # Handle tags search
+            if tags:
+                tag_conditions = []
+                for tag in tags:
+                    tag_conditions.append("tags LIKE ?")
+                    params.append(f'%"{tag}"%')
+                if tag_conditions:
+                    where_conditions.append(f"({' OR '.join(tag_conditions)})")
+            
+            # Build full query
+            base_query = "SELECT * FROM memories"
+            if where_conditions:
+                base_query += " WHERE " + " AND ".join(where_conditions)
+            base_query += " ORDER BY importance DESC, timestamp DESC LIMIT ?"
+            params.append(limit)
+            
+            # Execute query
+            results = []
+            if not self.db_connection:
+                return {
+                    'success': False,
+                    'error': 'Database not connected',
+                    'results': [],
+                    'count': 0
+                }
+            
+            async with self.db_connection.execute(base_query, params) as cursor:
+                async for row in cursor:
+                    memory = self._row_to_memory(row)
+                    results.append(memory)
+                    
+                    # Update access count
+                    await self._update_access_count(memory.id)
+            
+            # Convert to dict format
+            result_dicts = [self._memory_to_dict(m) for m in results]
+            
+            return {
+                'success': True,
+                'results': result_dicts,
+                'count': len(result_dicts),
+                'query_params': {
+                    'context_id': context_id,
+                    'memory_type': memory_type,
+                    'query': query,
+                    'tags': tags,
+                    'limit': limit,
+                    'min_importance': min_importance
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to query structured memory: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'results': [],
+                'count': 0
+            }
+    
     async def _initialize_database(self) -> None:
-        """Initialize the memory database."""
+        """Initialize the enhanced memory database."""
         self.db_connection = await aiosqlite.connect(str(self.memory_db_path))
         
-        # Create tables
+        # Create enhanced memories table
         await self.db_connection.execute('''
             CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
                 context_id TEXT,
                 content TEXT,
+                memory_type TEXT DEFAULT 'general',
                 metadata TEXT,
                 importance REAL,
                 access_count INTEGER DEFAULT 0,
                 timestamp DATETIME,
-                last_accessed DATETIME
+                last_accessed DATETIME,
+                tags TEXT,
+                source_task_id TEXT
             )
         ''')
         
@@ -608,15 +804,35 @@ class MemoryAgent(BaseAgent):
             )
         ''')
         
-        # Create indexes
+        # Create enhanced indexes for better query performance
         await self.db_connection.execute('''
             CREATE INDEX IF NOT EXISTS idx_memories_context 
             ON memories(context_id)
         ''')
         
         await self.db_connection.execute('''
+            CREATE INDEX IF NOT EXISTS idx_memories_type 
+            ON memories(memory_type)
+        ''')
+        
+        await self.db_connection.execute('''
             CREATE INDEX IF NOT EXISTS idx_memories_importance 
             ON memories(importance)
+        ''')
+        
+        await self.db_connection.execute('''
+            CREATE INDEX IF NOT EXISTS idx_memories_timestamp 
+            ON memories(timestamp)
+        ''')
+        
+        await self.db_connection.execute('''
+            CREATE INDEX IF NOT EXISTS idx_memories_tags 
+            ON memories(tags)
+        ''')
+        
+        await self.db_connection.execute('''
+            CREATE INDEX IF NOT EXISTS idx_memories_source_task 
+            ON memories(source_task_id)
         ''')
         
         await self.db_connection.execute('''
@@ -673,27 +889,65 @@ class MemoryAgent(BaseAgent):
             'id': memory.id,
             'context_id': memory.context_id,
             'content': memory.content,
+            'memory_type': memory.memory_type,
             'metadata': memory.metadata,
             'importance': memory.importance,
             'access_count': memory.access_count,
             'timestamp': memory.timestamp.isoformat(),
-            'last_accessed': memory.last_accessed.isoformat() if memory.last_accessed else None
+            'last_accessed': memory.last_accessed.isoformat() if memory.last_accessed else None,
+            'tags': memory.tags,
+            'source_task_id': memory.source_task_id
         }
     
-    def _row_to_memory(self, row: Tuple) -> MemoryRecord:
+    def _row_to_memory(self, row: Any) -> MemoryRecord:
         """Convert database row to memory record."""
-        return MemoryRecord(
-            id=row[0],
-            context_id=row[1],
-            content=row[2],
-            metadata=json.loads(row[3]) if row[3] else {},
-            importance=row[4],
-            access_count=row[5],
-            timestamp=datetime.fromisoformat(row[6]),
-            last_accessed=datetime.fromisoformat(row[7]) if row[7] else None
-        )
+        # Handle both old and new schema
+        try:
+            if len(row) >= 11:  # New enhanced schema
+                return MemoryRecord(
+                    id=row[0],
+                    context_id=row[1],
+                    content=row[2],
+                    memory_type=row[3] or "general",
+                    metadata=json.loads(row[4]) if row[4] else {},
+                    importance=row[5],
+                    access_count=row[6],
+                    timestamp=datetime.fromisoformat(row[7]),
+                    last_accessed=datetime.fromisoformat(row[8]) if row[8] else None,
+                    tags=json.loads(row[9]) if row[9] else [],
+                    source_task_id=row[10]
+                )
+            else:  # Old schema - backward compatibility
+                return MemoryRecord(
+                    id=row[0],
+                    context_id=row[1],
+                    content=row[2],
+                    memory_type="general",
+                    metadata=json.loads(row[3]) if len(row) > 3 and row[3] else {},
+                    importance=row[4] if len(row) > 4 else 0.5,
+                    access_count=row[5] if len(row) > 5 else 0,
+                    timestamp=datetime.fromisoformat(row[6]) if len(row) > 6 else datetime.now(),
+                    last_accessed=datetime.fromisoformat(row[7]) if len(row) > 7 and row[7] else None,
+                    tags=[],
+                    source_task_id=None
+                )
+        except (IndexError, ValueError, TypeError) as e:
+            # Fallback for malformed rows
+            self.logger.warning(f"Error parsing memory row: {e}")
+            return MemoryRecord(
+                id=str(row[0]) if len(row) > 0 else "unknown",
+                context_id=str(row[1]) if len(row) > 1 else "unknown",
+                content=str(row[2]) if len(row) > 2 else "",
+                memory_type="general",
+                metadata={},
+                importance=0.5,
+                access_count=0,
+                timestamp=datetime.now(),
+                tags=[],
+                source_task_id=None
+            )
     
-    def _row_to_knowledge_node(self, row: Tuple) -> KnowledgeNode:
+    def _row_to_knowledge_node(self, row: Any) -> KnowledgeNode:
         """Convert database row to knowledge node."""
         return KnowledgeNode(
             id=row[0],
@@ -703,7 +957,7 @@ class MemoryAgent(BaseAgent):
             created_at=datetime.fromisoformat(row[4])
         )
     
-    def _row_to_knowledge_edge(self, row: Tuple) -> KnowledgeEdge:
+    def _row_to_knowledge_edge(self, row: Any) -> KnowledgeEdge:
         """Convert database row to knowledge edge."""
         return KnowledgeEdge(
             id=row[0],
@@ -722,17 +976,20 @@ class MemoryAgent(BaseAgent):
         
         await self.db_connection.execute('''
             INSERT INTO memories 
-            (id, context_id, content, metadata, importance, access_count, timestamp, last_accessed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, context_id, content, memory_type, metadata, importance, access_count, timestamp, last_accessed, tags, source_task_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             record.id,
             record.context_id,
             record.content,
+            record.memory_type,
             json.dumps(record.metadata),
             record.importance,
             record.access_count,
             record.timestamp.isoformat(),
-            record.last_accessed.isoformat() if record.last_accessed else None
+            record.last_accessed.isoformat() if record.last_accessed else None,
+            json.dumps(record.tags),
+            record.source_task_id
         ))
         
         await self.db_connection.commit()
@@ -789,33 +1046,135 @@ class MemoryAgent(BaseAgent):
     
     async def _get_memory_from_db(self, memory_id: str) -> Optional[MemoryRecord]:
         """Get memory from database."""
-        # Implementation would fetch specific memory from database
+        if not self.db_connection:
+            return None
+        
+        try:
+            async with self.db_connection.execute(
+                'SELECT * FROM memories WHERE id = ?', (memory_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return self._row_to_memory(row)
+        except Exception as e:
+            self.logger.error(f"Failed to get memory {memory_id}: {e}")
+        
         return None
     
     async def _get_memories_by_context(self, context_id: str, limit: int) -> List[MemoryRecord]:
         """Get memories by context."""
-        # Implementation would fetch memories by context
-        return []
+        if not self.db_connection:
+            return []
+        
+        memories = []
+        try:
+            async with self.db_connection.execute('''
+                SELECT * FROM memories 
+                WHERE context_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (context_id, limit)) as cursor:
+                async for row in cursor:
+                    memories.append(self._row_to_memory(row))
+        except Exception as e:
+            self.logger.error(f"Failed to get memories by context {context_id}: {e}")
+        
+        return memories
     
     async def _get_recent_memories(self, limit: int) -> List[MemoryRecord]:
         """Get recent memories."""
-        # Implementation would fetch recent memories
-        return []
+        if not self.db_connection:
+            return []
+        
+        memories = []
+        try:
+            async with self.db_connection.execute('''
+                SELECT * FROM memories 
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (limit,)) as cursor:
+                async for row in cursor:
+                    memories.append(self._row_to_memory(row))
+        except Exception as e:
+            self.logger.error(f"Failed to get recent memories: {e}")
+        
+        return memories
     
     async def _update_access_count(self, memory_id: str) -> None:
         """Update memory access count."""
-        # Implementation would update access count
-        pass
+        try:
+            # Update in cache if present
+            if memory_id in self.memory_cache:
+                self.memory_cache[memory_id].access_count += 1
+                self.memory_cache[memory_id].last_accessed = datetime.now()
+            
+            # Update in database
+            if self.db_connection:
+                await self.db_connection.execute('''
+                    UPDATE memories 
+                    SET access_count = access_count + 1, last_accessed = ?
+                    WHERE id = ?
+                ''', (datetime.now().isoformat(), memory_id))
+                await self.db_connection.commit()
+        except Exception as e:
+            self.logger.warning(f"Failed to update access count for {memory_id}: {e}")
     
     async def _update_memory_db(self, memory_id: str, updates: Dict[str, Any]) -> None:
         """Update memory in database."""
-        # Implementation would update memory in database
-        pass
+        if not self.db_connection:
+            return
+        
+        try:
+            # Build dynamic update query
+            set_clauses = []
+            params = []
+            
+            for key, value in updates.items():
+                if key in ['content', 'memory_type', 'importance', 'source_task_id']:
+                    set_clauses.append(f"{key} = ?")
+                    params.append(value)
+                elif key == 'metadata':
+                    set_clauses.append("metadata = ?")
+                    params.append(json.dumps(value))
+                elif key == 'tags':
+                    set_clauses.append("tags = ?")
+                    params.append(json.dumps(value))
+            
+            if set_clauses:
+                query = f"UPDATE memories SET {', '.join(set_clauses)} WHERE id = ?"
+                params.append(memory_id)
+                await self.db_connection.execute(query, params)
+                await self.db_connection.commit()
+        except Exception as e:
+            self.logger.error(f"Failed to update memory {memory_id}: {e}")
     
     async def _delete_memory_db(self, memory_id: str) -> None:
         """Delete memory from database."""
-        # Implementation would delete memory from database
-        pass
+        if not self.db_connection:
+            return
+        
+        try:
+            await self.db_connection.execute('DELETE FROM memories WHERE id = ?', (memory_id,))
+            await self.db_connection.commit()
+        except Exception as e:
+            self.logger.error(f"Failed to delete memory {memory_id}: {e}")
+    
+    async def _get_memory_from_db(self, memory_id: str) -> Optional[MemoryRecord]:
+        """Get memory from database."""
+        if not self.db_connection:
+            return None
+        
+        try:
+            async with self.db_connection.execute(
+                'SELECT * FROM memories WHERE id = ?', (memory_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return self._row_to_memory(row)
+        except Exception as e:
+            self.logger.error(f"Failed to get memory {memory_id}: {e}")
+        
+        return None
     
     async def _insert_knowledge_node(self, node: KnowledgeNode) -> None:
         """Insert knowledge node into database."""

@@ -1,4 +1,3 @@
-# ai_client_manager.py
 """AI Client Manager for coordinating multiple AI providers."""
 
 import os
@@ -17,6 +16,7 @@ try:
     from ..ai_clients.xai_client import XAIClient
     from .simplified_coordinator import SimplifiedCoordinator
     from ..utils.error_handler import handle_errors, APIError, NetworkError, safe_execute
+    from ..mcp.cost_estimator import CostEstimator
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
     from models.data_models import Message, AIConfig
@@ -25,13 +25,15 @@ except ImportError:
     from ai_clients.xai_client import XAIClient
     from core.simplified_coordinator import SimplifiedCoordinator
     from utils.error_handler import handle_errors, APIError, NetworkError, safe_execute
+    from mcp.cost_estimator import CostEstimator
 
 
 class AIClientManager:
     """Manages multiple AI clients with simplified coordination."""
     
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, cost_estimator: Optional[CostEstimator] = None):
         self.config_manager = config_manager
+        self.cost_estimator = cost_estimator or CostEstimator(config_manager)
         self.clients: Dict[str, Any] = {}
         self.coordinator = SimplifiedCoordinator()
         self.failed_providers: Dict[str, int] = {}  # Track failed providers
@@ -88,7 +90,8 @@ class AIClientManager:
     
     @handle_errors(context="get_response", reraise=False, fallback_return="")
     def get_response(self, provider: str, messages: List[Message], 
-                    system_prompt: Optional[str] = None, retry_count: int = 0) -> str:
+                    system_prompt: Optional[str] = None, retry_count: int = 0,
+                    task_id: Optional[str] = None, agent_type: Optional[str] = None) -> str:
         """Get response from a specific AI provider with error handling and retries."""
         if provider not in self.clients:
             error_msg = f"Provider '{provider}' not available"
@@ -107,7 +110,43 @@ class AIClientManager:
         
         try:
             client = self.clients[provider]
+            
+            # Estimate tokens before request (for cost tracking)
+            input_tokens = 0
+            if hasattr(client, 'estimate_tokens'):
+                try:
+                    input_tokens = client.estimate_tokens(messages, system_prompt)
+                except Exception as e:
+                    self.logger.warning(f"Token estimation failed for {provider}: {e}")
+            
+            # Get response
             response = client.get_response(messages, system_prompt)
+            
+            # Estimate output tokens
+            output_tokens = 0
+            if hasattr(client, 'estimate_tokens') and response:
+                try:
+                    # Create a temporary message for output token estimation
+                    output_msg = Message(
+                        conversation_id="temp",
+                        participant="assistant", 
+                        content=response
+                    )
+                    output_tokens = client.estimate_tokens([output_msg])
+                except Exception as e:
+                    self.logger.warning(f"Output token estimation failed for {provider}: {e}")
+            
+            # Record cost usage if tracking is active
+            if task_id and self.cost_estimator:
+                model = getattr(client, 'model', 'unknown')
+                self.cost_estimator.record_usage(
+                    task_id=task_id,
+                    provider=provider,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    agent_type=agent_type
+                )
             
             # Reset failure count on success
             if provider in self.failed_providers:
@@ -128,7 +167,7 @@ class AIClientManager:
             if retry_count < self.max_retries:
                 self.logger.info(f"AI Manager: Retrying {provider} request "
                                f"(attempt {retry_count + 1}/{self.max_retries})")
-                return self.get_response(provider, messages, system_prompt, retry_count + 1)
+                return self.get_response(provider, messages, system_prompt, retry_count + 1, task_id, agent_type)
             
             # Convert to appropriate error type
             if "timeout" in str(e).lower() or "connection" in str(e).lower():
@@ -138,7 +177,8 @@ class AIClientManager:
     
     @handle_errors(context="get_smart_responses", reraise=False, fallback_return={})
     def get_smart_responses(self, messages: List[Message], 
-                            system_prompt: Optional[str] = None) -> Dict[str, str]:
+                            system_prompt: Optional[str] = None,
+                            task_id: Optional[str] = None) -> Dict[str, str]:
         """Get responses from participating AIs using simplified coordination"""
         
         if not messages:
@@ -169,7 +209,8 @@ class AIClientManager:
                 # Simple system prompt for group participation
                 group_prompt = self._create_group_prompt(provider, system_prompt)
                 
-                response = self.get_response(provider, shared_context, group_prompt)
+                response = self.get_response(provider, shared_context, group_prompt, 
+                                           task_id=task_id, agent_type="coordinator")
                 
                 if response and not response.startswith("Error:"):
                     responses[provider] = response

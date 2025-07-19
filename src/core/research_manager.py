@@ -17,6 +17,7 @@ try:
     # Try relative imports first (when imported from within src package)
     from ..mcp.client import MCPClient
     from ..mcp.protocols import ResearchAction, AgentResponse, TaskStatus
+    from ..mcp.cost_estimator import CostEstimator
     from ..config.config_manager import ConfigManager
     from ..utils.error_handler import ErrorHandler
     from ..utils.performance import PerformanceMonitor
@@ -24,6 +25,7 @@ except ImportError:
     # Fall back to absolute imports (when imported from outside src package)
     from mcp.client import MCPClient
     from mcp.protocols import ResearchAction, AgentResponse, TaskStatus
+    from mcp.cost_estimator import CostEstimator
     from config.config_manager import ConfigManager
     from utils.error_handler import ErrorHandler
     from utils.performance import PerformanceMonitor
@@ -63,6 +65,12 @@ class ResearchContext:
     retry_count: int = 0
     max_retries: int = 3
     
+    # Cost tracking
+    estimated_cost: float = 0.0
+    actual_cost: float = 0.0
+    cost_approved: bool = False
+    single_agent_mode: bool = False
+    
     # Context management
     context_data: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -89,6 +97,9 @@ class ResearchManager:
         self.error_handler = ErrorHandler()
         self.performance_monitor = PerformanceMonitor()
         
+        # Cost control
+        self.cost_estimator = CostEstimator(config_manager)
+        
         # MCP client for agent communication
         self.mcp_client: Optional[MCPClient] = None
         
@@ -108,7 +119,7 @@ class ResearchManager:
         self.max_concurrent_tasks = self.research_config.get('max_concurrent_tasks', 5)
         self.task_timeout = self.research_config.get('task_timeout', 300)  # 5 minutes
         
-        self.logger.info("Research Manager initialized")
+        self.logger.info("Research Manager initialized with cost control")
     
     async def _ensure_mcp_client_initialized(self) -> None:
         """
@@ -171,18 +182,18 @@ class ResearchManager:
         user_id: str, 
         conversation_id: str,
         options: Optional[Dict[str, Any]] = None
-    ) -> str:
+    ) -> tuple[str, Dict[str, Any]]:
         """
-        Start a new research task.
+        Start a new research task with cost estimation and control.
         
         Args:
             query: Research query to process
             user_id: ID of the user making the request
             conversation_id: ID of the conversation
-            options: Optional task configuration
+            options: Optional task configuration including cost_override
             
         Returns:
-            str: Task ID for tracking
+            tuple: (task_id, cost_info) where cost_info contains estimation and recommendations
         """
         task_id = str(uuid.uuid4())
         
@@ -190,27 +201,85 @@ class ResearchManager:
             # Ensure MCP client is initialized
             await self._ensure_mcp_client_initialized()
             
+            # Estimate cost for the research task
+            agents_to_use = ["retriever", "reasoner", "executor", "memory"]
+            parallel_execution = True
+            
+            # Check for single agent mode option
+            single_agent_mode = options.get('single_agent_mode', False) if options else False
+            if single_agent_mode:
+                agents_to_use = ["retriever"]  # Use only retriever in single agent mode
+                parallel_execution = False
+            
+            # Get cost estimate
+            cost_estimate = self.cost_estimator.estimate_task_cost(
+                query=query,
+                agents=agents_to_use,
+                parallel_execution=parallel_execution
+            )
+            
+            # Check if task should proceed based on cost
+            should_proceed, cost_reason = self.cost_estimator.should_proceed_with_task(
+                cost_estimate, conversation_id
+            )
+            
+            # Get cost recommendations
+            recommendations = self.cost_estimator.get_cost_recommendations(cost_estimate)
+            
+            # Prepare cost information for return
+            cost_info = {
+                'estimate': {
+                    'tokens': cost_estimate.estimated_tokens,
+                    'cost_usd': cost_estimate.estimated_cost_usd,
+                    'complexity': cost_estimate.task_complexity.value,
+                    'agent_count': cost_estimate.agent_count,
+                    'confidence': cost_estimate.confidence,
+                    'reasoning': cost_estimate.reasoning
+                },
+                'should_proceed': should_proceed,
+                'cost_reason': cost_reason,
+                'recommendations': recommendations
+            }
+            
             # Create research context
             context = ResearchContext(
                 task_id=task_id,
                 query=query,
                 user_id=user_id,
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                estimated_cost=cost_estimate.estimated_cost_usd,
+                single_agent_mode=single_agent_mode
             )
             
             # Apply options if provided
             if options:
                 context.max_retries = options.get('max_retries', context.max_retries)
                 context.metadata.update(options.get('metadata', {}))
+                # Check for cost override
+                context.cost_approved = options.get('cost_override', False)
             
-            # Store context
-            self.active_contexts[task_id] = context
+            # Only proceed if cost is approved or automatically acceptable
+            if should_proceed or context.cost_approved:
+                context.cost_approved = True
+                
+                # Start cost tracking
+                self.cost_estimator.start_cost_tracking(task_id, conversation_id)
+                
+                # Store context
+                self.active_contexts[task_id] = context
+                
+                # Start task orchestration
+                asyncio.create_task(self._orchestrate_research_task(context))
+                
+                self.logger.info(f"Started research task {task_id} for query: {query}, "
+                               f"estimated cost: ${cost_estimate.estimated_cost_usd:.4f}")
+            else:
+                # Task not approved due to cost
+                cost_info['task_started'] = False
+                self.logger.warning(f"Research task blocked due to cost: {cost_reason}")
             
-            # Start task orchestration
-            asyncio.create_task(self._orchestrate_research_task(context))
-            
-            self.logger.info(f"Started research task {task_id} for query: {query}")
-            return task_id
+            cost_info['task_started'] = should_proceed or context.cost_approved
+            return task_id, cost_info
             
         except Exception as e:
             self.logger.error(f"Failed to start research task: {e}")
@@ -228,14 +297,23 @@ class ResearchManager:
             # Start performance tracking
             self.performance_monitor.start_timer(f"research_task_{context.task_id}")
             
-            # Execute research stages sequentially
-            stages = [
-                (ResearchStage.PLANNING, self._execute_planning_stage),
-                (ResearchStage.RETRIEVAL, self._execute_retrieval_stage),
-                (ResearchStage.REASONING, self._execute_reasoning_stage),
-                (ResearchStage.EXECUTION, self._execute_execution_stage),
-                (ResearchStage.SYNTHESIS, self._execute_synthesis_stage),
-            ]
+            # Execute research stages sequentially (or single agent if specified)
+            if context.single_agent_mode:
+                # Single agent mode - only use retriever
+                stages = [
+                    (ResearchStage.PLANNING, self._execute_planning_stage),
+                    (ResearchStage.RETRIEVAL, self._execute_retrieval_stage),
+                ]
+                self.logger.info(f"Running task {context.task_id} in single-agent mode (cost-optimized)")
+            else:
+                # Full multi-agent mode
+                stages = [
+                    (ResearchStage.PLANNING, self._execute_planning_stage),
+                    (ResearchStage.RETRIEVAL, self._execute_retrieval_stage),
+                    (ResearchStage.REASONING, self._execute_reasoning_stage),
+                    (ResearchStage.EXECUTION, self._execute_execution_stage),
+                    (ResearchStage.SYNTHESIS, self._execute_synthesis_stage),
+                ]
             
             for stage, executor in stages:
                 if stage in context.failed_stages:
@@ -294,6 +372,13 @@ class ResearchManager:
             context.stage = ResearchStage.FAILED
             await self._notify_completion(context, success=False)
         finally:
+            # End cost tracking and get final usage
+            if context.cost_approved:
+                final_usage = self.cost_estimator.end_cost_tracking(context.task_id)
+                if final_usage:
+                    context.actual_cost = final_usage.cost_usd
+                    self.logger.info(f"Task {context.task_id} completed with final cost: ${context.actual_cost:.4f}")
+            
             # Clean up context after delay
             asyncio.create_task(self._cleanup_context(context.task_id, delay=3600))  # 1 hour
     
@@ -713,6 +798,9 @@ class ResearchManager:
             'failed_stages': [stage.value for stage in context.failed_stages],
             'retry_count': context.retry_count,
             'created_at': context.created_at.isoformat(),
+            'estimated_cost': context.estimated_cost,
+            'actual_cost': context.actual_cost,
+            'single_agent_mode': context.single_agent_mode,
             'updated_at': context.updated_at.isoformat()
         }
     
@@ -836,3 +924,110 @@ class ResearchManager:
             
         except Exception as e:
             self.logger.error(f"Error during shutdown: {e}")
+
+    # Cost Control Methods
+    
+    def get_cost_summary(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get cost usage summary for a session or all sessions.
+        
+        Args:
+            session_id: Optional session ID to filter by
+            
+        Returns:
+            Dict[str, Any]: Cost usage summary
+        """
+        return self.cost_estimator.get_usage_summary(session_id)
+    
+    def estimate_query_cost(self, query: str, single_agent_mode: bool = False) -> Dict[str, Any]:
+        """
+        Estimate cost for a query without starting the task.
+        
+        Args:
+            query: Research query to estimate
+            single_agent_mode: Whether to use single agent mode
+            
+        Returns:
+            Dict[str, Any]: Cost estimation details
+        """
+        agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "reasoner", "executor", "memory"]
+        parallel_execution = not single_agent_mode
+        
+        estimate = self.cost_estimator.estimate_task_cost(
+            query=query,
+            agents=agents_to_use,
+            parallel_execution=parallel_execution
+        )
+        
+        recommendations = self.cost_estimator.get_cost_recommendations(estimate)
+        
+        return {
+            'estimate': {
+                'tokens': estimate.estimated_tokens,
+                'cost_usd': estimate.estimated_cost_usd,
+                'complexity': estimate.task_complexity.value,
+                'agent_count': estimate.agent_count,
+                'confidence': estimate.confidence,
+                'reasoning': estimate.reasoning
+            },
+            'recommendations': recommendations,
+            'single_agent_mode': single_agent_mode
+        }
+    
+    def get_cost_thresholds(self) -> Dict[str, float]:
+        """
+        Get current cost control thresholds.
+        
+        Returns:
+            Dict[str, float]: Cost thresholds
+        """
+        return self.cost_estimator.cost_thresholds.copy()
+    
+    def update_cost_thresholds(self, thresholds: Dict[str, float]) -> None:
+        """
+        Update cost control thresholds.
+        
+        Args:
+            thresholds: New threshold values
+        """
+        for key, value in thresholds.items():
+            if key in self.cost_estimator.cost_thresholds:
+                self.cost_estimator.cost_thresholds[key] = value
+                self.logger.info(f"Updated cost threshold {key} to ${value}")
+    
+    def get_task_cost_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed cost status for a specific task.
+        
+        Args:
+            task_id: Task ID to get cost status for
+            
+        Returns:
+            Optional[Dict[str, Any]]: Cost status details
+        """
+        if task_id not in self.active_contexts:
+            return None
+        
+        context = self.active_contexts[task_id]
+        
+        # Get current usage if tracking is active
+        current_usage = None
+        if task_id in self.cost_estimator.active_sessions:
+            usage = self.cost_estimator.active_sessions[task_id]
+            current_usage = {
+                'tokens_used': usage.tokens_used,
+                'cost_usd': usage.cost_usd,
+                'provider_breakdown': usage.provider_breakdown,
+                'agent_breakdown': usage.agent_breakdown,
+                'duration_seconds': (datetime.now() - usage.start_time).total_seconds()
+            }
+        
+        return {
+            'task_id': task_id,
+            'estimated_cost': context.estimated_cost,
+            'actual_cost': context.actual_cost,
+            'cost_approved': context.cost_approved,
+            'single_agent_mode': context.single_agent_mode,
+            'current_usage': current_usage,
+            'stage': context.stage.value
+        }

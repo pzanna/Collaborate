@@ -28,6 +28,7 @@ from storage.database import DatabaseManager
 from core.ai_client_manager import AIClientManager
 from core.streaming_coordinator import StreamingResponseCoordinator
 from core.research_manager import ResearchManager
+from core.context_manager import ContextManager
 from models.data_models import Project, Conversation, Message
 from utils.export_manager import ExportManager
 from utils.error_handler import (
@@ -104,6 +105,7 @@ db_manager: DatabaseManager = None
 ai_manager: AIClientManager = None
 streaming_coordinator: StreamingResponseCoordinator = None
 research_manager: ResearchManager = None
+context_manager: ContextManager = None
 mcp_client: MCPClient = None
 export_manager: ExportManager = None
 
@@ -111,7 +113,7 @@ export_manager: ExportManager = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
-    global config_manager, db_manager, ai_manager, streaming_coordinator, research_manager, mcp_client, export_manager
+    global config_manager, db_manager, ai_manager, streaming_coordinator, research_manager, context_manager, mcp_client, export_manager
     
     print("🚀 Initializing Collaborate Web Server...")
     
@@ -123,6 +125,11 @@ async def lifespan(app: FastAPI):
     
     db_manager = DatabaseManager(config_manager.config.storage.database_path)
     export_manager = ExportManager(config_manager.config.storage.export_path)
+    
+    # Initialize context manager
+    context_manager = ContextManager(config_manager)
+    await context_manager.initialize()
+    print("✓ Context manager initialized")
     
     # Initialize MCP client
     try:
@@ -182,6 +189,10 @@ async def lifespan(app: FastAPI):
     # Cleanup research manager
     if research_manager:
         await research_manager.cleanup()
+    
+    # Cleanup context manager
+    if context_manager:
+        await context_manager.cleanup()
 
 
 # Create FastAPI app
@@ -518,6 +529,158 @@ async def cancel_research_task(task_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel research task: {str(e)}")
+
+
+# ===== Context Tracking API Endpoints =====
+
+@app.post("/api/context/create")
+async def create_context(conversation_id: str, context_id: Optional[str] = None):
+    """Create a new session context."""
+    if not context_manager:
+        raise HTTPException(status_code=503, detail="Context system not available")
+    
+    try:
+        created_context_id = await context_manager.create_context(conversation_id, context_id)
+        return {
+            "success": True,
+            "context_id": created_context_id,
+            "conversation_id": conversation_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create context: {str(e)}")
+
+
+@app.get("/api/context/{context_id}")
+async def get_context(context_id: str):
+    """Get a session context by ID."""
+    if not context_manager:
+        raise HTTPException(status_code=503, detail="Context system not available")
+    
+    try:
+        context = await context_manager.get_context(context_id)
+        if not context:
+            raise HTTPException(status_code=404, detail="Context not found")
+        
+        return {
+            "context_id": context.context_id,
+            "conversation_id": context.conversation_id,
+            "created_at": context.created_at.isoformat(),
+            "updated_at": context.updated_at.isoformat(),
+            "status": context.status,
+            "current_stage": context.current_stage,
+            "active_agents": context.active_agents,
+            "memory_references": context.memory_references,
+            "message_count": len(context.messages),
+            "task_count": len(context.research_tasks),
+            "trace_count": len(context.context_traces),
+            "metadata": context.metadata,
+            "settings": context.settings
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get context: {str(e)}")
+
+
+@app.post("/api/context/{context_id}/resume")
+async def resume_context(context_id: str):
+    """Resume a context with full data restoration."""
+    if not context_manager:
+        raise HTTPException(status_code=503, detail="Context system not available")
+    
+    try:
+        context = await context_manager.resume_context(context_id)
+        if not context:
+            raise HTTPException(status_code=404, detail="Context not found or could not be resumed")
+        
+        return {
+            "success": True,
+            "context_id": context.context_id,
+            "conversation_id": context.conversation_id,
+            "message_count": len(context.messages),
+            "task_count": len(context.research_tasks),
+            "trace_count": len(context.context_traces),
+            "current_stage": context.current_stage,
+            "status": context.status
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to resume context: {str(e)}")
+
+
+@app.get("/api/context/{context_id}/traces")
+async def get_context_traces(context_id: str, limit: int = 100):
+    """Get context traces for a context."""
+    if not context_manager:
+        raise HTTPException(status_code=503, detail="Context system not available")
+    
+    try:
+        traces = await context_manager.get_context_traces(context_id, limit)
+        
+        return {
+            "context_id": context_id,
+            "traces": [
+                {
+                    "trace_id": trace.trace_id,
+                    "task_id": trace.task_id,
+                    "stage": trace.stage,
+                    "content": trace.content,
+                    "timestamp": trace.timestamp.isoformat(),
+                    "metadata": trace.metadata
+                }
+                for trace in traces
+            ],
+            "count": len(traces)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get context traces: {str(e)}")
+
+
+@app.get("/api/contexts")
+async def list_contexts(conversation_id: Optional[str] = None, status: Optional[str] = None, limit: int = 50):
+    """List contexts with optional filtering."""
+    if not context_manager:
+        raise HTTPException(status_code=503, detail="Context system not available")
+    
+    try:
+        contexts = await context_manager.list_contexts(conversation_id, status, limit)
+        return {
+            "contexts": contexts,
+            "count": len(contexts)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list contexts: {str(e)}")
+
+
+@app.post("/api/context/{context_id}/trace")
+async def add_context_trace(context_id: str, stage: str, content: dict, task_id: Optional[str] = None, metadata: Optional[dict] = None):
+    """Add a context trace entry."""
+    if not context_manager:
+        raise HTTPException(status_code=503, detail="Context system not available")
+    
+    try:
+        trace_id = await context_manager.add_context_trace(
+            context_id=context_id,
+            stage=stage,
+            content=content,
+            task_id=task_id,
+            metadata=metadata
+        )
+        
+        return {
+            "success": True,
+            "trace_id": trace_id,
+            "context_id": context_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add context trace: {str(e)}")
 
 
 # WebSocket manager for real-time connections
