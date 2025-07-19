@@ -10,9 +10,8 @@ from typing import Dict, List, Optional, Set, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from .protocols import AgentRegistration, AgentType
-
-logger = logging.getLogger(__name__)
+from .protocols import AgentRegistration, AgentType, RegisterCapabilities
+from .structured_logger import get_mcp_logger
 
 
 @dataclass
@@ -49,6 +48,7 @@ class AgentRegistry:
         self.heartbeat_timeout = heartbeat_timeout
         self._lock = asyncio.Lock()
         self._cleanup_task: Optional[asyncio.Task] = None
+        self.logger = get_mcp_logger("agent_registry")
     
     async def register_agent(self, registration: AgentRegistration) -> bool:
         """Register a new agent instance"""
@@ -57,7 +57,7 @@ class AgentRegistry:
             
             # Check if agent already exists
             if agent_id in self.agents:
-                logger.warning(f"Agent {agent_id} already registered, updating registration")
+                self.logger.logger.warning(f"Agent {agent_id} already registered, updating registration")
             
             # Create agent instance
             agent_instance = AgentInstance(registration=registration)
@@ -69,14 +69,20 @@ class AgentRegistry:
                     self.capabilities[capability] = set()
                 self.capabilities[capability].add(agent_id)
             
-            logger.info(f"Registered agent {agent_id} of type {registration.agent_type}")
+            # Log agent registration
+            self.logger.log_agent_registration(
+                agent_id=agent_id,
+                agent_type=registration.agent_type,
+                capabilities=registration.capabilities,
+                success=True
+            )
             return True
     
     async def unregister_agent(self, agent_id: str) -> bool:
         """Unregister an agent instance"""
         async with self._lock:
             if agent_id not in self.agents:
-                logger.warning(f"Agent {agent_id} not found for unregistration")
+                self.logger.logger.warning(f"Agent {agent_id} not found for unregistration")
                 return False
             
             agent_instance = self.agents[agent_id]
@@ -91,7 +97,7 @@ class AgentRegistry:
             # Remove agent
             del self.agents[agent_id]
             
-            logger.info(f"Unregistered agent {agent_id}")
+            self.logger.logger.info(f"Unregistered agent {agent_id}")
             return True
     
     async def update_heartbeat(self, agent_id: str) -> bool:
@@ -115,7 +121,7 @@ class AgentRegistry:
                 return False
             
             agent_instance.current_tasks.add(task_id)
-            logger.debug(f"Assigned task {task_id} to agent {agent_id}")
+            # Note: Task assignment logging would be done by the server
             return True
     
     async def complete_task(self, agent_id: str, task_id: str) -> bool:
@@ -126,8 +132,66 @@ class AgentRegistry:
             
             agent_instance = self.agents[agent_id]
             agent_instance.current_tasks.discard(task_id)
-            logger.debug(f"Completed task {task_id} for agent {agent_id}")
+            # Note: Task completion logging would be done by the server
             return True
+    
+    async def register_capabilities(self, register_req: RegisterCapabilities) -> bool:
+        """Register agent capabilities via RegisterCapabilities RPC"""
+        # Convert RegisterCapabilities to AgentRegistration
+        registration = AgentRegistration(
+            agent_id=register_req.agent_id,
+            agent_type=register_req.agent_type,
+            capabilities=register_req.capabilities,
+            max_concurrent=register_req.max_concurrent,
+            timeout=register_req.timeout
+        )
+        
+        return await self.register_agent(registration)
+    
+    async def query_capabilities(self, capability: Optional[str] = None) -> Dict[str, Any]:
+        """Query available capabilities and agents"""
+        async with self._lock:
+            if capability:
+                # Query specific capability
+                agents = []
+                if capability in self.capabilities:
+                    for agent_id in self.capabilities[capability]:
+                        if agent_id in self.agents:
+                            agent = self.agents[agent_id]
+                            agents.append({
+                                'agent_id': agent_id,
+                                'agent_type': agent.registration.agent_type,
+                                'status': agent.registration.status,
+                                'is_available': agent.is_available,
+                                'load_factor': agent.load_factor,
+                                'current_tasks': len(agent.current_tasks)
+                            })
+                
+                return {
+                    'capability': capability,
+                    'available_agents': len([a for a in agents if a['is_available']]),
+                    'total_agents': len(agents),
+                    'agents': agents
+                }
+            else:
+                # Query all capabilities
+                result = {}
+                for cap, agent_ids in self.capabilities.items():
+                    available_count = 0
+                    for agent_id in agent_ids:
+                        if agent_id in self.agents and self.agents[agent_id].is_available:
+                            available_count += 1
+                    
+                    result[cap] = {
+                        'total_agents': len(agent_ids),
+                        'available_agents': available_count
+                    }
+                
+                return {
+                    'capabilities': result,
+                    'total_registered_agents': len(self.agents),
+                    'total_capabilities': len(self.capabilities)
+                }
     
     async def get_available_agents(self, capability: str) -> List[str]:
         """Get list of available agents for a specific capability"""
@@ -169,7 +233,7 @@ class AgentRegistry:
                 return False
             
             self.agents[agent_id].registration.status = status
-            logger.info(f"Set agent {agent_id} status to {status}")
+            self.logger.logger.info(f"Set agent {agent_id} status to {status}")
             return True
     
     async def start_cleanup_task(self):
@@ -206,12 +270,12 @@ class AgentRegistry:
                 
                 # Log unhealthy agents
                 if unhealthy_agents:
-                    logger.warning(f"Marked agents as unhealthy: {unhealthy_agents}")
+                    self.logger.logger.warning(f"Marked agents as unhealthy: {unhealthy_agents}")
                 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in agent cleanup task: {e}")
+                self.logger.log_error(f"Error in agent cleanup task: {e}", error_code="REGISTRY_CLEANUP_ERROR")
                 await asyncio.sleep(5)  # Wait before retrying
     
     async def get_stats(self) -> Dict[str, Any]:

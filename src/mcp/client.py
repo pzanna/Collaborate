@@ -14,6 +14,7 @@ from datetime import datetime
 import uuid
 
 from .protocols import ResearchAction, AgentResponse, serialize_message, deserialize_message
+from .structured_logger import get_mcp_logger
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,9 @@ class MCPClient:
         self._reconnect_task: Optional[asyncio.Task] = None
         self._should_reconnect = True
         self.reconnect_delay = 5  # seconds
+        
+        # Initialize structured logger
+        self.logger = get_mcp_logger("client")
         
     async def connect(self) -> bool:
         """Connect to MCP server"""

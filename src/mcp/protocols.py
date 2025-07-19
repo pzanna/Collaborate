@@ -46,8 +46,12 @@ class ResearchAction:
     priority: str = "normal"
     status: str = "pending"
     created_at: datetime = field(default_factory=datetime.now)
-    timeout: Optional[int] = None
+    timeout: Optional[float] = None
     retry_count: int = 0
+    max_retries: int = 3
+    parent_task_id: Optional[str] = None
+    dependencies: List[str] = field(default_factory=list)
+    parallelism: int = 1
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -61,7 +65,11 @@ class ResearchAction:
             'status': self.status,
             'created_at': self.created_at.isoformat(),
             'timeout': self.timeout,
-            'retry_count': self.retry_count
+            'retry_count': self.retry_count,
+            'max_retries': self.max_retries,
+            'parent_task_id': self.parent_task_id,
+            'dependencies': self.dependencies,
+            'parallelism': self.parallelism
         }
     
     @classmethod
@@ -167,12 +175,76 @@ class TaskUpdate:
         return cls(**data)
 
 
+@dataclass
+class RegisterCapabilities:
+    """Message for registering agent capabilities"""
+    agent_id: str
+    agent_type: str
+    capabilities: List[str]
+    max_concurrent: int = 1
+    timeout: int = 300
+    version: str = "1.0"
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'agent_id': self.agent_id,
+            'agent_type': self.agent_type,
+            'capabilities': self.capabilities,
+            'max_concurrent': self.max_concurrent,
+            'timeout': self.timeout,
+            'version': self.version,
+            'timestamp': self.timestamp.isoformat()
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'RegisterCapabilities':
+        """Create from dictionary"""
+        data = data.copy()
+        if 'timestamp' in data and isinstance(data['timestamp'], str):
+            data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        return cls(**data)
+
+
+@dataclass
+class TimeoutEvent:
+    """Event message for task timeouts"""
+    task_id: str
+    context_id: str
+    agent_type: str
+    timeout_duration: int
+    message: str
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'task_id': self.task_id,
+            'context_id': self.context_id,
+            'agent_type': self.agent_type,
+            'timeout_duration': self.timeout_duration,
+            'message': self.message,
+            'timestamp': self.timestamp.isoformat()
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'TimeoutEvent':
+        """Create from dictionary"""
+        data = data.copy()
+        if 'timestamp' in data and isinstance(data['timestamp'], str):
+            data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        return cls(**data)
+
+
 # Message type mapping for serialization
 MESSAGE_TYPES = {
     'research_action': ResearchAction,
     'agent_response': AgentResponse,
     'agent_registration': AgentRegistration,
-    'task_update': TaskUpdate
+    'task_update': TaskUpdate,
+    'register_capabilities': RegisterCapabilities,
+    'timeout_event': TimeoutEvent
 }
 
 

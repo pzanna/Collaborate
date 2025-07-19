@@ -26,10 +26,11 @@ except ImportError:
     from src.config.config_manager import ConfigManager
 from .protocols import (
     ResearchAction, AgentResponse, AgentRegistration, TaskUpdate,
-    serialize_message, deserialize_message, MESSAGE_TYPES
+    serialize_message, deserialize_message, MESSAGE_TYPES, RegisterCapabilities, TimeoutEvent
 )
 from .registry import AgentRegistry
 from .queue import TaskQueue
+from .structured_logger import get_mcp_logger
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,9 @@ class MCPServer:
                     self.log_level = 'INFO'
             
             self.config = FallbackConfig()
+        
+        # Initialize structured logger
+        self.logger = get_mcp_logger("server", self.config.log_level)
         
         # Core components
         self.agent_registry = AgentRegistry(heartbeat_timeout=30)
