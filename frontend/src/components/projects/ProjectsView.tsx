@@ -10,12 +10,7 @@ import {
 } from "../../store/slices/projectsSlice"
 import { apiService } from "../../services/api"
 import { formatDistanceToNow } from "date-fns"
-import {
-  FolderIcon,
-  PlusIcon,
-  ChatBubbleLeftIcon,
-  TrashIcon,
-} from "@heroicons/react/24/outline"
+import { FolderIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline"
 
 const ProjectsView: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -185,8 +180,8 @@ const ProjectsView: React.FC = () => {
 
               <div className="flex items-center justify-between text-sm text-gray-500">
                 <div className="flex items-center space-x-1">
-                  <ChatBubbleLeftIcon className="h-4 w-4" />
-                  <span>{project.conversation_count} conversations</span>
+                  <FolderIcon className="h-4 w-4" />
+                  <span>{project.item_count || 0} items</span>
                 </div>
                 <span>
                   {formatDistanceToNow(new Date(project.created_at), {

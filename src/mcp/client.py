@@ -204,6 +204,78 @@ class MCPClient:
         except Exception as e:
             logger.error(f"Failed to get server stats: {e}")
             return None
+
+    async def get_active_tasks(self) -> Dict[str, Any]:
+        """Get all active tasks with their details"""
+        if not self.is_connected or not self.websocket:
+            logger.error("Not connected to MCP server")
+            return {"tasks": []}
+        
+        try:
+            response_id = str(uuid.uuid4())
+            message = {
+                'type': 'get_active_tasks',
+                'data': {'response_id': response_id},
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Set up response callback
+            response_future = asyncio.Future()
+            self.response_callbacks[response_id] = response_future
+            
+            await self.websocket.send(json.dumps(message))
+            
+            # Wait for response (with timeout)
+            try:
+                result = await asyncio.wait_for(response_future, timeout=15.0)
+                return result if result else {"tasks": []}
+            except asyncio.TimeoutError:
+                logger.error("Timeout waiting for active tasks")
+                return {"tasks": []}
+            finally:
+                # Clean up callback
+                if response_id in self.response_callbacks:
+                    del self.response_callbacks[response_id]
+            
+        except Exception as e:
+            logger.error(f"Failed to get active tasks: {e}")
+            return {"tasks": []}
+
+    async def get_task_details(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed information about a specific task"""
+        if not self.is_connected or not self.websocket:
+            logger.error("Not connected to MCP server")
+            return None
+        
+        try:
+            response_id = str(uuid.uuid4())
+            message = {
+                'type': 'get_task_details',
+                'data': {'task_id': task_id, 'response_id': response_id},
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Set up response callback
+            response_future = asyncio.Future()
+            self.response_callbacks[response_id] = response_future
+            
+            await self.websocket.send(json.dumps(message))
+            
+            # Wait for response (with timeout)
+            try:
+                result = await asyncio.wait_for(response_future, timeout=10.0)
+                return result
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout waiting for task details for {task_id}")
+                return None
+            finally:
+                # Clean up callback
+                if response_id in self.response_callbacks:
+                    del self.response_callbacks[response_id]
+            
+        except Exception as e:
+            logger.error(f"Failed to get task details for {task_id}: {e}")
+            return None
     
     def add_message_handler(self, message_type: str, handler: Callable[[Dict[str, Any]], None]):
         """Add a message handler for specific message types"""

@@ -23,7 +23,7 @@ interface SystemHealth {
 }
 
 const HealthDashboard: React.FC = () => {
-  const { connectionStatus } = useSelector((state: RootState) => state.chat)
+  const connectionStatus = "connected" // Default to connected since chat is removed
   const [systemHealth, setSystemHealth] = useState<SystemHealth>({
     status: "healthy",
     uptime: "2h 34m",

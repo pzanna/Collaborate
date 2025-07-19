@@ -361,3 +361,30 @@ class TaskQueue:
                 })
             
             return result
+
+    async def get_active_tasks(self) -> List[QueuedTask]:
+        """Get all currently active tasks"""
+        async with self._lock:
+            return list(self._active_tasks.values())
+
+    async def get_task(self, task_id: str) -> Optional[QueuedTask]:
+        """Get a specific task by ID from any status"""
+        async with self._lock:
+            # Check active tasks first
+            if task_id in self._active_tasks:
+                return self._active_tasks[task_id]
+            
+            # Check completed tasks
+            if task_id in self._completed_tasks:
+                return self._completed_tasks[task_id]
+            
+            # Check failed tasks
+            if task_id in self._failed_tasks:
+                return self._failed_tasks[task_id]
+            
+            # Check pending tasks in queue
+            for task in self._queue:
+                if task.action.task_id == task_id:
+                    return task
+            
+            return None

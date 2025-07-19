@@ -136,6 +136,19 @@ class ConfigManager:
         with open(self.config_path, 'w') as f:
             json.dump(self.config.model_dump(), f, indent=4)
     
+    def get(self, key_path: str, default: Any = None) -> Any:
+        """Get a configuration value using dotted notation (e.g., 'storage.database_path')."""
+        keys = key_path.split('.')
+        value = self.config.model_dump()
+        
+        for key in keys:
+            if isinstance(value, dict) and key in value:
+                value = value[key]
+            else:
+                return default
+        
+        return value
+    
     def get_api_key(self, provider: str) -> str:
         """Get API key for a provider from environment variables."""
         if provider == "openai":

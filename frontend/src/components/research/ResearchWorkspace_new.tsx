@@ -24,52 +24,64 @@ const ResearchWorkspace: React.FC = () => {
 
     const newTask: ResearchTask = {
       id: Date.now().toString(),
-      title: `Research: ${newQuery.substring(0, 50)}${newQuery.length > 50 ? "..." : ""}`,
+      title: `Research: ${newQuery.substring(0, 50)}${
+        newQuery.length > 50 ? "..." : ""
+      }`,
       status: "pending",
       query: newQuery,
       createdAt: new Date(),
     }
 
-    setTasks(prev => [newTask, ...prev])
+    setTasks((prev) => [newTask, ...prev])
     setNewQuery("")
 
     // Simulate task processing
     setTimeout(() => {
-      setTasks(prev => prev.map(task => 
-        task.id === newTask.id 
-          ? { ...task, status: "running" } 
-          : task
-      ))
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === newTask.id ? { ...task, status: "running" } : task
+        )
+      )
     }, 100)
 
     setTimeout(() => {
-      setTasks(prev => prev.map(task => 
-        task.id === newTask.id 
-          ? { 
-              ...task, 
-              status: "completed",
-              results: `Research results for: ${newTask.query}\n\nThis is a placeholder for actual research functionality. The research system would integrate with various AI agents to gather information, analyze data, and provide comprehensive results.`
-            } 
-          : task
-      ))
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === newTask.id
+            ? {
+                ...task,
+                status: "completed",
+                results: `Research results for: ${newTask.query}\n\nThis is a placeholder for actual research functionality. The research system would integrate with various AI agents to gather information, analyze data, and provide comprehensive results.`,
+              }
+            : task
+        )
+      )
     }, 2000)
   }
 
   const getStatusColor = (status: ResearchTask["status"]) => {
     switch (status) {
-      case "pending": return "text-gray-500 bg-gray-100"
-      case "running": return "text-blue-500 bg-blue-100"
-      case "completed": return "text-green-500 bg-green-100"
-      case "error": return "text-red-500 bg-red-100"
+      case "pending":
+        return "text-gray-500 bg-gray-100"
+      case "running":
+        return "text-blue-500 bg-blue-100"
+      case "completed":
+        return "text-green-500 bg-green-100"
+      case "error":
+        return "text-red-500 bg-red-100"
     }
   }
 
   const getStatusIcon = (status: ResearchTask["status"]) => {
     switch (status) {
-      case "pending": return ClipboardDocumentListIcon
-      case "running": return PlayIcon
-      case "completed": return DocumentTextIcon
-      case "error": return DocumentTextIcon
+      case "pending":
+        return ClipboardDocumentListIcon
+      case "running":
+        return PlayIcon
+      case "completed":
+        return DocumentTextIcon
+      case "error":
+        return DocumentTextIcon
     }
   }
 
@@ -80,7 +92,9 @@ const ResearchWorkspace: React.FC = () => {
         <div className="flex items-center space-x-3 mb-4">
           <BeakerIcon className="h-8 w-8 text-blue-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Research Workspace</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Research Workspace
+            </h1>
             <p className="text-gray-600">AI-powered research and analysis</p>
           </div>
         </div>
@@ -111,7 +125,7 @@ const ResearchWorkspace: React.FC = () => {
         {/* Tasks panel */}
         <div className="w-1/3 bg-white border-r border-gray-200 p-4 overflow-y-auto">
           <h3 className="text-lg font-semibold mb-4">Research Tasks</h3>
-          
+
           {tasks.length === 0 ? (
             <div className="text-center text-gray-500 mt-8">
               <BeakerIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -136,7 +150,11 @@ const ResearchWorkspace: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-1">
                           {task.createdAt.toLocaleTimeString()}
                         </p>
-                        <span className={`inline-block px-2 py-1 text-xs rounded-full mt-2 ${getStatusColor(task.status)}`}>
+                        <span
+                          className={`inline-block px-2 py-1 text-xs rounded-full mt-2 ${getStatusColor(
+                            task.status
+                          )}`}
+                        >
                           {task.status}
                         </span>
                       </div>
@@ -151,20 +169,27 @@ const ResearchWorkspace: React.FC = () => {
         {/* Results panel */}
         <div className="flex-1 p-4 overflow-y-auto">
           <h3 className="text-lg font-semibold mb-4">Research Results</h3>
-          
-          {tasks.filter(t => t.results).length === 0 ? (
+
+          {tasks.filter((t) => t.results).length === 0 ? (
             <div className="text-center text-gray-500 mt-8">
               <DocumentTextIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
               <p>No results yet</p>
-              <p className="text-sm">Complete research tasks will appear here</p>
+              <p className="text-sm">
+                Complete research tasks will appear here
+              </p>
             </div>
           ) : (
             <div className="space-y-6">
               {tasks
-                .filter(task => task.results)
+                .filter((task) => task.results)
                 .map((task) => (
-                  <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">{task.title}</h4>
+                  <div
+                    key={task.id}
+                    className="bg-white border border-gray-200 rounded-lg p-4"
+                  >
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      {task.title}
+                    </h4>
                     <div className="text-sm text-gray-600 whitespace-pre-wrap">
                       {task.results}
                     </div>

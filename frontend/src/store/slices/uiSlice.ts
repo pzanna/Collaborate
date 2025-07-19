@@ -2,7 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 interface UIState {
   sidebarOpen: boolean;
-  currentView: 'chat' | 'projects' | 'health';
+  currentView: 'projects' | 'health' | 'tasks' | 'debug';
   theme: 'light' | 'dark';
   notifications: Array<{
     id: string;
@@ -14,7 +14,7 @@ interface UIState {
 
 const initialState: UIState = {
   sidebarOpen: true,
-  currentView: 'chat',
+  currentView: 'projects',
   theme: 'light',
   notifications: [],
 };

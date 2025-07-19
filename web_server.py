@@ -8,6 +8,7 @@ import os
 import sys
 import asyncio
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, AsyncGenerator, Any
 from contextlib import asynccontextmanager
@@ -23,19 +24,21 @@ from pydantic import BaseModel
 import uvicorn
 
 # Import existing Collaborate components
-from config.config_manager import ConfigManager
-from storage.database import DatabaseManager
-from core.ai_client_manager import AIClientManager
-from core.streaming_coordinator import StreamingResponseCoordinator
-from core.research_manager import ResearchManager
-from core.context_manager import ContextManager
-from models.data_models import Project, Conversation, Message
-from utils.export_manager import ExportManager
-from utils.error_handler import (
-    get_error_handler, format_error_for_user, 
-    CollaborateError, NetworkError, APIError, DatabaseError
+from src.config.config_manager import ConfigManager
+from src.storage.database import DatabaseManager
+from src.core.ai_client_manager import AIClientManager
+from src.core.streaming_coordinator import StreamingResponseCoordinator
+from src.core.research_manager import ResearchManager
+from src.core.context_manager import ContextManager
+from src.models.data_models import Project, Conversation, Message
+from src.utils.export_manager import ExportManager
+from src.utils.error_handler import (
+    ErrorHandler, 
+    CollaborateError,
+    format_error_for_user, 
+    APIError
 )
-from mcp.client import MCPClient
+from src.mcp.client import MCPClient
 
 
 # Pydantic models for API requests/responses
@@ -99,15 +102,15 @@ class HealthResponse(BaseModel):
     errors: Dict
 
 
-# Global instances
-config_manager: ConfigManager = None
-db_manager: DatabaseManager = None
-ai_manager: AIClientManager = None
-streaming_coordinator: StreamingResponseCoordinator = None
-research_manager: ResearchManager = None
-context_manager: ContextManager = None
-mcp_client: MCPClient = None
-export_manager: ExportManager = None
+# Global state
+config_manager: Optional[ConfigManager] = None
+db_manager: Optional[DatabaseManager] = None
+ai_manager: Optional[AIClientManager] = None
+streaming_coordinator: Optional[StreamingResponseCoordinator] = None
+research_manager: Optional[ResearchManager] = None
+context_manager: Optional[ContextManager] = None
+mcp_client: Optional[MCPClient] = None
+export_manager: Optional[ExportManager] = None
 
 
 @asynccontextmanager
@@ -683,6 +686,263 @@ async def add_context_trace(context_id: str, stage: str, content: dict, task_id:
         raise HTTPException(status_code=500, detail=f"Failed to add context trace: {str(e)}")
 
 
+# Phase 4: Task Viewer API Endpoints
+
+class TaskResponse(BaseModel):
+    task_id: str
+    parent_id: Optional[str] = None
+    agent_type: str
+    status: str
+    stage: str
+    created_at: str
+    updated_at: str
+    content: Dict[str, Any]
+    metadata: Optional[Dict[str, Any]] = None
+    dependencies: List[str] = []
+    children: List[str] = []
+
+class TaskGraphResponse(BaseModel):
+    tasks: List[TaskResponse]
+    connections: List[Dict[str, str]]
+    statistics: Dict[str, Any]
+
+class DebugPlanResponse(BaseModel):
+    plan_id: str
+    context_id: str
+    prompt: str
+    raw_response: str
+    parsed_tasks: List[Dict[str, Any]]
+    created_at: str
+    execution_status: str
+    modifications: List[Dict[str, Any]] = []
+
+@app.get("/api/tasks/active", response_model=TaskGraphResponse)
+async def get_active_tasks():
+    """Get all active tasks with their dependencies and status."""
+    if not mcp_client:
+        raise HTTPException(status_code=503, detail="MCP server not available")
+    
+    try:
+        # Get active tasks from MCP server
+        tasks_data = await mcp_client.get_active_tasks()
+        
+        tasks = []
+        connections = []
+        
+        for task_data in tasks_data.get('tasks', []):
+            task = TaskResponse(
+                task_id=task_data['task_id'],
+                parent_id=task_data.get('parent_id'),
+                agent_type=task_data['agent_type'],
+                status=task_data['status'],
+                stage=task_data.get('stage', 'unknown'),
+                created_at=task_data['created_at'],
+                updated_at=task_data['updated_at'],
+                content=task_data.get('content', {}),
+                metadata=task_data.get('metadata', {}),
+                dependencies=task_data.get('dependencies', []),
+                children=task_data.get('children', [])
+            )
+            tasks.append(task)
+            
+            # Build connections for graph visualization
+            if task.parent_id:
+                connections.append({
+                    "from": task.parent_id,
+                    "to": task.task_id,
+                    "type": "parent-child"
+                })
+            
+            for dep_id in task.dependencies:
+                connections.append({
+                    "from": dep_id,
+                    "to": task.task_id,
+                    "type": "dependency"
+                })
+        
+        # Calculate statistics
+        status_counts = {}
+        agent_counts = {}
+        for task in tasks:
+            status_counts[task.status] = status_counts.get(task.status, 0) + 1
+            agent_counts[task.agent_type] = agent_counts.get(task.agent_type, 0) + 1
+        
+        statistics = {
+            "total_tasks": len(tasks),
+            "status_breakdown": status_counts,
+            "agent_breakdown": agent_counts,
+            "connection_count": len(connections)
+        }
+        
+        return TaskGraphResponse(
+            tasks=tasks,
+            connections=connections,
+            statistics=statistics
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get active tasks: {str(e)}")
+
+@app.get("/api/tasks/{task_id}", response_model=TaskResponse)
+async def get_task_details(task_id: str):
+    """Get detailed information about a specific task."""
+    if not mcp_client:
+        raise HTTPException(status_code=503, detail="MCP server not available")
+    
+    try:
+        task_data = await mcp_client.get_task_details(task_id)
+        
+        if not task_data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        return TaskResponse(
+            task_id=task_data['task_id'],
+            parent_id=task_data.get('parent_id'),
+            agent_type=task_data['agent_type'],
+            status=task_data['status'],
+            stage=task_data.get('stage', 'unknown'),
+            created_at=task_data['created_at'],
+            updated_at=task_data['updated_at'],
+            content=task_data.get('content', {}),
+            metadata=task_data.get('metadata', {}),
+            dependencies=task_data.get('dependencies', []),
+            children=task_data.get('children', [])
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get task details: {str(e)}")
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """Cancel a specific task."""
+    if not mcp_client:
+        raise HTTPException(status_code=503, detail="MCP server not available")
+    
+    try:
+        success = await mcp_client.cancel_task(task_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Task not found or cannot be cancelled")
+        
+        return {"success": True, "task_id": task_id, "message": "Task cancelled successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to cancel task: {str(e)}")
+
+# Phase 4: Debug UI API Endpoints
+
+@app.get("/api/debug/plans/latest", response_model=DebugPlanResponse)
+async def get_latest_rm_plan(context_id: Optional[str] = None):
+    """Get the latest RM AI plan for debugging."""
+    if not research_manager:
+        raise HTTPException(status_code=503, detail="Research manager not available")
+    
+    try:
+        plan_data = await research_manager.get_latest_plan(context_id)
+        
+        if not plan_data:
+            raise HTTPException(status_code=404, detail="No plans found")
+        
+        return DebugPlanResponse(
+            plan_id=plan_data['plan_id'],
+            context_id=plan_data['context_id'],
+            prompt=plan_data['prompt'],
+            raw_response=plan_data['raw_response'],
+            parsed_tasks=plan_data['parsed_tasks'],
+            created_at=plan_data['created_at'],
+            execution_status=plan_data['execution_status'],
+            modifications=plan_data.get('modifications', [])
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get latest plan: {str(e)}")
+
+@app.get("/api/debug/plans/{plan_id}", response_model=DebugPlanResponse)
+async def get_rm_plan(plan_id: str):
+    """Get a specific RM AI plan by ID."""
+    if not research_manager:
+        raise HTTPException(status_code=503, detail="Research manager not available")
+    
+    try:
+        plan_data = await research_manager.get_plan(plan_id)
+        
+        if not plan_data:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+        return DebugPlanResponse(
+            plan_id=plan_data['plan_id'],
+            context_id=plan_data['context_id'],
+            prompt=plan_data['prompt'],
+            raw_response=plan_data['raw_response'],
+            parsed_tasks=plan_data['parsed_tasks'],
+            created_at=plan_data['created_at'],
+            execution_status=plan_data['execution_status'],
+            modifications=plan_data.get('modifications', [])
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get plan: {str(e)}")
+
+@app.post("/api/debug/plans/{plan_id}/modify")
+async def modify_rm_plan(plan_id: str, modifications: Dict[str, Any]):
+    """Modify a specific RM AI plan."""
+    if not research_manager:
+        raise HTTPException(status_code=503, detail="Research manager not available")
+    
+    try:
+        success = await research_manager.modify_plan(plan_id, modifications)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Plan not found or cannot be modified")
+        
+        return {
+            "success": True,
+            "plan_id": plan_id,
+            "modifications": modifications,
+            "message": "Plan modified successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to modify plan: {str(e)}")
+
+@app.get("/api/debug/plans")
+async def list_rm_plans(context_id: Optional[str] = None, limit: int = 50):
+    """List RM AI plans with optional context filtering."""
+    if not research_manager:
+        raise HTTPException(status_code=503, detail="Research manager not available")
+    
+    try:
+        plans = await research_manager.list_plans(context_id, limit)
+        
+        return {
+            "plans": [
+                {
+                    "plan_id": plan['plan_id'],
+                    "context_id": plan['context_id'],
+                    "created_at": plan['created_at'],
+                    "execution_status": plan['execution_status'],
+                    "task_count": len(plan.get('parsed_tasks', [])),
+                    "has_modifications": len(plan.get('modifications', [])) > 0
+                }
+                for plan in plans
+            ],
+            "count": len(plans)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list plans: {str(e)}")
+
+
 # WebSocket manager for real-time connections
 class ConnectionManager:
     def __init__(self):
@@ -833,6 +1093,67 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                 try:
                     db_manager.create_message(user_message)
                     print(f"✅ User message saved to database: {user_message.id}")
+                    
+                    # Broadcast user message to all connected clients
+                    await manager.send_to_conversation(conversation_id, {
+                        "type": "user_message",
+                        "message": {
+                            "id": user_message.id,
+                            "conversation_id": user_message.conversation_id,
+                            "participant": user_message.participant,
+                            "content": user_message.content,
+                            "timestamp": user_message.timestamp.isoformat()
+                        }
+                    })
+                    
+                    # Check if this is a research query
+                    if content.lower().startswith(('research:', 'find:', 'search:', 'analyze:')):
+                        # Handle research mode
+                        if research_manager:
+                            try:
+                                # Extract query (remove prefix)
+                                query = content.split(':', 1)[1].strip()
+                                
+                                # Create options for research task
+                                options = {
+                                    'research_mode': "comprehensive",
+                                    'max_results': 10,
+                                    'metadata': {}
+                                }
+                                
+                                # Start research task
+                                task_id = await research_manager.start_research_task(
+                                    query=query,
+                                    user_id="web_user",
+                                    conversation_id=conversation_id,
+                                    options=options
+                                )
+                                
+                                # Notify client about research task
+                                await manager.send_to_conversation(conversation_id, {
+                                    "type": "research_started",
+                                    "task_id": task_id,
+                                    "query": query
+                                })
+                                
+                                # Set up progress callback
+                                async def research_progress_callback(update):
+                                    await manager.send_to_conversation(conversation_id, update)
+                                
+                                research_manager.add_progress_callback(task_id, research_progress_callback)
+                                
+                            except Exception as e:
+                                print(f"❌ Research task error: {e}")
+                                await manager.send_to_conversation(conversation_id, {
+                                    "type": "error",
+                                    "message": f"Research task failed: {str(e)}"
+                                })
+                        else:
+                            await manager.send_to_conversation(conversation_id, {
+                                "type": "error",
+                                "message": "Research system not available"
+                            })
+                    
                 except Exception as e:
                     print(f"❌ Failed to save user message: {e}")
                     await manager.send_to_conversation(conversation_id, {
@@ -840,107 +1161,106 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                         "message": f"Failed to save message: {str(e)}"
                     })
                     continue
-                
-                # Broadcast user message to all connected clients
-                await manager.send_to_conversation(conversation_id, {
-                    "type": "user_message",
-                    "message": {
-                        "id": user_message.id,
-                        "conversation_id": user_message.conversation_id,
-                        "participant": user_message.participant,
-                        "content": user_message.content,
-                        "timestamp": user_message.timestamp.isoformat()
-                    }
-                })
-                
-                # Check if this is a research query
-                if content.lower().startswith(('research:', 'find:', 'search:', 'analyze:')):
-                    # Handle research mode
-                    if research_manager:
-                        try:
-                            # Extract query (remove prefix)
-                            query = content.split(':', 1)[1].strip()
-                            
-                            # Create options for research task
-                            options = {
-                                'research_mode': "comprehensive",
-                                'max_results': 10,
-                                'metadata': {}
-                            }
-                            
-                            # Start research task
-                            task_id = await research_manager.start_research_task(
-                                query=query,
-                                user_id="web_user",
-                                conversation_id=conversation_id,
-                                options=options
-                            )
-                            
-                            # Notify client about research task
-                            await manager.send_to_conversation(conversation_id, {
-                                "type": "research_started",
-                                "task_id": task_id,
-                                "query": query
-                            })
-                            
-                            # Set up progress callback
-                            async def research_progress_callback(update):
-                                await manager.send_to_conversation(conversation_id, update)
-                            
-                            research_manager.add_progress_callback(task_id, research_progress_callback)
-                            
-                        except Exception as e:
-                            print(f"❌ Research task error: {e}")
-                            await manager.send_to_conversation(conversation_id, {
-                                "type": "error",
-                                "message": f"Research error: {str(e)}"
-                            })
-                    else:
-                        await manager.send_to_conversation(conversation_id, {
-                            "type": "error",
-                            "message": "Research system not available"
-                        })
-                
-                # Stream AI responses if streaming coordinator available
-                elif streaming_coordinator:
-                    try:
-                        session = db_manager.get_conversation_session(conversation_id)
-                        context_messages = session.get_context_messages(
-                            config_manager.config.conversation.max_context_tokens
-                        )
-                        
-                        print(f"🤖 Starting AI streaming for conversation {conversation_id}")
-                        
-                        # Stream the conversation chain
-                        async for update in streaming_coordinator.stream_conversation_chain(
-                            user_message, context_messages
-                        ):
-                            # Forward streaming updates to all connected clients
-                            await manager.send_to_conversation(conversation_id, update)
-                            
-                        print(f"✅ AI streaming completed for conversation {conversation_id}")
-                        
-                    except Exception as e:
-                        print(f"❌ AI streaming error for conversation {conversation_id}: {e}")
-                        # Send error message to client
-                        await manager.send_to_conversation(conversation_id, {
-                            "type": "error",
-                            "message": f"AI response error: {str(e)}"
-                        })
-                        import traceback
-                        traceback.print_exc()
-                else:
-                    print("⚠️ No streaming coordinator available")
-                    await manager.send_to_conversation(conversation_id, {
-                        "type": "error",
-                        "message": "AI streaming not available"
-                    })
-                
+                    
     except WebSocketDisconnect:
         manager.disconnect(websocket, conversation_id)
     except Exception as e:
         print(f"WebSocket error: {e}")
-        manager.disconnect(websocket, conversation_id)
+
+
+@app.websocket("/api/tasks/stream")
+async def task_viewer_websocket(websocket: WebSocket):
+    """WebSocket endpoint for real-time task viewing."""
+    if not mcp_client:
+        await websocket.close(code=4503, reason="MCP server not available")
+        return
+    
+    try:
+        await websocket.accept()
+        print("✓ Task viewer WebSocket connected")
+        
+        # Send initial task data
+        try:
+            initial_tasks = await mcp_client.get_active_tasks()
+            await websocket.send_text(json.dumps({
+                "type": "initial_tasks",
+                "data": initial_tasks
+            }))
+        except Exception as e:
+            print(f"Failed to send initial task data: {e}")
+        
+        # Set up a periodic update loop
+        async def send_task_updates():
+            while True:
+                try:
+                    await asyncio.sleep(2)  # Update every 2 seconds
+                    
+                    # Get current active tasks
+                    tasks_data = await mcp_client.get_active_tasks()
+                    
+                    # Send update
+                    await websocket.send_text(json.dumps({
+                        "type": "task_update",
+                        "data": tasks_data,
+                        "timestamp": datetime.now().isoformat()
+                    }))
+                    
+                except WebSocketDisconnect:
+                    break
+                except Exception as e:
+                    print(f"Error sending task update: {e}")
+                    break
+        
+        # Start the update loop
+        update_task = asyncio.create_task(send_task_updates())
+        
+        try:
+            while True:
+                # Handle client messages
+                try:
+                    data = await websocket.receive_text()
+                    message_data = json.loads(data)
+                    
+                    # Handle task cancellation requests
+                    if message_data.get("type") == "cancel_task":
+                        task_id = message_data.get("task_id")
+                        if task_id:
+                            success = await mcp_client.cancel_task(task_id)
+                            await websocket.send_text(json.dumps({
+                                "type": "task_cancelled",
+                                "task_id": task_id,
+                                "success": success
+                            }))
+                    
+                    # Handle task detail requests
+                    elif message_data.get("type") == "get_task_details":
+                        task_id = message_data.get("task_id")
+                        if task_id:
+                            details = await mcp_client.get_task_details(task_id)
+                            await websocket.send_text(json.dumps({
+                                "type": "task_details",
+                                "task_id": task_id,
+                                "data": details
+                            }))
+                    
+                    # Handle ping/keepalive
+                    elif message_data.get("type") == "ping":
+                        await websocket.send_text(json.dumps({"type": "pong"}))
+                        
+                except asyncio.TimeoutError:
+                    # Send keepalive ping
+                    await websocket.send_text(json.dumps({"type": "ping"}))
+                    
+        except WebSocketDisconnect:
+            print("Task viewer WebSocket disconnected")
+        
+    except Exception as e:
+        print(f"Task viewer WebSocket error: {e}")
+    finally:
+        # Clean up
+        if 'update_task' in locals():
+            update_task.cancel()
+        print("Task viewer WebSocket connection closed")
 
 
 # Static files for serving the React app (when built)

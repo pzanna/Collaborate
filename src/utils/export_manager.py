@@ -482,3 +482,175 @@ class ExportManager:
         if PDF_AVAILABLE:
             formats.append("pdf")
         return formats
+    
+    # Compatibility methods for tests
+    def export_to_json(self, conversation_data: Dict[str, Any], filename: str) -> str:
+        """Export conversation data to JSON format."""
+        # Convert dict to ConversationSession-like object for compatibility
+        from datetime import datetime
+        
+        def parse_datetime(dt_value):
+            """Parse datetime from string or return datetime object."""
+            if isinstance(dt_value, str):
+                try:
+                    return datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                except ValueError:
+                    return datetime.now()
+            elif isinstance(dt_value, datetime):
+                return dt_value
+            else:
+                return datetime.now()
+        
+        # Create a minimal session object
+        class MockSession:
+            def __init__(self, data):
+                self.conversation = type('obj', (object,), {
+                    'id': data.get('id', data.get('conversation_id', 'export-id')),
+                    'title': data.get('title', 'Exported Conversation'),
+                    'created_at': parse_datetime(data.get('created_at', datetime.now())),
+                    'updated_at': parse_datetime(data.get('updated_at', datetime.now())),
+                    'participants': data.get('participants', ['user', 'assistant']),
+                    'status': data.get('status', 'active')
+                })()
+                self.project = type('obj', (object,), {
+                    'id': data.get('project_id', 'project-id'),
+                    'name': data.get('project_name', 'Test Project'),
+                    'description': data.get('project_description', 'Test project description')
+                })()
+                self.messages = []
+                # Convert messages if they exist
+                for msg_data in data.get('messages', []):
+                    msg = type('obj', (object,), {
+                        'id': msg_data.get('id', f'msg-{len(self.messages)}'),
+                        'participant': msg_data.get('participant', 'user'),
+                        'content': msg_data.get('content', ''),
+                        'timestamp': parse_datetime(msg_data.get('timestamp', datetime.now())),
+                        'message_type': msg_data.get('message_type', 'text'),
+                        'metadata': msg_data.get('metadata', {}),
+                        'role': msg_data.get('role', 'user')
+                    })()
+                    self.messages.append(msg)
+        
+        mock_session = MockSession(conversation_data)
+        return self._export_json(mock_session, filename)
+    
+    def export_to_markdown(self, conversation_data: Dict[str, Any], filename: str) -> str:
+        """Export conversation data to Markdown format."""
+        from datetime import datetime
+        
+        def parse_datetime(dt_value):
+            """Parse datetime from string or return datetime object."""
+            if isinstance(dt_value, str):
+                try:
+                    return datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                except ValueError:
+                    return datetime.now()
+            elif isinstance(dt_value, datetime):
+                return dt_value
+            else:
+                return datetime.now()
+        
+        # Create a minimal session object
+        class MockSession:
+            def __init__(self, data):
+                self.conversation = type('obj', (object,), {
+                    'id': data.get('id', data.get('conversation_id', 'export-id')),
+                    'title': data.get('title', 'Exported Conversation'),
+                    'created_at': parse_datetime(data.get('created_at', datetime.now())),
+                    'updated_at': parse_datetime(data.get('updated_at', datetime.now())),
+                    'participants': data.get('participants', ['user', 'assistant']),
+                    'status': data.get('status', 'active')
+                })()
+                self.project = type('obj', (object,), {
+                    'id': data.get('project_id', 'project-id'),
+                    'name': data.get('project_name', 'Test Project'),
+                    'description': data.get('project_description', 'Test project description')
+                })()
+                self.messages = []
+                # Convert messages if they exist
+                for msg_data in data.get('messages', []):
+                    msg = type('obj', (object,), {
+                        'id': msg_data.get('id', f'msg-{len(self.messages)}'),
+                        'participant': msg_data.get('participant', 'user'),
+                        'content': msg_data.get('content', ''),
+                        'timestamp': parse_datetime(msg_data.get('timestamp', datetime.now())),
+                        'message_type': msg_data.get('message_type', 'text'),
+                        'metadata': msg_data.get('metadata', {}),
+                        'role': msg_data.get('role', 'user')
+                    })()
+                    self.messages.append(msg)
+        
+        mock_session = MockSession(conversation_data)
+        return self._export_markdown(mock_session, filename)
+    
+    def export_to_pdf(self, conversation_data: Dict[str, Any], filename: str) -> str:
+        """Export conversation data to PDF format."""
+        from datetime import datetime
+        
+        def parse_datetime(dt_value):
+            """Parse datetime from string or return datetime object."""
+            if isinstance(dt_value, str):
+                try:
+                    return datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                except ValueError:
+                    return datetime.now()
+            elif isinstance(dt_value, datetime):
+                return dt_value
+            else:
+                return datetime.now()
+        
+        # Create a minimal session object
+        class MockSession:
+            def __init__(self, data):
+                self.conversation = type('obj', (object,), {
+                    'id': data.get('id', data.get('conversation_id', 'export-id')),
+                    'title': data.get('title', 'Exported Conversation'),
+                    'created_at': parse_datetime(data.get('created_at', datetime.now())),
+                    'updated_at': parse_datetime(data.get('updated_at', datetime.now())),
+                    'participants': data.get('participants', ['user', 'assistant']),
+                    'status': data.get('status', 'active')
+                })()
+                self.project = type('obj', (object,), {
+                    'id': data.get('project_id', 'project-id'),
+                    'name': data.get('project_name', 'Test Project'),
+                    'description': data.get('project_description', 'Test project description')
+                })()
+                self.messages = []
+                # Convert messages if they exist
+                for msg_data in data.get('messages', []):
+                    msg = type('obj', (object,), {
+                        'id': msg_data.get('id', f'msg-{len(self.messages)}'),
+                        'participant': msg_data.get('participant', 'user'),
+                        'content': msg_data.get('content', ''),
+                        'timestamp': parse_datetime(msg_data.get('timestamp', datetime.now())),
+                        'message_type': msg_data.get('message_type', 'text'),
+                        'metadata': msg_data.get('metadata', {}),
+                        'role': msg_data.get('role', 'user')
+                    })()
+                    self.messages.append(msg)
+        
+        mock_session = MockSession(conversation_data)
+        return self._export_pdf(mock_session, filename)
+    
+    def export_conversation_session(self, session: ConversationSession, format_type: str) -> str:
+        """Export a conversation session in the specified format."""
+        return self.export_conversation(session, format_type)
+    
+    def cleanup_old_exports(self, retention_days: int = 30) -> int:
+        """Clean up old export files."""
+        from datetime import datetime, timedelta
+        
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        cleaned_count = 0
+        
+        for filepath in self.export_path.iterdir():
+            if filepath.is_file():
+                file_time = datetime.fromtimestamp(filepath.stat().st_ctime)
+                if file_time < cutoff_date:
+                    try:
+                        filepath.unlink()
+                        cleaned_count += 1
+                    except OSError:
+                        pass  # Ignore errors for files in use
+        
+        return cleaned_count

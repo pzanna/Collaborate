@@ -218,6 +218,10 @@ class MCPServer:
             await self._handle_get_task_status(client_id, message_data)
         elif message_type == 'get_server_stats':
             await self._handle_get_server_stats(client_id, message_data)
+        elif message_type == 'get_active_tasks':
+            await self._handle_get_active_tasks(client_id, message_data)
+        elif message_type == 'get_task_details':
+            await self._handle_get_task_details(client_id, message_data)
         elif message_type == 'identify_research_manager':
             await self._handle_identify_research_manager(client_id, message_data)
         else:
@@ -371,6 +375,122 @@ class MCPServer:
             'type': 'research_manager_confirmed',
             'data': {'client_id': client_id}
         })
+
+
+
+
+
+    async def _handle_get_active_tasks(self, client_id: str, data: Dict[str, Any]):
+        """Handle request for active tasks"""
+        response_id = data.get('response_id')
+        
+        if response_id:
+            try:
+                # Get active tasks from queue
+                active_tasks = await self.task_queue.get_active_tasks()
+                
+                # Convert tasks to response format
+                tasks_data = []
+                for task in active_tasks:
+                    task_info = {
+                        'task_id': task.action.task_id,
+                        'parent_id': task.action.parent_task_id,
+                        'agent_type': task.action.agent_type,
+                        'status': task.action.status,
+                        'stage': 'executing',  # Default stage
+                        'created_at': task.action.created_at.isoformat(),
+                        'updated_at': task.queued_at.isoformat(),
+                        'content': task.action.payload,
+                        'metadata': {
+                            'assigned_agent': task.assigned_agent,
+                            'retry_count': task.retry_count,
+                            'priority': task.action.priority,
+                            'action': task.action.action
+                        },
+                        'dependencies': task.action.dependencies,
+                        'children': []  # Will be populated by client-side processing
+                    }
+                    tasks_data.append(task_info)
+                
+                await self._send_to_client(client_id, {
+                    'type': 'active_tasks_response',
+                    'data': {
+                        'response_id': response_id,
+                        'tasks': tasks_data
+                    }
+                })
+                
+            except Exception as e:
+                logger.error(f"Error getting active tasks: {e}")
+                await self._send_to_client(client_id, {
+                    'type': 'active_tasks_response',
+                    'data': {
+                        'response_id': response_id,
+                        'tasks': [],
+                        'error': str(e)
+                    }
+                })
+
+    async def _handle_get_task_details(self, client_id: str, data: Dict[str, Any]):
+        """Handle request for specific task details"""
+        task_id = data.get('task_id')
+        response_id = data.get('response_id')
+        
+        if task_id and response_id:
+            try:
+                # Get task details from queue
+                task = await self.task_queue.get_task(task_id)
+                
+                if task:
+                    task_info = {
+                        'task_id': task.action.task_id,
+                        'parent_id': task.action.parent_task_id,
+                        'agent_type': task.action.agent_type,
+                        'status': task.action.status,
+                        'stage': 'executing',  # Default stage
+                        'created_at': task.action.created_at.isoformat(),
+                        'updated_at': task.queued_at.isoformat(),
+                        'content': task.action.payload,
+                        'metadata': {
+                            'assigned_agent': task.assigned_agent,
+                            'retry_count': task.retry_count,
+                            'priority': task.action.priority,
+                            'action': task.action.action,
+                            'context_id': task.action.context_id,
+                            'max_retries': task.action.max_retries,
+                            'timeout': task.action.timeout
+                        },
+                        'dependencies': task.action.dependencies,
+                        'children': []  # Would need additional tracking for this
+                    }
+                    
+                    await self._send_to_client(client_id, {
+                        'type': 'task_details_response',
+                        'data': {
+                            'response_id': response_id,
+                            'task': task_info
+                        }
+                    })
+                else:
+                    await self._send_to_client(client_id, {
+                        'type': 'task_details_response',
+                        'data': {
+                            'response_id': response_id,
+                            'task': None,
+                            'error': 'Task not found'
+                        }
+                    })
+                    
+            except Exception as e:
+                logger.error(f"Error getting task details for {task_id}: {e}")
+                await self._send_to_client(client_id, {
+                    'type': 'task_details_response',
+                    'data': {
+                        'response_id': response_id,
+                        'task': None,
+                        'error': str(e)
+                    }
+                })
     
     async def _process_tasks(self):
         """Background task to process the task queue"""

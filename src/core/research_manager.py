@@ -8,7 +8,7 @@ AI agents (Retriever, Reasoner, Executor, Memory) to perform complex research ta
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -1031,3 +1031,140 @@ class ResearchManager:
             'current_usage': current_usage,
             'stage': context.stage.value
         }
+
+    # Phase 4: Debug UI Methods
+
+    async def get_latest_plan(self, context_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get the latest RM AI plan for debugging.
+        
+        Args:
+            context_id: Optional context ID to filter by
+            
+        Returns:
+            Optional[Dict[str, Any]]: Latest plan data
+        """
+        # For now, return a mock plan since we don't store plan history yet
+        # In a full implementation, this would query a plans database
+        
+        if context_id and context_id in self.active_contexts:
+            context = self.active_contexts[context_id]
+            return {
+                'plan_id': f"plan_{context_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                'context_id': context_id,
+                'prompt': f"Research plan for: {context.query}",
+                'raw_response': "Sample RM AI response for debugging",
+                'parsed_tasks': [
+                    {'task_id': 'task_1', 'agent': 'retriever', 'action': 'search_web'},
+                    {'task_id': 'task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
+                ],
+                'created_at': datetime.now().isoformat(),
+                'execution_status': context.stage.value,
+                'modifications': []
+            }
+        
+        # Return mock data for demo
+        return {
+            'plan_id': f"plan_latest_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            'context_id': 'demo_context',
+            'prompt': "Latest research plan prompt",
+            'raw_response': "Mock RM AI response",
+            'parsed_tasks': [
+                {'task_id': 'demo_task_1', 'agent': 'retriever', 'action': 'search_web'},
+                {'task_id': 'demo_task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
+            ],
+            'created_at': datetime.now().isoformat(),
+            'execution_status': 'planning',
+            'modifications': []
+        }
+
+    async def get_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific RM AI plan by ID.
+        
+        Args:
+            plan_id: Plan ID to retrieve
+            
+        Returns:
+            Optional[Dict[str, Any]]: Plan data
+        """
+        # Mock implementation - in production this would query a plans database
+        return {
+            'plan_id': plan_id,
+            'context_id': 'mock_context',
+            'prompt': f"Research plan prompt for {plan_id}",
+            'raw_response': f"RM AI response for plan {plan_id}",
+            'parsed_tasks': [
+                {'task_id': f'{plan_id}_task_1', 'agent': 'retriever', 'action': 'search_web'},
+                {'task_id': f'{plan_id}_task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
+            ],
+            'created_at': datetime.now().isoformat(),
+            'execution_status': 'completed',
+            'modifications': []
+        }
+
+    async def modify_plan(self, plan_id: str, modifications: Dict[str, Any]) -> bool:
+        """
+        Modify a specific RM AI plan.
+        
+        Args:
+            plan_id: Plan ID to modify
+            modifications: Modifications to apply
+            
+        Returns:
+            bool: True if successful
+        """
+        self.logger.info(f"Plan {plan_id} modified with: {modifications}")
+        
+        # In a full implementation, this would:
+        # 1. Update the plan in the database
+        # 2. Apply modifications to active tasks if needed
+        # 3. Notify relevant components of changes
+        
+        return True
+
+    async def list_plans(self, context_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        List RM AI plans with optional context filtering.
+        
+        Args:
+            context_id: Optional context ID to filter by
+            limit: Maximum number of plans to return
+            
+        Returns:
+            List[Dict[str, Any]]: List of plan summaries
+        """
+        # Mock implementation - in production this would query a plans database
+        plans = []
+        
+        # Include active contexts as plans
+        for ctx_id, context in self.active_contexts.items():
+            if context_id is None or ctx_id == context_id:
+                plans.append({
+                    'plan_id': f"plan_{ctx_id}",
+                    'context_id': ctx_id,
+                    'created_at': context.created_at.isoformat(),
+                    'execution_status': context.stage.value,
+                    'parsed_tasks': [
+                        {'task_id': 'mock_task_1', 'agent': 'retriever'},
+                        {'task_id': 'mock_task_2', 'agent': 'reasoner'}
+                    ],
+                    'modifications': []
+                })
+        
+        # Add some mock historical plans
+        if not context_id:
+            for i in range(min(5, limit - len(plans))):
+                plans.append({
+                    'plan_id': f"historical_plan_{i}",
+                    'context_id': f"historical_context_{i}",
+                    'created_at': (datetime.now() - timedelta(hours=i)).isoformat(),
+                    'execution_status': 'completed',
+                    'parsed_tasks': [
+                        {'task_id': f'hist_task_{i}_1', 'agent': 'retriever'},
+                        {'task_id': f'hist_task_{i}_2', 'agent': 'reasoner'}
+                    ],
+                    'modifications': []
+                })
+        
+        return plans[:limit]

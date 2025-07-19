@@ -2,26 +2,9 @@
  * API service for HTTP requests to the backend
  */
 
-import { Conversation, Message } from '../store/slices/chatSlice';
-
 const API_BASE_URL = process.env.NODE_ENV === 'development' 
   ? 'http://localhost:8000/api'
   : '/api';
-
-export interface CreateConversationRequest {
-  project_id: string;
-  title: string;
-}
-
-export interface CreateConversationResponse {
-  id: string;
-  project_id: string;
-  title: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  message_count: number;
-}
 
 export interface Project {
   id: string;
@@ -29,11 +12,10 @@ export interface Project {
   description: string;
   created_at: string;
   updated_at: string;
-  conversation_count: number;
+  item_count: number;
 }
 
 export interface ResearchRequest {
-  conversation_id: string;
   query: string;
   research_mode: 'comprehensive' | 'quick' | 'deep';
   max_results: number;
@@ -41,7 +23,6 @@ export interface ResearchRequest {
 
 export interface ResearchTaskResponse {
   task_id: string;
-  conversation_id: string;
   query: string;
   status: string;
   created_at: string;
@@ -92,23 +73,6 @@ class ApiService {
     }
 
     return response.json();
-  }
-
-  // Conversation methods
-  async createConversation(data: CreateConversationRequest): Promise<CreateConversationResponse> {
-    return this.request<CreateConversationResponse>('/conversations', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async getConversations(projectId?: string): Promise<Conversation[]> {
-    const params = projectId ? `?project_id=${projectId}` : '';
-    return this.request<Conversation[]>(`/conversations${params}`);
-  }
-
-  async getConversationMessages(conversationId: string): Promise<Message[]> {
-    return this.request<Message[]>(`/conversations/${conversationId}/messages`);
   }
 
   // Project methods

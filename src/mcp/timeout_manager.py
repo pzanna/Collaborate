@@ -19,6 +19,7 @@ class TaskTimeoutManager:
         self.default_timeout = default_timeout
         self.running_tasks: Dict[str, Dict] = {}
         self.timeout_tasks: Dict[str, asyncio.Task] = {}
+        self.cleanup_tasks: Dict[str, asyncio.Task] = {}
         self.logger = get_mcp_logger("timeout_manager")
         self._cleanup_task: Optional[asyncio.Task] = None
         self._is_running = False
@@ -39,9 +40,23 @@ class TaskTimeoutManager:
             except asyncio.CancelledError:
                 pass
         
-        # Cancel all running timeout tasks
-        for timeout_task in self.timeout_tasks.values():
+        # Cancel all running timeout tasks and wait for them
+        timeout_tasks = list(self.timeout_tasks.values())
+        cleanup_tasks = list(self.cleanup_tasks.values())
+        
+        for timeout_task in timeout_tasks:
             timeout_task.cancel()
+        for cleanup_task in cleanup_tasks:
+            cleanup_task.cancel()
+        
+        # Wait for all tasks to be cancelled
+        all_tasks = timeout_tasks + cleanup_tasks
+        if all_tasks:
+            await asyncio.gather(*all_tasks, return_exceptions=True)
+        
+        self.timeout_tasks.clear()
+        self.cleanup_tasks.clear()
+        self.running_tasks.clear()
         
         self.logger.log_server_lifecycle("stop", {"component": "timeout_manager"})
     
@@ -104,7 +119,8 @@ class TaskTimeoutManager:
         )
         
         # Remove from running tasks after a delay for cleanup
-        asyncio.create_task(self._delayed_cleanup(task_id, 60))
+        cleanup_task = asyncio.create_task(self._delayed_cleanup(task_id, 60))
+        self.cleanup_tasks[task_id] = cleanup_task
         
         return True
     
@@ -185,9 +201,16 @@ class TaskTimeoutManager:
     
     async def _delayed_cleanup(self, task_id: str, delay: int):
         """Remove task info after a delay"""
-        await asyncio.sleep(delay)
-        if task_id in self.running_tasks:
-            del self.running_tasks[task_id]
+        try:
+            await asyncio.sleep(delay)
+            if task_id in self.running_tasks:
+                del self.running_tasks[task_id]
+        except asyncio.CancelledError:
+            pass
+        finally:
+            # Remove from cleanup tasks
+            if task_id in self.cleanup_tasks:
+                del self.cleanup_tasks[task_id]
     
     async def _cleanup_loop(self):
         """Periodic cleanup of stale tasks"""

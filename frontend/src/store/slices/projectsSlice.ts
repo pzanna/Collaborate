@@ -6,7 +6,7 @@ export interface Project {
   description: string;
   created_at: string;
   updated_at: string;
-  conversation_count: number;
+  item_count: number;
 }
 
 interface ProjectsState {

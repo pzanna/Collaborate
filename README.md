@@ -403,6 +403,148 @@ python -m pytest --cov=src tests/
 - Encrypted exports available
 - No data sent to third parties (except AI providers)
 
+## 🧪 Testing Framework
+
+### Overview
+
+Collaborate includes a comprehensive testing framework that ensures all components function correctly and meet performance requirements. The testing framework provides:
+
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Cross-component workflow testing
+- **Performance Tests**: Load testing and benchmarking
+- **End-to-End Tests**: Complete application workflow validation
+
+### Running Tests
+
+#### Quick Test Commands
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test categories
+pytest -m unit                    # Unit tests only
+pytest -m integration            # Integration tests only
+pytest -m performance           # Performance tests only
+pytest -m e2e                   # End-to-end tests only
+
+# Run fast tests (excluding slow performance tests)
+pytest -m "not slow"
+
+# Run with coverage reporting
+pytest --cov=src --cov-report=html
+```
+
+#### Test Categories
+
+**Unit Tests** - Test individual components:
+
+```bash
+pytest tests/test_unit_ai_clients.py    # AI client testing
+pytest tests/test_unit_mcp.py          # MCP protocol testing
+pytest tests/test_unit_storage.py      # Database/storage testing
+```
+
+**Integration Tests** - Test component interactions:
+
+```bash
+pytest tests/test_integration.py       # Cross-component testing
+```
+
+**Performance Tests** - Load and stress testing:
+
+```bash
+pytest tests/test_performance_e2e.py   # Performance benchmarks
+pytest -m "performance and not slow"   # Fast performance tests only
+```
+
+### Test Configuration
+
+The testing framework uses `pytest.ini` for configuration:
+
+- **Test Discovery**: Automatically finds `test_*.py` files
+- **Markers**: Categorize tests by type (unit, integration, performance, etc.)
+- **Coverage**: Integrated coverage reporting
+- **Async Support**: Full async/await test support
+
+### Test Environment Setup
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio pytest-cov
+
+# Set test environment variables (optional)
+export TEST_DATABASE_PATH="/tmp/test.db"
+export LOG_LEVEL="DEBUG"
+
+# Run tests with verbose output
+pytest -v
+```
+
+### Performance Benchmarks
+
+The performance tests establish these benchmarks:
+
+- **Database Operations**:
+
+  - 100 conversations created in < 5 seconds
+  - 500 messages created in < 10 seconds
+  - Concurrent operations complete in < 15 seconds
+
+- **Memory Usage**:
+
+  - < 100MB increase for 1000 messages
+  - Proper resource cleanup validation
+
+- **AI Client Response**:
+  - Mock response times < 0.1 seconds
+  - Graceful error handling
+
+### Test Data Management
+
+Tests use isolated test data and temporary databases:
+
+- **Fixtures**: Shared test configuration and data
+- **Factories**: Dynamic test data generation
+- **Cleanup**: Automatic resource cleanup after tests
+- **Isolation**: Each test runs with fresh data
+
+### Continuous Integration
+
+For CI/CD integration, use these commands:
+
+```bash
+# Fast CI test suite
+pytest -m "unit and fast" --cov=src
+
+# Full CI test suite (excluding very slow tests)
+pytest -m "not slow" --cov=src --junitxml=test-results.xml
+```
+
+### Troubleshooting Tests
+
+**Common Test Issues**:
+
+1. **Database Lock Errors**: Tests use isolated temporary databases
+2. **MCP Connection Warnings**: Expected when MCP server not running
+3. **API Key Requirements**: Some tests need valid API keys
+4. **Async Test Issues**: Ensure proper `@pytest.mark.asyncio` usage
+
+**Debug Commands**:
+
+```bash
+# Verbose test output
+pytest -vvv --tb=long
+
+# Debug specific test
+pytest --pdb tests/test_file.py::test_function
+
+# Show print statements
+pytest -s
+```
+
+For comprehensive testing documentation, see [docs/TESTING_FRAMEWORK.md](docs/TESTING_FRAMEWORK.md).
+
 ## 🚨 Troubleshooting
 
 ### Common Issues
