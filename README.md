@@ -295,29 +295,41 @@ The application uses `config/default_config.json` for default settings:
 
 ## 🧪 Testing
 
-### Running Tests
+### Test Suite Execution
 
 ```bash
 # Run all tests
 python -m pytest
 
 # Run specific test categories
-python -m pytest tests/test_phase6_unit.py -v
-python -m pytest tests/test_phase6_integration.py -v
-python -m pytest tests/test_phase6_e2e.py -v
+python -m pytest tests/test_unit_ai_clients.py -v      # AI client tests
+python -m pytest tests/test_unit_mcp.py -v            # MCP protocol tests
+python -m pytest tests/test_unit_storage.py -v        # Storage/database tests
+python -m pytest tests/test_unit_debug.py -v          # Debug function tests
+python -m pytest tests/test_integration.py -v         # Integration tests
+python -m pytest tests/test_performance_e2e.py -v     # Performance tests
+
+# Run by markers
+python -m pytest -m unit                              # Unit tests only
+python -m pytest -m integration                       # Integration tests only
+python -m pytest -m performance                       # Performance tests only
 
 # Run with coverage
 python -m pytest --cov=src tests/
 ```
 
-### Test Categories
+### Test Suite Overview
 
-- **Unit Tests**: Individual component testing (40 tests)
-- **Integration Tests**: Cross-component functionality
-- **Performance Tests**: Load and stress testing
-- **E2E Tests**: End-to-end workflow testing
-- **Research Tests**: Research manager and agent testing
-- **MCP Tests**: Model Context Protocol testing
+- **Unit Tests**: Individual component testing (105 tests across 5 files)
+  - AI Clients: 13 tests
+  - MCP Protocol: 35 tests (24 + 11 simplified)
+  - Storage/Database: 29 tests
+  - Debug Functions: 28 tests
+- **Integration Tests**: Cross-component functionality (11 tests)
+- **Performance Tests**: Load and stress testing (9 tests)
+- **E2E Tests**: End-to-end workflow testing (included in performance suite)
+
+**Total**: 126+ comprehensive test cases covering all major components
 
 ## 📊 Performance
 

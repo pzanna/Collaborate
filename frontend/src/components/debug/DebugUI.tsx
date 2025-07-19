@@ -223,7 +223,7 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                     {formatDate(plan.created_at)}
                   </div>
 
-                  {plan.modifications.length > 0 && (
+                  {plan.modifications && plan.modifications.length > 0 && (
                     <div className="text-xs text-orange-600 mt-1">
                       {plan.modifications.length} modification(s)
                     </div>
@@ -354,35 +354,36 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
               </div>
 
               {/* Modifications */}
-              {selectedPlan.modifications.length > 0 && (
-                <div className="border border-gray-200 rounded-lg">
-                  <div className="border-b border-gray-200 p-4">
-                    <h3 className="text-lg font-medium">
-                      Applied Modifications
-                    </h3>
-                  </div>
-                  <div className="p-4">
-                    <div className="space-y-3">
-                      {selectedPlan.modifications.map((mod, index) => (
-                        <div
-                          key={index}
-                          className="bg-orange-50 border border-orange-200 p-3 rounded-lg"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium">{mod.type}</span>
-                            <span className="text-xs text-gray-500">
-                              {formatDate(mod.timestamp)}
-                            </span>
+              {selectedPlan.modifications &&
+                selectedPlan.modifications.length > 0 && (
+                  <div className="border border-gray-200 rounded-lg">
+                    <div className="border-b border-gray-200 p-4">
+                      <h3 className="text-lg font-medium">
+                        Applied Modifications
+                      </h3>
+                    </div>
+                    <div className="p-4">
+                      <div className="space-y-3">
+                        {selectedPlan.modifications.map((mod, index) => (
+                          <div
+                            key={index}
+                            className="bg-orange-50 border border-orange-200 p-3 rounded-lg"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">{mod.type}</span>
+                              <span className="text-xs text-gray-500">
+                                {formatDate(mod.timestamp)}
+                              </span>
+                            </div>
+                            <pre className="text-xs text-gray-700">
+                              {JSON.stringify(mod.changes, null, 2)}
+                            </pre>
                           </div>
-                          <pre className="text-xs text-gray-700">
-                            {JSON.stringify(mod.changes, null, 2)}
-                          </pre>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Modification Interface */}
               <div className="border border-gray-200 rounded-lg">

@@ -26,13 +26,17 @@ The testing framework is organized in the `tests/` directory with the following 
 tests/
 ├── __init__.py                     # Test package initialization
 ├── conftest.py                     # Shared fixtures and configuration
-├── test_unit_ai_clients.py        # AI client unit tests
-├── test_unit_mcp.py               # MCP protocol unit tests
-├── test_unit_storage.py           # Storage/database unit tests
-├── test_integration.py            # Integration tests
-├── test_performance_e2e.py        # Performance and E2E tests
+├── test_unit_ai_clients.py        # AI client unit tests (13 tests)
+├── test_unit_mcp.py               # MCP protocol unit tests (24 tests)
+├── test_unit_mcp_simple.py        # Simplified MCP tests (11 tests)
+├── test_unit_storage.py           # Storage/database unit tests (29 tests)
+├── test_unit_debug.py             # Debug functions unit tests (28 tests)
+├── test_integration.py            # Integration tests (11 tests)
+├── test_performance_e2e.py        # Performance and E2E tests (9 tests)
 └── __pycache__/                   # Compiled test files
 ```
+
+**Total Test Count**: 126+ test cases across all components
 
 ## Test Categories
 
@@ -42,9 +46,11 @@ tests/
 
 **Files**:
 
-- `test_unit_ai_clients.py` - OpenAI and xAI client testing
-- `test_unit_mcp.py` - MCP protocol component testing
-- `test_unit_storage.py` - Database and storage testing
+- `test_unit_ai_clients.py` - OpenAI and xAI client testing (13 tests)
+- `test_unit_mcp.py` - MCP protocol component testing (24 tests)
+- `test_unit_mcp_simple.py` - Simplified MCP protocol tests (11 tests)
+- `test_unit_storage.py` - Database and storage testing (29 tests)
+- `test_unit_debug.py` - Debug functions and diagnostics (28 tests)
 
 **Markers**:
 
@@ -57,7 +63,7 @@ tests/
 
 **Files**:
 
-- `test_integration.py` - Cross-component integration testing
+- `test_integration.py` - Cross-component integration testing (11 tests)
 
 **Markers**:
 
@@ -70,7 +76,7 @@ tests/
 
 **Files**:
 
-- `test_performance_e2e.py` - Performance and stress testing
+- `test_performance_e2e.py` - Performance and stress testing (9 tests)
 
 **Markers**:
 

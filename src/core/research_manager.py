@@ -1143,6 +1143,7 @@ class ResearchManager:
                 plans.append({
                     'plan_id': f"plan_{ctx_id}",
                     'context_id': ctx_id,
+                    'prompt': f"Research plan for: {getattr(context, 'query', 'Active research context')}",
                     'created_at': context.created_at.isoformat(),
                     'execution_status': context.stage.value,
                     'parsed_tasks': [
@@ -1158,6 +1159,7 @@ class ResearchManager:
                 plans.append({
                     'plan_id': f"historical_plan_{i}",
                     'context_id': f"historical_context_{i}",
+                    'prompt': f"Historical research plan {i}",
                     'created_at': (datetime.now() - timedelta(hours=i)).isoformat(),
                     'execution_status': 'completed',
                     'parsed_tasks': [
