@@ -184,7 +184,7 @@ class ConfigManager:
             return self.config.research_tasks if isinstance(self.config.research_tasks, dict) else self.config.research_tasks.dict()
         return {
             'max_concurrent_tasks': 5,
-            'task_timeout': 300,
+            'task_timeout': 600,
             'retry_attempts': 3,
             'search_depth': 'comprehensive'
         }

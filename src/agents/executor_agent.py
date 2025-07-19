@@ -70,7 +70,8 @@ class ExecutorAgent(BaseAgent):
             'write_file',
             'run_command',
             'transform_data',
-            'validate_data'
+            'validate_data',
+            'execute_research'
         ]
     
     async def _initialize_agent(self) -> None:
@@ -132,6 +133,8 @@ class ExecutorAgent(BaseAgent):
             return await self._transform_data(payload)
         elif action == 'validate_data':
             return await self._validate_data(payload)
+        elif action == 'execute_research':
+            return await self._execute_research(payload)
         else:
             raise ValueError(f"Unknown action: {action}")
     
@@ -692,3 +695,136 @@ class ExecutorAgent(BaseAgent):
             'valid': len(errors) == 0,
             'errors': errors
         }
+
+    async def _execute_research(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute research-related tasks.
+        
+        Args:
+            payload: Research execution parameters
+            
+        Returns:
+            Dict[str, Any]: Execution results
+        """
+        try:
+            query = payload.get('query', '')
+            context = payload.get('context', {})
+            execution_type = payload.get('execution_type', 'basic')
+            
+            self.logger.info(f"Executing research task for query: {query}")
+            
+            # For now, this is a simple implementation that logs the research context
+            # and returns a summary. In a full implementation, this could:
+            # - Execute code to analyze data
+            # - Make API calls to external services
+            # - Process files and documents
+            # - Run computational tasks
+            
+            results = []
+            
+            # Process search results if available
+            search_results = context.get('search_results', [])
+            if search_results:
+                results.append({
+                    'type': 'search_analysis',
+                    'description': f"Analyzed {len(search_results)} search results",
+                    'data': {
+                        'result_count': len(search_results),
+                        'sources': [result.get('url', 'Unknown') for result in search_results[:5]]
+                    }
+                })
+            
+            # Process reasoning output if available
+            reasoning_output = context.get('reasoning_output', '')
+            if reasoning_output:
+                # Handle both string and dict formats for reasoning output
+                if isinstance(reasoning_output, str):
+                    analysis_text = reasoning_output
+                    analysis_length = len(reasoning_output)
+                elif isinstance(reasoning_output, dict):
+                    analysis_text = str(reasoning_output.get('analysis', ''))
+                    analysis_length = len(analysis_text)
+                else:
+                    analysis_text = str(reasoning_output)
+                    analysis_length = len(analysis_text)
+                
+                results.append({
+                    'type': 'reasoning_analysis',
+                    'description': "Processed reasoning analysis",
+                    'data': {
+                        'analysis_length': analysis_length,
+                        'has_insights': 'insight' in analysis_text.lower() or 'finding' in analysis_text.lower(),
+                        'preview': analysis_text[:200] + '...' if len(analysis_text) > 200 else analysis_text
+                    }
+                })
+            
+            # Process any additional context data
+            memory_data = context.get('memory_data', {})
+            if memory_data:
+                results.append({
+                    'type': 'memory_integration',
+                    'description': "Integrated memory data",
+                    'data': {
+                        'memory_entries': len(memory_data.get('entries', [])),
+                        'has_historical_context': bool(memory_data.get('relevant_history', []))
+                    }
+                })
+            
+            # Process file data if available
+            file_data = context.get('file_data', [])
+            if file_data:
+                results.append({
+                    'type': 'file_processing',
+                    'description': f"Processed {len(file_data)} files",
+                    'data': {
+                        'file_count': len(file_data),
+                        'file_types': list(set(f.get('type', 'unknown') for f in file_data))
+                    }
+                })
+            
+            # Generate execution insights
+            insights = []
+            if search_results and reasoning_output:
+                insights.append("Successfully combined search results with reasoning analysis")
+            if len(results) > 1:
+                insights.append(f"Integrated {len(results)} different data sources")
+            
+            if insights:
+                results.append({
+                    'type': 'execution_insights',
+                    'description': "Generated execution insights",
+                    'data': {
+                        'insights': insights,
+                        'integration_success': True
+                    }
+                })
+            
+            # Create execution summary
+            execution_summary = {
+                'query': query,
+                'execution_type': execution_type,
+                'total_results': len(results),
+                'status': 'completed',
+                'timestamp': asyncio.get_event_loop().time()
+            }
+            
+            self.logger.info(f"Research execution completed with {len(results)} results")
+            
+            return {
+                'results': results,
+                'summary': execution_summary,
+                'status': 'completed'
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Research execution failed: {e}")
+            return {
+                'results': [],
+                'summary': {
+                    'query': payload.get('query', ''),
+                    'status': 'failed',
+                    'error': str(e)
+                },
+                'status': 'failed',
+                'error': str(e)
+            }

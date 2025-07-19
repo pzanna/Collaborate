@@ -75,6 +75,8 @@ class MCPServer:
         
         # Connection management
         self.clients: Dict[str, Any] = {}
+        self.agent_to_client: Dict[str, str] = {}  # agent_id -> client_id mapping
+        self.client_to_agent: Dict[str, str] = {}  # client_id -> agent_id mapping
         self.research_manager_client: Optional[str] = None
         
         # Server state
@@ -94,6 +96,9 @@ class MCPServer:
     async def start(self):
         """Start the MCP server"""
         try:
+            # Set running flag first
+            self.is_running = True
+            
             # Start background tasks
             await self._start_background_tasks()
             
@@ -102,11 +107,10 @@ class MCPServer:
                 self._handle_client,
                 self.config.host,
                 self.config.port,
-                ping_interval=20,
-                ping_timeout=10
+                ping_interval=30,
+                ping_timeout=60
             )
             
-            self.is_running = True
             logger.info(f"MCP Server started on {self.config.host}:{self.config.port}")
             
             # Set up signal handlers
@@ -114,6 +118,7 @@ class MCPServer:
             
         except Exception as e:
             logger.error(f"Failed to start MCP server: {e}")
+            self.is_running = False  # Reset on error
             raise
     
     async def stop(self):
@@ -179,6 +184,7 @@ class MCPServer:
             async for message in websocket:
                 try:
                     data = json.loads(message)
+                    logger.info(f"Received message from client {client_id}: type={data.get('type', 'unknown')}")
                     await self._handle_message(client_id, data)
                     self.stats['total_messages_received'] += 1
                 except json.JSONDecodeError:
@@ -195,6 +201,20 @@ class MCPServer:
             if client_id in self.clients:
                 del self.clients[client_id]
             
+            # Clean up agent mapping if this was an agent
+            if client_id in self.client_to_agent:
+                agent_id = self.client_to_agent[client_id]
+                
+                # Unregister agent
+                await self.agent_registry.unregister_agent(agent_id)
+                
+                # Clean up mappings
+                del self.client_to_agent[client_id]
+                if agent_id in self.agent_to_client:
+                    del self.agent_to_client[agent_id]
+                
+                logger.info(f"Unregistered agent {agent_id} due to client disconnect")
+            
             # If this was the research manager, clear reference
             if client_id == self.research_manager_client:
                 self.research_manager_client = None
@@ -204,12 +224,17 @@ class MCPServer:
         message_type = message.get('type')
         message_data = message.get('data', {})
         
+        logger.info(f"Processing message type '{message_type}' from client {client_id}")
+        
         if message_type == 'research_action':
             await self._handle_research_action(client_id, message_data)
         elif message_type == 'agent_response':
+            logger.info(f"Calling _handle_agent_response for client {client_id}")
             await self._handle_agent_response(client_id, message_data)
         elif message_type == 'agent_registration':
             await self._handle_agent_registration(client_id, message_data)
+        elif message_type == 'agent_heartbeat':
+            await self._handle_agent_heartbeat(client_id, message_data)
         elif message_type == 'heartbeat':
             await self._handle_heartbeat(client_id, message_data)
         elif message_type == 'cancel_task':
@@ -263,13 +288,24 @@ class MCPServer:
     async def _handle_agent_response(self, client_id: str, data: Dict[str, Any]):
         """Handle response from agent"""
         try:
+            logger.info(f"Received response from client {client_id}: {data}")
             response = AgentResponse.from_dict(data)
+            logger.info(f"Received response for task {response.task_id} from agent {response.agent_type}")
+            
+            # Get agent ID from client mapping
+            agent_id = self.client_to_agent.get(client_id)
+            if agent_id:
+                # Update agent registry to mark task as complete
+                await self.agent_registry.complete_task(agent_id, response.task_id)
+                logger.debug(f"Marked task {response.task_id} as complete for agent {agent_id}")
             
             # Mark task as completed or failed
             if response.status == 'completed':
                 await self.task_queue.complete_task(response.task_id, response.result)
+                logger.info(f"Task {response.task_id} marked as completed")
             elif response.status == 'failed':
                 await self.task_queue.fail_task(response.task_id, response.error or "Unknown error")
+                logger.info(f"Task {response.task_id} marked as failed")
             
             # Forward response to Research Manager
             if self.research_manager_client:
@@ -277,8 +313,11 @@ class MCPServer:
                     'type': 'agent_response',
                     'data': response.to_dict()
                 })
+                logger.info(f"Forwarded response for task {response.task_id} to research manager")
+            else:
+                logger.warning(f"No research manager client available to forward response for task {response.task_id}")
             
-            logger.debug(f"Processed response for task {response.task_id}")
+            logger.info(f"Successfully processed response for task {response.task_id}")
         
         except Exception as e:
             logger.error(f"Error handling agent response: {e}")
@@ -292,7 +331,12 @@ class MCPServer:
             success = await self.agent_registry.register_agent(registration)
             
             if success:
+                # Track agent-to-client mapping
+                self.agent_to_client[registration.agent_id] = client_id
+                self.client_to_agent[client_id] = registration.agent_id
+                
                 self.stats['total_agents_registered'] += 1
+                logger.info(f"Registered agent {registration.agent_id} from client {client_id}")
                 
                 # Send acknowledgment
                 await self._send_to_client(client_id, {
@@ -314,6 +358,16 @@ class MCPServer:
         agent_id = data.get('agent_id')
         if agent_id:
             await self.agent_registry.update_heartbeat(agent_id)
+    
+    async def _handle_agent_heartbeat(self, client_id: str, data: Dict[str, Any]):
+        """Handle agent heartbeat to maintain health status"""
+        try:
+            agent_id = data.get('agent_id')
+            if agent_id:
+                await self.agent_registry.update_heartbeat(agent_id)
+                logger.debug(f"Updated heartbeat for agent {agent_id}")
+        except Exception as e:
+            logger.error(f"Error handling agent heartbeat: {e}")
     
     async def _handle_cancel_task(self, client_id: str, data: Dict[str, Any]):
         """Handle task cancellation request"""
@@ -494,14 +548,19 @@ class MCPServer:
     
     async def _process_tasks(self):
         """Background task to process the task queue"""
+        logger.info("Task processing loop started")
         while self.is_running:
             try:
                 # Get next task
                 task = await self.task_queue.get_next_task()
                 
                 if task:
+                    logger.info(f"Processing task {task.action.task_id} with action '{task.action.action}'")
+                    
                     # Find available agent
                     agents = await self.agent_registry.get_available_agents(task.action.action)
+                    
+                    logger.info(f"Found {len(agents)} available agents for action '{task.action.action}': {agents}")
                     
                     if agents:
                         agent_id = agents[0]  # Use least loaded agent
@@ -515,13 +574,30 @@ class MCPServer:
                         
                         logger.info(f"Assigned task {task.action.task_id} to agent {agent_id}")
                     else:
+                        # Debug: Get all registered agents and capabilities
+                        all_agents = await self.agent_registry.get_all_agents()
+                        capabilities = await self.agent_registry.get_capabilities()
+                        
+                        logger.warning(f"No available agents for task {task.action.task_id} with action '{task.action.action}'")
+                        logger.warning(f"Registered agents: {list(all_agents.keys())}")
+                        logger.warning(f"Available capabilities: {list(capabilities.keys())}")
+                        
+                        # Check specific capability
+                        if task.action.action in capabilities:
+                            agent_ids = capabilities[task.action.action]
+                            logger.warning(f"Agents with capability '{task.action.action}': {list(agent_ids)}")
+                            for agent_id in agent_ids:
+                                if agent_id in all_agents:
+                                    agent = all_agents[agent_id]
+                                    logger.warning(f"Agent {agent_id}: available={agent.is_available}, status={agent.registration.status}, tasks={len(agent.current_tasks)}")
+                        
                         # No available agents, put task back in queue
                         await self.task_queue.fail_task(
                             task.action.task_id, 
                             "No available agents", 
                             retry=True
                         )
-                        logger.warning(f"No available agents for task {task.action.task_id}")
+                        logger.warning(f"Failed task {task.action.task_id} due to no available agents")
                 
                 # Small delay to prevent tight loop
                 await asyncio.sleep(0.1)
@@ -529,20 +605,37 @@ class MCPServer:
             except Exception as e:
                 logger.error(f"Error processing tasks: {e}")
                 await asyncio.sleep(1)
+        
+        logger.info("Task processing loop stopped")
     
     async def _send_task_to_agent(self, agent_id: str, action: ResearchAction):
         """Send task to specific agent"""
         # Find agent's client connection
-        # This is a simplified approach - in practice, you'd maintain agent->client mapping
-        message = serialize_message('research_action', action)
-        
-        # Broadcast to all clients (agents will filter by their capabilities)
-        for client_id, websocket in self.clients.items():
-            try:
-                await websocket.send(json.dumps(message))
-                self.stats['total_messages_sent'] += 1
-            except Exception as e:
-                logger.error(f"Error sending task to client {client_id}: {e}")
+        if agent_id in self.agent_to_client:
+            client_id = self.agent_to_client[agent_id]
+            
+            if client_id in self.clients:
+                try:
+                    message = {
+                        'type': 'research_task',
+                        'data': action.to_dict(),
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    
+                    await self.clients[client_id].send(json.dumps(message))
+                    self.stats['total_messages_sent'] += 1
+                    logger.info(f"Sent task {action.task_id} to agent {agent_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Error sending task to agent {agent_id}: {e}")
+                    # Mark task as failed if we can't send it
+                    await self.task_queue.fail_task(action.task_id, f"Failed to send to agent: {e}")
+            else:
+                logger.error(f"Client {client_id} for agent {agent_id} not found")
+                await self.task_queue.fail_task(action.task_id, "Agent client disconnected")
+        else:
+            logger.error(f"Agent {agent_id} not found in agent-to-client mapping")
+            await self.task_queue.fail_task(action.task_id, "Agent not registered")
     
     async def _send_to_client(self, client_id: str, message: Dict[str, Any]):
         """Send message to specific client"""

@@ -15,7 +15,7 @@ from src.mcp.structured_logger import get_mcp_logger, LogLevel, LogEvent
 class TaskTimeoutManager:
     """Manages task timeouts and cancellation"""
     
-    def __init__(self, default_timeout: float = 300.0):
+    def __init__(self, default_timeout: float = 600.0):
         self.default_timeout = default_timeout
         self.running_tasks: Dict[str, Dict] = {}
         self.timeout_tasks: Dict[str, asyncio.Task] = {}

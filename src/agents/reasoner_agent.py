@@ -188,10 +188,40 @@ class ReasonerAgent(BaseAgent):
         context = payload.get('context', {})
         search_results = context.get('search_results', [])
         
+        # If no search results available, provide analysis based on available context
         if not search_results:
-            raise ValueError("Search results are required for analysis")
+            self.logger.info(f"No search results available for analysis, proceeding with general knowledge")
+            # Use general knowledge to provide analysis
+            prompt = f"""
+            Please provide a comprehensive analysis of the topic: {query}
+            
+            Based on your knowledge, please provide:
+            1. Key concepts and definitions
+            2. Main aspects and considerations
+            3. Important facts and background information
+            4. Current trends and developments
+            5. Potential challenges and opportunities
+            6. Recommended areas for further research
+            
+            Please be thorough and provide actionable insights even without specific search results.
+            """
+            
+            # Get AI response
+            response = await self._get_ai_response(prompt)
+            
+            return {
+                'query': query,
+                'analysis': {
+                    'type': 'knowledge_based',
+                    'findings': response,
+                    'source': 'general_knowledge',
+                    'confidence': 'medium'
+                },
+                'raw_response': response,
+                'analysis_model': self.default_model
+            }
         
-        # Prepare content for analysis
+        # Prepare content for analysis with search results
         content = self._prepare_content_for_analysis(search_results)
         
         # Create analysis prompt
@@ -437,17 +467,18 @@ class ReasonerAgent(BaseAgent):
             raise RuntimeError("No AI client available")
         
         try:
-            # Create a simple message format
-            messages = [{"role": "user", "content": prompt}]
+            # Create Message objects for the AI client
+            from ..models.data_models import Message
+            messages = [Message(
+                conversation_id="reasoner_task",
+                participant="user",
+                content=prompt
+            )]
             
-            # Get response (simplified - actual implementation depends on client interface)
-            response = await self.default_client.generate_response(
-                messages=messages,
-                max_tokens=2000,
-                temperature=self.temperature
-            )
+            # Get response using the correct method name
+            response = self.default_client.get_response(messages=messages)
             
-            return response.get('content', '') if isinstance(response, dict) else str(response)
+            return str(response)
             
         except Exception as e:
             self.logger.error(f"AI response generation failed: {e}")
@@ -523,3 +554,32 @@ class ReasonerAgent(BaseAgent):
         pattern = rf'{section_name}[:\s]*\n(.*?)(?=\n\d+\.|$)'
         match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
         return match.group(1).strip() if match else ''
+
+
+if __name__ == "__main__":
+    import sys
+    import os
+    
+    # Add the project root to the Python path
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(0, project_root)
+    
+    async def main():
+        """Start the reasoner agent."""
+        from ..config.config_manager import ConfigManager
+        
+        # Initialize config manager
+        config_manager = ConfigManager()
+        
+        agent = ReasonerAgent(config_manager)
+        try:
+            await agent.start()
+            # Keep the agent running
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            print("Shutting down reasoner agent...")
+        finally:
+            await agent.stop()
+    
+    asyncio.run(main())

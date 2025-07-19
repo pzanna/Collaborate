@@ -19,7 +19,7 @@ const ResearchWorkspace: React.FC = () => {
   const [tasks, setTasks] = useState<ResearchTask[]>([])
   const [newQuery, setNewQuery] = useState("")
 
-  const startResearch = () => {
+  const startResearch = async () => {
     if (!newQuery.trim()) return
 
     const newTask: ResearchTask = {
@@ -33,30 +33,114 @@ const ResearchWorkspace: React.FC = () => {
     }
 
     setTasks((prev) => [newTask, ...prev])
+    const query = newQuery
     setNewQuery("")
 
-    // Simulate task processing
-    setTimeout(() => {
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.id === newTask.id ? { ...task, status: "running" } : task
-        )
-      )
-    }, 100)
+    try {
+      // Start research task via API
+      const response = await fetch("/api/research/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversation_id: "research_session",
+          query: query,
+          research_mode: "comprehensive",
+          max_results: 10,
+        }),
+      })
 
-    setTimeout(() => {
+      if (response.ok) {
+        const result = await response.json()
+
+        // Update task with server task ID and status
+        setTasks((prev) =>
+          prev.map((task) =>
+            task.id === newTask.id
+              ? { ...task, id: result.task_id, status: "running" }
+              : task
+          )
+        )
+
+        // Poll for task completion
+        pollTaskStatus(result.task_id, newTask.id)
+      } else {
+        // Handle error
+        setTasks((prev) =>
+          prev.map((task) =>
+            task.id === newTask.id
+              ? {
+                  ...task,
+                  status: "error",
+                  results: "Failed to start research task",
+                }
+              : task
+          )
+        )
+      }
+    } catch (error) {
+      console.error("Error starting research:", error)
       setTasks((prev) =>
         prev.map((task) =>
           task.id === newTask.id
-            ? {
-                ...task,
-                status: "completed",
-                results: `Research results for: ${newTask.query}\n\nThis is a placeholder for actual research functionality. The research system would integrate with various AI agents to gather information, analyze data, and provide comprehensive results.`,
-              }
+            ? { ...task, status: "error", results: "Network error" }
             : task
         )
       )
-    }, 2000)
+    }
+  }
+
+  const pollTaskStatus = async (taskId: string, localTaskId: string) => {
+    const maxPolls = 30 // 5 minutes max
+    let pollCount = 0
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/research/task/${taskId}`)
+        if (response.ok) {
+          const task = await response.json()
+
+          if (task.status === "completed" || task.status === "failed") {
+            // Task completed
+            setTasks((prev) =>
+              prev.map((t) =>
+                t.id === localTaskId || t.id === taskId
+                  ? {
+                      ...t,
+                      status:
+                        task.status === "completed" ? "completed" : "error",
+                      results: task.results
+                        ? JSON.stringify(task.results, null, 2)
+                        : task.status === "failed"
+                        ? "Research failed"
+                        : undefined,
+                    }
+                  : t
+              )
+            )
+          } else if (pollCount < maxPolls) {
+            // Continue polling
+            pollCount++
+            setTimeout(poll, 10000) // Poll every 10 seconds
+          } else {
+            // Timeout
+            setTasks((prev) =>
+              prev.map((t) =>
+                t.id === localTaskId || t.id === taskId
+                  ? { ...t, status: "error", results: "Research timed out" }
+                  : t
+              )
+            )
+          }
+        }
+      } catch (error) {
+        console.error("Error polling task status:", error)
+      }
+    }
+
+    // Start polling after a short delay
+    setTimeout(poll, 2000)
   }
 
   const getStatusColor = (status: ResearchTask["status"]) => {

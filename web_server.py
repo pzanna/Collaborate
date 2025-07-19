@@ -113,6 +113,69 @@ mcp_client: Optional[MCPClient] = None
 export_manager: Optional[ExportManager] = None
 
 
+# WebSocket manager for real-time connections
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.conversation_connections: Dict[str, List[WebSocket]] = {}
+        self.research_connections: Dict[str, List[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        
+        if conversation_id:
+            if conversation_id not in self.conversation_connections:
+                self.conversation_connections[conversation_id] = []
+            self.conversation_connections[conversation_id].append(websocket)
+
+    async def connect_research(self, websocket: WebSocket, task_id: str):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        
+        if task_id not in self.research_connections:
+            self.research_connections[task_id] = []
+        self.research_connections[task_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        
+        if conversation_id and conversation_id in self.conversation_connections:
+            if websocket in self.conversation_connections[conversation_id]:
+                self.conversation_connections[conversation_id].remove(websocket)
+
+    def disconnect_research(self, websocket: WebSocket, task_id: str):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        
+        if task_id in self.research_connections:
+            if websocket in self.research_connections[task_id]:
+                self.research_connections[task_id].remove(websocket)
+
+    async def send_to_conversation(self, conversation_id: str, message: dict):
+        if conversation_id in self.conversation_connections:
+            for connection in self.conversation_connections[conversation_id]:
+                try:
+                    await connection.send_text(json.dumps(message))
+                except:
+                    # Remove dead connections
+                    self.conversation_connections[conversation_id].remove(connection)
+
+    async def send_to_research(self, task_id: str, message: dict):
+        if task_id in self.research_connections:
+            for connection in self.research_connections[task_id]:
+                try:
+                    await connection.send_text(json.dumps(message))
+                except:
+                    # Remove dead connections
+                    self.research_connections[task_id].remove(connection)
+
+
+# Initialize connection manager
+manager = ConnectionManager()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
@@ -149,7 +212,29 @@ async def lifespan(app: FastAPI):
             # Initialize research manager with MCP client
             research_manager = ResearchManager(config_manager)
             await research_manager.initialize(mcp_client)
-            print("✓ Research manager initialized")
+            
+            # Register completion callback to notify WebSocket clients
+            async def research_completion_callback(completion_data):
+                """Callback to notify WebSocket clients when research completes."""
+                task_id = completion_data.get('task_id')
+                if task_id:
+                    try:
+                        # Notify WebSocket clients about completion
+                        await manager.send_to_research(task_id, {
+                            'type': 'research_completed',
+                            'task_id': task_id,
+                            'success': completion_data.get('success', False),
+                            'results': completion_data.get('results', {}),
+                            'duration': completion_data.get('duration', 0),
+                            'completed_stages': completion_data.get('completed_stages', []),
+                            'failed_stages': completion_data.get('failed_stages', [])
+                        })
+                        print(f"✓ Notified WebSocket clients about completion of task {task_id}")
+                    except Exception as e:
+                        print(f"⚠ Failed to notify WebSocket clients: {e}")
+            
+            research_manager.register_completion_callback(research_completion_callback)
+            print("✓ Research manager initialized with completion callbacks")
         else:
             print("⚠ MCP server not available, research features disabled")
             mcp_client = None
@@ -449,7 +534,7 @@ async def start_research_task(request: ResearchRequest):
         }
         
         # Create research task with proper parameters
-        task_id = await research_manager.start_research_task(
+        task_id, cost_info = await research_manager.start_research_task(
             query=request.query,
             user_id="web_user",  # Default user ID for web requests
             conversation_id=request.conversation_id,
@@ -1122,7 +1207,7 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
                                 }
                                 
                                 # Start research task
-                                task_id = await research_manager.start_research_task(
+                                task_id, cost_info = await research_manager.start_research_task(
                                     query=query,
                                     user_id="web_user",
                                     conversation_id=conversation_id,

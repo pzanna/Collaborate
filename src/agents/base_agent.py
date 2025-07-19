@@ -6,6 +6,7 @@ This module provides the abstract base class that all specialized agents
 """
 
 import asyncio
+import json
 import logging
 import uuid
 from abc import ABC, abstractmethod
@@ -126,6 +127,14 @@ class BaseAgent(ABC):
         
         # Start task processing loop
         await self._task_processing_loop()
+    
+    async def run(self) -> None:
+        """Initialize and run the agent (convenience method)."""
+        success = await self.initialize()
+        if success:
+            await self.start()
+        else:
+            raise RuntimeError(f"Failed to initialize agent {self.agent_id}")
     
     async def stop(self) -> None:
         """Stop the agent and clean up resources."""
@@ -333,30 +342,101 @@ class BaseAgent(ABC):
             timeout=self.task_timeout
         )
         
-        # Create a registration action
-        registration_action = ResearchAction(
-            task_id=f"registration_{self.agent_id}",
-            context_id="system",
-            agent_type="system",
-            action="register_agent",
-            payload=registration.to_dict()
-        )
+        # Send registration message directly to MCP server
+        message = {
+            'type': 'agent_registration',
+            'data': registration.to_dict(),
+            'timestamp': datetime.now().isoformat()
+        }
         
-        # Send registration to MCP server
-        await self.mcp_client.send_task(registration_action)
-        self.logger.info(f"Registered agent {self.agent_id} with MCP server")
+        if self.mcp_client.websocket:
+            await self.mcp_client.websocket.send(json.dumps(message))
+            self.logger.info(f"Registered agent {self.agent_id} with MCP server")
+        else:
+            raise RuntimeError("MCP client not connected")
     
     async def _task_processing_loop(self) -> None:
         """Main task processing loop."""
+        # Set up message handler for incoming tasks
+        if self.mcp_client:
+            self.mcp_client.add_message_handler('research_task', self._handle_incoming_task)
+        
+        # Initialize heartbeat tracking
+        last_heartbeat = datetime.now()
+        heartbeat_interval = 15  # Send heartbeat every 15 seconds
+        
         while self.is_running:
             try:
-                # This is a simplified loop - in a real implementation,
-                # the MCP client would receive tasks and call process_task
+                # Keep the agent alive and responsive
                 await asyncio.sleep(0.1)
+                
+                # Send heartbeat periodically
+                current_time = datetime.now()
+                if (current_time - last_heartbeat).total_seconds() >= heartbeat_interval:
+                    await self._send_heartbeat()
+                    last_heartbeat = current_time
+                
+                # Check for agent health
+                if self.mcp_client and not self.mcp_client.is_connected:
+                    self.logger.warning(f"Agent {self.agent_id} lost connection to MCP server")
+                    # Try to reconnect
+                    await asyncio.sleep(5)
+                    await self.mcp_client.connect()
+                    if self.mcp_client.is_connected:
+                        await self._register_with_mcp()
+                        self.mcp_client.add_message_handler('research_task', self._handle_incoming_task)
                 
             except Exception as e:
                 self.logger.error(f"Error in task processing loop: {e}")
                 await asyncio.sleep(1)
+    
+    async def _handle_incoming_task(self, task_data: Dict[str, Any]) -> None:
+        """Handle incoming task from MCP server."""
+        try:
+            # Check if this task is for this agent type
+            target_agent_type = task_data.get('agent_type')
+            if target_agent_type and target_agent_type != self.agent_type:
+                return  # Task not for this agent
+            
+            # Create ResearchAction from task data
+            from ..mcp.protocols import ResearchAction
+            task = ResearchAction(
+                task_id=task_data.get('task_id', ''),
+                context_id=task_data.get('context_id', ''),
+                agent_type=task_data.get('agent_type', ''),
+                action=task_data.get('action', ''),
+                payload=task_data.get('payload', {}),
+                priority=task_data.get('priority', 'normal'),
+                status=task_data.get('status', 'pending')
+            )
+            
+            if task:
+                # Process the task
+                response = await self.process_task(task)
+                
+                # Send response back to MCP server
+                if self.mcp_client:
+                    self.logger.info(f"Sending response for task {response.task_id} with status {response.status}")
+                    success = await self.mcp_client.send_response(response)
+                    if success:
+                        self.logger.info(f"✓ Successfully sent response for task {response.task_id}")
+                    else:
+                        self.logger.error(f"✗ Failed to send response for task {response.task_id}")
+                else:
+                    self.logger.error(f"No MCP client available to send response for task {response.task_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling incoming task: {e}")
+            # Send error response if possible
+            if self.mcp_client and 'task_id' in task_data:
+                error_response = AgentResponse(
+                    task_id=task_data['task_id'],
+                    context_id=task_data.get('context_id', 'unknown'),
+                    agent_type=self.agent_type,
+                    status="failed",
+                    error=f"Task processing error: {str(e)}"
+                )
+                await self.mcp_client.send_response(error_response)
     
     async def _cancel_task(self, task_id: str) -> None:
         """Cancel an active task."""
@@ -369,9 +449,26 @@ class BaseAgent(ABC):
             if self.mcp_client:
                 response = AgentResponse(
                     task_id=task_id,
-                    context_id=task.context_id,
+                    context_id="unknown",
                     agent_type=self.agent_type,
-                    status="cancelled",
-                    error="Task cancelled during agent shutdown"
+                    status="cancelled"
                 )
                 await self.mcp_client.send_response(response)
+    
+    async def _send_heartbeat(self) -> None:
+        """Send heartbeat to MCP server to maintain health status."""
+        try:
+            if self.mcp_client and self.mcp_client.websocket:
+                heartbeat_message = {
+                    'type': 'agent_heartbeat',
+                    'data': {
+                        'agent_id': self.agent_id,
+                        'timestamp': datetime.now().isoformat(),
+                        'status': self.status.value,
+                        'active_tasks': len(self.active_tasks)
+                    }
+                }
+                await self.mcp_client.websocket.send(json.dumps(heartbeat_message))
+                self.logger.debug(f"Sent heartbeat for agent {self.agent_id}")
+        except Exception as e:
+            self.logger.warning(f"Failed to send heartbeat: {e}")

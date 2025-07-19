@@ -211,7 +211,17 @@ class RetrieverAgent(BaseAgent):
                 if response.status != 200:
                     raise Exception(f"DuckDuckGo API returned status {response.status}")
                 
-                data = await response.json()
+                content_type = response.headers.get('content-type', '').lower()
+                if 'application/json' not in content_type:
+                    # DuckDuckGo is returning non-JSON content, fall back to web search
+                    self.logger.warning(f"DuckDuckGo returned unexpected content type: {content_type}")
+                    return await self._search_web_fallback(query, max_results)
+                
+                try:
+                    data = await response.json()
+                except Exception as json_error:
+                    self.logger.error(f"Failed to parse JSON from DuckDuckGo: {json_error}")
+                    return await self._search_web_fallback(query, max_results)
                 
                 results = []
                 
@@ -248,55 +258,18 @@ class RetrieverAgent(BaseAgent):
     
     async def _search_web_fallback(self, query: str, max_results: int) -> List[Dict[str, Any]]:
         """
-        Fallback web search using HTTP requests.
+        Fallback search when external search fails.
         
         Args:
             query: Search query
             max_results: Maximum number of results
             
         Returns:
-            List[Dict[str, Any]]: Search results
+            List[Dict[str, Any]]: Empty results list
         """
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-                
-            # Use a simple web search approach
-            search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-            
-            async with self.session.get(search_url) as response:
-                if response.status != 200:
-                    return []
-                
-                html = await response.text()
-                soup = BeautifulSoup(html, 'html.parser')
-                
-                results = []
-                
-                # Extract search results
-                for result in soup.find_all('div', class_='result')[:max_results]:
-                    title_elem = result.find('a', class_='result__a')
-                    snippet_elem = result.find('a', class_='result__snippet')
-                    
-                    if title_elem:
-                        title = title_elem.get_text(strip=True)
-                        url = title_elem.get('href', '')
-                        content = snippet_elem.get_text(strip=True) if snippet_elem else ''
-                        
-                        results.append({
-                            'title': title,
-                            'url': url,
-                            'content': content,
-                            'source': 'duckduckgo_web',
-                            'type': 'web_result'
-                        })
-                
-                return results
-                
-        except Exception as e:
-            self.logger.error(f"Web search fallback failed: {e}")
-            return []
-    
+        self.logger.warning(f"Search fallback triggered for query: {query}")
+        return []
+
     async def _search_searx(self, query: str, max_results: int) -> List[Dict[str, Any]]:
         """
         Search using SearX.

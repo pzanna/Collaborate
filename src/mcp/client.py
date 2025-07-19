@@ -277,8 +277,8 @@ class MCPClient:
             logger.error(f"Failed to get task details for {task_id}: {e}")
             return None
     
-    def add_message_handler(self, message_type: str, handler: Callable[[Dict[str, Any]], None]):
-        """Add a message handler for specific message types"""
+    def add_message_handler(self, message_type: str, handler: Callable[[Dict[str, Any]], Any]):
+        """Add a message handler for specific message types (can be sync or async)"""
         self.message_handlers[message_type] = handler
     
     def remove_message_handler(self, message_type: str):

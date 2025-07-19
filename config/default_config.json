@@ -34,7 +34,7 @@
         "export_path": "exports/"
     },
     "logging": {
-        "level": "INFO",
+        "level": "DEBUG",
         "file": "logs/collaborate.log",
         "enable_ai_api_logging": true,
         "ai_api_log_file": "logs/ai_api.log",
@@ -44,9 +44,9 @@
         "host": "127.0.0.1",
         "port": 9000,
         "max_concurrent_tasks": 10,
-        "task_timeout": 300,
+        "task_timeout": 600,
         "retry_attempts": 3,
-        "log_level": "INFO",
+        "log_level": "DEBUG",
         "enable_task_logging": true,
         "task_log_file": "logs/mcp_tasks.log"
     },
@@ -59,7 +59,7 @@
                 "search_papers"
             ],
             "max_concurrent": 3,
-            "timeout": 60,
+            "timeout": 120,
             "tools": {
                 "search_engine": "duckduckgo",
                 "max_results": 10,
@@ -76,7 +76,7 @@
                 "synthesis"
             ],
             "max_concurrent": 2,
-            "timeout": 120,
+            "timeout": 240,
             "ai_provider": "openai",
             "model": "gpt-4.1-mini",
             "temperature": 0.3,
@@ -91,7 +91,7 @@
                 "file_operations"
             ],
             "max_concurrent": 2,
-            "timeout": 180,
+            "timeout": 300,
             "sandbox": {
                 "enable_code_execution": true,
                 "allowed_imports": [

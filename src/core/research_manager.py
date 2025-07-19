@@ -110,6 +110,10 @@ class ResearchManager:
         self.agent_capabilities: Dict[str, List[str]] = {}
         self.agent_availability: Dict[str, bool] = {}
         
+        # Response tracking for agent communications
+        self.pending_responses: Dict[str, asyncio.Future] = {}
+        self.response_timeout = 60  # seconds
+        
         # Callbacks for UI updates
         self.progress_callbacks: List[Callable] = []
         self.completion_callbacks: List[Callable] = []
@@ -117,7 +121,7 @@ class ResearchManager:
         # Configuration
         self.research_config = self.config.get_research_config()
         self.max_concurrent_tasks = self.research_config.get('max_concurrent_tasks', 5)
-        self.task_timeout = self.research_config.get('task_timeout', 300)  # 5 minutes
+        self.task_timeout = self.research_config.get('task_timeout', 600)  # 10 minutes
         
         self.logger.info("Research Manager initialized with cost control")
     
@@ -136,6 +140,20 @@ class ResearchManager:
                 
                 # Connect to MCP server
                 await self.mcp_client.connect()
+                
+                # Identify as research manager
+                if self.mcp_client.websocket:
+                    import json
+                    identification_message = {
+                        'type': 'identify_research_manager',
+                        'data': {'manager_id': 'research_manager'},
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    self.logger.info(f"Sending research manager identification: {identification_message}")
+                    await self.mcp_client.websocket.send(json.dumps(identification_message))
+                    self.logger.info("✓ Successfully sent research manager identification to MCP server")
+                else:
+                    self.logger.error("No WebSocket connection available for identification")
                 
                 # Register message handlers
                 self.mcp_client.add_message_handler('agent_response', self._handle_agent_response)
@@ -165,6 +183,26 @@ class ResearchManager:
             if external_mcp_client:
                 # Use external MCP client
                 self.mcp_client = external_mcp_client
+                
+                # Identify as research manager
+                if self.mcp_client.websocket:
+                    import json
+                    identification_message = {
+                        'type': 'identify_research_manager',
+                        'data': {'manager_id': 'research_manager'},
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    self.logger.info(f"Sending research manager identification: {identification_message}")
+                    await self.mcp_client.websocket.send(json.dumps(identification_message))
+                    self.logger.info("✓ Successfully sent research manager identification to MCP server")
+                else:
+                    self.logger.error("No WebSocket connection available for identification")
+                
+                # Register message handlers
+                self.mcp_client.add_message_handler('agent_response', self._handle_agent_response)
+                self.mcp_client.add_message_handler('agent_registration', self._handle_agent_registration)
+                self.mcp_client.add_message_handler('task_update', self._handle_task_update)
+                
                 self.logger.info("Research Manager initialized with external MCP client")
             else:
                 # Use internal initialization
@@ -600,18 +638,31 @@ class ResearchManager:
                 self.logger.error("MCP client not initialized")
                 return None
             
+            # Create a future to wait for the response
+            response_future = asyncio.Future()
+            self.pending_responses[action.task_id] = response_future
+            
             # Send action via MCP client
             success = await self.mcp_client.send_task(action)
             
             if success:
-                # Wait for response - this would be handled by the MCP queue system
-                # TODO: Implement proper response waiting mechanism
-                return None
+                # Wait for response with timeout
+                try:
+                    response = await asyncio.wait_for(response_future, timeout=self.response_timeout)
+                    return response
+                except asyncio.TimeoutError:
+                    self.logger.error(f"Timeout waiting for response from {agent_type} for task {action.task_id}")
+                    return None
+                finally:
+                    # Clean up pending response
+                    self.pending_responses.pop(action.task_id, None)
             
             return None
             
         except Exception as e:
             self.logger.error(f"Failed to send action to {agent_type}: {e}")
+            # Clean up pending response on error
+            self.pending_responses.pop(action.task_id, None)
             return None
     
     def _handle_agent_response(self, message_data: Dict[str, Any]) -> None:
@@ -622,12 +673,30 @@ class ResearchManager:
             message_data: Message data from agent
         """
         try:
-            # Extract task ID from message
-            task_id = message_data.get('task_id')
+            # Create AgentResponse object from message data
+            from ..mcp.protocols import AgentResponse
+            response = AgentResponse(
+                task_id=message_data.get('task_id', ''),
+                context_id=message_data.get('context_id', ''),
+                agent_type=message_data.get('agent_type', ''),
+                status=message_data.get('status', ''),
+                result=message_data.get('result'),
+                error=message_data.get('error')
+            )
+            
+            task_id = response.task_id
+            
+            # Complete pending response future if exists
+            if task_id in self.pending_responses:
+                future = self.pending_responses[task_id]
+                if not future.done():
+                    future.set_result(response)
+                    self.logger.debug(f"Completed pending response for task {task_id}")
+            
+            # Also handle context updates
             if task_id and task_id in self.active_contexts:
                 context = self.active_contexts[task_id]
-                # Response handling is done in stage execution methods
-                self.logger.debug(f"Received response for task {task_id}")
+                self.logger.debug(f"Received response for task {task_id} in context")
             
         except Exception as e:
             self.logger.error(f"Error handling agent response: {e}")

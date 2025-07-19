@@ -1,30 +1,41 @@
 #!/bin/bash
 
 # Start script for Collaborate Web UI
-# This script starts both the backend and frontend in development mode
+# This script starts the MCP server, agents, backend and frontend
 
 echo "🚀 Starting Collaborate Web UI..."
 
 # Function to handle cleanup on exit
 cleanup() {
     echo "Stopping services..."
-    kill $MCP_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null
+    kill $MCP_PID $AGENTS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null
     exit 0
 }
 
 # Set up signal handlers
 trap cleanup SIGINT SIGTERM
 
-# Activate Python virtual environment
-source .venv/bin/activate
+# Activate Python virtual environment if it exists
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+    echo "✓ Activated virtual environment"
+fi
 
 # Start MCP server
 echo "🔧 Starting MCP server..."
-python -m src.mcp.server &
+python mcp_server.py &
 MCP_PID=$!
 
 # Wait a moment for MCP server to start
-sleep 2
+sleep 3
+
+# Start research agents
+echo "🤖 Starting research agents..."
+python agent_launcher.py &
+AGENTS_PID=$!
+
+# Wait a moment for agents to connect
+sleep 3
 
 # Start backend server
 echo "🖥️  Starting backend server..."
@@ -44,6 +55,7 @@ FRONTEND_PID=$!
 echo ""
 echo "✅ All services are running!"
 echo "🔧 MCP Server:  http://localhost:9000"
+echo "🤖 Agents:      4 research agents running"
 echo "🌐 Backend API: http://localhost:8000"
 echo "🌐 Frontend:    http://localhost:3000"
 echo ""
