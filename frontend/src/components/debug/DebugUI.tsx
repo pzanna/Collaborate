@@ -209,7 +209,7 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                   onClick={() => fetchPlan(plan.plan_id)}
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <span className="text-sm font-medium truncate max-w-32">
+                    <span className="text-sm font-medium truncate max-w-xs">
                       {plan.plan_id}
                     </span>
                     <span
