@@ -290,7 +290,7 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600 font-medium">Context ID:</span>
-                    <div className="font-mono text-xs mt-1 p-2 bg-gray-50 rounded border truncate">
+                    <div className="font-mono text-xs mt-1 p-2 bg-gray-50 rounded border overflow-x-auto">
                       {selectedPlan.context_id}
                     </div>
                   </div>
