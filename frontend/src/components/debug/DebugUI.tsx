@@ -145,17 +145,17 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
   }
 
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div className={`space-y-8 ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Debug UI</h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mt-1">
             Inspect and modify RM AI plans and decisions
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={fetchLatestPlan}
             className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
@@ -175,15 +175,21 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-red-500">⚠️</span>
-            <span className="text-red-700">{error}</span>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <span className="text-red-500 text-lg">⚠️</span>
+            <div>
+              <h3 className="text-sm font-medium text-red-800 mb-1">Connection Error</h3>
+              <p className="text-sm text-red-700">
+                Unable to connect to the research manager. This is expected when no active research tasks are running.
+              </p>
+              <p className="text-xs text-red-600 mt-2 font-mono">{error}</p>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Plans List */}
         <div className="lg:col-span-1">
           <div className="border border-gray-200 rounded-lg">
@@ -232,8 +238,16 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
               ))}
 
               {plans.length === 0 && !isLoading && (
-                <div className="text-center py-8 text-gray-500">
-                  No plans found
+                <div className="text-center py-12 text-gray-500">
+                  <div className="mb-3">
+                    <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="text-sm font-medium text-gray-600 mb-1">No plans found</div>
+                  <div className="text-xs text-gray-500">
+                    Plans will appear here when research tasks are active
+                  </div>
                 </div>
               )}
             </div>
@@ -243,17 +257,21 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
         {/* Plan Details */}
         <div className="lg:col-span-2">
           {!selectedPlan ? (
-            <div className="border border-gray-200 rounded-lg p-6">
+            <div className="border border-gray-200 rounded-lg p-8">
               <div className="text-center text-gray-500">
-                <div className="text-lg font-medium mb-2">No Plan Selected</div>
-                <div className="text-sm">
-                  Select a plan from the list to view details and make
-                  modifications
+                <div className="mb-4">
+                  <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div className="text-lg font-medium mb-2 text-gray-600">No Plan Selected</div>
+                <div className="text-sm text-gray-500 max-w-md mx-auto">
+                  Select a plan from the list to view details and make modifications, or start a new research task to generate plans.
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* Plan Header */}
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
