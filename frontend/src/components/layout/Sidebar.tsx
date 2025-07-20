@@ -1,7 +1,6 @@
 import React from "react"
-import { useSelector, useDispatch } from "react-redux"
+import { useDispatch } from "react-redux"
 import { useNavigate, useLocation } from "react-router-dom"
-import { RootState } from "../../store/store"
 import { toggleSidebar } from "../../store/slices/uiSlice"
 import {
   XMarkIcon,
@@ -16,8 +15,6 @@ const Sidebar: React.FC = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
-
-  const { sidebarOpen } = useSelector((state: RootState) => state.ui)
 
   const menuItems = [
     { id: "projects", label: "Projects", icon: FolderIcon, path: "/projects" },
@@ -37,8 +34,6 @@ const Sidebar: React.FC = () => {
       location.pathname === path || location.pathname.startsWith(path + "/")
     )
   }
-
-  if (!sidebarOpen) return null
 
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col">

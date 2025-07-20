@@ -145,11 +145,11 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
   }
 
   return (
-    <div className={`space-y-8 ${className}`}>
+    <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Debug UI</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Debug UI</h1>
           <p className="text-gray-600 mt-1">
             Inspect and modify RM AI plans and decisions
           </p>
@@ -175,7 +175,7 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <span className="text-red-500 text-lg">⚠️</span>
             <div>
@@ -189,31 +189,31 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Plans List */}
-        <div className="lg:col-span-1">
-          <div className="border border-gray-200 rounded-lg">
-            <div className="border-b border-gray-200 p-4">
-              <h2 className="text-lg font-semibold">Recent Plans</h2>
+        <div className="xl:col-span-1">
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="border-b border-gray-200 px-4 py-3">
+              <h2 className="text-lg font-semibold text-gray-900">Recent Plans</h2>
             </div>
 
-            <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+            <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
               {plans.map((plan) => (
                 <div
                   key={plan.plan_id}
-                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                  className={`p-3 border rounded-md cursor-pointer transition-all duration-200 ${
                     selectedPlan?.plan_id === plan.plan_id
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-gray-300"
+                      ? "border-blue-500 bg-blue-50 shadow-sm"
+                      : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
                   }`}
                   onClick={() => fetchPlan(plan.plan_id)}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium truncate">
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-sm font-medium truncate max-w-xs">
                       {plan.plan_id}
                     </span>
                     <span
-                      className={`px-2 py-1 text-xs font-medium rounded border ${getStatusColor(
+                      className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(
                         plan.execution_status
                       )}`}
                     >
@@ -221,8 +221,8 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                     </span>
                   </div>
 
-                  <div className="text-xs text-gray-600">
-                    Context: {plan.context_id}
+                  <div className="text-xs text-gray-600 truncate">
+                    {plan.context_id}
                   </div>
 
                   <div className="text-xs text-gray-500 mt-1">
@@ -238,7 +238,7 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
               ))}
 
               {plans.length === 0 && !isLoading && (
-                <div className="text-center py-12 text-gray-500">
+                <div className="text-center py-8 text-gray-500">
                   <div className="mb-3">
                     <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -255,9 +255,9 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
         </div>
 
         {/* Plan Details */}
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2">
           {!selectedPlan ? (
-            <div className="border border-gray-200 rounded-lg p-8">
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8">
               <div className="text-center text-gray-500">
                 <div className="mb-4">
                   <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -271,15 +271,15 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
               </div>
             </div>
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {/* Plan Header */}
-              <div className="border border-gray-200 rounded-lg p-4">
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold">
+                  <h2 className="text-lg font-semibold text-gray-900">
                     {selectedPlan.plan_id}
                   </h2>
                   <span
-                    className={`px-3 py-1 text-sm font-medium rounded border ${getStatusColor(
+                    className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(
                       selectedPlan.execution_status
                     )}`}
                   >
@@ -287,61 +287,65 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-gray-600">Context ID:</span>
-                    <div className="font-mono text-xs">
+                    <span className="text-gray-600 font-medium">Context ID:</span>
+                    <div className="font-mono text-xs mt-1 p-2 bg-gray-50 rounded border overflow-x-auto">
                       {selectedPlan.context_id}
                     </div>
                   </div>
 
                   <div>
-                    <span className="text-gray-600">Created:</span>
-                    <div>{formatDate(selectedPlan.created_at)}</div>
+                    <span className="text-gray-600 font-medium">Created:</span>
+                    <div className="mt-1">{formatDate(selectedPlan.created_at)}</div>
                   </div>
                 </div>
               </div>
 
               {/* Prompt */}
-              <div className="border border-gray-200 rounded-lg">
-                <div className="border-b border-gray-200 p-4">
-                  <h3 className="text-lg font-medium">Original Prompt</h3>
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div className="border-b border-gray-200 px-4 py-3">
+                  <h3 className="text-lg font-medium text-gray-900">Original Prompt</h3>
                 </div>
                 <div className="p-4">
-                  <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto bg-gray-50 p-3 rounded">
-                    {selectedPlan.prompt}
-                  </pre>
+                  <div className="max-h-48 overflow-y-auto">
+                    <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded border">
+                      {selectedPlan.prompt}
+                    </pre>
+                  </div>
                 </div>
               </div>
 
               {/* Raw Response */}
-              <div className="border border-gray-200 rounded-lg">
-                <div className="border-b border-gray-200 p-4">
-                  <h3 className="text-lg font-medium">RM AI Raw Response</h3>
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div className="border-b border-gray-200 px-4 py-3">
+                  <h3 className="text-lg font-medium text-gray-900">RM AI Raw Response</h3>
                 </div>
                 <div className="p-4">
-                  <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto bg-gray-50 p-3 rounded max-h-64">
-                    {selectedPlan.raw_response}
-                  </pre>
+                  <div className="max-h-64 overflow-y-auto">
+                    <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded border">
+                      {selectedPlan.raw_response}
+                    </pre>
+                  </div>
                 </div>
               </div>
 
               {/* Parsed Tasks */}
-              <div className="border border-gray-200 rounded-lg">
-                <div className="border-b border-gray-200 p-4">
-                  <h3 className="text-lg font-medium">Parsed Tasks</h3>
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div className="border-b border-gray-200 px-4 py-3">
+                  <h3 className="text-lg font-medium text-gray-900">Parsed Tasks</h3>
                 </div>
                 <div className="p-4">
-                  <div className="space-y-3">
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
                     {selectedPlan.parsed_tasks.map((task, index) => (
-                      <div key={index} className="bg-gray-50 p-3 rounded-lg">
+                      <div key={index} className="bg-gray-50 border border-gray-200 p-3 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium">{task.task_id}</span>
+                          <span className="font-medium text-gray-900">{task.task_id}</span>
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full font-medium">
                               {task.agent}
                             </span>
-                            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
+                            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full font-medium">
                               {task.action}
                             </span>
                           </div>
@@ -350,20 +354,24 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                         {Object.keys(task).filter(
                           (key) => !["task_id", "agent", "action"].includes(key)
                         ).length > 0 && (
-                          <pre className="text-xs text-gray-600 mt-2">
-                            {JSON.stringify(
-                              Object.fromEntries(
-                                Object.entries(task).filter(
-                                  ([key]) =>
-                                    !["task_id", "agent", "action"].includes(
-                                      key
+                          <div className="mt-2">
+                            <div className="max-h-32 overflow-y-auto">
+                              <pre className="text-xs text-gray-600 bg-white p-2 rounded border">
+                                {JSON.stringify(
+                                  Object.fromEntries(
+                                    Object.entries(task).filter(
+                                      ([key]) =>
+                                        !["task_id", "agent", "action"].includes(
+                                          key
+                                        )
                                     )
-                                )
-                              ),
-                              null,
-                              2
-                            )}
-                          </pre>
+                                  ),
+                                  null,
+                                  2
+                                )}
+                              </pre>
+                            </div>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -374,28 +382,30 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
               {/* Modifications */}
               {selectedPlan.modifications &&
                 selectedPlan.modifications.length > 0 && (
-                  <div className="border border-gray-200 rounded-lg">
-                    <div className="border-b border-gray-200 p-4">
-                      <h3 className="text-lg font-medium">
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <div className="border-b border-gray-200 px-4 py-3">
+                      <h3 className="text-lg font-medium text-gray-900">
                         Applied Modifications
                       </h3>
                     </div>
                     <div className="p-4">
-                      <div className="space-y-3">
+                      <div className="space-y-3 max-h-64 overflow-y-auto">
                         {selectedPlan.modifications.map((mod, index) => (
                           <div
                             key={index}
                             className="bg-orange-50 border border-orange-200 p-3 rounded-lg"
                           >
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium">{mod.type}</span>
+                              <span className="font-medium text-orange-800">{mod.type}</span>
                               <span className="text-xs text-gray-500">
                                 {formatDate(mod.timestamp)}
                               </span>
                             </div>
-                            <pre className="text-xs text-gray-700">
-                              {JSON.stringify(mod.changes, null, 2)}
-                            </pre>
+                            <div className="max-h-32 overflow-y-auto">
+                              <pre className="text-xs text-gray-700 bg-white p-2 rounded border">
+                                {JSON.stringify(mod.changes, null, 2)}
+                              </pre>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -404,9 +414,9 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                 )}
 
               {/* Modification Interface */}
-              <div className="border border-gray-200 rounded-lg">
-                <div className="border-b border-gray-200 p-4">
-                  <h3 className="text-lg font-medium">Make Modifications</h3>
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div className="border-b border-gray-200 px-4 py-3">
+                  <h3 className="text-lg font-medium text-gray-900">Make Modifications</h3>
                 </div>
                 <div className="p-4">
                   <div className="space-y-4">
@@ -415,7 +425,7 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                         Modification JSON
                       </label>
                       <textarea
-                        className="w-full h-32 p-3 border border-gray-300 rounded-lg font-mono text-sm"
+                        className="w-full h-32 p-3 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder='{"type": "task_override", "task_id": "task_1", "changes": {"priority": "high"}}'
                         value={JSON.stringify(modifications, null, 2)}
                         onChange={(e) => {
@@ -429,18 +439,18 @@ const DebugUI: React.FC<DebugUIProps> = ({ className = "" }) => {
                       />
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <button
                         onClick={applyModifications}
                         disabled={Object.keys(modifications).length === 0}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Apply Modifications
                       </button>
 
                       <button
                         onClick={() => setModifications({})}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
                       >
                         Clear
                       </button>

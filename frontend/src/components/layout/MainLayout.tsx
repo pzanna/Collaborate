@@ -16,13 +16,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <div
-        className={`${
-          sidebarOpen ? "w-80" : "w-16"
-        } transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col`}
-      >
-        <Sidebar />
-      </div>
+      {sidebarOpen && (
+        <div className="w-64 transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col">
+          <Sidebar />
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -30,7 +28,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <Header />
 
         {/* Content */}
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <main className="flex-1 overflow-auto bg-gray-50">{children}</main>
       </div>
 
       {/* Mobile sidebar overlay */}
