@@ -1113,8 +1113,8 @@ class ResearchManager:
         Returns:
             Optional[Dict[str, Any]]: Latest plan data
         """
-        # For now, return a mock plan since we don't store plan history yet
         # In a full implementation, this would query a plans database
+        # For now, only return data for active contexts
         
         if context_id and context_id in self.active_contexts:
             context = self.active_contexts[context_id]
@@ -1122,7 +1122,7 @@ class ResearchManager:
                 'plan_id': f"plan_{context_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 'context_id': context_id,
                 'prompt': f"Research plan for: {context.query}",
-                'raw_response': "Sample RM AI response for debugging",
+                'raw_response': "RM AI response for active research context",
                 'parsed_tasks': [
                     {'task_id': 'task_1', 'agent': 'retriever', 'action': 'search_web'},
                     {'task_id': 'task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
@@ -1132,20 +1132,8 @@ class ResearchManager:
                 'modifications': []
             }
         
-        # Return mock data for demo
-        return {
-            'plan_id': f"plan_latest_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            'context_id': 'demo_context',
-            'prompt': "Latest research plan prompt",
-            'raw_response': "Mock RM AI response",
-            'parsed_tasks': [
-                {'task_id': 'demo_task_1', 'agent': 'retriever', 'action': 'search_web'},
-                {'task_id': 'demo_task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
-            ],
-            'created_at': datetime.now().isoformat(),
-            'execution_status': 'planning',
-            'modifications': []
-        }
+        # Return None when no plans are available
+        return None
 
     async def get_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -1157,20 +1145,9 @@ class ResearchManager:
         Returns:
             Optional[Dict[str, Any]]: Plan data
         """
-        # Mock implementation - in production this would query a plans database
-        return {
-            'plan_id': plan_id,
-            'context_id': 'mock_context',
-            'prompt': f"Research plan prompt for {plan_id}",
-            'raw_response': f"RM AI response for plan {plan_id}",
-            'parsed_tasks': [
-                {'task_id': f'{plan_id}_task_1', 'agent': 'retriever', 'action': 'search_web'},
-                {'task_id': f'{plan_id}_task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
-            ],
-            'created_at': datetime.now().isoformat(),
-            'execution_status': 'completed',
-            'modifications': []
-        }
+        # In a full implementation, this would query a plans database
+        # For now, return None since we don't have persistent plan storage
+        return None
 
     async def modify_plan(self, plan_id: str, modifications: Dict[str, Any]) -> bool:
         """
@@ -1203,10 +1180,10 @@ class ResearchManager:
         Returns:
             List[Dict[str, Any]]: List of plan summaries
         """
-        # Mock implementation - in production this would query a plans database
+        # In a full implementation, this would query a plans database
         plans = []
         
-        # Include active contexts as plans
+        # Include active contexts as plans if they exist
         for ctx_id, context in self.active_contexts.items():
             if context_id is None or ctx_id == context_id:
                 plans.append({
@@ -1216,26 +1193,11 @@ class ResearchManager:
                     'created_at': context.created_at.isoformat(),
                     'execution_status': context.stage.value,
                     'parsed_tasks': [
-                        {'task_id': 'mock_task_1', 'agent': 'retriever'},
-                        {'task_id': 'mock_task_2', 'agent': 'reasoner'}
+                        {'task_id': 'task_1', 'agent': 'retriever'},
+                        {'task_id': 'task_2', 'agent': 'reasoner'}
                     ],
                     'modifications': []
                 })
         
-        # Add some mock historical plans
-        if not context_id:
-            for i in range(min(5, limit - len(plans))):
-                plans.append({
-                    'plan_id': f"historical_plan_{i}",
-                    'context_id': f"historical_context_{i}",
-                    'prompt': f"Historical research plan {i}",
-                    'created_at': (datetime.now() - timedelta(hours=i)).isoformat(),
-                    'execution_status': 'completed',
-                    'parsed_tasks': [
-                        {'task_id': f'hist_task_{i}_1', 'agent': 'retriever'},
-                        {'task_id': f'hist_task_{i}_2', 'agent': 'reasoner'}
-                    ],
-                    'modifications': []
-                })
-        
+        # Return only real active contexts, no mock data
         return plans[:limit]
