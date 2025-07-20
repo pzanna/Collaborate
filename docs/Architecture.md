@@ -1,88 +1,66 @@
-# Collaborate Project - Architecture Documentation
+# Eunice Research Platform - Solution Architecture Documentation
 
-# Architecture Overview
+## Architecture Overview
 
-This document outlines the architecture of the Collaborate project, detailing the components, their interactions, and the overall design principles.
+The Eunice research platform, named after the AI from the William Gibson novel [Agency](<https://en.wikipedia.org/wiki/Agency_(novel)>), is designed to facilitate advanced research workflows by integrating various tools and services. Its architecture is based on a microservices approach, allowing for flexibility, scalability, and ease of maintenance.
 
-## System Architecture
-
-![Architecture](Architecture.jpg)
-
-The Collaborate system is designed to facilitate collaborative research and data analysis through a modular architecture. It leverages microservices, APIs, and a robust frontend to provide a seamless user experience while maintaining high performance and reliability.
-
-- **Frontend**: User interface for interaction with the system.
-- **Backend**: Core logic and processing engine.
-- **Database**: Persistent storage for user data, research workflows, and system logs.
-- **Agents**: Specialized components that perform specific tasks such as data retrieval, analysis, and reporting.
-- **Monitoring & Logging**: Tools for tracking system performance and debugging issues.
-- **APIs**: Interfaces for communication between frontend, backend, and external services.
+![Architecture Diagram](Architecture.jpeg)
 
 ## Key Components
 
-- **Frontend**: Built with React, providing a responsive and user-friendly interface.
-- **Backend**: Developed using Python with FastAPI, handling requests and orchestrating agent interactions.
-- **Database**: Utilizes PostgreSQL for structured data storage, with Redis for caching and session management.
-- **Agents**: Implemented as microservices, allowing for independent scaling and deployment.
-- **Monitoring & Logging**: Integrated with tools like Prometheus and Grafana for real-time monitoring, and ELK stack for logging and analysis.
-- **APIs**: RESTful APIs for communication, with GraphQL support for flexible queries.
+## Web Interface
 
-## Development Roadmap
+The web interface serves as the primary user interface for researchers, providing access to the platform's features and functionalities. It is built using React and provides a user-friendly experience for managing research projects, accessing data, and collaborating with the team.
 
-The development roadmap outlines the phases of the project, including completed tasks and future priorities.
+## API Gateway
 
-## Completed Phases
+The API Gateway acts as a single entry point for all client requests, routing them to the appropriate microservices and handling authentication, authorization, and rate limiting.
+It also implements security measures such as encryption, authentication, and authorization to protect sensitive data and ensure secure communication between services.
 
-- **Phase 1: Foundation Hardening**
+## MCP Server
 
-  - Focused on reliability and performance improvements.
-  - Completed tasks include:
-    - ✅ MCP reliability & logging
-    - ✅ RM Prompt Planning Upgrade
+The MCP (Microservices Control Plane) server is the core component of the Eunice platform, responsible for managing the microservices architecture. It provides the following functionalities:
 
-- **Phase 2: Intelligence Scaling**
+- **Service Discovery**: Automatically detects and registers microservices, allowing them to communicate with each other seamlessly.
 
-  - Introduced parallelism for enhanced processing capabilities.
-  - Completed tasks include:
-    - ✅ Parallelism
+- **Load Balancing**: Distributes incoming requests across multiple instances of microservices to ensure optimal performance and reliability.
 
-- **Phase 3: Memory Persistence**
+- **Monitoring and Logging**: Collects metrics, logs, and traces from microservices to provide insights into system performance, health, and usage patterns.
 
-  - Implemented memory management and cost optimization strategies.
-  - Completed tasks include:
-    - ✅ Memory Agent
+- **Configuration Management**: Centralizes configuration settings for microservices, allowing for dynamic updates without requiring service restarts.
 
-- **Phase 4: Frontend Integration**
+## Researcher Manager
 
-  - Integrated frontend tools for better user experience.
-  - Completed tasks include:
-    - ✅ Frontend tools integration
+The Researcher Manager oversees the operational aspects of the research projects, including agent coordination, resource management and usage costs. It also supports the user in strategic planning, project management, and ensuring a project's efficient execution while fostering interdisciplinary collaboration.
 
-- **Phase 5: Testing Framework Implementation**
-  - Built comprehensive testing infrastructure for quality assurance.
-  - Completed tasks include:
-    - ✅ Complete pytest-based testing framework with 126+ test cases
-    - ✅ Unit testing for AI clients, MCP protocols, storage components, and debug functions
-    - ✅ Integration testing for cross-component workflows
-    - ✅ Performance and load testing with established benchmarks
-    - ✅ End-to-end workflow testing and validation
-    - ✅ Comprehensive documentation and testing guides
-    - ✅ CI/CD ready configuration with proper test categorization
+## Agent Personas
 
-## Testing Architecture
+The platform features several agent personas, each with distinct roles and capabilities:
 
-The Collaborate system now includes enterprise-grade testing infrastructure:
+- **Neurobiologist**: Lead the biological aspects of neuron interfacing, including brain mapping, neuron extraction/isolation, and viability assessments. Collaborate on experiment design to ensure ethical and effective interfacing with computer systems.
 
-- **Test Framework**: pytest-based framework with async support and comprehensive fixtures
-- **Test Categories**: Unit, Integration, Performance, and End-to-End testing suites
-- **Coverage Areas**: AI clients, database operations, MCP protocols, configuration management, debug functions
-- **Performance Monitoring**: Established benchmarks for response times, memory usage, and throughput
-- **Quality Assurance**: Automated validation of functionality and performance standards
-- **Documentation**: Complete testing guides, best practices, and troubleshooting resources
+- **Computational Neuroscientist**: Bridges biology and computing by modeling neural activity and designing protocols to interface neurons with digital systems, while comparing to ANN benchmarks.
 
-## Quality Metrics
+- **AI/ML Engineer & Data Scientist**: Build and train artificial neural networks as benchmarks for comparison, integrate them with biological interfaces, and analyze experimental data using statistical methods to validate performance outcomes.
 
-- **Test Coverage**: 126+ test cases across all major components
-- **Performance Standards**: Database operations benchmarked at <5s for 100 conversations
-- **Error Detection**: Comprehensive error handling and recovery testing
-- **Reliability**: Multi-threaded and concurrent operation validation
-- **Maintainability**: Clear test structure and documentation for ongoing development
+- **Animal Biologist & Bioethics Specialist**: Oversee animal welfare for subjects while advising on ethical implications of bio-digital interfacing, securing regulatory approvals, and ensuring compliance with biosafety and data privacy standards.
+
+- **Technical/Scientific Writer**: Document research methodologies, findings, and comparisons between neurons and ANNs; prepare manuscripts for publication, grant proposals, and reports; ensure clear, accurate communication of complex technical concepts to diverse audiences.
+
+_Refer to the [Research Team Roles](Research_team.md) for more details._
+
+## Tooling and Services
+
+The Eunice platform integrates various tools and services to support its research activities:
+
+- **Memory**: Utilises a local knowledge base for storing research data, documents, and findings.
+
+- **Retriever**: Leverages the Internet for gathering information, literature reviews, research papers and staying updated with the latest research in neuroscience and AI.
+
+- **Executor**: Handles code execution, API calls, data processing, and file operations for the research system.
+
+- **Reasoner**: Handles analysis, reasoning, and synthesis tasks for the research system.
+
+## AI Models
+
+The Eunice platform leverages various AI models to enhance its research capabilities including models from OpenAI, xAI, Anthopic, and other locally hosted models. These models are used for natural language processing, data analysis, and other AI-driven tasks to support the research process. LLMs (Large Language Models) are accessed by API calls to ensure scalability and flexibility in model version and cost.
