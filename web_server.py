@@ -411,7 +411,7 @@ async def delete_project(project_id: str):
     try:
         success = db_manager.delete_project(project_id)
         if not success:
-            raise HTTPException(status_code=404, detail="Project not found")
+            return {"success": False, "message": "Project not found or already deleted"}
         
         return {"success": True, "message": "Project deleted successfully"}
     except CollaborateError as e:
@@ -485,7 +485,7 @@ async def delete_conversation(conversation_id: str):
     try:
         success = db_manager.delete_conversation(conversation_id)
         if not success:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+            return {"success": False, "message": "Conversation not found or already deleted"}
         
         return {"success": True, "message": "Conversation deleted successfully"}
     except CollaborateError as e:
@@ -500,7 +500,7 @@ async def get_conversation_messages(conversation_id: str):
     try:
         session = db_manager.get_conversation_session(conversation_id)
         if not session:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+            return []  # Return empty list if conversation not found
         
         return [
             MessageResponse(
@@ -567,7 +567,17 @@ async def get_research_task(task_id: str):
     try:
         task_context = research_manager.get_task_context(task_id)
         if not task_context:
-            raise HTTPException(status_code=404, detail="Research task not found")
+            # Return empty task response instead of error
+            return ResearchTaskResponse(
+                task_id=task_id,
+                conversation_id="",
+                query="Task not found",
+                status="not_found",
+                created_at="",
+                updated_at="",
+                progress=0.0,
+                results=None
+            )
         
         # Calculate progress
         progress = research_manager.calculate_task_progress(task_id)
@@ -609,7 +619,7 @@ async def cancel_research_task(task_id: str):
     try:
         success = await research_manager.cancel_task(task_id)
         if not success:
-            raise HTTPException(status_code=404, detail="Research task not found")
+            return {"success": False, "message": "Research task not found or already completed"}
         
         return {"success": True, "message": "Research task cancelled successfully"}
         
@@ -648,7 +658,21 @@ async def get_context(context_id: str):
     try:
         context = await context_manager.get_context(context_id)
         if not context:
-            raise HTTPException(status_code=404, detail="Context not found")
+            return {
+                "context_id": context_id,
+                "conversation_id": "",
+                "created_at": "",
+                "updated_at": "",
+                "status": "not_found",
+                "current_stage": "",
+                "active_agents": [],
+                "memory_references": [],
+                "message_count": 0,
+                "task_count": 0,
+                "trace_count": 0,
+                "metadata": {},
+                "settings": {}
+            }
         
         return {
             "context_id": context.context_id,
@@ -681,7 +705,17 @@ async def resume_context(context_id: str):
     try:
         context = await context_manager.resume_context(context_id)
         if not context:
-            raise HTTPException(status_code=404, detail="Context not found or could not be resumed")
+            return {
+                "success": False,
+                "context_id": context_id,
+                "conversation_id": "",
+                "message_count": 0,
+                "task_count": 0,
+                "trace_count": 0,
+                "current_stage": "",
+                "status": "not_found",
+                "message": "Context not found or could not be resumed"
+            }
         
         return {
             "success": True,
@@ -878,7 +912,20 @@ async def get_task_details(task_id: str):
         task_data = await mcp_client.get_task_details(task_id)
         
         if not task_data:
-            raise HTTPException(status_code=404, detail="Task not found")
+            # Return empty task response instead of error
+            return TaskResponse(
+                task_id=task_id,
+                parent_id=None,
+                agent_type="unknown",
+                status="not_found",
+                stage="unknown",
+                created_at="",
+                updated_at="",
+                content={},
+                metadata={},
+                dependencies=[],
+                children=[]
+            )
         
         return TaskResponse(
             task_id=task_data['task_id'],
@@ -909,7 +956,7 @@ async def cancel_task(task_id: str):
         success = await mcp_client.cancel_task(task_id)
         
         if not success:
-            raise HTTPException(status_code=404, detail="Task not found or cannot be cancelled")
+            return {"success": False, "task_id": task_id, "message": "Task not found or cannot be cancelled"}
         
         return {"success": True, "task_id": task_id, "message": "Task cancelled successfully"}
         
@@ -930,7 +977,16 @@ async def get_latest_rm_plan(context_id: Optional[str] = None):
         plan_data = await research_manager.get_latest_plan(context_id)
         
         if not plan_data:
-            raise HTTPException(status_code=404, detail="No plans found")
+            # Return an empty response instead of raising an error for better UI handling
+            return DebugPlanResponse(
+                plan_id="",
+                context_id="",
+                prompt="No plan data available",
+                raw_response="",
+                parsed_tasks=[],
+                created_at="",
+                execution_status="not_found"
+            )
         
         return DebugPlanResponse(
             plan_id=plan_data['plan_id'],
@@ -958,7 +1014,16 @@ async def get_rm_plan(plan_id: str):
         plan_data = await research_manager.get_plan(plan_id)
         
         if not plan_data:
-            raise HTTPException(status_code=404, detail="Plan not found")
+            # Return an empty response instead of raising an error for better UI handling
+            return DebugPlanResponse(
+                plan_id=plan_id,
+                context_id="",
+                prompt="No plan data available",
+                raw_response="",
+                parsed_tasks=[],
+                created_at="",
+                execution_status="not_found"
+            )
         
         return DebugPlanResponse(
             plan_id=plan_data['plan_id'],
@@ -986,7 +1051,16 @@ async def modify_rm_plan(plan_id: str, modifications: Dict[str, Any]):
         success = await research_manager.modify_plan(plan_id, modifications)
         
         if not success:
-            raise HTTPException(status_code=404, detail="Plan not found or cannot be modified")
+            # Return an empty response instead of raising an error for better UI handling
+            return DebugPlanResponse(
+                plan_id="",
+                context_id="",
+                prompt="No plan data available",
+                raw_response="",
+                parsed_tasks=[],
+                created_at="",
+                execution_status="not_found"
+            )
         
         return {
             "success": True,
@@ -1028,66 +1102,7 @@ async def list_rm_plans(context_id: Optional[str] = None, limit: int = 50):
         raise HTTPException(status_code=500, detail=f"Failed to list plans: {str(e)}")
 
 
-# WebSocket manager for real-time connections
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-        self.conversation_connections: Dict[str, List[WebSocket]] = {}
-        self.research_connections: Dict[str, List[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        
-        if conversation_id:
-            if conversation_id not in self.conversation_connections:
-                self.conversation_connections[conversation_id] = []
-            self.conversation_connections[conversation_id].append(websocket)
-
-    async def connect_research(self, websocket: WebSocket, task_id: str):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        
-        if task_id not in self.research_connections:
-            self.research_connections[task_id] = []
-        self.research_connections[task_id].append(websocket)
-
-    def disconnect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-        
-        if conversation_id and conversation_id in self.conversation_connections:
-            if websocket in self.conversation_connections[conversation_id]:
-                self.conversation_connections[conversation_id].remove(websocket)
-
-    def disconnect_research(self, websocket: WebSocket, task_id: str):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-        
-        if task_id in self.research_connections:
-            if websocket in self.research_connections[task_id]:
-                self.research_connections[task_id].remove(websocket)
-
-    async def send_to_conversation(self, conversation_id: str, message: dict):
-        if conversation_id in self.conversation_connections:
-            for connection in self.conversation_connections[conversation_id]:
-                try:
-                    await connection.send_text(json.dumps(message))
-                except:
-                    # Remove dead connections
-                    self.conversation_connections[conversation_id].remove(connection)
-
-    async def send_to_research(self, task_id: str, message: dict):
-        if task_id in self.research_connections:
-            for connection in self.research_connections[task_id]:
-                try:
-                    await connection.send_text(json.dumps(message))
-                except:
-                    # Remove dead connections
-                    self.research_connections[task_id].remove(connection)
-
-
-manager = ConnectionManager()
+# Connection manager instance already defined earlier in the file
 
 
 @app.websocket("/api/research/stream/{task_id}")

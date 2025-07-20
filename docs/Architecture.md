@@ -31,7 +31,7 @@ The MCP (Microservices Control Plane) server is the core component of the Eunice
 
 ## Researcher Manager
 
-The Researcher Manager oversees the operational aspects of the research projects, including agent coordination, resource management and usage costs. It also supports the user in strategic planning, project management, and ensuring a project's efficient execution while fostering interdisciplinary collaboration.
+The [Researcher Manager](docs/Research_Manager.md) oversees the operational aspects of the research projects, including agent coordination, resource management and usage costs. It also supports the user in strategic planning, project management, and ensuring a project's efficient execution while fostering interdisciplinary collaboration.
 
 ## Agent Personas
 

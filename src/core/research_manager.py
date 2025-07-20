@@ -214,6 +214,65 @@ class ResearchManager:
             self.error_handler.handle_error(e, "research_manager_init")
             return False
     
+    async def _estimate_task_cost(
+        self,
+        query: str,
+        conversation_id: str,
+        options: Optional[Dict[str, Any]] = None
+    ) -> tuple[Dict[str, Any], bool, bool]:
+        """
+        Estimate cost for a research task with approval logic.
+        
+        Args:
+            query: Research query to process
+            conversation_id: ID of the conversation for cost tracking
+            options: Optional task configuration including single_agent_mode
+            
+        Returns:
+            tuple: (cost_info, should_proceed, single_agent_mode)
+        """
+        # Determine agent configuration
+        single_agent_mode = options.get('single_agent_mode', False) if options else False
+        
+        if single_agent_mode:
+            agents_to_use = ["retriever"]  # Use only retriever in single agent mode
+            parallel_execution = False
+        else:
+            agents_to_use = ["retriever", "reasoner", "executor", "memory"]
+            parallel_execution = True
+        
+        # Get cost estimate
+        cost_estimate = self.cost_estimator.estimate_task_cost(
+            query=query,
+            agents=agents_to_use,
+            parallel_execution=parallel_execution
+        )
+        
+        # Check if task should proceed based on cost
+        should_proceed, cost_reason = self.cost_estimator.should_proceed_with_task(
+            cost_estimate, conversation_id
+        )
+        
+        # Get cost recommendations
+        recommendations = self.cost_estimator.get_cost_recommendations(cost_estimate)
+        
+        # Prepare cost information for return
+        cost_info = {
+            'estimate': {
+                'tokens': cost_estimate.estimated_tokens,
+                'cost_usd': cost_estimate.estimated_cost_usd,
+                'complexity': cost_estimate.task_complexity.value,
+                'agent_count': cost_estimate.agent_count,
+                'confidence': cost_estimate.confidence,
+                'reasoning': cost_estimate.reasoning
+            },
+            'should_proceed': should_proceed,
+            'cost_reason': cost_reason,
+            'recommendations': recommendations
+        }
+        
+        return cost_info, should_proceed, single_agent_mode
+
     async def start_research_task(
         self, 
         query: str, 
@@ -240,44 +299,9 @@ class ResearchManager:
             await self._ensure_mcp_client_initialized()
             
             # Estimate cost for the research task
-            agents_to_use = ["retriever", "reasoner", "executor", "memory"]
-            parallel_execution = True
-            
-            # Check for single agent mode option
-            single_agent_mode = options.get('single_agent_mode', False) if options else False
-            if single_agent_mode:
-                agents_to_use = ["retriever"]  # Use only retriever in single agent mode
-                parallel_execution = False
-            
-            # Get cost estimate
-            cost_estimate = self.cost_estimator.estimate_task_cost(
-                query=query,
-                agents=agents_to_use,
-                parallel_execution=parallel_execution
+            cost_info, should_proceed, single_agent_mode = await self._estimate_task_cost(
+                query, conversation_id, options
             )
-            
-            # Check if task should proceed based on cost
-            should_proceed, cost_reason = self.cost_estimator.should_proceed_with_task(
-                cost_estimate, conversation_id
-            )
-            
-            # Get cost recommendations
-            recommendations = self.cost_estimator.get_cost_recommendations(cost_estimate)
-            
-            # Prepare cost information for return
-            cost_info = {
-                'estimate': {
-                    'tokens': cost_estimate.estimated_tokens,
-                    'cost_usd': cost_estimate.estimated_cost_usd,
-                    'complexity': cost_estimate.task_complexity.value,
-                    'agent_count': cost_estimate.agent_count,
-                    'confidence': cost_estimate.confidence,
-                    'reasoning': cost_estimate.reasoning
-                },
-                'should_proceed': should_proceed,
-                'cost_reason': cost_reason,
-                'recommendations': recommendations
-            }
             
             # Create research context
             context = ResearchContext(
@@ -285,7 +309,7 @@ class ResearchManager:
                 query=query,
                 user_id=user_id,
                 conversation_id=conversation_id,
-                estimated_cost=cost_estimate.estimated_cost_usd,
+                estimated_cost=cost_info['estimate']['cost_usd'],
                 single_agent_mode=single_agent_mode
             )
             
@@ -310,11 +334,11 @@ class ResearchManager:
                 asyncio.create_task(self._orchestrate_research_task(context))
                 
                 self.logger.info(f"Started research task {task_id} for query: {query}, "
-                               f"estimated cost: ${cost_estimate.estimated_cost_usd:.4f}")
+                               f"estimated cost: ${cost_info['estimate']['cost_usd']:.4f}")
             else:
                 # Task not approved due to cost
                 cost_info['task_started'] = False
-                self.logger.warning(f"Research task blocked due to cost: {cost_reason}")
+                self.logger.warning(f"Research task blocked due to cost: {cost_info['cost_reason']}")
             
             cost_info['task_started'] = should_proceed or context.cost_approved
             return task_id, cost_info
@@ -1008,9 +1032,9 @@ class ResearchManager:
         """
         return self.cost_estimator.get_usage_summary(session_id)
     
-    def estimate_query_cost(self, query: str, single_agent_mode: bool = False) -> Dict[str, Any]:
+    async def estimate_query_cost_async(self, query: str, single_agent_mode: bool = False) -> Dict[str, Any]:
         """
-        Estimate cost for a query without starting the task.
+        Estimate cost for a query without starting the task (async version).
         
         Args:
             query: Research query to estimate
@@ -1019,6 +1043,32 @@ class ResearchManager:
         Returns:
             Dict[str, Any]: Cost estimation details
         """
+        options = {'single_agent_mode': single_agent_mode}
+        cost_info, _, _ = await self._estimate_task_cost(
+            query=query,
+            conversation_id="estimate_only",  # Dummy conversation ID for estimation
+            options=options
+        )
+        
+        # Remove task-specific fields for estimation-only response
+        cost_info.pop('should_proceed', None)
+        cost_info.pop('cost_reason', None)
+        cost_info['single_agent_mode'] = single_agent_mode
+        
+        return cost_info
+
+    def estimate_query_cost(self, query: str, single_agent_mode: bool = False) -> Dict[str, Any]:
+        """
+        Estimate cost for a query without starting the task (synchronous version).
+        
+        Args:
+            query: Research query to estimate
+            single_agent_mode: Whether to use single agent mode
+            
+        Returns:
+            Dict[str, Any]: Cost estimation details
+        """
+        # Fallback synchronous implementation for backwards compatibility
         agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "reasoner", "executor", "memory"]
         parallel_execution = not single_agent_mode
         
