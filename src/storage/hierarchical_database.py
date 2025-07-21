@@ -618,6 +618,49 @@ class HierarchicalDatabaseManager:
         except Exception as e:
             raise DatabaseError("Failed to delete research topic", f"Topic deletion failed: {e}")
     
+    @handle_errors(context="update_research_plan")
+    def update_research_plan(self, plan_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a research plan."""
+        try:
+            # Check if plan exists
+            plan = self.get_research_plan(plan_id)
+            if not plan:
+                return None
+            
+            # Build update query dynamically
+            update_fields = []
+            update_values = []
+            
+            for field, value in update_data.items():
+                if field in ['name', 'description', 'plan_type', 'status']:
+                    update_fields.append(f"{field} = ?")
+                    update_values.append(value)
+                elif field in ['plan_structure', 'metadata']:
+                    update_fields.append(f"{field} = ?")
+                    update_values.append(json.dumps(value))
+            
+            if not update_fields:
+                return plan  # No updates to apply
+            
+            update_values.append(datetime.now().isoformat())  # updated_at
+            update_values.append(plan_id)  # WHERE clause
+            
+            update_query = f"""
+                UPDATE research_plans 
+                SET {', '.join(update_fields)}, updated_at = ?
+                WHERE id = ?
+            """
+            
+            with self.get_connection() as conn:
+                conn.execute(update_query, update_values)
+                conn.commit()
+            
+            # Return updated plan
+            return self.get_research_plan(plan_id)
+            
+        except Exception as e:
+            raise DatabaseError("Failed to update research plan", f"Plan update failed: {e}")
+    
     @handle_errors(context="delete_research_plan")
     def delete_research_plan(self, plan_id: str) -> bool:
         """Delete a research plan and all its tasks."""

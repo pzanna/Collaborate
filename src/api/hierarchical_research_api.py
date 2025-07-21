@@ -6,6 +6,7 @@ from src.models.hierarchical_data_models import (
     ResearchTopicRequest,
     ResearchTopicResponse,
     ResearchPlanRequest,
+    ResearchPlanUpdate,
     ResearchPlanResponse,
     TaskRequest,
     TaskResponse
@@ -249,24 +250,24 @@ async def get_research_plan(
 @hierarchical_router.put("/plans/{plan_id}", response_model=ResearchPlanResponse)
 async def update_research_plan(
     plan_id: str,
-    plan_update: ResearchPlanRequest,
+    plan_update: ResearchPlanUpdate,
     db: Optional[HierarchicalDatabaseManager] = Depends(get_database)
 ):
     """Update a research plan."""
+    db = check_database_available(db)
+    
     try:
-        # Prepare update data
+        # Prepare update data from non-None values
         update_data = {}
-        if plan_update.name:
+        if plan_update.name is not None:
             update_data['name'] = plan_update.name
-        if plan_update.description:
+        if plan_update.description is not None:
             update_data['description'] = plan_update.description
-        if plan_update.plan_type:
+        if plan_update.plan_type is not None:
             update_data['plan_type'] = plan_update.plan_type
-        if plan_update.status:
-            update_data['status'] = plan_update.status
-        if plan_update.plan_structure:
+        if plan_update.plan_structure is not None:
             update_data['plan_structure'] = plan_update.plan_structure
-        if plan_update.metadata:
+        if plan_update.metadata is not None:
             update_data['metadata'] = plan_update.metadata
         
         # Update plan in database
