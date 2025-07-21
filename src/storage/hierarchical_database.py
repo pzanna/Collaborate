@@ -104,6 +104,9 @@ class HierarchicalDatabaseManager:
                 # Create original tables
                 self._create_original_tables(conn)
                 
+                # Migrate existing tables to hierarchical schema
+                self._migrate_to_hierarchical_schema(conn)
+                
                 # Create hierarchical tables
                 self._create_hierarchical_tables(conn)
                 
@@ -226,6 +229,27 @@ class HierarchicalDatabaseManager:
             CREATE INDEX IF NOT EXISTS idx_tasks_task_type ON research_tasks(task_type);
             CREATE INDEX IF NOT EXISTS idx_tasks_task_order ON research_tasks(task_order);
         """)
+    
+    def _migrate_to_hierarchical_schema(self, conn: sqlite3.Connection) -> None:
+        """Migrate existing tables to support hierarchical schema."""
+        try:
+            # Check if research_tasks table needs migration by checking for plan_id column
+            cursor = conn.execute("PRAGMA table_info(research_tasks)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            # Add missing columns if they don't exist
+            if 'plan_id' not in columns:
+                conn.execute("ALTER TABLE research_tasks ADD COLUMN plan_id TEXT")
+            
+            if 'task_type' not in columns:
+                conn.execute("ALTER TABLE research_tasks ADD COLUMN task_type TEXT DEFAULT 'research'")
+            
+            if 'task_order' not in columns:
+                conn.execute("ALTER TABLE research_tasks ADD COLUMN task_order INTEGER DEFAULT 0")
+                
+        except sqlite3.OperationalError:
+            # Table might not exist yet, which is fine
+            pass
     
     # Research Topics Methods
     @handle_errors(context="create_research_topic")

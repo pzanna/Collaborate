@@ -20,7 +20,7 @@ stop_existing_services() {
     echo "🛑 Checking for existing services..."
     
     # Stop any existing Python processes for this project
-    pkill -f "python mcp_server.py" 2>/dev/null && echo "  ✓ Stopped existing MCP server"
+    pkill -f "python -m src.mcp" 2>/dev/null && echo "  ✓ Stopped existing MCP server"
     pkill -f "python agent_launcher.py" 2>/dev/null && echo "  ✓ Stopped existing agents"
     pkill -f "python web_server.py" 2>/dev/null && echo "  ✓ Stopped existing web server"
     
@@ -45,7 +45,7 @@ fi
 
 # Start MCP server
 echo "🔧 Starting MCP server..."
-python mcp_server.py &
+python -m src.mcp &
 MCP_PID=$!
 
 # Wait a moment for MCP server to start

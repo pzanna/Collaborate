@@ -717,8 +717,8 @@ class DatabaseManager:
                     reasoning_output=row['reasoning_output'],
                     execution_results=json.loads(row['execution_results']) if row['execution_results'] else [],
                     synthesis=row['synthesis'],
-                    research_plan=json.loads(row['research_plan']) if row.get('research_plan') else None,
-                    plan_approved=bool(row.get('plan_approved', False)),
+                    research_plan=json.loads(row['research_plan']) if row['research_plan'] else None,
+                    plan_approved=bool(row['plan_approved'] if 'plan_approved' in row.keys() else False),
                     metadata=json.loads(row['metadata']) if row['metadata'] else {}
                 )
             return None
@@ -803,14 +803,14 @@ class DatabaseManager:
                     reasoning_output=row['reasoning_output'],
                     execution_results=json.loads(row['execution_results']) if row['execution_results'] else [],
                     synthesis=row['synthesis'],
-                    research_plan=json.loads(row['research_plan']) if row.get('research_plan') else None,
-                    plan_approved=bool(row.get('plan_approved', False)),
+                    research_plan=json.loads(row['research_plan']) if row['research_plan'] else None,
+                    plan_approved=bool(row['plan_approved'] if 'plan_approved' in row.keys() else False),
                     metadata=json.loads(row['metadata']) if row['metadata'] else {}
                 )
                 for row in rows
             ]
     
-    def update_research_plan(self, task_id: str, research_plan: Dict[str, Any]) -> bool:
+    def update_task_research_plan(self, task_id: str, research_plan: Dict[str, Any]) -> bool:
         """Update the research plan for a task."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -977,10 +977,50 @@ class DatabaseManager:
         # For now, return None to indicate this method isn't fully implemented
         return None
     
+    def update_research_topic(self, topic_id: str, topic_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a research topic."""
+        # For now, return None to indicate this method isn't fully implemented
+        return None
+    
     def get_research_plans_by_topic(self, topic_id: str, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all research plans for a topic."""
         # For now, return empty list
         return []
+    
+    def get_research_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
+        """Get a research plan by ID."""
+        # For now, return None
+        return None
+    
+    def update_research_plan(self, plan_id: str, plan_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a research plan."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Store plan data as JSON in the research_plan column
+                # First check if the task exists
+                cursor.execute("""
+                    SELECT id FROM research_tasks WHERE id = ?
+                """, (plan_id,))
+                
+                if cursor.fetchone():
+                    # Update existing task with plan data
+                    cursor.execute("""
+                        UPDATE research_tasks 
+                        SET research_plan = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (json.dumps(plan_data), datetime.now(), plan_id))
+                    
+                    conn.commit()
+                    return plan_data
+                else:
+                    print(f"Warning: Task {plan_id} not found for plan update")
+                    return None
+                    
+        except Exception as e:
+            print(f"Error updating research plan: {e}")
+            return None
     
     def create_research_plan(self, plan_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a new research plan."""
@@ -1004,6 +1044,11 @@ class DatabaseManager:
     
     def create_task(self, task_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a new task."""
+        # For now, return None
+        return None
+    
+    def update_task(self, task_id: str, task_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a task."""
         # For now, return None
         return None
     

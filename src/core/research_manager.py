@@ -515,11 +515,11 @@ class ResearchManager:
                 if response.result and "plan" in response.result:
                     plan_data = response.result["plan"]
                     try:
-                        success = self.db_manager.update_research_plan(
+                        result = self.db_manager.update_research_plan(
                             context.task_id, 
                             plan_data
                         )
-                        if success:
+                        if result:
                             self.logger.info(f"Research plan stored in database for task {context.task_id}")
                         else:
                             self.logger.warning(f"Failed to store research plan in database for task {context.task_id}")

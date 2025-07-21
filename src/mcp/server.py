@@ -181,7 +181,7 @@ class MCPServer:
                 'type': 'connection_established',
                 'data': {'client_id': client_id},
                 'timestamp': datetime.now().isoformat()
-            }))
+            }, default=str))
             
             async for message in websocket:
                 try:
@@ -624,7 +624,7 @@ class MCPServer:
                         'timestamp': datetime.now().isoformat()
                     }
                     
-                    await self.clients[client_id].send(json.dumps(message))
+                    await self.clients[client_id].send(json.dumps(message, default=str))
                     self.stats['total_messages_sent'] += 1
                     logger.info(f"Sent task {action.task_id} to agent {agent_id}")
                     
@@ -644,7 +644,7 @@ class MCPServer:
         if client_id in self.clients:
             try:
                 message['timestamp'] = datetime.now().isoformat()
-                await self.clients[client_id].send(json.dumps(message))
+                await self.clients[client_id].send(json.dumps(message, default=str))
                 self.stats['total_messages_sent'] += 1
             except Exception as e:
                 logger.error(f"Error sending message to client {client_id}: {e}")

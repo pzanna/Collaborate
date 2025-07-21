@@ -29,3 +29,16 @@ if __name__ == "__main__":
             logging.FileHandler(os.path.join(log_path, 'mcp_server.log')),
         ]
     )
+    
+    # Import and run the MCP server
+    try:
+        from src.mcp.server import main
+        print("🔧 Starting MCP Server...")
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("🛑 MCP Server stopped by user")
+    except Exception as e:
+        print(f"❌ MCP Server error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
