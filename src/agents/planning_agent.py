@@ -1,7 +1,7 @@
 """
-Reasoning Agent for research tasks.
+Planning Agent for research tasks.
 
-This module provides the ReasonerAgent that handles analysis, reasoning,
+This module provides the Planning Agent that handles planning, analysis, reasoning,
 and synthesis tasks for the research system.
 """
 
@@ -18,11 +18,12 @@ from ..ai_clients.openai_client import OpenAIClient
 from ..ai_clients.xai_client import XAIClient
 
 
-class ReasonerAgent(BaseAgent):
+class PlanningAgent(BaseAgent):
     """
-    Reasoning Agent for analysis and synthesis tasks.
+    Planning Agent for planning, analysis and synthesis tasks.
     
     This agent handles:
+    - Research planning and strategy
     - Information analysis
     - Research plan generation
     - Result synthesis
@@ -32,25 +33,25 @@ class ReasonerAgent(BaseAgent):
     
     def __init__(self, config_manager: ConfigManager):
         """
-        Initialize the Reasoner Agent.
+        Initialize the Planning Agent.
         
         Args:
             config_manager: Configuration manager instance
         """
-        super().__init__("reasoner", config_manager)
+        super().__init__("planning", config_manager)
         
         # AI clients
         self.ai_clients = {}
         
-        # Reasoning configuration
+        # Planning and reasoning configuration
         self.default_model = "gpt-4"
         self.max_context_length = 8000
         self.temperature = 0.7
         
-        self.logger.info("ReasonerAgent initialized")
+        self.logger.info("PlanningAgent initialized")
     
     def _get_capabilities(self) -> List[str]:
-        """Get reasoner agent capabilities."""
+        """Get planning agent capabilities."""
         return [
             'plan_research',
             'analyze_information',
@@ -63,7 +64,7 @@ class ReasonerAgent(BaseAgent):
         ]
     
     async def _initialize_agent(self) -> None:
-        """Initialize reasoner-specific resources."""
+        """Initialize planning-specific resources."""
         # Initialize AI clients
         ai_providers = self.config.config.ai_providers
         
@@ -81,29 +82,29 @@ class ReasonerAgent(BaseAgent):
         self.default_client = self.ai_clients.get('openai') or self.ai_clients.get('xai')
         
         if not self.default_client:
-            raise RuntimeError("No AI client available for reasoning")
+            raise RuntimeError("No AI client available for planning")
         
-        self.logger.info(f"ReasonerAgent initialized with {len(self.ai_clients)} AI clients")
+        self.logger.info(f"Planning Agent initialized with {len(self.ai_clients)} AI clients")
     
     async def _cleanup_agent(self) -> None:
-        """Clean up reasoner-specific resources."""
+        """Clean up planning-specific resources."""
         # Clean up AI clients if needed
         for client in self.ai_clients.values():
             if hasattr(client, 'close'):
                 await client.close()
         
         self.ai_clients.clear()
-        self.logger.info("ReasonerAgent cleanup completed")
+        self.logger.info("Planning Agent cleanup completed")
     
     async def _process_task_impl(self, task: ResearchAction) -> Dict[str, Any]:
         """
-        Process a reasoning task.
+        Process a planning task.
         
         Args:
             task: Research task to process
             
         Returns:
-            Dict[str, Any]: Reasoning results
+            Dict[str, Any]: Planning results
         """
         action = task.action
         payload = task.payload
@@ -470,7 +471,7 @@ class ReasonerAgent(BaseAgent):
             # Create Message objects for the AI client
             from ..models.data_models import Message
             messages = [Message(
-                conversation_id="reasoner_task",
+                conversation_id="planning_task",
                 participant="user",
                 content=prompt
             )]
@@ -565,20 +566,20 @@ if __name__ == "__main__":
     sys.path.insert(0, project_root)
     
     async def main():
-        """Start the reasoner agent."""
+        """Start the planning agent."""
         from ..config.config_manager import ConfigManager
         
         # Initialize config manager
         config_manager = ConfigManager()
         
-        agent = ReasonerAgent(config_manager)
+        agent = PlanningAgent(config_manager)
         try:
             await agent.start()
             # Keep the agent running
             while True:
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
-            print("Shutting down reasoner agent...")
+            print("Shutting down planning agent...")
         finally:
             await agent.stop()
     

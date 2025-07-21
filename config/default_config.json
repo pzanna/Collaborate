@@ -67,9 +67,10 @@
                 "scraping_timeout": 30
             }
         },
-        "reasoner": {
-            "type": "ReasonerAgent",
+        "planning": {
+            "type": "PlanningAgent",
             "capabilities": [
+                "plan_research",
                 "summarise_results",
                 "chain_of_thought",
                 "analysis",

@@ -285,7 +285,7 @@ Tracks costs per agent type:
 ```python
 agent_breakdown = {
     'retriever': {'tokens': 1200, 'cost': 0.036},
-    'reasoner': {'tokens': 800, 'cost': 0.024},
+    'planning': {'tokens': 800, 'cost': 0.024},
     'executor': {'tokens': 300, 'cost': 0.009}
 }
 ```
@@ -366,12 +366,12 @@ def get_cost_recommendations(self, estimate: CostEstimate) -> Dict[str, Any]:
 
 ```python
 # High Performance (Default)
-agents = ["retriever", "reasoner", "executor", "memory"]
+agents = ["retriever", "planning", "executor", "memory"]
 parallel_execution = True
 complexity_multiplier = 1.0
 
 # Balanced Performance
-agents = ["retriever", "reasoner"]
+agents = ["retriever", "planning"]
 parallel_execution = True
 complexity_multiplier = 0.6
 
@@ -396,7 +396,7 @@ async def _estimate_task_cost(
 ) -> tuple[Dict[str, Any], bool, bool]:
     # Determine agent configuration
     single_agent_mode = options.get('single_agent_mode', False)
-    agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "reasoner", "executor", "memory"]
+    agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "planning", "executor", "memory"]
 
     # Get cost estimate
     cost_estimate = self.cost_estimator.estimate_task_cost(
@@ -517,7 +517,7 @@ if final_usage:
         },
         "agent_breakdown": {
             "retriever": {"tokens": 1200, "cost": 0.036},
-            "reasoner": {"tokens": 1450, "cost": 0.046}
+            "planning": {"tokens": 1450, "cost": 0.046}
         }
     }
 }

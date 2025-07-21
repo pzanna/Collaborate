@@ -2,7 +2,7 @@
 """
 Agent Launcher - Starts all research agents
 
-This script starts all the research agents (Retriever, Reasoner, Executor, Memory)
+This script starts all the research agents (Retriever, Planning, Executor, Memory)
 that connect to the MCP server to handle research tasks.
 """
 
@@ -49,14 +49,14 @@ class AgentLauncher:
             
             # Import all agent classes
             from src.agents.retriever_agent import RetrieverAgent
-            from src.agents.reasoner_agent import ReasonerAgent
+            from src.agents.planning_agent import PlanningAgent
             from src.agents.executor_agent import ExecutorAgent
             from src.agents.memory_agent import MemoryAgent
             
             # Create and initialize agents
             agent_classes = [
                 ("Retriever", RetrieverAgent),
-                ("Reasoner", ReasonerAgent),
+                ("Planning", PlanningAgent),
                 ("Executor", ExecutorAgent),
                 ("Memory", MemoryAgent)
             ]

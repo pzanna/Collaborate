@@ -2,7 +2,7 @@
 Research Manager - Orchestrates multi-agent research tasks using MCP protocol.
 
 This module provides the core Research Manager that coordinates between different
-AI agents (Retriever, Reasoner, Executor, Memory) to perform complex research tasks.
+AI agents (Retriever, Planning, Executor, Memory) to perform complex research tasks.
 """
 
 import asyncio
@@ -241,7 +241,7 @@ class ResearchManager:
             agents_to_use = ["retriever"]  # Use only retriever in single agent mode
             parallel_execution = False
         else:
-            agents_to_use = ["retriever", "reasoner", "executor", "memory"]
+            agents_to_use = ["retriever", "planning", "executor", "memory"]
             parallel_execution = True
         
         # Get cost estimate
@@ -463,7 +463,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.conversation_id,
-                agent_type="reasoner",
+                agent_type="planning",
                 action="plan_research",
                 payload={
                     "query": context.query,
@@ -473,8 +473,8 @@ class ResearchManager:
                 }
             )
             
-            # Send to planning agent (using reasoning agent for now)
-            response = await self._send_to_agent("reasoner", action)
+            # Send to planning agent
+            response = await self._send_to_agent("planning", action)
             
             if response and response.status == "completed":
                 # Update context with planning results
@@ -543,7 +543,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.conversation_id,
-                agent_type="reasoner",
+                agent_type="planning",
                 action="analyze_information",
                 payload={
                     "query": context.query,
@@ -553,8 +553,8 @@ class ResearchManager:
                 }
             )
             
-            # Send to reasoning agent
-            response = await self._send_to_agent("reasoner", action)
+            # Send to planning agent
+            response = await self._send_to_agent("planning", action)
             
             if response and response.status == "completed":
                 # Store reasoning output
@@ -624,7 +624,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.conversation_id,
-                agent_type="reasoner",
+                agent_type="planning",
                 action="synthesize_results",
                 payload={
                     "query": context.query,
@@ -634,8 +634,8 @@ class ResearchManager:
                 }
             )
             
-            # Send to reasoning agent for synthesis
-            response = await self._send_to_agent("reasoner", action)
+            # Send to planning agent for synthesis
+            response = await self._send_to_agent("planning", action)
             
             if response and response.status == "completed":
                 # Store synthesis
@@ -1073,7 +1073,7 @@ class ResearchManager:
             Dict[str, Any]: Cost estimation details
         """
         # Fallback synchronous implementation for backwards compatibility
-        agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "reasoner", "executor", "memory"]
+        agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "planning", "executor", "memory"]
         parallel_execution = not single_agent_mode
         
         estimate = self.cost_estimator.estimate_task_cost(
@@ -1179,7 +1179,7 @@ class ResearchManager:
                 'raw_response': "RM AI response for active research context",
                 'parsed_tasks': [
                     {'task_id': 'task_1', 'agent': 'retriever', 'action': 'search_web'},
-                    {'task_id': 'task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
+                    {'task_id': 'task_2', 'agent': 'planning', 'action': 'analyze_results'}
                 ],
                 'created_at': datetime.now().isoformat(),
                 'execution_status': context.stage.value,
@@ -1248,7 +1248,7 @@ class ResearchManager:
                     'execution_status': context.stage.value,
                     'parsed_tasks': [
                         {'task_id': 'task_1', 'agent': 'retriever'},
-                        {'task_id': 'task_2', 'agent': 'reasoner'}
+                        {'task_id': 'task_2', 'agent': 'planning'}
                     ],
                     'modifications': []
                 })

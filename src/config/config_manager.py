@@ -195,7 +195,7 @@ class ConfigManager:
             return self.config.agents if isinstance(self.config.agents, dict) else self.config.agents.dict()
         return {
             'retriever': {'enabled': True, 'max_results': 10},
-            'reasoner': {'enabled': True, 'model': 'gpt-4'},
+            'planning': {'enabled': True, 'model': 'gpt-4'},
             'executor': {'enabled': True, 'timeout': 60},
             'memory': {'enabled': True, 'max_entries': 1000}
         }

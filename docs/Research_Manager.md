@@ -4,7 +4,7 @@ _Last Updated: July 21, 2025_
 
 ## Overview
 
-The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Retriever, Reasoner, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **project-based task organization**.
+The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Retriever, Planning, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **project-based task organization**.
 
 > **📘 Related Documentation**: For detailed information about the cost estimation system, see [Cost Estimation System Documentation](Cost_Estimation_System.md).
 
@@ -170,7 +170,7 @@ The `_orchestrate_research_task` method executes research stages:
 1. **Planning Stage** (`_execute_planning_stage`)
 
    - Analyzes query and creates research plan
-   - Uses Reasoner agent for strategic planning
+   - Uses Planning agent for strategic planning
    - Establishes research objectives and approach
 
 2. **Retrieval Stage** (`_execute_retrieval_stage`)
@@ -182,7 +182,7 @@ The `_orchestrate_research_task` method executes research stages:
 3. **Reasoning Stage** (`_execute_reasoning_stage`)
 
    - Analyzes gathered information
-   - Uses Reasoner agent for comprehensive analysis
+   - Uses Planning agent for comprehensive analysis
    - Generates insights and connections
 
 4. **Execution Stage** (`_execute_execution_stage`)
@@ -193,7 +193,7 @@ The `_orchestrate_research_task` method executes research stages:
 
 5. **Synthesis Stage** (`_execute_synthesis_stage`)
    - Combines all research outputs
-   - Uses Reasoner agent for final synthesis
+   - Uses Planning agent for final synthesis
    - Generates comprehensive research summary
 
 #### Single-Agent Mode (Cost-Optimized)
@@ -285,7 +285,7 @@ final_usage = self.cost_estimator.end_cost_tracking(task_id)
 **Enhanced Tracking Features:**
 
 - **Provider-Specific Tracking**: Separate cost tracking for each AI provider
-- **Agent-Level Breakdown**: Cost attribution per agent type (retriever, reasoner, executor, memory)
+- **Agent-Level Breakdown**: Cost attribution per agent type (retriever, planning, executor, memory)
 - **Token Distribution**: Separate tracking of input vs output tokens
 - **Session Aggregation**: Cumulative costs across related tasks in a conversation
 - **Daily Usage Monitoring**: Automatic daily cost accumulation and threshold checking
@@ -496,7 +496,7 @@ The new task detail page provides comprehensive information:
   - Document retrieval and processing
   - Source validation and ranking
 
-- **ReasonerAgent** (`src/agents/reasoner_agent.py`)
+- **PlanningAgent** (`src/agents/planning_agent.py`)
 
   - Strategic planning and analysis
   - Information synthesis and reasoning
@@ -826,9 +826,9 @@ const request = {
 }
 ```
 
-2. **Database Migration**: The system automatically creates the new `research_tasks` table on startup
+1. **Database Migration**: The system automatically creates the new `research_tasks` table on startup
 
-3. **Frontend Updates**: Update components to handle project selection and task navigation
+2. **Frontend Updates**: Update components to handle project selection and task navigation
 
 **Backward Compatibility:**
 

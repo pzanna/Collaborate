@@ -59,7 +59,7 @@ const TaskGraph: React.FC<TaskGraphProps> = ({
     switch (agentType.toLowerCase()) {
       case "retriever":
         return "🔍"
-      case "reasoner":
+      case "planning":
         return "🧠"
       case "executor":
         return "⚡"
