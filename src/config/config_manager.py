@@ -241,7 +241,7 @@ class ConfigManager:
                 ai_api_logger.propagate = False
                 
                 # Also set up individual AI client loggers
-                for client_name in ['ai_clients.openai_client', 'ai_clients.xai_client', 'core.ai_client_manager']:
+                for client_name in ['src.ai_clients.openai_client', 'src.ai_clients.xai_client', 'src.core.ai_client_manager']:
                     client_logger = logging.getLogger(client_name)
                     client_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
                     client_logger.addHandler(ai_api_handler)

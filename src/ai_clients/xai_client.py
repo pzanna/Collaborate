@@ -69,9 +69,12 @@ class XAIClient:
             self.logger.info(f"xAI API Response - Success: Content length: {len(response_content)}, "
                            f"Response time: {response_time:.2f}s")
             
-            # Log response content (truncated for readability)
+            # Log response content (truncated and sanitized for log format)
             content_preview = response_content[:200] + "..." if len(response_content) > 200 else response_content
-            self.logger.debug(f"xAI Response content preview: {content_preview}")
+            # Sanitize content for single-line log entry (replace newlines and multiple spaces)
+            sanitized_preview = content_preview.replace('\n', ' ').replace('\r', ' ')
+            sanitized_preview = ' '.join(sanitized_preview.split())  # Normalize whitespace
+            self.logger.debug(f"xAI Response content preview: {sanitized_preview}")
             
             return response_content
         
