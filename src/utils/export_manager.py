@@ -58,7 +58,7 @@ class ExportManager:
             "metadata": {
                 "export_timestamp": datetime.now().isoformat(),
                 "export_format": "json",
-                "exporter": "Collaborate v1.0"
+                "exporter": "Eunice v1.0"
             },
             "project": {
                 "id": session.project.id if session.project else None,
@@ -150,7 +150,7 @@ class ExportManager:
         content.append(f"- **xAI Messages:** {len([m for m in session.messages if m.participant == 'xai'])}")
         content.append(f"- **Duration:** {self._calculate_duration(session.messages)}")
         content.append("")
-        content.append(f"*Exported on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Collaborate v1.0*")
+        content.append(f"*Exported on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Eunice v1.0*")
         
         markdown_content = "\n".join(content)
         
@@ -324,7 +324,7 @@ class ExportManager:
     </div>
 
     <div class="footer">
-        Exported on {{ export_timestamp }} by Collaborate v1.0
+        Exported on {{ export_timestamp }} by Eunice v1.0
     </div>
 </body>
 </html>
@@ -434,7 +434,7 @@ class ExportManager:
         
         # Footer
         story.append(Spacer(1, 20))
-        footer_text = f"<i>Exported on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Collaborate v1.0</i>"
+        footer_text = f"<i>Exported on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Eunice v1.0</i>"
         story.append(Paragraph(footer_text, styles['Normal']))
         
         doc.build(story)

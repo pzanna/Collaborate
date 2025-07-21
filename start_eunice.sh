@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Start script for Collaborate Web UI
+# Start script for Eunice Web UI
 # This script starts the MCP server, agents, backend and frontend
 
-echo "🚀 Starting Collaborate Web UI..."
+echo "🚀 Starting Eunice Web UI..."
 
 # Function to handle cleanup on exit
 cleanup() {

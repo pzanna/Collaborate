@@ -32,7 +32,7 @@ const Header: React.FC = () => {
     } else if (path.startsWith("/health")) {
       return { title: "Health", icon: HeartIcon }
     }
-    return { title: "Collaborate", icon: FolderIcon }
+    return { title: "Eunice", icon: FolderIcon }
   }
 
   const { title, icon: Icon } = getPageInfo()

@@ -1,4 +1,4 @@
-"""Core data models for the Collaborate application."""
+"""Core data models for the Eunice application."""
 
 from datetime import datetime
 from typing import Dict, Any, Optional, List

@@ -261,7 +261,7 @@ class TestSystemHealthDiagnostics:
     def test_show_system_health_method_structure(self):
         """Test that the system health method has the expected structure."""
         # This test verifies the method exists and has basic functionality
-        # without importing the problematic collaborate module
+        # without importing the problematic eunice module
         
         # Create a simple mock health checker
         class MockHealthChecker:

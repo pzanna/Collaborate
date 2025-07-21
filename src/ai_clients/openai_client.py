@@ -1,4 +1,4 @@
-"""OpenAI client wrapper for the Collaborate application."""
+"""OpenAI client wrapper for the Eunice application."""
 
 import openai
 import os

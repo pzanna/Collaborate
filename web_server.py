@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FastAPI Web Server for Collaborate AI Platform
+FastAPI Web Server for Eunice AI Platform
 Provides REST API and WebSocket endpoints for the web UI
 """
 
@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 
-# Import existing Collaborate components
+# Import existing Eunice components
 from src.config.config_manager import ConfigManager
 from src.storage.database import DatabaseManager
 from src.core.ai_client_manager import AIClientManager
@@ -32,9 +32,10 @@ from src.core.research_manager import ResearchManager
 from src.core.context_manager import ContextManager
 from src.models.data_models import Project, Conversation, Message
 from src.utils.export_manager import ExportManager
+from src.utils.id_utils import generate_timestamped_id
 from src.utils.error_handler import (
     ErrorHandler, 
-    CollaborateError,
+    EuniceError,
     format_error_for_user, 
     APIError
 )
@@ -189,7 +190,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan management."""
     global config_manager, db_manager, ai_manager, streaming_coordinator, research_manager, context_manager, mcp_client, export_manager
     
-    print("🚀 Initializing Collaborate Web Server...")
+    print("🚀 Initializing Eunice Web Server...")
     
     # Initialize components (same as CLI)
     config_manager = ConfigManager()
@@ -271,12 +272,12 @@ async def lifespan(app: FastAPI):
         ai_manager = None
         streaming_coordinator = None
     
-    print("✓ Collaborate Web Server initialized successfully!")
+    print("✓ Eunice Web Server initialized successfully!")
     
     yield
     
     # Cleanup on shutdown
-    print("👋 Shutting down Collaborate Web Server...")
+    print("👋 Shutting down Eunice Web Server...")
     
     # Disconnect MCP client
     if mcp_client:
@@ -293,7 +294,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Collaborate AI Platform API",
+    title="Eunice AI Platform API",
     description="REST API and WebSocket endpoints for real-time AI collaboration",
     version="1.0.0",
     lifespan=lifespan
@@ -413,7 +414,7 @@ async def create_project(project: ProjectCreate):
             updated_at=created_project.updated_at.isoformat(),
             conversation_count=0
         )
-    except CollaborateError as e:
+    except EuniceError as e:
         raise HTTPException(status_code=400, detail=format_error_for_user(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -428,7 +429,7 @@ async def delete_project(project_id: str):
             return {"success": False, "message": "Project not found or already deleted"}
         
         return {"success": True, "message": "Project deleted successfully"}
-    except CollaborateError as e:
+    except EuniceError as e:
         raise HTTPException(status_code=400, detail=format_error_for_user(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -556,7 +557,7 @@ async def create_conversation(conversation: ConversationCreate):
             updated_at=created_conversation.updated_at.isoformat(),
             message_count=0
         )
-    except CollaborateError as e:
+    except EuniceError as e:
         raise HTTPException(status_code=400, detail=format_error_for_user(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -571,7 +572,7 @@ async def delete_conversation(conversation_id: str):
             return {"success": False, "message": "Conversation not found or already deleted"}
         
         return {"success": True, "message": "Conversation deleted successfully"}
-    except CollaborateError as e:
+    except EuniceError as e:
         raise HTTPException(status_code=400, detail=format_error_for_user(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -613,7 +614,8 @@ async def start_research_task(request: ResearchRequest):
     
     try:
         # Generate task name if not provided
-        task_name = request.name or f"Research: {request.query[:50]}{'...' if len(request.query) > 50 else ''}"
+        from src.utils.id_utils import generate_task_name
+        task_name = generate_task_name(request.query, request.name)
         
         # Create options dict from request parameters
         options = {
@@ -1516,14 +1518,14 @@ def main():
     """Run the web server."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Collaborate Web Server')
+    parser = argparse.ArgumentParser(description='Eunice Web Server')
     parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
     parser.add_argument('--port', type=int, default=8000, help='Port to bind to')
     parser.add_argument('--reload', action='store_true', help='Enable auto-reload for development')
     
     args = parser.parse_args()
     
-    print(f"🌐 Starting Collaborate Web Server on http://{args.host}:{args.port}")
+    print(f"🌐 Starting Eunice Web Server on http://{args.host}:{args.port}")
     print("📱 Web UI available at the above URL")
     print("🔌 WebSocket streaming enabled for real-time chat")
     print("🔬 Research system integration enabled")
@@ -1627,7 +1629,7 @@ async def create_research_topic(project_id: str, topic_create: ResearchTopicCrea
         
         # Fallback: return mock response for now
         return ResearchTopicResponse(
-            id=f"topic_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            id=generate_timestamped_id('topic'),
             project_id=project_id,
             name=topic_create.name,
             description=topic_create.description,
@@ -1716,7 +1718,7 @@ async def create_research_plan(topic_id: str, plan_create: ResearchPlanCreate):
         
         # Fallback: return mock response
         return ResearchPlanResponse(
-            id=f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            id=generate_timestamped_id('plan'),
             topic_id=topic_id,
             name=plan_create.name,
             description=plan_create.description,
@@ -1822,7 +1824,7 @@ async def create_task(plan_id: str, task_create: TaskCreate):
         
         # Fallback: return mock response
         return TaskResponse(
-            id=f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            id=generate_timestamped_id('task'),
             plan_id=plan_id,
             name=task_create.name,
             description=task_create.description,

@@ -22,7 +22,7 @@ def test_hierarchical_structure():
     print("=" * 50)
     
     # Initialize the database manager
-    db = HierarchicalDatabaseManager("data/collaborate.db")
+    db = HierarchicalDatabaseManager("data/eunice.db")
     
     # 1. Create a sample project (mock for now)
     project_id = "proj_ai_safety_demo"
@@ -123,21 +123,8 @@ def test_hierarchical_structure():
         'metadata': {'technical_focus': 'algorithms'}
     }
     
-    plan2_data = {
-        'id': plan2_id,
-        'topic_id': topic1_id,
-        'name': 'Industry Standards Analysis',
-        'description': 'Analysis of industry-specific AI ethics standards and implementations',
-        'plan_type': 'focused',
-        'status': 'draft',
-        'estimated_cost': 0.15,
-        'plan_structure': {
-            'stages': ['research', 'compare', 'evaluate'],
-            'approach': 'single-agent',
-            'timeline': '1-2 days'
-        },
-        'metadata': {'focus': 'industry_practices'}
-    }
+    # Note: Removing duplicate plan2_data definition to fix variable redefinition
+    # The second definition was overwriting the first one
     
     plan1 = db.create_research_plan(plan1_data)
     plan2 = db.create_research_plan(plan2_data)

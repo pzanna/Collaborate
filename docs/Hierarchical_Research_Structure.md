@@ -159,7 +159,7 @@ The system includes an automatic migration that:
 python web_server.py  # Migration runs automatically
 
 # Manual migration (if needed)
-python hierarchical_migration.py data/collaborate.db
+python hierarchical_migration.py data/eunice.db
 ```
 
 ### Migration Results

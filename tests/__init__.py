@@ -1,5 +1,5 @@
 """
-Test suite for the Collaborate Multi-AI Research Platform.
+Test suite for the Eunice Multi-AI Research Platform.
 
 This package contains comprehensive tests covering all aspects of the application:
 - Unit tests for individual components

@@ -311,7 +311,28 @@ class TaskFanoutManager:
         }
 
     async def _aggregate_results_by_type(self, fanout_task: FanoutTask, action_name: str, field_configs: Dict[str, Any]) -> Dict[str, Any]:
-        """Generic aggregation method to reduce code duplication"""
+        """
+        Generic aggregation method to reduce code duplication.
+        
+        This method aggregates results from multiple subtasks based on the specified
+        `field_configs`. It initializes collectors for each field, collects data from
+        partial results, and processes the collected data according to the aggregation
+        rules defined in `field_configs`.
+        
+        Parameters:
+            fanout_task (FanoutTask): The task containing partial results to aggregate.
+            action_name (str): The name of the action being aggregated (e.g., 'search', 'analyze').
+            field_configs (Dict[str, Any]): A dictionary defining the aggregation rules for each field.
+                - Keys are field names to aggregate.
+                - Values specify the aggregation rule, which can be:
+                  * `list`: Collects all values into a list.
+                  * `set`: Collects all unique values into a set.
+                  * `'avg'`: Computes the average of numeric values.
+                  
+        Returns:
+            Dict[str, Any]: A dictionary containing the aggregated results, including the action name
+                and the aggregated fields.
+        """
         aggregated: Dict[str, Any] = {'action': action_name}
         collectors: Dict[str, Any] = {}
         

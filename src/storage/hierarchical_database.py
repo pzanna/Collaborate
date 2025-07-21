@@ -13,10 +13,19 @@ from contextlib import contextmanager
 try:
     from ..models.data_models import Project, Conversation, Message, ConversationSession, ResearchTask
     from ..utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
+    from ..utils.id_utils import generate_timestamped_id
 except ImportError:
-    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from models.data_models import Project, Conversation, Message, ConversationSession, ResearchTask
-    from utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
+    # For direct execution or testing
+    import sys
+    from pathlib import Path
+    
+    # Add the parent directory to the path
+    project_root = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(project_root))
+    
+    from src.models.data_models import Project, Conversation, Message, ConversationSession, ResearchTask
+    from src.utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
+    from src.utils.id_utils import generate_timestamped_id
 
 # Import new hierarchical models
 try:
@@ -40,7 +49,7 @@ except ImportError:
 class HierarchicalDatabaseManager:
     """Enhanced database manager with hierarchical research support."""
     
-    def __init__(self, db_path: str = "data/collaborate.db"):
+    def __init__(self, db_path: str = "data/eunice.db"):
         self.db_path = db_path
         self._persistent_conn = None
         self.max_retries = 3
@@ -217,7 +226,7 @@ class HierarchicalDatabaseManager:
     def create_research_topic(self, topic_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a new research topic."""
         try:
-            topic_id = topic_data.get('id', f"topic_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            topic_id = topic_data.get('id', generate_timestamped_id('topic'))
             
             with self.get_connection() as conn:
                 conn.execute("""
@@ -306,7 +315,7 @@ class HierarchicalDatabaseManager:
     def create_research_plan(self, plan_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a new research plan."""
         try:
-            plan_id = plan_data.get('id', f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            plan_id = plan_data.get('id', generate_timestamped_id('plan'))
             
             with self.get_connection() as conn:
                 conn.execute("""

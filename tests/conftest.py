@@ -1,5 +1,5 @@
 """
-Shared test fixtures and configuration for the Collaborate test suite.
+Shared test fixtures and configuration for the Eunice test suite.
 
 This module provides common fixtures, test data, and configuration
 used across multiple test modules.
@@ -75,7 +75,7 @@ def test_config() -> Dict[str, Any]:
         },
         "logging": {
             "level": "INFO",
-            "file": "/tmp/test_collaborate.log"
+            "file": "/tmp/test_eunice.log"
         }
     }
 

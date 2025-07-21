@@ -1,4 +1,4 @@
-"""Enhanced error handling utilities for the Collaborate application."""
+"""Enhanced error handling utilities for the Eunice application."""
 
 import logging
 import sys
@@ -20,8 +20,8 @@ class ErrorType(Enum):
     UNKNOWN_ERROR = "unknown_error"
 
 
-class CollaborateError(Exception):
-    """Base exception class for Collaborate application errors."""
+class EuniceError(Exception):
+    """Base exception class for Eunice application errors."""
     
     def __init__(self, message: str, error_type: ErrorType = ErrorType.UNKNOWN_ERROR, 
                  details: Optional[Dict[str, Any]] = None, original_error: Optional[Exception] = None):
@@ -46,7 +46,7 @@ class CollaborateError(Exception):
         }
 
 
-class NetworkError(CollaborateError):
+class NetworkError(EuniceError):
     """Network-related errors."""
     
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None, 
@@ -54,7 +54,7 @@ class NetworkError(CollaborateError):
         super().__init__(message, ErrorType.NETWORK_ERROR, details, original_error)
 
 
-class APIError(CollaborateError):
+class APIError(EuniceError):
     """API-related errors."""
     
     def __init__(self, message: str, provider: str, status_code: Optional[int] = None,
@@ -64,7 +64,7 @@ class APIError(CollaborateError):
         super().__init__(message, ErrorType.API_ERROR, details, original_error)
 
 
-class DatabaseError(CollaborateError):
+class DatabaseError(EuniceError):
     """Database-related errors."""
     
     def __init__(self, message: str, operation: str, details: Optional[Dict[str, Any]] = None,
@@ -74,7 +74,7 @@ class DatabaseError(CollaborateError):
         super().__init__(message, ErrorType.DATABASE_ERROR, details, original_error)
 
 
-class ConfigurationError(CollaborateError):
+class ConfigurationError(EuniceError):
     """Configuration-related errors."""
     
     def __init__(self, message: str, config_key: Optional[str] = None, 
@@ -85,7 +85,7 @@ class ConfigurationError(CollaborateError):
         super().__init__(message, ErrorType.CONFIGURATION_ERROR, details, original_error)
 
 
-class ValidationError(CollaborateError):
+class ValidationError(EuniceError):
     """Data validation errors."""
     
     def __init__(self, message: str, field: Optional[str] = None, value: Optional[Any] = None,
@@ -96,7 +96,7 @@ class ValidationError(CollaborateError):
         super().__init__(message, ErrorType.VALIDATION_ERROR, details, original_error)
 
 
-class FileError(CollaborateError):
+class FileError(EuniceError):
     """File operation errors."""
     
     def __init__(self, message: str, file_path: str, operation: str,
@@ -115,23 +115,23 @@ class ErrorHandler:
         self.recent_errors: list = []
         self.max_recent_errors = 50
     
-    def handle_error(self, error: Exception, context: Optional[str] = None) -> CollaborateError:
-        """Handle an error and convert it to a CollaborateError if needed."""
-        if isinstance(error, CollaborateError):
-            collaborate_error = error
+    def handle_error(self, error: Exception, context: Optional[str] = None) -> EuniceError:
+        """Handle an error and convert it to a EuniceError if needed."""
+        if isinstance(error, EuniceError):
+            eunice_error = error
         else:
-            collaborate_error = self._convert_to_collaborate_error(error, context)
+            eunice_error = self._convert_to_eunice_error(error, context)
         
         # Log the error
-        self._log_error(collaborate_error, context)
+        self._log_error(eunice_error, context)
         
         # Track error statistics
-        self._track_error(collaborate_error)
+        self._track_error(eunice_error)
         
-        return collaborate_error
+        return eunice_error
     
-    def _convert_to_collaborate_error(self, error: Exception, context: Optional[str] = None) -> CollaborateError:
-        """Convert a generic exception to a CollaborateError."""
+    def _convert_to_eunice_error(self, error: Exception, context: Optional[str] = None) -> EuniceError:
+        """Convert a generic exception to a EuniceError."""
         error_str = str(error)
         
         # Network-related errors
@@ -155,9 +155,9 @@ class ErrorHandler:
             return ConfigurationError(f"Configuration error: {error_str}", original_error=error)
         
         # Generic error
-        return CollaborateError(f"Unexpected error: {error_str}", original_error=error)
+        return EuniceError(f"Unexpected error: {error_str}", original_error=error)
     
-    def _log_error(self, error: CollaborateError, context: Optional[str] = None):
+    def _log_error(self, error: EuniceError, context: Optional[str] = None):
         """Log an error with appropriate level and formatting."""
         log_message = f"[{error.error_type.value}] {error.message}"
         if context:
@@ -173,7 +173,7 @@ class ErrorHandler:
         else:
             self.logger.info(log_message, extra={"error_details": error_dict})
     
-    def _track_error(self, error: CollaborateError):
+    def _track_error(self, error: EuniceError):
         """Track error statistics and recent errors."""
         # Update error counts
         self.error_counts[error.error_type] = self.error_counts.get(error.error_type, 0) + 1
@@ -211,9 +211,9 @@ def handle_errors(context: Optional[str] = None, reraise: bool = True,
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                collaborate_error = _error_handler.handle_error(e, context or func.__name__)
+                eunice_error = _error_handler.handle_error(e, context or func.__name__)
                 if reraise:
-                    raise collaborate_error
+                    raise eunice_error
                 return fallback_return
         return wrapper
     return decorator
@@ -230,12 +230,12 @@ def safe_execute(func: Callable, *args, context: Optional[str] = None,
     try:
         return func(*args, **kwargs)
     except Exception as e:
-        collaborate_error = _error_handler.handle_error(e, context)
-        print(f"❌ Error: {collaborate_error.message}")
+        eunice_error = _error_handler.handle_error(e, context)
+        print(f"❌ Error: {eunice_error.message}")
         return fallback_return
 
 
-def format_error_for_user(error: CollaborateError) -> str:
+def format_error_for_user(error: EuniceError) -> str:
     """Format an error message for display to the user."""
     user_messages = {
         ErrorType.NETWORK_ERROR: "⚠️ Network connection issue. Please check your internet connection and try again.",

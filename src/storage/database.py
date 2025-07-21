@@ -1,4 +1,4 @@
-"""Database operations for the Collaborate application."""
+"""Database operations for the Eunice application."""
 
 import sqlite3
 import json
@@ -20,9 +20,9 @@ except ImportError:
 
 
 class DatabaseManager:
-    """Manages database operations for the Collaborate application with enhanced error handling."""
+    """Manages database operations for the Eunice application with enhanced error handling."""
     
-    def __init__(self, db_path: str = "data/collaborate.db"):
+    def __init__(self, db_path: str = "data/eunice.db"):
         self.db_path = db_path
         self._persistent_conn = None
         self.max_retries = 3

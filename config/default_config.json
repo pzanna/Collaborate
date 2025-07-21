@@ -30,12 +30,12 @@
         }
     },
     "storage": {
-        "database_path": "data/collaborate.db",
+        "database_path": "data/eunice.db",
         "export_path": "exports/"
     },
     "logging": {
         "level": "DEBUG",
-        "file": "logs/collaborate.log",
+        "file": "logs/eunice.log",
         "enable_ai_api_logging": true,
         "ai_api_log_file": "logs/ai_api.log",
         "ai_api_log_level": "DEBUG"

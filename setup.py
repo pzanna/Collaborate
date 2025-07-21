@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for the Collaborate application
+Setup script for the Eunice application
 """
 
 import os
@@ -101,7 +101,7 @@ def test_foundation():
 
 def main():
     """Run setup process."""
-    print("🚀 Collaborate Application Setup")
+    print("🚀 Eunice Application Setup")
     print("=" * 40)
     
     success = True

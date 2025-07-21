@@ -1,4 +1,4 @@
-"""Configuration management for the Collaborate application."""
+"""Configuration management for the Eunice application."""
 
 import os
 import json
@@ -30,14 +30,14 @@ class ConversationConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     """Configuration for data storage."""
-    database_path: str = "data/collaborate.db"
+    database_path: str = "data/eunice.db"
     export_path: str = "exports/"
 
 
 class LoggingConfig(BaseModel):
     """Configuration for logging."""
     level: str = "INFO"
-    file: str = "logs/collaborate.log"
+    file: str = "logs/eunice.log"
     enable_ai_api_logging: bool = True
     ai_api_log_file: str = "logs/ai_api.log"
     ai_api_log_level: str = "INFO"
@@ -112,7 +112,7 @@ class ConfigManager:
     
     def _get_default_config_path(self) -> str:
         """Get the default configuration file path."""
-        return os.getenv("COLLABORATE_CONFIG_PATH", "config/default_config.json")
+        return os.getenv("EUNICE_CONFIG_PATH", "config/default_config.json")
     
     def _load_config(self) -> Config:
         """Load configuration from file or create default."""
@@ -277,5 +277,5 @@ class ConfigManager:
             return self.config.logging if isinstance(self.config.logging, dict) else self.config.logging.dict()
         return {
             'level': 'INFO',
-            'file': 'logs/collaborate.log'
+            'file': 'logs/eunice.log'
         }

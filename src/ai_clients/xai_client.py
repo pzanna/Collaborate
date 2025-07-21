@@ -1,4 +1,4 @@
-"""xAI client wrapper for the Collaborate application."""
+"""xAI client wrapper for the Eunice application."""
 
 import os
 import sys

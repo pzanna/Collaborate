@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Setup script for Collaborate AI Platform
+# Setup script for Eunice AI Platform
 # This script sets up the Python environment and installs all dependencies
 
-echo "🚀 Setting up Collaborate AI Platform..."
+echo "🚀 Setting up Eunice AI Platform..."
 
 # Check if Python 3.8+ is available
 python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')

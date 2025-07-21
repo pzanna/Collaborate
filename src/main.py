@@ -1,5 +1,5 @@
 """
-Main entry point for the Collaborate application
+Main entry point for the Eunice application
 """
 
 import os
@@ -14,7 +14,7 @@ from .storage.database import DatabaseManager
 
 
 def main():
-    """Main entry point for the Collaborate application."""
+    """Main entry point for the Eunice application."""
     # Ensure directories exist
     os.makedirs("data", exist_ok=True)
     os.makedirs("logs", exist_ok=True)
@@ -29,7 +29,7 @@ def main():
     # Initialize database
     db_manager = DatabaseManager(config_manager.config.storage.database_path)
     
-    print("✓ Collaborate application initialized successfully")
+    print("✓ Eunice application initialized successfully")
     print("📋 Use web_server.py to start the web interface")
     print("🤖 Use agent_launcher.py to start research agents")
     print("🔧 Use mcp_server.py to start the MCP server")

@@ -156,7 +156,7 @@ The platform generates detailed logs for monitoring:
 
 - `logs/agents.log` - Agent coordination and activities
 - `logs/ai_api.log` - AI service interactions
-- `logs/collaborate.log` - Collaboration events
+- `logs/eunice.log` - Collaboration events
 - `logs/mcp_server.log` - MCP server operations
 
 ## 🔧 Configuration

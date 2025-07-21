@@ -413,7 +413,13 @@ class HierarchicalResearchAPI {
   // ============================================================================
 
   async getLegacyResearchTasks(projectId?: string): Promise<TaskResponse[]> {
-    console.warn('⚠️  Using deprecated endpoint. Consider using hierarchical structure.')
+    // Use a more robust deprecation warning that can be controlled
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        '⚠️  [DEPRECATED] getLegacyResearchTasks() is deprecated. ' +
+        'Please migrate to the hierarchical structure using getTasksByPlan().'
+      )
+    }
     
     const url = projectId 
       ? `${this.baseUrl}/api/projects/${projectId}/research-tasks`

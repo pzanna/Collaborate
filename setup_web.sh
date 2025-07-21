@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Setting up Collaborate Web UI..."
+echo "🚀 Setting up Eunice Web UI..."
 
 # Check if Python virtual environment exists
 if [ ! -d ".venv" ]; then
