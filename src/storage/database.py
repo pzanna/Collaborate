@@ -200,6 +200,11 @@ class DatabaseManager:
             # Add plan_approved column if it doesn't exist
             cursor.execute("ALTER TABLE research_tasks ADD COLUMN plan_approved BOOLEAN DEFAULT 0")
             print("✓ Added plan_approved column to research_tasks table")
+        
+        if 'description' not in research_columns:
+            # Add description column if it doesn't exist
+            cursor.execute("ALTER TABLE research_tasks ADD COLUMN description TEXT DEFAULT ''")
+            print("✓ Added description column to research_tasks table")
     
     # Project operations
     @handle_errors(context="create_project", reraise=False, fallback_return=None)

@@ -64,6 +64,7 @@ const TaskViewer: React.FC<TaskViewerProps> = ({ className = "" }) => {
   const [agentFilter, setAgentFilter] = useState("all")
   const [viewMode, setViewMode] = useState<"list" | "graph">("list")
   const [autoRefresh, setAutoRefresh] = useState(true)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [ws, setWs] = useState<WebSocket | null>(null)
 
   // Fetch task data from API

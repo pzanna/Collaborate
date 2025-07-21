@@ -3,7 +3,7 @@
  * Shows detailed view of a research topic with its plans and navigation
  */
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
   ArrowLeftIcon,
@@ -36,14 +36,7 @@ const ResearchTopicDetail: React.FC = () => {
   const [showCreatePlanForm, setShowCreatePlanForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
 
-  useEffect(() => {
-    if (topicId) {
-      loadTopicDetails()
-      loadPlans()
-    }
-  }, [topicId])
-
-  const loadTopicDetails = async () => {
+  const loadTopicDetails = useCallback(async () => {
     if (!topicId) return
 
     try {
@@ -56,9 +49,9 @@ const ResearchTopicDetail: React.FC = () => {
         err instanceof Error ? err.message : "Failed to load topic details"
       )
     }
-  }
+  }, [topicId])
 
-  const loadPlans = async () => {
+  const loadPlans = useCallback(async () => {
     if (!topicId) return
 
     try {
@@ -74,7 +67,14 @@ const ResearchTopicDetail: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [topicId])
+
+  useEffect(() => {
+    if (topicId) {
+      loadTopicDetails()
+      loadPlans()
+    }
+  }, [topicId, loadTopicDetails, loadPlans])
 
   const handleBackClick = () => {
     navigate(`/projects/${projectId}/topics`)

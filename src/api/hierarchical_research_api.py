@@ -6,6 +6,7 @@ from src.models.hierarchical_data_models import (
     ResearchTopicRequest,
     ResearchTopicResponse,
     ResearchPlanRequest,
+    ResearchPlanUpdate,
     ResearchPlanResponse,
     TaskRequest,
     TaskResponse
@@ -64,7 +65,7 @@ async def create_research_topic(
             'project_id': project_id,
             'name': topic_request.name,
             'description': topic_request.description,
-            'status': topic_request.status or 'active',
+            'status': 'active',  # Default status for new topics
             'metadata': topic_request.metadata or {}
         }
         
@@ -195,7 +196,7 @@ async def create_research_plan(
             'name': plan_request.name,
             'description': plan_request.description,
             'plan_type': plan_request.plan_type,
-            'status': plan_request.status or 'draft',
+            'status': 'draft',  # Default status for new plans
             'plan_structure': plan_request.plan_structure or {},
             'metadata': plan_request.metadata or {}
         }
@@ -249,24 +250,24 @@ async def get_research_plan(
 @hierarchical_router.put("/plans/{plan_id}", response_model=ResearchPlanResponse)
 async def update_research_plan(
     plan_id: str,
-    plan_update: ResearchPlanRequest,
+    plan_update: ResearchPlanUpdate,
     db: Optional[HierarchicalDatabaseManager] = Depends(get_database)
 ):
     """Update a research plan."""
+    db = check_database_available(db)
+    
     try:
-        # Prepare update data
+        # Prepare update data from non-None values
         update_data = {}
-        if plan_update.name:
+        if plan_update.name is not None:
             update_data['name'] = plan_update.name
-        if plan_update.description:
+        if plan_update.description is not None:
             update_data['description'] = plan_update.description
-        if plan_update.plan_type:
+        if plan_update.plan_type is not None:
             update_data['plan_type'] = plan_update.plan_type
-        if plan_update.status:
-            update_data['status'] = plan_update.status
-        if plan_update.plan_structure:
+        if plan_update.plan_structure is not None:
             update_data['plan_structure'] = plan_update.plan_structure
-        if plan_update.metadata:
+        if plan_update.metadata is not None:
             update_data['metadata'] = plan_update.metadata
         
         # Update plan in database
@@ -323,12 +324,12 @@ async def create_task(
             'description': task_request.description,
             'task_type': task_request.task_type,
             'task_order': task_request.task_order or 1,
-            'status': task_request.status or 'pending',
-            'stage': task_request.stage or 'planning',
-            'single_agent_mode': task_request.single_agent_mode or False,
-            'max_results': task_request.max_results or 10,
-            'query': task_request.query,
-            'metadata': task_request.metadata or {}
+            'status': 'pending',  # Default status for new tasks
+            'stage': 'planning',  # Default stage for new tasks
+            'single_agent_mode': getattr(task_request, 'single_agent_mode', False),
+            'max_results': getattr(task_request, 'max_results', 10),
+            'query': getattr(task_request, 'query', None),
+            'metadata': getattr(task_request, 'metadata', {})
         }
         
         # Create task in database
