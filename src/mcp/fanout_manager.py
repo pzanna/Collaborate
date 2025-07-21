@@ -271,56 +271,19 @@ class TaskFanoutManager:
     
     async def _aggregate_search_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
         """Aggregate search results"""
-        all_results = []
-        all_sources = set()
-        total_relevance = 0.0
-        result_count = 0
-        
-        for subtask_id, result in fanout_task.partial_results.items():
-            if 'results' in result:
-                all_results.extend(result['results'])
-            if 'sources' in result:
-                all_sources.update(result['sources'])
-            if 'relevance_score' in result:
-                total_relevance += result['relevance_score']
-                result_count += 1
-        
-        # Sort results by relevance if available
-        if all_results and isinstance(all_results[0], dict) and 'relevance' in all_results[0]:
-            all_results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
-        
-        return {
-            'action': 'search',
-            'results': all_results,
-            'sources': list(all_sources),
-            'total_results': len(all_results),
-            'average_relevance': total_relevance / max(result_count, 1),
-            'subtask_count': len(fanout_task.partial_results),
-            'success_rate': fanout_task.success_rate
-        }
+        return await self._aggregate_results_by_type(fanout_task, 'search', {
+            'results': list,  # Extend lists
+            'sources': set,   # Union sets
+            'relevance_score': 'avg'  # Average numbers
+        })
     
     async def _aggregate_analysis_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
         """Aggregate analysis results"""
-        insights = []
-        confidence_scores = []
-        conclusions = []
-        
-        for subtask_id, result in fanout_task.partial_results.items():
-            if 'insights' in result:
-                insights.extend(result['insights'])
-            if 'confidence' in result:
-                confidence_scores.append(result['confidence'])
-            if 'conclusion' in result:
-                conclusions.append(result['conclusion'])
-        
-        return {
-            'action': 'analyze',
-            'insights': insights,
-            'conclusions': conclusions,
-            'average_confidence': sum(confidence_scores) / max(len(confidence_scores), 1),
-            'subtask_count': len(fanout_task.partial_results),
-            'success_rate': fanout_task.success_rate
-        }
+        return await self._aggregate_results_by_type(fanout_task, 'analyze', {
+            'insights': list,
+            'conclusions': list,
+            'confidence': 'avg'
+        })
     
     async def _aggregate_execution_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
         """Aggregate execution results"""
@@ -346,6 +309,58 @@ class TaskFanoutManager:
             'subtask_count': len(fanout_task.partial_results),
             'success_rate': fanout_task.success_rate
         }
+
+    async def _aggregate_results_by_type(self, fanout_task: FanoutTask, action_name: str, field_configs: Dict[str, Any]) -> Dict[str, Any]:
+        """Generic aggregation method to reduce code duplication"""
+        aggregated: Dict[str, Any] = {'action': action_name}
+        collectors: Dict[str, Any] = {}
+        
+        # Initialize collectors based on field configs
+        for field, config in field_configs.items():
+            if config == list:
+                collectors[field] = []
+            elif config == set:
+                collectors[field] = set()
+            elif config == 'avg':
+                collectors[field] = []
+        
+        # Collect data from all partial results
+        for subtask_id, result in fanout_task.partial_results.items():
+            for field, config in field_configs.items():
+                if field in result:
+                    if config == list and isinstance(result[field], list):
+                        collectors[field].extend(result[field])
+                    elif config == set:
+                        if isinstance(result[field], (list, set)):
+                            collectors[field].update(result[field])
+                        else:
+                            collectors[field].add(result[field])
+                    elif config == 'avg' and isinstance(result[field], (int, float)):
+                        collectors[field].append(result[field])
+        
+        # Process collected data
+        for field, config in field_configs.items():
+            if config == list:
+                aggregated[field] = collectors[field]
+                # Sort by relevance if available
+                if (field == 'results' and collectors[field] and 
+                    isinstance(collectors[field][0], dict) and 'relevance' in collectors[field][0]):
+                    aggregated[field].sort(key=lambda x: x.get('relevance', 0), reverse=True)
+            elif config == set:
+                aggregated[field] = list(collectors[field])
+            elif config == 'avg':
+                values = collectors[field]
+                aggregated[f'average_{field}'] = sum(values) / max(len(values), 1) if values else 0.0
+        
+        # Add common metadata
+        aggregated['subtask_count'] = len(fanout_task.partial_results)
+        aggregated['success_rate'] = fanout_task.success_rate
+        
+        # Add action-specific metadata
+        if action_name == 'search':
+            aggregated['total_results'] = len(aggregated.get('results', []))
+        
+        return aggregated
     
     async def _aggregate_default_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
         """Default result aggregation"""

@@ -129,9 +129,10 @@ def main():
         print("🎉 Setup completed successfully!")
         print("\n📋 Next steps:")
         print("1. Edit .env file and add your API keys")
-        print("2. Run 'python test_full_functionality.py' to test everything")
-        print("3. Run 'python collaborate.py' to start the application")
-        print("\n💡 Tip: You can also run 'python run_collaborate.py' as a shortcut")
+        print("2. Start MCP server: python mcp_server.py")
+        print("3. Start agents: python agent_launcher.py")
+        print("4. Start web server: python web_server.py")
+        print("\n💡 Tip: Use start_eunice.sh to start all services at once")
     else:
         print("❌ Setup completed with errors")
         print("📋 Please fix the issues above before proceeding")

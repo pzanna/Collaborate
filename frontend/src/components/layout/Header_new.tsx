@@ -56,7 +56,7 @@ const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center space-x-4">
-        <div className="text-sm text-gray-500">Multi-Agent Research System</div>
+        <div className="text-sm text-gray-500">Eunice Research System</div>
       </div>
     </div>
   )

@@ -271,6 +271,10 @@ class StructuredLogger:
     def __init__(self, config_manager=None):
         self.mcp_logger = MCPLogger("structured_logger", "INFO", config_manager)
     
+    def __getattr__(self, name: str):
+        """Delegate all method calls to the underlying MCPLogger for simplicity"""
+        return getattr(self.mcp_logger, name)
+    
     def log_event(self, component: str, event: str, data: Dict[str, Any], level: str = "INFO"):
         """Log event method compatible with tests"""
         self.mcp_logger.legacy_log_event(component, event, data, level)

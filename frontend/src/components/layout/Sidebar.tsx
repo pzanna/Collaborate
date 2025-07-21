@@ -39,7 +39,7 @@ const Sidebar: React.FC = () => {
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-800">Collaborate</h2>
+        <h2 className="text-lg font-semibold text-gray-800">Eunice</h2>
         <button
           onClick={() => dispatch(toggleSidebar())}
           className="p-1 rounded-lg hover:bg-gray-100 transition-colors"

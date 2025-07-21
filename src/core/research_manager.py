@@ -49,6 +49,7 @@ class ResearchContext:
     query: str
     user_id: str
     conversation_id: str
+    project_id: Optional[str] = None  # New field for project association
     stage: ResearchStage = ResearchStage.PLANNING
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -309,6 +310,7 @@ class ResearchManager:
                 query=query,
                 user_id=user_id,
                 conversation_id=conversation_id,
+                project_id=options.get('project_id') if options else None,  # Extract project_id from options
                 estimated_cost=cost_info['estimate']['cost_usd'],
                 single_agent_mode=single_agent_mode
             )
