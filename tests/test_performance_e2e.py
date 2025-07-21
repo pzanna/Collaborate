@@ -1,5 +1,5 @@
 """
-Performance and End-to-End tests for the Collaborate application.
+Performance and End-to-End tests for the Eunice application.
 
 Tests the performance characteristics and complete workflows including:
 - Load testing for database operations

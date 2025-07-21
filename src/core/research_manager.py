@@ -21,6 +21,7 @@ try:
     from ..config.config_manager import ConfigManager
     from ..utils.error_handler import ErrorHandler
     from ..utils.performance import PerformanceMonitor
+    from ..utils.id_utils import generate_timestamped_id
 except ImportError:
     # Fall back to absolute imports (when imported from outside src package)
     from mcp.client import MCPClient
@@ -29,6 +30,7 @@ except ImportError:
     from config.config_manager import ConfigManager
     from utils.error_handler import ErrorHandler
     from utils.performance import PerformanceMonitor
+    from utils.id_utils import generate_timestamped_id
 
 
 class ResearchStage(Enum):
@@ -49,6 +51,7 @@ class ResearchContext:
     query: str
     user_id: str
     conversation_id: str
+    project_id: Optional[str] = None  # New field for project association
     stage: ResearchStage = ResearchStage.PLANNING
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -309,6 +312,7 @@ class ResearchManager:
                 query=query,
                 user_id=user_id,
                 conversation_id=conversation_id,
+                project_id=options.get('project_id') if options else None,  # Extract project_id from options
                 estimated_cost=cost_info['estimate']['cost_usd'],
                 single_agent_mode=single_agent_mode
             )
@@ -1169,7 +1173,7 @@ class ResearchManager:
         if context_id and context_id in self.active_contexts:
             context = self.active_contexts[context_id]
             return {
-                'plan_id': f"plan_{context_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                'plan_id': f"plan_{context_id}_{generate_timestamped_id('temp')}",
                 'context_id': context_id,
                 'prompt': f"Research plan for: {context.query}",
                 'raw_response': "RM AI response for active research context",

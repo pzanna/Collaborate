@@ -1,10 +1,12 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import {
   BeakerIcon,
   ClipboardDocumentListIcon,
   DocumentTextIcon,
   PlayIcon,
+  FolderIcon,
 } from "@heroicons/react/24/outline"
+import { apiService, Project } from "../../services/api"
 
 interface ResearchTask {
   id: string
@@ -18,9 +20,36 @@ interface ResearchTask {
 const ResearchWorkspace: React.FC = () => {
   const [tasks, setTasks] = useState<ResearchTask[]>([])
   const [newQuery, setNewQuery] = useState("")
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("")
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true)
+
+  // Load projects on component mount
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const projectsData = await apiService.getProjects()
+        setProjects(projectsData)
+        // Auto-select first project if available
+        if (projectsData.length > 0) {
+          setSelectedProjectId(projectsData[0].id)
+        }
+      } catch (error) {
+        console.error("Failed to load projects:", error)
+      } finally {
+        setIsLoadingProjects(false)
+      }
+    }
+
+    loadProjects()
+  }, [])
 
   const startResearch = async () => {
     if (!newQuery.trim()) return
+    if (!selectedProjectId) {
+      alert("Please select a project first")
+      return
+    }
 
     const newTask: ResearchTask = {
       id: Date.now().toString(),
@@ -37,15 +66,19 @@ const ResearchWorkspace: React.FC = () => {
     setNewQuery("")
 
     try {
-      // Start research task via API
+      // Start research task via API with project_id
       const response = await fetch("/api/research/start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          project_id: selectedProjectId, // Add project_id
           conversation_id: "research_session",
           query: query,
+          name: `Research: ${query.substring(0, 50)}${
+            query.length > 50 ? "..." : ""
+          }`, // Add task name
           research_mode: "comprehensive",
           max_results: 10,
         }),
@@ -183,6 +216,38 @@ const ResearchWorkspace: React.FC = () => {
           </div>
         </div>
 
+        {/* Project selector */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Project
+          </label>
+          {isLoadingProjects ? (
+            <div className="flex items-center space-x-2 p-2">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-gray-600">Loading projects...</span>
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800 text-sm">
+                No projects available. Please create a project first.
+              </p>
+            </div>
+          ) : (
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select a project...</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
         {/* Research input */}
         <div className="flex space-x-4">
           <input
@@ -195,7 +260,7 @@ const ResearchWorkspace: React.FC = () => {
           />
           <button
             onClick={startResearch}
-            disabled={!newQuery.trim()}
+            disabled={!newQuery.trim() || !selectedProjectId}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
           >
             <BeakerIcon className="h-5 w-5" />

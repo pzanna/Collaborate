@@ -1,4 +1,4 @@
-"""Core data models for the Collaborate application."""
+"""Core data models for the Eunice application."""
 
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -105,3 +105,48 @@ class ConversationSession(BaseModel):
             total_chars += message_chars
         
         return list(reversed(context_messages))
+
+
+class ResearchTask(BaseModel):
+    """Research task model for tracking research requests."""
+    id: str = Field(default_factory=generate_uuid)
+    project_id: str
+    conversation_id: Optional[str] = None
+    query: str
+    name: str  # Human-readable task name
+    status: str = "pending"  # pending, running, completed, failed, cancelled
+    stage: str = "planning"  # planning, retrieval, reasoning, execution, synthesis, complete, failed
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    estimated_cost: float = 0.0
+    actual_cost: float = 0.0
+    cost_approved: bool = False
+    single_agent_mode: bool = False
+    research_mode: str = "comprehensive"  # comprehensive, quick, deep
+    max_results: int = 10
+    progress: float = 0.0
+    
+    # Research results
+    search_results: List[Dict[str, Any]] = Field(default_factory=list)
+    reasoning_output: Optional[str] = None
+    execution_results: List[Dict[str, Any]] = Field(default_factory=list)
+    synthesis: Optional[str] = None
+    
+    # Metadata
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def update_timestamp(self) -> None:
+        """Update the updated_at timestamp."""
+        self.updated_at = datetime.now()
+
+    def update_progress(self, new_progress: float) -> None:
+        """Update task progress."""
+        self.progress = max(0.0, min(100.0, new_progress))
+        self.update_timestamp()
+
+    def update_status(self, new_status: str, new_stage: Optional[str] = None) -> None:
+        """Update task status and optionally stage."""
+        self.status = new_status
+        if new_stage:
+            self.stage = new_stage
+        self.update_timestamp()

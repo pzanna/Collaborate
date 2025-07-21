@@ -4,9 +4,51 @@ _Last Updated: July 21, 2025_
 
 ## Overview
 
-The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Retriever, Reasoner, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control and real-time monitoring.
+The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Retriever, Reasoner, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **project-based task organization**.
 
 > **📘 Related Documentation**: For detailed information about the cost estimation system, see [Cost Estimation System Documentation](Cost_Estimation_System.md).
+
+## Key Updates in Project Integration
+
+### New Features Added
+
+1. **Project-Based Task Organization**: All research tasks are now linked to specific projects
+2. **Enhanced Database Integration**: Research tasks are persistently stored with full metadata
+3. **Project Task Listing**: API endpoints to list and view research tasks by project
+4. **Task Detail Views**: Comprehensive task detail pages with results, cost, and status information
+5. **Enhanced Frontend Integration**: Updated UI components for project-aware research workflows
+
+### Database Schema Extensions
+
+New `research_tasks` table with the following structure:
+
+```sql
+CREATE TABLE research_tasks (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    conversation_id TEXT,
+    query TEXT NOT NULL,
+    name TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    stage TEXT DEFAULT 'planning',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    estimated_cost REAL DEFAULT 0.0,
+    actual_cost REAL DEFAULT 0.0,
+    cost_approved BOOLEAN DEFAULT 0,
+    single_agent_mode BOOLEAN DEFAULT 0,
+    research_mode TEXT DEFAULT 'comprehensive',
+    max_results INTEGER DEFAULT 10,
+    progress REAL DEFAULT 0.0,
+    search_results TEXT,
+    reasoning_output TEXT,
+    execution_results TEXT,
+    synthesis TEXT,
+    metadata TEXT,
+    FOREIGN KEY (project_id) REFERENCES projects (id),
+    FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+);
+```
 
 ## Architecture
 
@@ -31,11 +73,54 @@ class ResearchStage(Enum):
 
 Each research task is tracked using a `ResearchContext` dataclass that maintains:
 
-- **Task Metadata**: ID, query, user, conversation references
+- **Task Metadata**: ID, query, user, conversation references, **project association**
 - **Stage Progression**: Current stage, completed/failed stages, retry logic
 - **Research Data**: Search results, reasoning output, execution results, synthesis
 - **Cost Tracking**: Estimated vs actual costs, approval status
 - **Context Management**: Data persistence and metadata
+
+**Enhanced ResearchContext with Project Support:**
+
+```python
+@dataclass
+class ResearchContext:
+    task_id: str
+    query: str
+    user_id: str
+    conversation_id: str
+    project_id: Optional[str] = None  # New: Project association
+    stage: ResearchStage = ResearchStage.PLANNING
+    # ... other fields
+```
+
+#### 3. Database Integration
+
+**Research Task Data Model:**
+
+```python
+class ResearchTask(BaseModel):
+    id: str = Field(default_factory=generate_uuid)
+    project_id: str  # Required project association
+    conversation_id: Optional[str] = None
+    query: str
+    name: str  # Human-readable task name
+    status: str = "pending"  # pending, running, completed, failed, cancelled
+    stage: str = "planning"  # Current research stage
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    # Cost and progress tracking
+    estimated_cost: float = 0.0
+    actual_cost: float = 0.0
+    cost_approved: bool = False
+    single_agent_mode: bool = False
+    progress: float = 0.0
+    # Research results
+    search_results: List[Dict[str, Any]] = Field(default_factory=list)
+    reasoning_output: Optional[str] = None
+    execution_results: List[Dict[str, Any]] = Field(default_factory=list)
+    synthesis: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+```
 
 #### 3. Agent Communication
 
@@ -258,9 +343,42 @@ The Research Manager integrates with the FastAPI web server through dedicated en
 
 #### Research Task Endpoints
 
-- `POST /api/research/start` - Start new research task
+- `POST /api/research/start` - Start new research task (**now requires project_id**)
 - `GET /api/research/task/{task_id}` - Get task status and results
 - `DELETE /api/research/task/{task_id}` - Cancel active task
+- `GET /api/projects/{project_id}/research-tasks` - **New**: List tasks for a project
+- `GET /api/research-tasks` - **New**: List all tasks with filters
+
+#### Enhanced Research Request Format
+
+```python
+class ResearchRequest(BaseModel):
+    project_id: str  # New required field
+    conversation_id: str
+    query: str
+    name: Optional[str] = None  # Optional human-readable name
+    research_mode: str = "comprehensive"
+    max_results: int = 10
+```
+
+#### Enhanced Research Response Format
+
+```python
+class ResearchTaskResponse(BaseModel):
+    task_id: str
+    project_id: str  # New field
+    conversation_id: str
+    query: str
+    name: str  # Human-readable name
+    status: str
+    stage: str  # Current stage
+    created_at: str
+    updated_at: str
+    progress: float = 0.0
+    estimated_cost: float = 0.0  # New field
+    actual_cost: float = 0.0     # New field
+    results: Optional[Dict[str, Any]] = None
+```
 
 #### WebSocket Streaming
 
@@ -271,16 +389,102 @@ The Research Manager integrates with the FastAPI web server through dedicated en
 #### Example API Usage
 
 ```python
-# Start research task
+# Start research task with project association
 response = await start_research_task(ResearchRequest(
+    project_id="proj_123",  # Required project ID
     conversation_id="conv_123",
     query="Analyze market trends in AI",
+    name="AI Market Analysis",  # Optional readable name
     research_mode="comprehensive",
     max_results=10
 ))
 
-# Returns: ResearchTaskResponse with task_id and status
+# Get all tasks for a project
+project_tasks = await get_project_research_tasks("proj_123")
+
+# Get task details with results and cost information
+task_details = await get_research_task("task_456")
 ```
+
+### 5. Project Integration Features
+
+#### Project-Based Task Organization
+
+All research tasks are now organizationally linked to projects, providing:
+
+**Benefits:**
+
+- **Organized Workflow**: Tasks grouped by project for better management
+- **Project-Level Analytics**: Track costs and progress at project level
+- **Enhanced Navigation**: Drill-down from project to individual tasks
+- **Contextual Collaboration**: Tasks inherit project context and permissions
+
+**Project Task Management:**
+
+```python
+# Database methods for project-task integration
+def create_research_task(self, research_task: ResearchTask) -> Optional[ResearchTask]
+def get_research_tasks_by_project(self, project_id: str) -> List[ResearchTask]
+def get_research_task_count_by_project(self, project_id: str) -> int
+def list_research_tasks(self, project_id: Optional[str] = None,
+                       status_filter: Optional[str] = None) -> List[ResearchTask]
+```
+
+#### Enhanced Project Information
+
+Projects now include research task counts:
+
+```python
+class ProjectResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    created_at: str
+    updated_at: str
+    conversation_count: int = 0
+    research_task_count: int = 0  # New field
+```
+
+#### Frontend Integration
+
+**New Components Added:**
+
+- `ProjectDetailView`: Shows project overview with all associated research tasks
+- `ResearchTaskDetailView`: Comprehensive task detail page with results, costs, and status
+- Enhanced `ProjectsView`: Displays task counts and provides navigation to task details
+- Updated `ResearchWorkspace`: Includes project selection for new research tasks
+
+**Navigation Flow:**
+
+1. **Projects List** → Click project → **Project Detail Page**
+2. **Project Detail** → Click task → **Task Detail Page**
+3. **Research Workspace** → Select project → Create task → **Task Detail Page**
+
+#### Task Detail Views
+
+The new task detail page provides comprehensive information:
+
+**Task Overview:**
+
+- Task name, status, and progress
+- Current research stage
+- Creation and update timestamps
+- Cost information (estimated vs actual)
+
+**Research Content:**
+
+- Original research query
+- Search results with relevance scores
+- AI analysis and reasoning output
+- Task execution results
+- Final synthesis and summary
+
+**Cost Analytics:**
+
+- Estimated vs actual cost comparison
+- Cost breakdown by provider and agent
+- Cost approval status
+- Single-agent mode indicator
 
 ### 5. Agent System Integration
 
@@ -350,19 +554,20 @@ mcp_config = {
 
 ## Usage Examples
 
-### Basic Research Task
+### Basic Research Task with Project Association
 
 ```python
 # Initialize Research Manager
 research_manager = ResearchManager(config_manager)
 await research_manager.initialize()
 
-# Start research task
+# Start research task with project association
 task_id, cost_info = await research_manager.start_research_task(
     query="What are the latest developments in quantum computing?",
     user_id="user_123",
     conversation_id="conv_456",
     options={
+        'project_id': 'proj_789',  # Required project association
         'research_mode': 'comprehensive',
         'max_results': 15,
         'single_agent_mode': False
@@ -374,7 +579,187 @@ status = research_manager.get_task_status(task_id)
 print(f"Progress: {research_manager.calculate_task_progress(task_id)}%")
 ```
 
-### Cost-Optimized Research
+### Project-Based Task Management
+
+```python
+# Create a research task via API
+research_request = ResearchRequest(
+    project_id="proj_789",
+    conversation_id="conv_456",
+    query="Analyze quantum computing market trends",
+    name="Quantum Computing Market Analysis",
+    research_mode="comprehensive",
+    max_results=10
+)
+
+# Start the task
+task_response = await apiService.startResearchTask(research_request)
+print(f"Started task: {task_response.name} (ID: {task_response.task_id})")
+
+# List all tasks for a project
+project_tasks = await apiService.getProjectResearchTasks("proj_789")
+print(f"Project has {len(project_tasks)} research tasks")
+
+# Get detailed task information
+task_details = await apiService.getResearchTask(task_response.task_id)
+print(f"Task status: {task_details.status}, Progress: {task_details.progress}%")
+print(f"Estimated cost: ${task_details.estimated_cost:.4f}")
+print(f"Actual cost: ${task_details.actual_cost:.4f}")
+```
+
+### Database Integration Examples
+
+```python
+# Database operations for research tasks
+from src.storage.database import DatabaseManager
+from src.models.data_models import ResearchTask
+
+db_manager = DatabaseManager()
+
+# Create a research task record
+research_task = ResearchTask(
+    project_id="proj_123",
+    conversation_id="conv_456",
+    query="Analyze AI ethics frameworks",
+    name="AI Ethics Analysis",
+    research_mode="comprehensive",
+    estimated_cost=0.15
+)
+
+# Save to database
+created_task = db_manager.create_research_task(research_task)
+print(f"Created task: {created_task.name}")
+
+# List tasks for a project
+project_tasks = db_manager.get_research_tasks_by_project("proj_123")
+print(f"Found {len(project_tasks)} tasks for project")
+
+# Update task progress
+task = db_manager.get_research_task(created_task.id)
+task.update_progress(45.0)
+task.update_status("running", "reasoning")
+db_manager.update_research_task(task)
+
+# Get task count for project
+task_count = db_manager.get_research_task_count_by_project("proj_123")
+print(f"Project has {task_count} research tasks")
+```
+
+### Frontend Integration Examples
+
+#### Starting Research from Project Context
+
+```typescript
+// In ResearchWorkspace component
+const [selectedProjectId, setSelectedProjectId] = useState<string>("")
+const [projects, setProjects] = useState<Project[]>([])
+
+// Load available projects
+useEffect(() => {
+  const loadProjects = async () => {
+    const projectsData = await apiService.getProjects()
+    setProjects(projectsData)
+    if (projectsData.length > 0) {
+      setSelectedProjectId(projectsData[0].id)
+    }
+  }
+  loadProjects()
+}, [])
+
+// Start research with project context
+const startResearch = async () => {
+  if (!selectedProjectId) {
+    alert("Please select a project first")
+    return
+  }
+
+  const request: ResearchRequest = {
+    project_id: selectedProjectId,
+    conversation_id: "research_session",
+    query: newQuery,
+    name: `Research: ${newQuery.substring(0, 50)}`,
+    research_mode: "comprehensive",
+    max_results: 10,
+  }
+
+  try {
+    const response = await apiService.startResearchTask(request)
+    console.log(`Started task: ${response.name}`)
+    // Navigate to task detail view
+    navigate(`/research/task/${response.task_id}`)
+  } catch (error) {
+    console.error("Failed to start research:", error)
+  }
+}
+```
+
+#### Project Detail View Navigation
+
+```typescript
+// ProjectDetailView component shows all project tasks
+const ProjectDetailView: React.FC = () => {
+  const { projectId } = useParams<{ projectId: string }>()
+  const [researchTasks, setResearchTasks] = useState<ResearchTaskResponse[]>([])
+
+  useEffect(() => {
+    const loadProjectTasks = async () => {
+      if (projectId) {
+        const tasks = await apiService.getProjectResearchTasks(projectId)
+        setResearchTasks(tasks)
+      }
+    }
+    loadProjectTasks()
+  }, [projectId])
+
+  const handleTaskClick = (taskId: string) => {
+    navigate(`/research/task/${taskId}`)
+  }
+
+  // Render tasks with status, progress, and cost information
+  return (
+    <div>
+      {researchTasks.map((task) => (
+        <div key={task.task_id} onClick={() => handleTaskClick(task.task_id)}>
+          <h3>{task.name}</h3>
+          <p>
+            Status: {task.status}, Progress: {Math.round(task.progress)}%
+          </p>
+          <p>Cost: ${task.actual_cost.toFixed(4)}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+#### Research Task Detail View
+
+```typescript
+// ResearchTaskDetailView shows comprehensive task information
+const ResearchTaskDetailView: React.FC = () => {
+  const { taskId } = useParams<{ taskId: string }>()
+  const [task, setTask] = useState<ResearchTaskResponse | null>(null)
+
+  useEffect(() => {
+    const loadTask = async () => {
+      if (taskId) {
+        const taskData = await apiService.getResearchTask(taskId)
+        setTask(taskData)
+      }
+    }
+    loadTask()
+  }, [taskId])
+
+  // Display comprehensive task information including:
+  // - Task metadata (name, status, stage, progress)
+  // - Research query and objectives
+  // - Cost information (estimated vs actual)
+  // - Research results (search results, analysis, synthesis)
+  // - Task timeline and updates
+}
+```
+
+### Cost-Optimized Research with Project Context
 
 ```python
 # Single-agent mode for cost savings
@@ -383,6 +768,7 @@ task_id, cost_info = await research_manager.start_research_task(
     user_id="user_123",
     conversation_id="conv_456",
     options={
+        'project_id': 'proj_456',  # Required project association
         'single_agent_mode': True,  # Use only retriever
         'max_results': 5
     }
@@ -410,7 +796,53 @@ async def completion_handler(completion_data):
 research_manager.register_completion_callback(completion_handler)
 ```
 
-## Cost Management
+## Migration and Upgrade Notes
+
+### Upgrading to Project-Based Research Tasks
+
+**Breaking Changes:**
+
+- **Required project_id**: All new research tasks must specify a `project_id` in the request
+- **Updated API contracts**: `ResearchRequest` and `ResearchTaskResponse` models have new required fields
+- **Database schema changes**: New `research_tasks` table with foreign key relationships
+
+**Migration Steps:**
+
+1. **Update API Clients**: Modify all research task creation calls to include `project_id`
+
+```typescript
+// Before
+const request = {
+  conversation_id: "conv_123",
+  query: "Research query",
+}
+
+// After
+const request = {
+  project_id: "proj_456", // Required
+  conversation_id: "conv_123",
+  query: "Research query",
+  name: "Task Name", // Optional but recommended
+}
+```
+
+2. **Database Migration**: The system automatically creates the new `research_tasks` table on startup
+
+3. **Frontend Updates**: Update components to handle project selection and task navigation
+
+**Backward Compatibility:**
+
+- Existing research workflows continue to work but require project selection
+- Historical research data is preserved in the existing conversation system
+- Cost estimation and tracking APIs remain unchanged
+
+**Recommended Migration Path:**
+
+1. **Create default projects** for existing conversations
+2. **Update frontend components** to include project selection
+3. **Modify API calls** to include project_id
+4. **Test task creation and retrieval** workflows
+5. **Update monitoring and analytics** to use project-based views
 
 > **📘 Detailed Cost Documentation**: For comprehensive information about cost estimation algorithms, thresholds, and optimization strategies, see [Cost Estimation System Documentation](Cost_Estimation_System.md).
 

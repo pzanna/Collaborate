@@ -1,5 +1,5 @@
 """
-Integration tests for the Collaborate application.
+Integration tests for the Eunice application.
 
 Tests the integration between different components including:
 - AI client manager coordination

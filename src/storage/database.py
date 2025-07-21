@@ -1,4 +1,4 @@
-"""Database operations for the Collaborate application."""
+"""Database operations for the Eunice application."""
 
 import sqlite3
 import json
@@ -11,18 +11,18 @@ from contextlib import contextmanager
 
 # Import models and error handling
 try:
-    from ..models.data_models import Project, Conversation, Message, ConversationSession
+    from ..models.data_models import Project, Conversation, Message, ConversationSession, ResearchTask
     from ..utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from models.data_models import Project, Conversation, Message, ConversationSession
+    from models.data_models import Project, Conversation, Message, ConversationSession, ResearchTask
     from utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
 
 
 class DatabaseManager:
-    """Manages database operations for the Collaborate application with enhanced error handling."""
+    """Manages database operations for the Eunice application with enhanced error handling."""
     
-    def __init__(self, db_path: str = "data/collaborate.db"):
+    def __init__(self, db_path: str = "data/eunice.db"):
         self.db_path = db_path
         self._persistent_conn = None
         self.max_retries = 3
@@ -133,9 +133,39 @@ class DatabaseManager:
                 FOREIGN KEY (conversation_id) REFERENCES conversations (id)
             );
             
+            CREATE TABLE IF NOT EXISTS research_tasks (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                conversation_id TEXT,
+                query TEXT NOT NULL,
+                name TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                stage TEXT DEFAULT 'planning',
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP,
+                estimated_cost REAL DEFAULT 0.0,
+                actual_cost REAL DEFAULT 0.0,
+                cost_approved BOOLEAN DEFAULT 0,
+                single_agent_mode BOOLEAN DEFAULT 0,
+                research_mode TEXT DEFAULT 'comprehensive',
+                max_results INTEGER DEFAULT 10,
+                progress REAL DEFAULT 0.0,
+                search_results TEXT,
+                reasoning_output TEXT,
+                execution_results TEXT,
+                synthesis TEXT,
+                metadata TEXT,
+                FOREIGN KEY (project_id) REFERENCES projects (id),
+                FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+            );
+            
             CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id);
             CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
             CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_research_tasks_project_id ON research_tasks(project_id);
+            CREATE INDEX IF NOT EXISTS idx_research_tasks_conversation_id ON research_tasks(conversation_id);
+            CREATE INDEX IF NOT EXISTS idx_research_tasks_status ON research_tasks(status);
+            CREATE INDEX IF NOT EXISTS idx_research_tasks_created_at ON research_tasks(created_at);
         """)
     
     @handle_errors(context="database_migration")
@@ -565,3 +595,199 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Database integrity check error: {e}")
             return False
+
+    # ===== Research Task Management Methods =====
+
+    @handle_errors(context="create_research_task", reraise=False, fallback_return=None)
+    def create_research_task(self, research_task: ResearchTask) -> Optional[ResearchTask]:
+        """Create a new research task with error handling."""
+        try:
+            # Validate research task data
+            if not research_task.query or not research_task.query.strip():
+                raise ValidationError("Research task query cannot be empty", "query", research_task.query)
+            
+            if not research_task.name or not research_task.name.strip():
+                raise ValidationError("Research task name cannot be empty", "name", research_task.name)
+            
+            if not research_task.project_id:
+                raise ValidationError("Research task must be assigned to a project", "project_id", research_task.project_id)
+
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if project exists
+                cursor.execute("SELECT COUNT(*) FROM projects WHERE id = ?", (research_task.project_id,))
+                if cursor.fetchone()[0] == 0:
+                    raise ValidationError(f"Project with ID '{research_task.project_id}' does not exist", "project_id", research_task.project_id)
+                
+                # Check if conversation exists (if provided)
+                if research_task.conversation_id:
+                    cursor.execute("SELECT COUNT(*) FROM conversations WHERE id = ?", (research_task.conversation_id,))
+                    if cursor.fetchone()[0] == 0:
+                        raise ValidationError(f"Conversation with ID '{research_task.conversation_id}' does not exist", "conversation_id", research_task.conversation_id)
+                
+                # Insert research task
+                cursor.execute("""
+                    INSERT INTO research_tasks (
+                        id, project_id, conversation_id, query, name, status, stage,
+                        created_at, updated_at, estimated_cost, actual_cost, cost_approved,
+                        single_agent_mode, research_mode, max_results, progress,
+                        search_results, reasoning_output, execution_results, synthesis, metadata
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    research_task.id,
+                    research_task.project_id,
+                    research_task.conversation_id,
+                    research_task.query,
+                    research_task.name,
+                    research_task.status,
+                    research_task.stage,
+                    research_task.created_at,
+                    research_task.updated_at,
+                    research_task.estimated_cost,
+                    research_task.actual_cost,
+                    research_task.cost_approved,
+                    research_task.single_agent_mode,
+                    research_task.research_mode,
+                    research_task.max_results,
+                    research_task.progress,
+                    json.dumps(research_task.search_results),
+                    research_task.reasoning_output,
+                    json.dumps(research_task.execution_results),
+                    research_task.synthesis,
+                    json.dumps(research_task.metadata)
+                ))
+                
+                return research_task
+                
+        except ValidationError:
+            raise  # Re-raise validation errors
+        except Exception as e:
+            raise DatabaseError(f"Failed to create research task: {str(e)}", "create_research_task", 
+                              {"task_name": research_task.name}, e)
+
+    def get_research_task(self, task_id: str) -> Optional[ResearchTask]:
+        """Get a research task by ID."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM research_tasks WHERE id = ?", (task_id,)
+            ).fetchone()
+            
+            if row:
+                return ResearchTask(
+                    id=row['id'],
+                    project_id=row['project_id'],
+                    conversation_id=row['conversation_id'],
+                    query=row['query'],
+                    name=row['name'],
+                    status=row['status'],
+                    stage=row['stage'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at']),
+                    estimated_cost=row['estimated_cost'],
+                    actual_cost=row['actual_cost'],
+                    cost_approved=bool(row['cost_approved']),
+                    single_agent_mode=bool(row['single_agent_mode']),
+                    research_mode=row['research_mode'],
+                    max_results=row['max_results'],
+                    progress=row['progress'],
+                    search_results=json.loads(row['search_results']) if row['search_results'] else [],
+                    reasoning_output=row['reasoning_output'],
+                    execution_results=json.loads(row['execution_results']) if row['execution_results'] else [],
+                    synthesis=row['synthesis'],
+                    metadata=json.loads(row['metadata']) if row['metadata'] else {}
+                )
+            return None
+
+    def update_research_task(self, research_task: ResearchTask) -> None:
+        """Update a research task."""
+        research_task.update_timestamp()
+        with self.get_connection() as conn:
+            conn.execute(
+                """UPDATE research_tasks 
+                   SET query = ?, name = ?, status = ?, stage = ?, updated_at = ?,
+                       estimated_cost = ?, actual_cost = ?, cost_approved = ?,
+                       single_agent_mode = ?, research_mode = ?, max_results = ?,
+                       progress = ?, search_results = ?, reasoning_output = ?,
+                       execution_results = ?, synthesis = ?, metadata = ?
+                   WHERE id = ?""",
+                (research_task.query, research_task.name, research_task.status,
+                 research_task.stage, research_task.updated_at, research_task.estimated_cost,
+                 research_task.actual_cost, research_task.cost_approved,
+                 research_task.single_agent_mode, research_task.research_mode,
+                 research_task.max_results, research_task.progress,
+                 json.dumps(research_task.search_results), research_task.reasoning_output,
+                 json.dumps(research_task.execution_results), research_task.synthesis,
+                 json.dumps(research_task.metadata), research_task.id)
+            )
+            conn.commit()
+
+    def delete_research_task(self, task_id: str) -> bool:
+        """Delete a research task."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM research_tasks WHERE id = ?", (task_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def list_research_tasks(self, project_id: Optional[str] = None, conversation_id: Optional[str] = None, 
+                           status_filter: Optional[str] = None, limit: int = 100) -> List[ResearchTask]:
+        """List research tasks with optional filters."""
+        with self.get_connection() as conn:
+            query = "SELECT * FROM research_tasks WHERE 1=1"
+            params = []
+            
+            if project_id:
+                query += " AND project_id = ?"
+                params.append(project_id)
+            
+            if conversation_id:
+                query += " AND conversation_id = ?"
+                params.append(conversation_id)
+            
+            if status_filter:
+                query += " AND status = ?"
+                params.append(status_filter)
+            
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            
+            rows = conn.execute(query, params).fetchall()
+            
+            return [
+                ResearchTask(
+                    id=row['id'],
+                    project_id=row['project_id'],
+                    conversation_id=row['conversation_id'],
+                    query=row['query'],
+                    name=row['name'],
+                    status=row['status'],
+                    stage=row['stage'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at']),
+                    estimated_cost=row['estimated_cost'],
+                    actual_cost=row['actual_cost'],
+                    cost_approved=bool(row['cost_approved']),
+                    single_agent_mode=bool(row['single_agent_mode']),
+                    research_mode=row['research_mode'],
+                    max_results=row['max_results'],
+                    progress=row['progress'],
+                    search_results=json.loads(row['search_results']) if row['search_results'] else [],
+                    reasoning_output=row['reasoning_output'],
+                    execution_results=json.loads(row['execution_results']) if row['execution_results'] else [],
+                    synthesis=row['synthesis'],
+                    metadata=json.loads(row['metadata']) if row['metadata'] else {}
+                )
+                for row in rows
+            ]
+
+    def get_research_tasks_by_project(self, project_id: str) -> List[ResearchTask]:
+        """Get all research tasks for a specific project."""
+        return self.list_research_tasks(project_id=project_id)
+
+    def get_research_task_count_by_project(self, project_id: str) -> int:
+        """Get the count of research tasks for a project."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM research_tasks WHERE project_id = ?", (project_id,))
+            return cursor.fetchone()[0]

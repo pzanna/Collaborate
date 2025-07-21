@@ -271,6 +271,22 @@ class StructuredLogger:
     def __init__(self, config_manager=None):
         self.mcp_logger = MCPLogger("structured_logger", "INFO", config_manager)
     
+    def __getattr__(self, name: str):
+        """
+        Delegate attribute access to the underlying MCPLogger instance.
+        
+        This method is called when an attribute is not found in the usual places.
+        It delegates the attribute access to the `MCPLogger` instance, allowing
+        the `StructuredLogger` class to act as a proxy for `MCPLogger`.
+        
+        Parameters:
+            name (str): The name of the attribute being accessed.
+            
+        Returns:
+            Any: The corresponding attribute or method from the `MCPLogger` instance.
+        """
+        return getattr(self.mcp_logger, name)
+    
     def log_event(self, component: str, event: str, data: Dict[str, Any], level: str = "INFO"):
         """Log event method compatible with tests"""
         self.mcp_logger.legacy_log_event(component, event, data, level)

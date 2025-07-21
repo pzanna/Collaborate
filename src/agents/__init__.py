@@ -1,5 +1,5 @@
 """
-Agent framework for the Collaborate research system.
+Agent framework for the Eunice research system.
 
 This module provides specialized agents for different research tasks:
 - BaseAgent: Abstract base class for all agents

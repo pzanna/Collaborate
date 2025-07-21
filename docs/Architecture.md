@@ -49,6 +49,14 @@ The platform features several agent personas, each with distinct roles and capab
 
 _Refer to the [Research Team Roles](Research_team.md) for more details._
 
+## Project Structure
+
+The Eunice platform organizes research work in a hierarchical structure:
+**Project → Research Topic → Plan → Tasks**
+This structure allows for better organization, clearer separation of concerns, and more intuitive navigation.
+
+Refer to the [Hierarchical Research Structure](docs/HIERARCHICAL_RESEARCH_STRUCTURE.md) for detailed information on how research is organized within the platform.
+
 ## Tooling and Services
 
 The Eunice platform integrates various tools and services to support its research activities:

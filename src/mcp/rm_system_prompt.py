@@ -271,9 +271,7 @@ def suggest_parallelism(task_description: str, item_count: int = 1) -> int:
 
 
 # Example usage for testing
-if __name__ == "__main__":
-    print("Enhanced RM System Prompt Length:", len(get_enhanced_rm_prompt()))
-    print("Suggested parallelism for 'search 20 papers':", 
-          suggest_parallelism("search papers", 20))
-    print("Suggested parallelism for 'synthesize results':", 
-          suggest_parallelism("synthesize results", 5))
+# Example usage:
+# get_enhanced_rm_prompt() -> Get the full enhanced prompt
+# suggest_parallelism("search papers", 20) -> Returns suggested parallelism value
+# suggest_parallelism("synthesize results", 5) -> Returns suggested parallelism value

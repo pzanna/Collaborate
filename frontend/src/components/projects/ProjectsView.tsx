@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react"
 import { useSelector, useDispatch } from "react-redux"
+import { useNavigate } from "react-router-dom"
 import { RootState, AppDispatch } from "../../store/store"
 import {
   setProjects,
@@ -9,11 +10,13 @@ import {
   addProject,
 } from "../../store/slices/projectsSlice"
 import { apiService } from "../../services/api"
+import { hierarchicalAPI } from "../../services/hierarchicalAPI"
 import { formatDistanceToNow } from "date-fns"
 import { FolderIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline"
 
 const ProjectsView: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
+  const navigate = useNavigate()
   const { projects, isLoading, error } = useSelector(
     (state: RootState) => state.projects
   )
@@ -26,12 +29,33 @@ const ProjectsView: React.FC = () => {
     description: "",
   })
   const [isCreating, setIsCreating] = useState(false)
+  const [researchTopicsCounts, setResearchTopicsCounts] = useState<
+    Record<string, number>
+  >({})
 
   const loadProjects = useCallback(async () => {
     dispatch(setLoading(true))
     try {
       const projectsData = await apiService.getProjects()
       dispatch(setProjects(projectsData))
+
+      // Load research topics counts for each project
+      const topicsCounts: Record<string, number> = {}
+      await Promise.all(
+        projectsData.map(async (project) => {
+          try {
+            const topics = await hierarchicalAPI.getResearchTopics(project.id)
+            topicsCounts[project.id] = topics.length
+          } catch (error) {
+            console.warn(
+              `Failed to load topics for project ${project.id}:`,
+              error
+            )
+            topicsCounts[project.id] = 0
+          }
+        })
+      )
+      setResearchTopicsCounts(topicsCounts)
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to load projects"
@@ -42,6 +66,10 @@ const ProjectsView: React.FC = () => {
   useEffect(() => {
     loadProjects()
   }, [loadProjects])
+
+  const handleProjectClick = (projectId: string) => {
+    navigate(`/projects/${projectId}`)
+  }
 
   const handleDeleteProject = async (
     projectId: string,
@@ -149,7 +177,8 @@ const ProjectsView: React.FC = () => {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 p-6 group relative"
+              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 p-6 group relative cursor-pointer"
+              onClick={() => handleProjectClick(project.id)}
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center space-x-3">
@@ -161,7 +190,10 @@ const ProjectsView: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDeleteProject(project.id, project.name)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteProject(project.id, project.name)
+                  }}
                   disabled={deletingProjectId === project.id}
                   className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition-all disabled:opacity-50"
                   title="Delete project"
@@ -179,9 +211,25 @@ const ProjectsView: React.FC = () => {
               </p>
 
               <div className="flex items-center justify-between text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <FolderIcon className="h-4 w-4" />
-                  <span>{project.item_count || 0} items</span>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-1">
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                      />
+                    </svg>
+                    <span>
+                      {researchTopicsCounts[project.id] || 0} Research Topics
+                    </span>
+                  </div>
                 </div>
                 <span>
                   {formatDistanceToNow(new Date(project.created_at), {

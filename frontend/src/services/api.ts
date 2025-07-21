@@ -13,21 +13,31 @@ export interface Project {
   created_at: string;
   updated_at: string;
   item_count: number;
+  research_task_count: number;  // New field for research task count
 }
 
 export interface ResearchRequest {
+  project_id: string;  // New required field
+  conversation_id: string;
   query: string;
+  name?: string;  // Optional human-readable task name
   research_mode: 'comprehensive' | 'quick' | 'deep';
   max_results: number;
 }
 
 export interface ResearchTaskResponse {
   task_id: string;
+  project_id: string;  // New field
+  conversation_id: string;
   query: string;
+  name: string;  // Human-readable task name
   status: string;
+  stage: string;  // Current stage
   created_at: string;
   updated_at: string;
   progress: number;
+  estimated_cost: number;  // New field
+  actual_cost: number;     // New field
   results?: {
     search_results: Array<{
       title: string;
@@ -109,6 +119,25 @@ class ApiService {
     return this.request<{ success: boolean; message: string }>(`/research/task/${taskId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Research task listing methods
+  async getProjectResearchTasks(projectId: string): Promise<ResearchTaskResponse[]> {
+    return this.request<ResearchTaskResponse[]>(`/projects/${projectId}/research-tasks`);
+  }
+
+  async getAllResearchTasks(filters?: {
+    project_id?: string;
+    status?: string;
+    limit?: number;
+  }): Promise<ResearchTaskResponse[]> {
+    const params = new URLSearchParams();
+    if (filters?.project_id) params.append('project_id', filters.project_id);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    
+    const queryString = params.toString();
+    return this.request<ResearchTaskResponse[]>(`/research-tasks${queryString ? `?${queryString}` : ''}`);
   }
 
   // Health check

@@ -54,7 +54,7 @@ class ContextManager:
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         self.db_connection: Optional[aiosqlite.Connection] = None
-        self.db_path = Path(config_manager.get('storage.database_path', 'data/collaborate.db'))
+        self.db_path = Path(config_manager.get('storage.database_path', 'data/eunice.db'))
         self.active_contexts: Dict[str, SessionContext] = {}
         
     async def initialize(self) -> None:
