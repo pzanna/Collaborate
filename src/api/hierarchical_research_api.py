@@ -64,7 +64,7 @@ async def create_research_topic(
             'project_id': project_id,
             'name': topic_request.name,
             'description': topic_request.description,
-            'status': topic_request.status or 'active',
+            'status': 'active',  # Default status for new topics
             'metadata': topic_request.metadata or {}
         }
         
@@ -195,7 +195,7 @@ async def create_research_plan(
             'name': plan_request.name,
             'description': plan_request.description,
             'plan_type': plan_request.plan_type,
-            'status': plan_request.status or 'draft',
+            'status': 'draft',  # Default status for new plans
             'plan_structure': plan_request.plan_structure or {},
             'metadata': plan_request.metadata or {}
         }
@@ -323,12 +323,12 @@ async def create_task(
             'description': task_request.description,
             'task_type': task_request.task_type,
             'task_order': task_request.task_order or 1,
-            'status': task_request.status or 'pending',
-            'stage': task_request.stage or 'planning',
-            'single_agent_mode': task_request.single_agent_mode or False,
-            'max_results': task_request.max_results or 10,
-            'query': task_request.query,
-            'metadata': task_request.metadata or {}
+            'status': 'pending',  # Default status for new tasks
+            'stage': 'planning',  # Default stage for new tasks
+            'single_agent_mode': getattr(task_request, 'single_agent_mode', False),
+            'max_results': getattr(task_request, 'max_results', 10),
+            'query': getattr(task_request, 'query', None),
+            'metadata': getattr(task_request, 'metadata', {})
         }
         
         # Create task in database

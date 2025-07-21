@@ -457,15 +457,16 @@ class HierarchicalDatabaseManager:
             with self.get_connection() as conn:
                 conn.execute("""
                     INSERT INTO research_tasks 
-                    (id, project_id, plan_id, name, query, status, stage, created_at, updated_at, 
+                    (id, project_id, plan_id, name, description, query, status, stage, created_at, updated_at, 
                      estimated_cost, actual_cost, cost_approved, single_agent_mode, 
                      research_mode, max_results, progress, task_type, task_order, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     task_id,
                     project_id,
                     task_data['plan_id'],
                     task_data['name'],
+                    task_data.get('description', ''),
                     task_data.get('query', ''),
                     task_data.get('status', 'pending'),
                     task_data.get('stage', 'planning'),
@@ -501,13 +502,23 @@ class HierarchicalDatabaseManager:
                 row = cursor.fetchone()
                 if row:
                     task = dict(row)
-                    # Parse JSON fields
+                    # Parse JSON fields and ensure proper defaults
                     for field in ['search_results', 'execution_results', 'metadata']:
                         if task.get(field):
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = []
+                                task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                        else:
+                            task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                    
+                    # Ensure required fields have proper defaults
+                    task.setdefault('description', '')
+                    task.setdefault('search_results', [])
+                    task.setdefault('execution_results', [])
+                    task.setdefault('reasoning_output', None)
+                    task.setdefault('synthesis', None)
+                    
                     return task
                 return None
                 
