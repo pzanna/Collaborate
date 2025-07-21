@@ -508,9 +508,9 @@ class HierarchicalDatabaseManager:
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                                task[field] = self._get_default_value_for_field(field)
                         else:
-                            task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                            task[field] = self._get_default_value_for_field(field)
                     
                     # Ensure required fields have proper defaults
                     task.setdefault('description', '')
