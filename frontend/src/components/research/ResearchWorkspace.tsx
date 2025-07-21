@@ -24,6 +24,7 @@ const ResearchWorkspace: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>("")
   const [isLoadingProjects, setIsLoadingProjects] = useState(true)
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
 
   // Load projects on component mount
@@ -45,6 +46,60 @@ const ResearchWorkspace: React.FC = () => {
 
     loadProjects()
   }, [])
+
+  // Load existing research tasks
+  useEffect(() => {
+    const loadTasks = async () => {
+      try {
+        setIsLoadingTasks(true)
+        const response = await fetch("/api/research-tasks?limit=50")
+        if (response.ok) {
+          const apiTasks = await response.json()
+
+          // Convert API tasks to our local task format
+          const convertedTasks: ResearchTask[] = apiTasks.map(
+            (apiTask: any) => ({
+              id: apiTask.task_id,
+              title:
+                apiTask.name ||
+                apiTask.query?.substring(0, 50) +
+                  (apiTask.query?.length > 50 ? "..." : ""),
+              status: mapApiStatusToUIStatus(apiTask.status, apiTask.stage),
+              stage: apiTask.stage,
+              query: apiTask.query,
+              createdAt: new Date(apiTask.created_at),
+            })
+          )
+
+          setTasks(convertedTasks)
+
+          // Auto-select the most recent task if none selected
+          if (convertedTasks.length > 0 && !selectedTaskId) {
+            setSelectedTaskId(convertedTasks[0].id)
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load research tasks:", error)
+      } finally {
+        setIsLoadingTasks(false)
+      }
+    }
+
+    loadTasks()
+  }, [selectedTaskId])
+
+  // Helper function to map API status to UI status
+  const mapApiStatusToUIStatus = (
+    apiStatus: string,
+    stage?: string
+  ): ResearchTask["status"] => {
+    if (apiStatus === "completed") return "completed"
+    if (apiStatus === "failed") return "error"
+    if (apiStatus === "waiting_approval" || stage === "planning_complete")
+      return "waiting_approval"
+    if (apiStatus === "running" || apiStatus === "pending") return "running"
+    return "pending"
+  }
 
   const startResearch = async () => {
     if (!newQuery.trim()) return
@@ -124,6 +179,40 @@ const ResearchWorkspace: React.FC = () => {
         )
       )
     }
+  }
+
+  // Refresh a specific task from the server
+  const refreshTask = async (taskId: string) => {
+    try {
+      const response = await fetch(`/api/research/task/${taskId}`)
+      if (response.ok) {
+        const apiTask = await response.json()
+
+        const updatedTask: ResearchTask = {
+          id: apiTask.task_id,
+          title:
+            apiTask.name ||
+            apiTask.query?.substring(0, 50) +
+              (apiTask.query?.length > 50 ? "..." : ""),
+          status: mapApiStatusToUIStatus(apiTask.status, apiTask.stage),
+          stage: apiTask.stage,
+          query: apiTask.query,
+          results: apiTask.results
+            ? JSON.stringify(apiTask.results, null, 2)
+            : undefined,
+          createdAt: new Date(apiTask.created_at),
+        }
+
+        setTasks((prev) =>
+          prev.map((task) => (task.id === taskId ? updatedTask : task))
+        )
+
+        return updatedTask
+      }
+    } catch (error) {
+      console.error("Error refreshing task:", error)
+    }
+    return null
   }
 
   const pollTaskStatus = async (taskId: string, localTaskId: string) => {
@@ -322,7 +411,12 @@ const ResearchWorkspace: React.FC = () => {
         <div className="w-1/4 bg-white border-r border-gray-200 p-4 overflow-y-auto">
           <h3 className="text-lg font-semibold mb-4">Research Tasks</h3>
 
-          {tasks.length === 0 ? (
+          {isLoadingTasks ? (
+            <div className="text-center text-gray-500 mt-8">
+              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p>Loading research tasks...</p>
+            </div>
+          ) : tasks.length === 0 ? (
             <div className="text-center text-gray-500 mt-8">
               <BeakerIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
               <p>No research tasks yet</p>
@@ -377,8 +471,13 @@ const ResearchWorkspace: React.FC = () => {
               <ResearchPlanViewer
                 taskId={selectedTaskId}
                 onPlanApproved={() => {
-                  // Refresh task list to update status
-                  // You could implement task refresh logic here
+                  // Refresh the specific task when plan is approved
+                  refreshTask(selectedTaskId).then((updatedTask) => {
+                    // If task status changed from waiting_approval to running, restart polling
+                    if (updatedTask && updatedTask.status === "running") {
+                      pollTaskStatus(selectedTaskId, selectedTaskId)
+                    }
+                  })
                 }}
               />
             </div>
@@ -398,31 +497,50 @@ const ResearchWorkspace: React.FC = () => {
         <div className="flex-1 p-4 overflow-y-auto">
           <h3 className="text-lg font-semibold mb-4">Research Results</h3>
 
-          {tasks.filter((t) => t.results).length === 0 ? (
+          {selectedTaskId ? (
+            (() => {
+              const selectedTask = tasks.find((t) => t.id === selectedTaskId)
+              return selectedTask?.results ? (
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    {selectedTask.title}
+                  </h4>
+                  <div className="text-sm text-gray-600 whitespace-pre-wrap">
+                    {selectedTask.results}
+                  </div>
+                </div>
+              ) : selectedTask?.status === "completed" ? (
+                <div className="text-center text-gray-500 mt-8">
+                  <DocumentTextIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>Research completed but no results available</p>
+                  <p className="text-sm">
+                    The research task finished but didn't produce visible
+                    results
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center text-gray-500 mt-8">
+                  <DocumentTextIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No results yet</p>
+                  <p className="text-sm">
+                    {selectedTask?.status === "running"
+                      ? "Research is in progress..."
+                      : selectedTask?.status === "waiting_approval"
+                      ? "Waiting for plan approval..."
+                      : selectedTask?.status === "error"
+                      ? "Research failed"
+                      : "Complete the research task to see results"}
+                  </p>
+                </div>
+              )
+            })()
+          ) : (
             <div className="text-center text-gray-500 mt-8">
               <DocumentTextIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>No results yet</p>
+              <p>Select a task to view results</p>
               <p className="text-sm">
-                Complete research tasks will appear here
+                Choose a research task from the left panel to see its results
               </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {tasks
-                .filter((task) => task.results)
-                .map((task) => (
-                  <div
-                    key={task.id}
-                    className="bg-white border border-gray-200 rounded-lg p-4"
-                  >
-                    <h4 className="font-semibold text-gray-900 mb-2">
-                      {task.title}
-                    </h4>
-                    <div className="text-sm text-gray-600 whitespace-pre-wrap">
-                      {task.results}
-                    </div>
-                  </div>
-                ))}
             </div>
           )}
         </div>

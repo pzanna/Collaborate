@@ -216,8 +216,145 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
 
       {/* Plan content */}
       <div className="p-4 space-y-4">
-        {/* Raw Plan */}
-        {plan.raw_plan && (
+        {/* Show structured sections if available, otherwise show raw plan */}
+        {plan.objectives ||
+        plan.key_areas ||
+        plan.questions ||
+        plan.sources ||
+        plan.outcomes ? (
+          <>
+            {/* Objectives */}
+            {(plan.objectives || editing) && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                  Research Objectives
+                </h4>
+                {editing ? (
+                  <textarea
+                    value={editedPlan.objectives || ""}
+                    onChange={(e) =>
+                      setEditedPlan((prev) => ({
+                        ...prev,
+                        objectives: e.target.value,
+                      }))
+                    }
+                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter research objectives..."
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
+                    {plan.objectives}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Key Areas */}
+            {(plan.key_areas || editing) && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                  Key Areas to Investigate
+                </h4>
+                {editing ? (
+                  <textarea
+                    value={editedPlan.key_areas || ""}
+                    onChange={(e) =>
+                      setEditedPlan((prev) => ({
+                        ...prev,
+                        key_areas: e.target.value,
+                      }))
+                    }
+                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter key areas to investigate..."
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
+                    {plan.key_areas}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Questions */}
+            {(plan.questions || editing) && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                  Specific Questions
+                </h4>
+                {editing ? (
+                  <textarea
+                    value={editedPlan.questions || ""}
+                    onChange={(e) =>
+                      setEditedPlan((prev) => ({
+                        ...prev,
+                        questions: e.target.value,
+                      }))
+                    }
+                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter specific questions to answer..."
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
+                    {plan.questions}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Sources */}
+            {(plan.sources || editing) && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                  Information Sources
+                </h4>
+                {editing ? (
+                  <textarea
+                    value={editedPlan.sources || ""}
+                    onChange={(e) =>
+                      setEditedPlan((prev) => ({
+                        ...prev,
+                        sources: e.target.value,
+                      }))
+                    }
+                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter information sources to consult..."
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
+                    {plan.sources}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Expected Outcomes */}
+            {(plan.outcomes || editing) && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                  Expected Outcomes
+                </h4>
+                {editing ? (
+                  <textarea
+                    value={editedPlan.outcomes || ""}
+                    onChange={(e) =>
+                      setEditedPlan((prev) => ({
+                        ...prev,
+                        outcomes: e.target.value,
+                      }))
+                    }
+                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter expected outcomes..."
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
+                    {plan.outcomes}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        ) : plan.raw_plan ? (
+          /* Show raw plan if no structured sections available */
           <div>
             <h4 className="text-sm font-medium text-gray-900 mb-2">
               Complete Plan
@@ -240,135 +377,11 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
               </p>
             )}
           </div>
-        )}
-
-        {/* Objectives */}
-        {(plan.objectives || editing) && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-2">
-              Research Objectives
-            </h4>
-            {editing ? (
-              <textarea
-                value={editedPlan.objectives || ""}
-                onChange={(e) =>
-                  setEditedPlan((prev) => ({
-                    ...prev,
-                    objectives: e.target.value,
-                  }))
-                }
-                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter research objectives..."
-              />
-            ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                {plan.objectives}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Key Areas */}
-        {(plan.key_areas || editing) && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-2">
-              Key Areas to Investigate
-            </h4>
-            {editing ? (
-              <textarea
-                value={editedPlan.key_areas || ""}
-                onChange={(e) =>
-                  setEditedPlan((prev) => ({
-                    ...prev,
-                    key_areas: e.target.value,
-                  }))
-                }
-                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter key areas to investigate..."
-              />
-            ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                {plan.key_areas}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Questions */}
-        {(plan.questions || editing) && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-2">
-              Specific Questions
-            </h4>
-            {editing ? (
-              <textarea
-                value={editedPlan.questions || ""}
-                onChange={(e) =>
-                  setEditedPlan((prev) => ({
-                    ...prev,
-                    questions: e.target.value,
-                  }))
-                }
-                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter specific questions to answer..."
-              />
-            ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                {plan.questions}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Sources */}
-        {(plan.sources || editing) && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-2">
-              Information Sources
-            </h4>
-            {editing ? (
-              <textarea
-                value={editedPlan.sources || ""}
-                onChange={(e) =>
-                  setEditedPlan((prev) => ({
-                    ...prev,
-                    sources: e.target.value,
-                  }))
-                }
-                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter information sources to consult..."
-              />
-            ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                {plan.sources}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Expected Outcomes */}
-        {(plan.outcomes || editing) && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-2">
-              Expected Outcomes
-            </h4>
-            {editing ? (
-              <textarea
-                value={editedPlan.outcomes || ""}
-                onChange={(e) =>
-                  setEditedPlan((prev) => ({
-                    ...prev,
-                    outcomes: e.target.value,
-                  }))
-                }
-                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter expected outcomes..."
-              />
-            ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                {plan.outcomes}
-              </p>
-            )}
+        ) : (
+          /* No plan data available */
+          <div className="text-center p-8 text-gray-500">
+            <DocumentTextIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <p>No plan content available</p>
           </div>
         )}
       </div>

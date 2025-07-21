@@ -551,10 +551,43 @@ class PlanningAgent(BaseAgent):
     
     def _extract_section(self, text: str, section_name: str) -> str:
         """Extract a section from structured text."""
-        # Simple section extraction - in production, you'd use more sophisticated parsing
-        pattern = rf'{section_name}[:\s]*\n(.*?)(?=\n\d+\.|$)'
-        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
-        return match.group(1).strip() if match else ''
+        # Handle different section formats
+        patterns = [
+            # Markdown headers with numbers: ### 1. Research Objectives
+            rf'#{1,4}\s*\d+\.\s*{re.escape(section_name)}[^\n]*\n(.*?)(?=#{1,4}\s*\d+\.|$)',
+            # Markdown headers without numbers: ### Research Objectives  
+            rf'#{1,4}\s*{re.escape(section_name)}[^\n]*\n(.*?)(?=#{1,4}\s*\w+|$)',
+            # Colon format: Research Objectives:
+            rf'{re.escape(section_name)}[:\s]*\n(.*?)(?=\n\d+\.|#{1,4}|$)',
+            # Generic pattern
+            rf'{re.escape(section_name)}[:\s]*\n(.*?)(?=\n[A-Z][^a-z]*[:|\n]|$)'
+        ]
+        
+        # Map different variations of section names
+        section_variations = {
+            'objectives': ['objectives', 'research objectives'],
+            'key areas': ['key areas', 'key areas to investigate'],
+            'questions': ['questions', 'specific questions', 'specific questions to answer'],
+            'sources': ['sources', 'information sources', 'information sources to consult'],
+            'outcomes': ['outcomes', 'expected outcomes']
+        }
+        
+        # Get all possible names for this section
+        possible_names = section_variations.get(section_name.lower(), [section_name])
+        
+        for name in possible_names:
+            for pattern in patterns:
+                # Create the pattern with the current name variation
+                current_pattern = pattern.replace(re.escape(section_name), re.escape(name))
+                match = re.search(current_pattern, text, re.IGNORECASE | re.DOTALL)
+                if match:
+                    content = match.group(1).strip()
+                    # Clean up the content
+                    content = re.sub(r'^-+$', '', content, flags=re.MULTILINE)  # Remove separator lines
+                    content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)  # Remove excessive newlines
+                    return content.strip()
+        
+        return ''
 
 
 if __name__ == "__main__":
