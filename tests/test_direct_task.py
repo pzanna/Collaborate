@@ -23,7 +23,7 @@ async def send_test_task():
             action = {
                 'task_id': task_id,
                 'context_id': 'test_context',
-                'agent_type': 'reasoner',
+                'agent_type': 'planning',
                 'action': 'plan_research',
                 'payload': {
                     'query': 'Simple test query',

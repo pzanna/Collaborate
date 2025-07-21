@@ -28,19 +28,29 @@ class ConversationConfig(BaseModel):
     max_response_length: int = 1500
 
 
+import os
+import sys
+import json
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field
+
+
 class StorageConfig(BaseModel):
     """Configuration for data storage."""
-    database_path: str = "data/eunice.db"
+    database_path: str = Field(default_factory=lambda: os.path.join(os.getenv("EUNICE_DATA_PATH", "data"), "eunice.db"))
     export_path: str = "exports/"
 
 
 class LoggingConfig(BaseModel):
     """Configuration for logging."""
-    level: str = "INFO"
-    file: str = "logs/eunice.log"
+    level: str = Field(default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO"))
+    file: str = Field(default_factory=lambda: os.path.join(os.getenv("EUNICE_LOG_PATH", "logs"), "eunice.log"))
     enable_ai_api_logging: bool = True
-    ai_api_log_file: str = "logs/ai_api.log"
-    ai_api_log_level: str = "INFO"
+    ai_api_log_file: str = Field(default_factory=lambda: os.path.join(os.getenv("EUNICE_LOG_PATH", "logs"), "ai_api.log"))
+    ai_api_log_level: str = Field(default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO"))
 
 
 class CoordinationConfig(BaseModel):
@@ -56,12 +66,11 @@ class MCPServerConfig(BaseModel):
     """Configuration for MCP server."""
     host: str = "127.0.0.1"
     port: int = 9000
-    max_concurrent_tasks: int = 10
     task_timeout: int = 300
     retry_attempts: int = 3
-    log_level: str = "INFO"
+    log_level: str = Field(default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO"))
     enable_task_logging: bool = True
-    task_log_file: str = "logs/mcp_tasks.log"
+    task_log_file: str = Field(default_factory=lambda: os.path.join(os.getenv("EUNICE_LOG_PATH", "logs"), "mcp_tasks.log"))
 
 
 class AgentConfig(BaseModel):
@@ -78,7 +87,7 @@ class ResearchTasksConfig(BaseModel):
     max_task_queue_size: int = 50
     result_cache_ttl: int = 3600
     enable_task_persistence: bool = True
-    task_db: str = "data/research_tasks.db"
+    task_db: str = Field(default_factory=lambda: os.path.join(os.getenv("EUNICE_DATA_PATH", "data"), "research_tasks.db"))
 
 
 class ResearchManagerConfig(BaseModel):
@@ -115,10 +124,13 @@ class ConfigManager:
         return os.getenv("EUNICE_CONFIG_PATH", "config/default_config.json")
     
     def _load_config(self) -> Config:
-        """Load configuration from file or create default."""
+        """Load configuration from file and apply environment variable overrides."""
         if os.path.exists(self.config_path):
             with open(self.config_path, 'r') as f:
                 config_data = json.load(f)
+
+            # Apply environment variable overrides
+            self._apply_env_overrides(config_data)
 
             # Fix provider field in ai_providers
             if 'ai_providers' in config_data:
@@ -129,6 +141,65 @@ class ConfigManager:
             return Config(**config_data)
         else:
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
+
+    def _apply_env_overrides(self, config_data: dict) -> None:
+        """Apply environment variable overrides to config data."""
+        # Data path overrides
+        data_path = os.getenv("EUNICE_DATA_PATH")
+        if data_path:
+            if 'storage' not in config_data:
+                config_data['storage'] = {}
+            config_data['storage']['database_path'] = os.path.join(data_path, "eunice.db")
+            
+            if 'research_tasks' not in config_data:
+                config_data['research_tasks'] = {}
+            config_data['research_tasks']['task_db'] = os.path.join(data_path, "research_tasks.db")
+            
+            # Update agent memory storage path
+            if 'agents' in config_data and 'memory' in config_data['agents']:
+                if 'storage' not in config_data['agents']['memory']:
+                    config_data['agents']['memory']['storage'] = {}
+                config_data['agents']['memory']['storage']['context_db'] = os.path.join(data_path, "context.db")
+
+        # Log path and level overrides
+        log_path = os.getenv("EUNICE_LOG_PATH")
+        log_level = os.getenv("EUNICE_LOG_LEVEL")
+        
+        if log_path or log_level:
+            if 'logging' not in config_data:
+                config_data['logging'] = {}
+            
+            if log_path:
+                config_data['logging']['file'] = os.path.join(log_path, "eunice.log")
+                config_data['logging']['ai_api_log_file'] = os.path.join(log_path, "ai_api.log")
+            
+            if log_level:
+                config_data['logging']['level'] = log_level
+                config_data['logging']['ai_api_log_level'] = log_level
+
+            # Update MCP server log settings
+            if 'mcp_server' not in config_data:
+                config_data['mcp_server'] = {}
+            
+            if log_path:
+                config_data['mcp_server']['task_log_file'] = os.path.join(log_path, "mcp_tasks.log")
+            
+            if log_level:
+                config_data['mcp_server']['log_level'] = log_level
+
+        # Server configuration overrides
+        host = os.getenv("EUNICE_HOST")
+        mcp_port = os.getenv("EUNICE_MCP_PORT")
+        
+        if host or mcp_port:
+            if 'mcp_server' not in config_data:
+                config_data['mcp_server'] = {}
+            
+            if host:
+                config_data['mcp_server']['host'] = host
+            
+            if mcp_port:
+                config_data['mcp_server']['port'] = int(mcp_port)
     
     def save_config(self) -> None:
         """Save current configuration to file."""
@@ -155,6 +226,8 @@ class ConfigManager:
             return os.getenv("OPENAI_API_KEY", "")
         elif provider == "xai":
             return os.getenv("XAI_API_KEY", "")
+        elif provider == "anthropic":
+            return os.getenv("ANTHROPIC_API_KEY", "")
         else:
             raise ValueError(f"Unknown provider: {provider}")
     
@@ -195,7 +268,7 @@ class ConfigManager:
             return self.config.agents if isinstance(self.config.agents, dict) else self.config.agents.dict()
         return {
             'retriever': {'enabled': True, 'max_results': 10},
-            'reasoner': {'enabled': True, 'model': 'gpt-4'},
+            'planning': {'enabled': True, 'model': 'gpt-4'},
             'executor': {'enabled': True, 'timeout': 60},
             'memory': {'enabled': True, 'max_entries': 1000}
         }
@@ -241,7 +314,7 @@ class ConfigManager:
                 ai_api_logger.propagate = False
                 
                 # Also set up individual AI client loggers
-                for client_name in ['ai_clients.openai_client', 'ai_clients.xai_client', 'core.ai_client_manager']:
+                for client_name in ['src.ai_clients.openai_client', 'src.ai_clients.xai_client', 'src.core.ai_client_manager']:
                     client_logger = logging.getLogger(client_name)
                     client_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
                     client_logger.addHandler(ai_api_handler)

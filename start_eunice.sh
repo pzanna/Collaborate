@@ -15,6 +15,28 @@ cleanup() {
 # Set up signal handlers
 trap cleanup SIGINT SIGTERM
 
+# Function to stop existing services
+stop_existing_services() {
+    echo "🛑 Checking for existing services..."
+    
+    # Stop any existing Python processes for this project
+    pkill -f "python -m src.mcp" 2>/dev/null && echo "  ✓ Stopped existing MCP server"
+    pkill -f "python agent_launcher.py" 2>/dev/null && echo "  ✓ Stopped existing agents"
+    pkill -f "python web_server.py" 2>/dev/null && echo "  ✓ Stopped existing web server"
+    
+    # Kill processes using the ports we need
+    lsof -ti:9000 2>/dev/null | xargs kill -9 2>/dev/null && echo "  ✓ Freed port 9000 (MCP server)"
+    lsof -ti:8000 2>/dev/null | xargs kill -9 2>/dev/null && echo "  ✓ Freed port 8000 (web server)"
+    lsof -ti:3000 2>/dev/null | xargs kill -9 2>/dev/null && echo "  ✓ Freed port 3000 (frontend)"
+    
+    # Wait a moment for processes to fully terminate
+    sleep 2
+    echo "✓ Cleanup complete"
+}
+
+# Stop any existing services before starting
+stop_existing_services
+
 # Activate Python virtual environment if it exists
 if [ -d ".venv" ]; then
     source .venv/bin/activate
@@ -23,7 +45,7 @@ fi
 
 # Start MCP server
 echo "🔧 Starting MCP server..."
-python mcp_server.py &
+python -m src.mcp &
 MCP_PID=$!
 
 # Wait a moment for MCP server to start

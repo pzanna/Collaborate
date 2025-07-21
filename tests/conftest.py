@@ -309,7 +309,7 @@ TEST_RESEARCH_QUERIES = [
 
 TEST_AGENT_CAPABILITIES = {
     "retriever": ["search", "gather", "collect"],
-    "reasoner": ["analyze", "synthesize", "conclude"],
+    "planning": ["analyze", "synthesize", "conclude"],
     "executor": ["execute", "implement", "perform"],
     "memory": ["store", "retrieve", "remember"]
 }

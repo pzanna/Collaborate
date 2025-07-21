@@ -16,11 +16,11 @@ from contextlib import asynccontextmanager
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field
 import uvicorn
 
 # Import existing Eunice components
@@ -30,7 +30,7 @@ from src.core.ai_client_manager import AIClientManager
 from src.core.streaming_coordinator import StreamingResponseCoordinator
 from src.core.research_manager import ResearchManager
 from src.core.context_manager import ContextManager
-from src.models.data_models import Project, Conversation, Message
+from src.models.data_models import Project
 from src.utils.export_manager import ExportManager
 from src.utils.id_utils import generate_timestamped_id, generate_task_name
 from src.utils.error_handler import (
@@ -40,6 +40,27 @@ from src.utils.error_handler import (
     APIError
 )
 from src.mcp.client import MCPClient
+from src.api.hierarchical_research_api import hierarchical_router
+from functools import wraps
+import logging
+
+logger = logging.getLogger(__name__)
+
+def handle_api_errors(func):
+    """Decorator for consistent API error handling."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except HTTPException:
+            raise
+        except EuniceError as e:
+            raise HTTPException(status_code=400, detail=format_error_for_user(e))
+        except Exception as e:
+            logger.error(f"Unexpected error in {func.__name__}: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+    return wrapper
+
 
 
 # Pydantic models for API requests/responses
@@ -47,16 +68,7 @@ class ProjectCreate(BaseModel):
     name: str
     description: str = ""
 
-class ConversationCreate(BaseModel):
-    project_id: str
-    title: str
-
-class MessageCreate(BaseModel):
-    conversation_id: str
-    content: str
-
 class ResearchRequest(BaseModel):
-    conversation_id: str
     project_id: str  # New field for project association
     query: str
     name: Optional[str] = None  # Optional human-readable task name
@@ -66,7 +78,6 @@ class ResearchRequest(BaseModel):
 class ResearchTaskResponse(BaseModel):
     task_id: str
     project_id: str  # New field for project association
-    conversation_id: str
     query: str
     name: str  # Human-readable task name
     status: str
@@ -76,23 +87,9 @@ class ResearchTaskResponse(BaseModel):
     progress: float = 0.0
     estimated_cost: float = 0.0
     actual_cost: float = 0.0
+    research_plan: Optional[Dict[str, Any]] = None
+    plan_approved: bool = False
     results: Optional[Dict[str, Any]] = None
-
-class MessageResponse(BaseModel):
-    id: str
-    conversation_id: str
-    participant: str
-    content: str
-    timestamp: str
-    
-class ConversationResponse(BaseModel):
-    id: str
-    project_id: str
-    title: str
-    status: str
-    created_at: str
-    updated_at: str
-    message_count: int = 0
 
 class ProjectResponse(BaseModel):
     id: str
@@ -100,14 +97,69 @@ class ProjectResponse(BaseModel):
     description: str
     created_at: str
     updated_at: str
-    conversation_count: int = 0
     research_task_count: int = 0  # New field for research task count
+
+
+# Standard response models
+class SuccessResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+class ErrorResponse(BaseModel):
+    success: bool = False
+    error: str
+    details: Optional[Dict[str, Any]] = None
+
+class BulkOperationResponse(BaseModel):
+    success: bool
+    processed: int
+    failed: int
+    errors: List[str] = []
+
+# Pagination support
+class PaginationParams(BaseModel):
+    page: int = Field(default=1, ge=1, description="Page number (starts from 1)")
+    limit: int = Field(default=50, ge=1, le=1000, description="Items per page")
+    sort_by: Optional[str] = Field(default=None, description="Field to sort by")
+    sort_order: str = Field(default="asc", pattern="^(asc|desc)$", description="Sort order")
+
+class PaginatedResponse(BaseModel):
+    data: List[Any]
+    pagination: Dict[str, Any] = Field(description="Pagination metadata")
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+# Filtering support
+class FilterParams(BaseModel):
+    created_after: Optional[str] = Field(default=None, description="Filter by creation date (ISO format)")
+    created_before: Optional[str] = Field(default=None, description="Filter by creation date (ISO format)")
+    status: Optional[str] = Field(default=None, description="Filter by status")
+    search: Optional[str] = Field(default=None, description="Search query")
+
+# Bulk operations
+class BulkDeleteRequest(BaseModel):
+    ids: List[str] = Field(description="List of IDs to delete")
+
+class BulkUpdateRequest(BaseModel):
+    ids: List[str] = Field(description="List of IDs to update")
+    updates: Dict[str, Any] = Field(description="Updates to apply")
+
+# API versioning
+class APIVersionInfo(BaseModel):
+    version: str
+    supported_versions: List[str]
+    deprecated_versions: List[str]
+    migration_guide_url: Optional[str] = None
 
 class HealthResponse(BaseModel):
     status: str
     database: Dict
     ai_providers: Dict
     research_system: Dict
+    mcp_server: Dict
     errors: Dict
 
 
@@ -126,17 +178,7 @@ export_manager: Optional[ExportManager] = None
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
-        self.conversation_connections: Dict[str, List[WebSocket]] = {}
         self.research_connections: Dict[str, List[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        
-        if conversation_id:
-            if conversation_id not in self.conversation_connections:
-                self.conversation_connections[conversation_id] = []
-            self.conversation_connections[conversation_id].append(websocket)
 
     async def connect_research(self, websocket: WebSocket, task_id: str):
         await websocket.accept()
@@ -146,14 +188,6 @@ class ConnectionManager:
             self.research_connections[task_id] = []
         self.research_connections[task_id].append(websocket)
 
-    def disconnect(self, websocket: WebSocket, conversation_id: Optional[str] = None):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-        
-        if conversation_id and conversation_id in self.conversation_connections:
-            if websocket in self.conversation_connections[conversation_id]:
-                self.conversation_connections[conversation_id].remove(websocket)
-
     def disconnect_research(self, websocket: WebSocket, task_id: str):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
@@ -161,15 +195,6 @@ class ConnectionManager:
         if task_id in self.research_connections:
             if websocket in self.research_connections[task_id]:
                 self.research_connections[task_id].remove(websocket)
-
-    async def send_to_conversation(self, conversation_id: str, message: dict):
-        if conversation_id in self.conversation_connections:
-            for connection in self.conversation_connections[conversation_id]:
-                try:
-                    await connection.send_text(json.dumps(message))
-                except:
-                    # Remove dead connections
-                    self.conversation_connections[conversation_id].remove(connection)
 
     async def send_to_research(self, task_id: str, message: dict):
         if task_id in self.research_connections:
@@ -218,8 +243,8 @@ async def lifespan(app: FastAPI):
         if await mcp_client.connect():
             print("✓ MCP client connected successfully")
             
-            # Initialize research manager with MCP client
-            research_manager = ResearchManager(config_manager)
+            # Initialize research manager with MCP client and database
+            research_manager = ResearchManager(config_manager, db_manager)
             await research_manager.initialize(mcp_client)
             
             # Register completion callback to notify WebSocket clients
@@ -292,12 +317,54 @@ async def lifespan(app: FastAPI):
         await context_manager.cleanup()
 
 
-# Create FastAPI app
+# Create FastAPI app with comprehensive documentation
 app = FastAPI(
-    title="Eunice AI Platform API",
-    description="REST API and WebSocket endpoints for real-time AI collaboration",
-    version="1.0.0",
-    lifespan=lifespan
+    title="Eunice Research Platform API",
+    description="""
+    ## Eunice Research Platform API
+    
+    A comprehensive REST API and WebSocket service for the Eunice AI Research Platform.
+    
+    ### Features
+    - **Project Management**: Create and manage research projects
+    - **Research Tasks**: Automated research task execution
+    - **Hierarchical Research**: Complete topic-plan-task structure
+    - **Search & Filtering**: Advanced search capabilities
+    - **Bulk Operations**: Efficient batch processing
+    
+    ### API Structure
+    - **Single Version**: Unified API v1.0.0 for consistency
+    - **Comprehensive**: All features in one cohesive API
+    
+    ### Authentication
+    Currently in development - all endpoints are public.
+    """,
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    contact={
+        "name": "Eunice Development Team",
+        "url": "https://github.com/pzanna/Eunice"
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+    },
+    servers=[
+        {"url": "http://localhost:8000", "description": "Development server"},
+        {"url": "https://api.eunice.ai", "description": "Production server"}
+    ],
+    tags_metadata=[
+        {"name": "health", "description": "System health and status"},
+        {"name": "projects", "description": "Project management operations"},
+        {"name": "research", "description": "Research task management"},
+        {"name": "tasks", "description": "Task monitoring and control"},
+        {"name": "debug", "description": "Debug and development tools"},
+        {"name": "v2-hierarchical", "description": "V2 Hierarchical Research API"},
+        {"name": "websockets", "description": "Real-time WebSocket connections"}
+    ]
 )
 
 # Add CORS middleware
@@ -309,9 +376,107 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include hierarchical research API router
+app.include_router(hierarchical_router)
+
+# Simple API version middleware (single version)
+@app.middleware("http")
+async def add_api_headers(request, call_next):
+    """Add standard API headers to all responses."""
+    response = await call_next(request)
+    response.headers["X-API-Version"] = "1.0.0"
+    return response
+
+# =============================================================================
+# EXCEPTION HANDLERS
+# =============================================================================
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc: HTTPException):
+    """Handle HTTP exceptions with standardized error format."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            success=False,
+            error=exc.detail,
+            details={
+                "status_code": exc.status_code,
+                "path": str(request.url.path),
+                "method": request.method
+            }
+        ).dict()
+    )
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request, exc: ValueError):
+    """Handle validation errors."""
+    return JSONResponse(
+        status_code=400,
+        content=ErrorResponse(
+            success=False,
+            error="Validation error",
+            details={
+                "message": str(exc),
+                "path": str(request.url.path),
+                "method": request.method
+            }
+        ).dict()
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc: Exception):
+    """Handle unexpected errors."""
+    import traceback
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            success=False,
+            error="Internal server error",
+            details={
+                "type": type(exc).__name__,
+                "path": str(request.url.path),
+                "method": request.method,
+                "traceback": traceback.format_exc() if app.debug else None
+            }
+        ).dict()
+    )
+
+# =============================================================================
+# END EXCEPTION HANDLERS
+# =============================================================================
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """Log all API requests for monitoring and debugging."""
+    import time
+    start_time = time.time()
+    
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    
+    # Log the request
+    print(f"API Request: {request.method} {request.url.path} - "
+          f"Status: {response.status_code} - Time: {process_time:.3f}s")
+    
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
+
+
+# API Version endpoint
+@app.get("/api/version", response_model=APIVersionInfo, tags=["health"])
+async def get_api_version():
+    """Get API version information."""
+    return APIVersionInfo(
+        version="1.0.0",
+        supported_versions=["1.0"],
+        deprecated_versions=[],
+        migration_guide_url="/docs"
+    )
+
 
 # Health endpoint
-@app.get("/api/health", response_model=HealthResponse)
+@app.get("/api/health", response_model=HealthResponse, tags=["health"])
 async def get_health():
     """Get system health status."""
     try:
@@ -319,8 +484,11 @@ async def get_health():
         db_status = {"status": "healthy", "tables": 0}
         try:
             # Simple DB check
-            projects = db_manager.list_projects()
-            db_status["tables"] = len(projects) if projects else 0
+            if db_manager:
+                projects = db_manager.list_projects()
+                db_status["tables"] = len(projects) if projects else 0
+            else:
+                db_status = {"status": "disabled", "reason": "Database manager not initialized"}
         except Exception as e:
             db_status = {"status": "error", "error": str(e)}
         
@@ -345,11 +513,67 @@ async def get_health():
             except Exception as e:
                 research_status = {"status": "error", "error": str(e)}
         
+        # Check MCP server
+        mcp_status = {"status": "offline", "connected": False}
+        if mcp_client:
+            try:
+                # Get basic connection status
+                connection_info = mcp_client.connection_status
+                mcp_status.update({
+                    "status": "healthy" if connection_info["connected"] else "offline",
+                    "connected": connection_info["connected"],
+                    "host": connection_info["host"],
+                    "port": connection_info["port"],
+                    "client_id": connection_info["client_id"],
+                    "should_reconnect": connection_info["should_reconnect"]
+                })
+                
+                # If connected, get server stats for more detailed health info
+                if connection_info["connected"]:
+                    try:
+                        server_stats = await mcp_client.get_server_stats()
+                        if server_stats:
+                            mcp_status.update({
+                                "server_stats": server_stats,
+                                "detailed_health": "available"
+                            })
+                        else:
+                            mcp_status["detailed_health"] = "unavailable"
+                    except Exception as stats_e:
+                        mcp_status["stats_error"] = str(stats_e)
+                        mcp_status["detailed_health"] = "error"
+                
+            except Exception as e:
+                mcp_status = {
+                    "status": "error", 
+                    "connected": False,
+                    "error": str(e)
+                }
+        else:
+            # MCP server is configured but not running/reachable
+            mcp_config = config_manager.get_mcp_config() if config_manager else {}
+            mcp_status = {
+                "status": "offline",
+                "connected": False,
+                "reason": "MCP server not running or unreachable",
+                "expected_host": mcp_config.get('host', '127.0.0.1'),
+                "expected_port": mcp_config.get('port', 9000)
+            }
+        
+        # Determine overall system status
+        overall_status = "healthy"
+        if (db_status.get("status") == "error" or 
+            ai_status.get("status") == "error" or 
+            research_status.get("status") == "error" or
+            mcp_status.get("status") == "error"):
+            overall_status = "degraded"
+        
         return HealthResponse(
-            status="healthy",
+            status=overall_status,
             database=db_status,
             ai_providers=ai_status,
             research_system=research_status,
+            mcp_server=mcp_status,
             errors={}
         )
     except Exception as e:
@@ -358,47 +582,96 @@ async def get_health():
             database={"status": "error"},
             ai_providers={"status": "error"},
             research_system={"status": "error"},
+            mcp_server={"status": "error"},
             errors={"general": str(e)}
         )
 
 
 # Projects endpoints
-@app.get("/api/projects", response_model=List[ProjectResponse])
-async def list_projects():
-    """Get all projects."""
+@app.get("/api/projects", response_model=PaginatedResponse, tags=["projects"])
+async def list_projects(
+    pagination: PaginationParams = Depends(),
+    filters: FilterParams = Depends()
+):
+    """Get all projects with pagination and filtering support."""
     try:
-        projects = db_manager.list_projects()
-        conversations = db_manager.list_conversations()
-        
-        # Count conversations per project
-        conv_counts = {}
-        for conv in conversations:
-            conv_counts[conv.project_id] = conv_counts.get(conv.project_id, 0) + 1
+        # Get all projects (in a real implementation, this would be paginated at the DB level)
+        all_projects = db_manager.list_projects() if db_manager else []
         
         # Count research tasks per project
         task_counts = {}
-        for project in projects:
-            task_counts[project.id] = db_manager.get_research_task_count_by_project(project.id)
+        for project in all_projects:
+            if db_manager:
+                task_counts[project.id] = db_manager.get_research_task_count_by_project(project.id)
+            else:
+                task_counts[project.id] = 0
         
-        return [
+        # Apply filtering
+        filtered_projects = all_projects
+        if filters.search:
+            filtered_projects = [p for p in filtered_projects 
+                               if filters.search.lower() in p.name.lower() 
+                               or filters.search.lower() in p.description.lower()]
+        
+        if filters.created_after:
+            from datetime import datetime
+            after_date = datetime.fromisoformat(filters.created_after.replace('Z', '+00:00'))
+            filtered_projects = [p for p in filtered_projects if p.created_at >= after_date]
+        
+        # Apply sorting
+        if pagination.sort_by:
+            reverse = pagination.sort_order == "desc"
+            if pagination.sort_by == "name":
+                filtered_projects.sort(key=lambda x: x.name, reverse=reverse)
+            elif pagination.sort_by == "created_at":
+                filtered_projects.sort(key=lambda x: x.created_at, reverse=reverse)
+        
+        # Apply pagination
+        total = len(filtered_projects)
+        start_idx = (pagination.page - 1) * pagination.limit
+        end_idx = start_idx + pagination.limit
+        paginated_projects = filtered_projects[start_idx:end_idx]
+        
+        # Format response
+        project_responses = [
             ProjectResponse(
                 id=project.id,
                 name=project.name,
                 description=project.description,
                 created_at=project.created_at.isoformat(),
                 updated_at=project.updated_at.isoformat(),
-                conversation_count=conv_counts.get(project.id, 0),
                 research_task_count=task_counts.get(project.id, 0)
             )
-            for project in projects
+            for project in paginated_projects
         ]
+        
+        pages = (total + pagination.limit - 1) // pagination.limit
+        
+        return PaginatedResponse(
+            data=project_responses,
+            pagination={
+                "page": pagination.page,
+                "limit": pagination.limit,
+                "total": total,
+                "pages": pages,
+                "has_next": pagination.page < pages,
+                "has_prev": pagination.page > 1
+            },
+            total=total,
+            page=pagination.page,
+            limit=pagination.limit,
+            pages=pages
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/projects", response_model=ProjectResponse)
+@app.post("/api/projects", response_model=ProjectResponse, tags=["projects"])
 async def create_project(project: ProjectCreate):
     """Create a new project."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         new_project = Project(name=project.name, description=project.description)
         created_project = db_manager.create_project(new_project)
@@ -412,7 +685,7 @@ async def create_project(project: ProjectCreate):
             description=created_project.description,
             created_at=created_project.created_at.isoformat(),
             updated_at=created_project.updated_at.isoformat(),
-            conversation_count=0
+            research_task_count=0
         )
     except EuniceError as e:
         raise HTTPException(status_code=400, detail=format_error_for_user(e))
@@ -420,15 +693,18 @@ async def create_project(project: ProjectCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/api/projects/{project_id}")
+@app.delete("/api/projects/{project_id}", response_model=SuccessResponse)
 async def delete_project(project_id: str):
-    """Delete a project and all its conversations and messages."""
+    """Delete a project and all its associated research data."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         success = db_manager.delete_project(project_id)
         if not success:
-            return {"success": False, "message": "Project not found or already deleted"}
+            return SuccessResponse(success=False, message="Project not found or already deleted")
         
-        return {"success": True, "message": "Project deleted successfully"}
+        return SuccessResponse(success=True, message="Project deleted successfully")
     except EuniceError as e:
         raise HTTPException(status_code=400, detail=format_error_for_user(e))
     except Exception as e:
@@ -449,7 +725,6 @@ async def list_project_research_tasks(project_id: str):
             ResearchTaskResponse(
                 task_id=task.id,
                 project_id=task.project_id,
-                conversation_id=task.conversation_id or "",
                 query=task.query,
                 name=task.name,
                 status=task.status,
@@ -487,7 +762,6 @@ async def list_all_research_tasks(
             ResearchTaskResponse(
                 task_id=task.id,
                 project_id=task.project_id,
-                conversation_id=task.conversation_id or "",
                 query=task.query,
                 name=task.name,
                 status=task.status,
@@ -502,104 +776,6 @@ async def list_all_research_tasks(
         ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get research tasks: {str(e)}")
-
-
-# Conversations endpoints
-@app.get("/api/conversations", response_model=List[ConversationResponse])
-async def list_conversations(project_id: Optional[str] = None):
-    """Get all conversations, optionally filtered by project."""
-    try:
-        conversations = db_manager.list_conversations()
-        
-        if project_id:
-            conversations = [c for c in conversations if c.project_id == project_id]
-        
-        # Get message counts
-        response_conversations = []
-        for conv in conversations:
-            session = db_manager.get_conversation_session(conv.id)
-            message_count = len(session.messages) if session else 0
-            
-            response_conversations.append(ConversationResponse(
-                id=conv.id,
-                project_id=conv.project_id,
-                title=conv.title,
-                status=conv.status,
-                created_at=conv.created_at.isoformat(),
-                updated_at=conv.updated_at.isoformat(),
-                message_count=message_count
-            ))
-        
-        return response_conversations
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/conversations", response_model=ConversationResponse)
-async def create_conversation(conversation: ConversationCreate):
-    """Create a new conversation."""
-    try:
-        new_conversation = Conversation(
-            project_id=conversation.project_id,
-            title=conversation.title
-        )
-        created_conversation = db_manager.create_conversation(new_conversation)
-        
-        if not created_conversation:
-            raise HTTPException(status_code=400, detail="Failed to create conversation")
-        
-        return ConversationResponse(
-            id=created_conversation.id,
-            project_id=created_conversation.project_id,
-            title=created_conversation.title,
-            status=created_conversation.status,
-            created_at=created_conversation.created_at.isoformat(),
-            updated_at=created_conversation.updated_at.isoformat(),
-            message_count=0
-        )
-    except EuniceError as e:
-        raise HTTPException(status_code=400, detail=format_error_for_user(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str):
-    """Delete a conversation and all its messages."""
-    try:
-        success = db_manager.delete_conversation(conversation_id)
-        if not success:
-            return {"success": False, "message": "Conversation not found or already deleted"}
-        
-        return {"success": True, "message": "Conversation deleted successfully"}
-    except EuniceError as e:
-        raise HTTPException(status_code=400, detail=format_error_for_user(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
-async def get_conversation_messages(conversation_id: str):
-    """Get all messages in a conversation."""
-    try:
-        session = db_manager.get_conversation_session(conversation_id)
-        if not session:
-            return []  # Return empty list if conversation not found
-        
-        return [
-            MessageResponse(
-                id=msg.id,
-                conversation_id=msg.conversation_id,
-                participant=msg.participant,
-                content=msg.content,
-                timestamp=msg.timestamp.isoformat()
-            )
-            for msg in session.messages
-        ]
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Research endpoints
@@ -628,7 +804,7 @@ async def start_research_task(request: ResearchRequest):
         task_id, cost_info = await research_manager.start_research_task(
             query=request.query,
             user_id="web_user",  # Default user ID for web requests
-            conversation_id=request.conversation_id,
+            conversation_id="",  # No longer using conversations
             options=options
         )
         
@@ -641,7 +817,7 @@ async def start_research_task(request: ResearchRequest):
         research_task = ResearchTask(
             id=task_id,
             project_id=request.project_id,
-            conversation_id=request.conversation_id,
+            conversation_id=None,  # No longer using conversations
             query=request.query,
             name=task_name,
             status="running",
@@ -663,7 +839,6 @@ async def start_research_task(request: ResearchRequest):
         return ResearchTaskResponse(
             task_id=task_id,
             project_id=request.project_id,
-            conversation_id=request.conversation_id,
             query=request.query,
             name=task_name,
             status=created_task.status,
@@ -724,7 +899,6 @@ async def get_research_task(task_id: str):
         return ResearchTaskResponse(
             task_id=task_id,
             project_id=db_task.project_id,
-            conversation_id=db_task.conversation_id or "",
             query=db_task.query,
             name=db_task.name,
             status=db_task.status,
@@ -734,6 +908,8 @@ async def get_research_task(task_id: str):
             progress=db_task.progress,
             estimated_cost=db_task.estimated_cost,
             actual_cost=db_task.actual_cost,
+            research_plan=db_task.research_plan,
+            plan_approved=db_task.plan_approved,
             results=results
         )
         
@@ -743,7 +919,7 @@ async def get_research_task(task_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to get research task: {str(e)}")
 
 
-@app.delete("/api/research/task/{task_id}")
+@app.delete("/api/research/task/{task_id}", response_model=SuccessResponse)
 async def cancel_research_task(task_id: str):
     """Cancel a research task."""
     if not research_manager:
@@ -752,9 +928,9 @@ async def cancel_research_task(task_id: str):
     try:
         success = await research_manager.cancel_task(task_id)
         if not success:
-            return {"success": False, "message": "Research task not found or already completed"}
+            return SuccessResponse(success=False, message="Research task not found or already completed")
         
-        return {"success": True, "message": "Research task cancelled successfully"}
+        return SuccessResponse(success=True, message="Research task cancelled successfully")
         
     except HTTPException:
         raise
@@ -762,180 +938,107 @@ async def cancel_research_task(task_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to cancel research task: {str(e)}")
 
 
-# ===== Context Tracking API Endpoints =====
+# Research plan management endpoints
 
-@app.post("/api/context/create")
-async def create_context(conversation_id: str, context_id: Optional[str] = None):
-    """Create a new session context."""
-    if not context_manager:
-        raise HTTPException(status_code=503, detail="Context system not available")
+class ResearchPlanManagementResponse(BaseModel):
+    task_id: str
+    research_plan: Optional[Dict[str, Any]] = None
+    plan_approved: bool = False
+    created_at: str
+    updated_at: str
+
+class ResearchPlanUpdateRequest(BaseModel):
+    research_plan: Dict[str, Any]
+
+class ResearchPlanApprovalRequest(BaseModel):
+    approved: bool
+
+@app.get("/api/research/task/{task_id}/plan", response_model=ResearchPlanManagementResponse)
+async def get_research_plan(task_id: str):
+    """Get the research plan for a specific task."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
     
     try:
-        created_context_id = await context_manager.create_context(conversation_id, context_id)
-        return {
-            "success": True,
-            "context_id": created_context_id,
-            "conversation_id": conversation_id
-        }
+        # Get task to verify it exists and get metadata
+        task = db_manager.get_research_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Research task not found")
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create context: {str(e)}")
-
-
-@app.get("/api/context/{context_id}")
-async def get_context(context_id: str):
-    """Get a session context by ID."""
-    if not context_manager:
-        raise HTTPException(status_code=503, detail="Context system not available")
-    
-    try:
-        context = await context_manager.get_context(context_id)
-        if not context:
-            return {
-                "context_id": context_id,
-                "conversation_id": "",
-                "created_at": "",
-                "updated_at": "",
-                "status": "not_found",
-                "current_stage": "",
-                "active_agents": [],
-                "memory_references": [],
-                "message_count": 0,
-                "task_count": 0,
-                "trace_count": 0,
-                "metadata": {},
-                "settings": {}
-            }
-        
-        return {
-            "context_id": context.context_id,
-            "conversation_id": context.conversation_id,
-            "created_at": context.created_at.isoformat(),
-            "updated_at": context.updated_at.isoformat(),
-            "status": context.status,
-            "current_stage": context.current_stage,
-            "active_agents": context.active_agents,
-            "memory_references": context.memory_references,
-            "message_count": len(context.messages),
-            "task_count": len(context.research_tasks),
-            "trace_count": len(context.context_traces),
-            "metadata": context.metadata,
-            "settings": context.settings
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get context: {str(e)}")
-
-
-@app.post("/api/context/{context_id}/resume")
-async def resume_context(context_id: str):
-    """Resume a context with full data restoration."""
-    if not context_manager:
-        raise HTTPException(status_code=503, detail="Context system not available")
-    
-    try:
-        context = await context_manager.resume_context(context_id)
-        if not context:
-            return {
-                "success": False,
-                "context_id": context_id,
-                "conversation_id": "",
-                "message_count": 0,
-                "task_count": 0,
-                "trace_count": 0,
-                "current_stage": "",
-                "status": "not_found",
-                "message": "Context not found or could not be resumed"
-            }
-        
-        return {
-            "success": True,
-            "context_id": context.context_id,
-            "conversation_id": context.conversation_id,
-            "message_count": len(context.messages),
-            "task_count": len(context.research_tasks),
-            "trace_count": len(context.context_traces),
-            "current_stage": context.current_stage,
-            "status": context.status
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to resume context: {str(e)}")
-
-
-@app.get("/api/context/{context_id}/traces")
-async def get_context_traces(context_id: str, limit: int = 100):
-    """Get context traces for a context."""
-    if not context_manager:
-        raise HTTPException(status_code=503, detail="Context system not available")
-    
-    try:
-        traces = await context_manager.get_context_traces(context_id, limit)
-        
-        return {
-            "context_id": context_id,
-            "traces": [
-                {
-                    "trace_id": trace.trace_id,
-                    "task_id": trace.task_id,
-                    "stage": trace.stage,
-                    "content": trace.content,
-                    "timestamp": trace.timestamp.isoformat(),
-                    "metadata": trace.metadata
-                }
-                for trace in traces
-            ],
-            "count": len(traces)
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get context traces: {str(e)}")
-
-
-@app.get("/api/contexts")
-async def list_contexts(conversation_id: Optional[str] = None, status: Optional[str] = None, limit: int = 50):
-    """List contexts with optional filtering."""
-    if not context_manager:
-        raise HTTPException(status_code=503, detail="Context system not available")
-    
-    try:
-        contexts = await context_manager.list_contexts(conversation_id, status, limit)
-        return {
-            "contexts": contexts,
-            "count": len(contexts)
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list contexts: {str(e)}")
-
-
-@app.post("/api/context/{context_id}/trace")
-async def add_context_trace(context_id: str, stage: str, content: dict, task_id: Optional[str] = None, metadata: Optional[dict] = None):
-    """Add a context trace entry."""
-    if not context_manager:
-        raise HTTPException(status_code=503, detail="Context system not available")
-    
-    try:
-        trace_id = await context_manager.add_context_trace(
-            context_id=context_id,
-            stage=stage,
-            content=content,
+        return ResearchPlanManagementResponse(
             task_id=task_id,
-            metadata=metadata
+            research_plan=task.research_plan,
+            plan_approved=task.plan_approved,
+            created_at=task.created_at.isoformat(),
+            updated_at=task.updated_at.isoformat()
         )
         
-        return {
-            "success": True,
-            "trace_id": trace_id,
-            "context_id": context_id
-        }
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add context trace: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get research plan: {str(e)}")
+
+@app.put("/api/research/task/{task_id}/plan", response_model=SuccessResponse)
+async def update_research_plan(task_id: str, request: ResearchPlanUpdateRequest):
+    """Update the research plan for a specific task."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Verify task exists
+        task = db_manager.get_research_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Research task not found")
+        
+        # Update the research plan
+        success = db_manager.update_research_plan(task_id, request.research_plan)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update research plan")
+        
+        # Reset approval status when plan is updated
+        db_manager.approve_research_plan(task_id, False)
+        
+        return SuccessResponse(success=True, message="Research plan updated successfully")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update research plan: {str(e)}")
+
+@app.post("/api/research/task/{task_id}/plan/approve", response_model=SuccessResponse)
+async def approve_research_plan(task_id: str, request: ResearchPlanApprovalRequest):
+    """Approve or reject a research plan."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Verify task exists
+        task = db_manager.get_research_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Research task not found")
+        
+        # Check if task has a research plan
+        if not task.research_plan:
+            raise HTTPException(status_code=400, detail="No research plan to approve")
+        
+        # Update approval status
+        success = db_manager.approve_research_plan(task_id, request.approved)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update approval status")
+        
+        # If approved, update task status to allow proceeding to next stage
+        if request.approved:
+            task.plan_approved = True
+            task.status = "ready"  # Ready to proceed to next stage
+            db_manager.update_research_task(task)
+        
+        message = "Research plan approved" if request.approved else "Research plan rejected"
+        return SuccessResponse(success=True, message=message, data={"approved": request.approved})
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to approve research plan: {str(e)}")
 
 
 # Phase 4: Task Viewer API Endpoints
@@ -1283,124 +1386,6 @@ async def research_websocket(websocket: WebSocket, task_id: str):
         manager.disconnect_research(websocket, task_id)
 
 
-@app.websocket("/api/chat/stream/{conversation_id}")
-async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
-    """WebSocket endpoint for real-time chat streaming."""
-    try:
-        await manager.connect(websocket, conversation_id)
-        print(f"✓ WebSocket connected for conversation: {conversation_id}")
-    except Exception as e:
-        print(f"✗ Failed to establish WebSocket connection: {e}")
-        raise
-    
-    try:
-        while True:
-            # Receive message from client
-            data = await websocket.receive_text()
-            message_data = json.loads(data)
-            
-            # Handle connection initialization
-            if message_data.get("type") == "connection_init":
-                print(f"WebSocket connection initialized for conversation {conversation_id}")
-                # Send a welcome message or confirmation
-                await manager.send_to_conversation(conversation_id, {
-                    "type": "connection_confirmed",
-                    "conversation_id": conversation_id
-                })
-                continue
-            
-            if message_data.get("type") == "user_message":
-                content = message_data.get("content", "").strip()
-                if not content:
-                    continue
-                
-                print(f"📝 Processing user message: {content[:50]}...")
-                
-                # Create and save user message
-                user_message = Message(
-                    conversation_id=conversation_id,
-                    participant="user",
-                    content=content
-                )
-                
-                try:
-                    db_manager.create_message(user_message)
-                    print(f"✅ User message saved to database: {user_message.id}")
-                    
-                    # Broadcast user message to all connected clients
-                    await manager.send_to_conversation(conversation_id, {
-                        "type": "user_message",
-                        "message": {
-                            "id": user_message.id,
-                            "conversation_id": user_message.conversation_id,
-                            "participant": user_message.participant,
-                            "content": user_message.content,
-                            "timestamp": user_message.timestamp.isoformat()
-                        }
-                    })
-                    
-                    # Check if this is a research query
-                    if content.lower().startswith(('research:', 'find:', 'search:', 'analyze:')):
-                        # Handle research mode
-                        if research_manager:
-                            try:
-                                # Extract query (remove prefix)
-                                query = content.split(':', 1)[1].strip()
-                                
-                                # Create options for research task
-                                options = {
-                                    'research_mode': "comprehensive",
-                                    'max_results': 10,
-                                    'metadata': {}
-                                }
-                                
-                                # Start research task
-                                task_id, cost_info = await research_manager.start_research_task(
-                                    query=query,
-                                    user_id="web_user",
-                                    conversation_id=conversation_id,
-                                    options=options
-                                )
-                                
-                                # Notify client about research task
-                                await manager.send_to_conversation(conversation_id, {
-                                    "type": "research_started",
-                                    "task_id": task_id,
-                                    "query": query
-                                })
-                                
-                                # Set up progress callback
-                                async def research_progress_callback(update):
-                                    await manager.send_to_conversation(conversation_id, update)
-                                
-                                research_manager.add_progress_callback(task_id, research_progress_callback)
-                                
-                            except Exception as e:
-                                print(f"❌ Research task error: {e}")
-                                await manager.send_to_conversation(conversation_id, {
-                                    "type": "error",
-                                    "message": f"Research task failed: {str(e)}"
-                                })
-                        else:
-                            await manager.send_to_conversation(conversation_id, {
-                                "type": "error",
-                                "message": "Research system not available"
-                            })
-                    
-                except Exception as e:
-                    print(f"❌ Failed to save user message: {e}")
-                    await manager.send_to_conversation(conversation_id, {
-                        "type": "error",
-                        "message": f"Failed to save message: {str(e)}"
-                    })
-                    continue
-                    
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, conversation_id)
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-
-
 @app.websocket("/api/tasks/stream")
 async def task_viewer_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time task viewing."""
@@ -1497,14 +1482,14 @@ async def task_viewer_websocket(websocket: WebSocket):
 
 
 # Static files for serving the React app (when built)
-if Path("frontend/dist").exists():
-    app.mount("/static", StaticFiles(directory="frontend/dist/static"), name="static")
+if Path("frontend/build").exists():
+    app.mount("/static", StaticFiles(directory="frontend/build/static"), name="static")
     
     @app.get("/", response_class=HTMLResponse)
     async def serve_frontend():
         """Serve the React frontend."""
         try:
-            with open("frontend/dist/index.html") as f:
+            with open("frontend/build/index.html") as f:
                 return HTMLResponse(content=f.read())
         except FileNotFoundError:
             return HTMLResponse(
@@ -1516,10 +1501,11 @@ if Path("frontend/dist").exists():
 def main():
     """Run the web server."""
     import argparse
+    import os
     
     parser = argparse.ArgumentParser(description='Eunice Web Server')
-    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
-    parser.add_argument('--port', type=int, default=8000, help='Port to bind to')
+    parser.add_argument('--host', default=os.getenv('EUNICE_HOST', '127.0.0.1'), help='Host to bind to')
+    parser.add_argument('--port', type=int, default=int(os.getenv('EUNICE_WEB_PORT', '8000')), help='Port to bind to')
     parser.add_argument('--reload', action='store_true', help='Enable auto-reload for development')
     
     args = parser.parse_args()
@@ -1528,459 +1514,6 @@ def main():
     print("📱 Web UI available at the above URL")
     print("🔌 WebSocket streaming enabled for real-time chat")
     print("🔬 Research system integration enabled")
-    
-# =============================================================================
-# HIERARCHICAL RESEARCH API ENDPOINTS (V2)
-# =============================================================================
-
-# Pydantic models for hierarchical research
-class ResearchTopicCreate(BaseModel):
-    name: str
-    description: str = ""
-    metadata: Dict[str, Any] = {}
-
-class ResearchTopicResponse(BaseModel):
-    id: str
-    project_id: str
-    name: str
-    description: str
-    status: str
-    created_at: str
-    updated_at: str
-    plan_count: int = 0
-    task_count: int = 0
-    metadata: Dict[str, Any] = {}
-
-class ResearchPlanCreate(BaseModel):
-    name: str
-    description: str = ""
-    plan_type: str = "comprehensive"
-    plan_structure: Dict[str, Any] = {}
-    metadata: Dict[str, Any] = {}
-
-class ResearchPlanResponse(BaseModel):
-    id: str
-    topic_id: str
-    name: str
-    description: str
-    plan_type: str
-    status: str
-    created_at: str
-    updated_at: str
-    estimated_cost: float
-    actual_cost: float
-    task_count: int = 0
-    completed_tasks: int = 0
-    progress: float = 0.0
-    plan_structure: Dict[str, Any] = {}
-    metadata: Dict[str, Any] = {}
-
-class TaskCreate(BaseModel):
-    name: str
-    description: str = ""
-    task_type: str = "research"
-    task_order: int = 0
-    query: Optional[str] = None
-    max_results: int = 10
-    single_agent_mode: bool = False
-    metadata: Dict[str, Any] = {}
-
-class TaskResponse(BaseModel):
-    id: str
-    plan_id: str
-    name: str
-    description: str
-    task_type: str
-    task_order: int
-    status: str
-    stage: str
-    created_at: str
-    updated_at: str
-    estimated_cost: float
-    actual_cost: float
-    cost_approved: bool
-    single_agent_mode: bool
-    max_results: int
-    progress: float
-    query: Optional[str] = None
-    search_results: List[Dict[str, Any]] = []
-    reasoning_output: Optional[str] = None
-    execution_results: List[Dict[str, Any]] = []
-    synthesis: Optional[str] = None
-    metadata: Dict[str, Any] = {}
-
-# Research Topics Endpoints
-@app.post("/api/v2/projects/{project_id}/topics", response_model=ResearchTopicResponse)
-async def create_research_topic(project_id: str, topic_create: ResearchTopicCreate):
-    """Create a new research topic within a project."""
-    try:
-        # Check if we have hierarchical database support
-        if hasattr(db_manager, 'create_research_topic'):
-            topic_data = {
-                'project_id': project_id,
-                'name': topic_create.name,
-                'description': topic_create.description,
-                'metadata': topic_create.metadata
-            }
-            topic = db_manager.create_research_topic(topic_data)
-            if topic:
-                return ResearchTopicResponse(**topic)
-        
-        # Fallback: return mock response for now
-        return ResearchTopicResponse(
-            id=generate_timestamped_id('topic'),
-            project_id=project_id,
-            name=topic_create.name,
-            description=topic_create.description,
-            status="active",
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
-            plan_count=0,
-            task_count=0,
-            metadata=topic_create.metadata
-        )
-    except Exception as e:
-        print(f"Error creating research topic: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v2/projects/{project_id}/topics", response_model=List[ResearchTopicResponse])
-async def list_research_topics(project_id: str, status: Optional[str] = None):
-    """List all research topics for a project."""
-    try:
-        # Check if we have hierarchical database support
-        if hasattr(db_manager, 'get_research_topics_by_project'):
-            topics = db_manager.get_research_topics_by_project(project_id, status_filter=status)
-            return [ResearchTopicResponse(**topic) for topic in topics]
-        
-        # Fallback: return mock response
-        return [
-            ResearchTopicResponse(
-                id="topic_example",
-                project_id=project_id,
-                name="Sample Research Topic",
-                description="This is a sample research topic for demonstration",
-                status="active",
-                created_at=datetime.now().isoformat(),
-                updated_at=datetime.now().isoformat(),
-                plan_count=1,
-                task_count=3,
-                metadata={}
-            )
-        ]
-    except Exception as e:
-        print(f"Error listing research topics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v2/topics/{topic_id}", response_model=ResearchTopicResponse)
-async def get_research_topic(topic_id: str):
-    """Get a specific research topic."""
-    try:
-        if hasattr(db_manager, 'get_research_topic'):
-            topic = db_manager.get_research_topic(topic_id)
-            if topic:
-                return ResearchTopicResponse(**topic)
-        
-        # Fallback: return mock response
-        return ResearchTopicResponse(
-            id=topic_id,
-            project_id="proj_example",
-            name="Sample Research Topic",
-            description="This is a sample research topic",
-            status="active",
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
-            plan_count=1,
-            task_count=3,
-            metadata={}
-        )
-    except Exception as e:
-        print(f"Error getting research topic: {e}")
-        raise HTTPException(status_code=404, detail="Research topic not found")
-
-# Research Plans Endpoints
-@app.post("/api/v2/topics/{topic_id}/plans", response_model=ResearchPlanResponse)
-async def create_research_plan(topic_id: str, plan_create: ResearchPlanCreate):
-    """Create a new research plan within a topic."""
-    try:
-        if hasattr(db_manager, 'create_research_plan'):
-            plan_data = {
-                'topic_id': topic_id,
-                'name': plan_create.name,
-                'description': plan_create.description,
-                'plan_type': plan_create.plan_type,
-                'plan_structure': plan_create.plan_structure,
-                'metadata': plan_create.metadata
-            }
-            plan = db_manager.create_research_plan(plan_data)
-            if plan:
-                return ResearchPlanResponse(**plan)
-        
-        # Fallback: return mock response
-        return ResearchPlanResponse(
-            id=generate_timestamped_id('plan'),
-            topic_id=topic_id,
-            name=plan_create.name,
-            description=plan_create.description,
-            plan_type=plan_create.plan_type,
-            status="draft",
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
-            estimated_cost=0.0,
-            actual_cost=0.0,
-            task_count=0,
-            completed_tasks=0,
-            progress=0.0,
-            plan_structure=plan_create.plan_structure,
-            metadata=plan_create.metadata
-        )
-    except Exception as e:
-        print(f"Error creating research plan: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v2/topics/{topic_id}/plans", response_model=List[ResearchPlanResponse])
-async def list_research_plans(topic_id: str, status: Optional[str] = None):
-    """List all research plans for a topic."""
-    try:
-        if hasattr(db_manager, 'get_research_plans_by_topic'):
-            plans = db_manager.get_research_plans_by_topic(topic_id, status_filter=status)
-            return [ResearchPlanResponse(**plan) for plan in plans]
-        
-        # Fallback: return mock response
-        return [
-            ResearchPlanResponse(
-                id="plan_example",
-                topic_id=topic_id,
-                name="Comprehensive Research Plan",
-                description="A comprehensive approach to this research topic",
-                plan_type="comprehensive",
-                status="active",
-                created_at=datetime.now().isoformat(),
-                updated_at=datetime.now().isoformat(),
-                estimated_cost=0.25,
-                actual_cost=0.15,
-                task_count=3,
-                completed_tasks=1,
-                progress=33.3,
-                plan_structure={"stages": ["research", "analysis", "synthesis"]},
-                metadata={}
-            )
-        ]
-    except Exception as e:
-        print(f"Error listing research plans: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v2/plans/{plan_id}", response_model=ResearchPlanResponse)
-async def get_research_plan(plan_id: str):
-    """Get a specific research plan."""
-    try:
-        if hasattr(db_manager, 'get_research_plan'):
-            plan = db_manager.get_research_plan(plan_id)
-            if plan:
-                return ResearchPlanResponse(**plan)
-        
-        # Fallback: return mock response
-        return ResearchPlanResponse(
-            id=plan_id,
-            topic_id="topic_example",
-            name="Comprehensive Research Plan",
-            description="A comprehensive approach to this research topic",
-            plan_type="comprehensive",
-            status="active",
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
-            estimated_cost=0.25,
-            actual_cost=0.15,
-            task_count=3,
-            completed_tasks=1,
-            progress=33.3,
-            plan_structure={"stages": ["research", "analysis", "synthesis"]},
-            metadata={}
-        )
-    except Exception as e:
-        print(f"Error getting research plan: {e}")
-        raise HTTPException(status_code=404, detail="Research plan not found")
-
-# Tasks Endpoints
-@app.post("/api/v2/plans/{plan_id}/tasks", response_model=TaskResponse)
-async def create_task(plan_id: str, task_create: TaskCreate):
-    """Create a new task within a plan."""
-    try:
-        if hasattr(db_manager, 'create_task'):
-            task_data = {
-                'plan_id': plan_id,
-                'name': task_create.name,
-                'description': task_create.description,
-                'task_type': task_create.task_type,
-                'task_order': task_create.task_order,
-                'query': task_create.query,
-                'max_results': task_create.max_results,
-                'single_agent_mode': task_create.single_agent_mode,
-                'metadata': task_create.metadata
-            }
-            task = db_manager.create_task(task_data)
-            if task:
-                return TaskResponse(**task)
-        
-        # Fallback: return mock response
-        return TaskResponse(
-            id=generate_timestamped_id('task'),
-            plan_id=plan_id,
-            name=task_create.name,
-            description=task_create.description,
-            task_type=task_create.task_type,
-            task_order=task_create.task_order,
-            status="pending",
-            stage="planning",
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
-            estimated_cost=0.05,
-            actual_cost=0.0,
-            cost_approved=False,
-            single_agent_mode=task_create.single_agent_mode,
-            max_results=task_create.max_results,
-            progress=0.0,
-            query=task_create.query,
-            search_results=[],
-            reasoning_output=None,
-            execution_results=[],
-            synthesis=None,
-            metadata=task_create.metadata
-        )
-    except Exception as e:
-        print(f"Error creating task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v2/plans/{plan_id}/tasks", response_model=List[TaskResponse])
-async def list_tasks(plan_id: str, status: Optional[str] = None, task_type: Optional[str] = None):
-    """List all tasks for a plan."""
-    try:
-        if hasattr(db_manager, 'get_tasks_by_plan'):
-            tasks = db_manager.get_tasks_by_plan(plan_id, status_filter=status, type_filter=task_type)
-            return [TaskResponse(**task) for task in tasks]
-        
-        # Fallback: return mock response
-        return [
-            TaskResponse(
-                id="task_example",
-                plan_id=plan_id,
-                name="Research Academic Literature",
-                description="Search for and analyze academic papers on the topic",
-                task_type="research",
-                task_order=1,
-                status="completed",
-                stage="complete",
-                created_at=datetime.now().isoformat(),
-                updated_at=datetime.now().isoformat(),
-                estimated_cost=0.05,
-                actual_cost=0.04,
-                cost_approved=True,
-                single_agent_mode=False,
-                max_results=10,
-                progress=100.0,
-                query="academic literature research topic",
-                search_results=[{"title": "Sample Paper", "relevance": 0.95}],
-                reasoning_output="Found relevant academic sources",
-                execution_results=[],
-                synthesis="Analysis complete",
-                metadata={}
-            )
-        ]
-    except Exception as e:
-        print(f"Error listing tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v2/tasks/{task_id}", response_model=TaskResponse)
-async def get_task(task_id: str):
-    """Get a specific task."""
-    try:
-        if hasattr(db_manager, 'get_task'):
-            task = db_manager.get_task(task_id)
-            if task:
-                return TaskResponse(**task)
-        
-        # Fallback: return mock response
-        return TaskResponse(
-            id=task_id,
-            plan_id="plan_example",
-            name="Research Academic Literature",
-            description="Search for and analyze academic papers on the topic",
-            task_type="research",
-            task_order=1,
-            status="completed",
-            stage="complete",
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
-            estimated_cost=0.05,
-            actual_cost=0.04,
-            cost_approved=True,
-            single_agent_mode=False,
-            max_results=10,
-            progress=100.0,
-            query="academic literature research topic",
-            search_results=[{"title": "Sample Paper", "relevance": 0.95}],
-            reasoning_output="Found relevant academic sources",
-            execution_results=[],
-            synthesis="Analysis complete",
-            metadata={}
-        )
-    except Exception as e:
-        print(f"Error getting task: {e}")
-        raise HTTPException(status_code=404, detail="Task not found")
-
-# Hierarchical Navigation Endpoint
-@app.get("/api/v2/projects/{project_id}/hierarchy")
-async def get_project_hierarchy(project_id: str):
-    """Get complete hierarchy for a project (topics -> plans -> tasks)."""
-    try:
-        if hasattr(db_manager, 'get_project_hierarchy'):
-            hierarchy = db_manager.get_project_hierarchy(project_id)
-            return hierarchy
-        
-        # Fallback: return mock hierarchy
-        return {
-            "project_id": project_id,
-            "topics": [
-                {
-                    "id": "topic_example",
-                    "name": "Sample Research Topic",
-                    "description": "This is a sample research topic",
-                    "status": "active",
-                    "plans": [
-                        {
-                            "id": "plan_example",
-                            "name": "Comprehensive Research Plan",
-                            "description": "A comprehensive approach",
-                            "status": "active",
-                            "tasks": [
-                                {
-                                    "id": "task_example",
-                                    "name": "Research Academic Literature",
-                                    "status": "completed",
-                                    "progress": 100.0
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        }
-    except Exception as e:
-        print(f"Error getting project hierarchy: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Deprecation warnings for legacy endpoints
-@app.post("/api/research/start")
-async def legacy_start_research(request: ResearchRequest):
-    """Legacy endpoint - use /api/v2/plans/{plan_id}/tasks instead."""
-    print("⚠️  DEPRECATED: /api/research/start is deprecated. Use /api/v2/plans/{plan_id}/tasks instead.")
-    # Call the original implementation for now
-    return await start_research_task(request)
-
-    
-# =============================================================================
-# END HIERARCHICAL RESEARCH API ENDPOINTS
-# =============================================================================
-
     
     uvicorn.run(
         "web_server:app",

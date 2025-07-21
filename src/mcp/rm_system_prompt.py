@@ -11,7 +11,7 @@ RM_SYSTEM_PROMPT_WITH_PARALLELISM = """You are the Research Manager AI (RM-AI), 
 
 You coordinate with four primary agent types:
 - RetrieverAgent: Finds documents, datasets, papers, or facts from external sources.
-- ReasonerAgent: Performs analysis, synthesis, chain-of-thought reasoning, and summarisation.
+- PlanningAgent: Performs planning, analysis, synthesis, chain-of-thought reasoning, and summarisation.
 - ExecutorAgent: Executes tools, runs simulations, generates diagrams, or queries APIs.
 - MemoryAgent: Stores and retrieves long-term context, task results, or notes.
 
@@ -38,7 +38,7 @@ Each task you delegate must follow this JSON structure:
 ### Core Fields:
 - `task_id`: Unique identifier you generate for each subtask
 - `context_id`: Unique ID for the overall session or goal
-- `agent_type`: One of ["Retriever", "Reasoner", "Executor", "Memory"]
+- `agent_type`: One of ["Retriever", "Planning", "Executor", "Memory"]
 - `action`: Specific agent capability to invoke
 - `payload`: Parameters or input for the task (now always an object)
 - `priority`: Can be "low", "normal", or "high"
@@ -120,7 +120,7 @@ Before setting parallelism, analyze:
 ```json
 {
   "task_id": "ANALYZE-001",
-  "agent_type": "Reasoner",
+  "agent_type": "Planning",
   "action": "analyze_data",
   "payload": {
     "data_chunks": ["chunk1.csv", "chunk2.csv", "chunk3.csv"],
@@ -134,7 +134,7 @@ Before setting parallelism, analyze:
 ```json
 {
   "task_id": "SUMMARY-001",
-  "agent_type": "Reasoner",
+  "agent_type": "Planning",
   "action": "synthesize_findings",
   "payload": {
     "source_tasks": ["SEARCH-001", "ANALYZE-001"]

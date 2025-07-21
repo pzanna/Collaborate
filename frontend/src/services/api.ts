@@ -16,6 +16,22 @@ export interface Project {
   research_task_count: number;  // New field for research task count
 }
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    has_next: boolean;
+    has_prev: boolean;
+  };
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
 export interface ResearchRequest {
   project_id: string;  // New required field
   conversation_id: string;
@@ -87,7 +103,8 @@ class ApiService {
 
   // Project methods
   async getProjects(): Promise<Project[]> {
-    return this.request<Project[]>('/projects');
+    const response = await this.request<PaginatedResponse<Project>>('/projects');
+    return response.data;
   }
 
   async createProject(data: { name: string; description: string }): Promise<Project> {
@@ -146,6 +163,7 @@ class ApiService {
     database: Record<string, any>;
     ai_providers: Record<string, any>;
     research_system: Record<string, any>;
+    mcp_server: Record<string, any>;
     errors: Record<string, any>;
   }> {
     return this.request('/health');

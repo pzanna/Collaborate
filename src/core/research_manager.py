@@ -2,7 +2,7 @@
 Research Manager - Orchestrates multi-agent research tasks using MCP protocol.
 
 This module provides the core Research Manager that coordinates between different
-AI agents (Retriever, Reasoner, Executor, Memory) to perform complex research tasks.
+AI agents (Retriever, Planning, Executor, Memory) to perform complex research tasks.
 """
 
 import asyncio
@@ -22,6 +22,7 @@ try:
     from ..utils.error_handler import ErrorHandler
     from ..utils.performance import PerformanceMonitor
     from ..utils.id_utils import generate_timestamped_id
+    from ..storage.database import DatabaseManager
 except ImportError:
     # Fall back to absolute imports (when imported from outside src package)
     from mcp.client import MCPClient
@@ -31,6 +32,7 @@ except ImportError:
     from utils.error_handler import ErrorHandler
     from utils.performance import PerformanceMonitor
     from utils.id_utils import generate_timestamped_id
+    from storage.database import DatabaseManager
 
 
 class ResearchStage(Enum):
@@ -88,17 +90,21 @@ class ResearchManager:
     proper task completion.
     """
     
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, db_manager: Optional[DatabaseManager] = None):
         """
         Initialize the Research Manager.
         
         Args:
             config_manager: Configuration manager instance
+            db_manager: Database manager instance (optional, will create if not provided)
         """
         self.config = config_manager
         self.logger = logging.getLogger(__name__)
         self.error_handler = ErrorHandler()
         self.performance_monitor = PerformanceMonitor()
+        
+        # Database manager for storing research plans and results
+        self.db_manager = db_manager if db_manager else DatabaseManager()
         
         # Cost control
         self.cost_estimator = CostEstimator(config_manager)
@@ -241,7 +247,7 @@ class ResearchManager:
             agents_to_use = ["retriever"]  # Use only retriever in single agent mode
             parallel_execution = False
         else:
-            agents_to_use = ["retriever", "reasoner", "executor", "memory"]
+            agents_to_use = ["retriever", "planning", "executor", "memory"]
             parallel_execution = True
         
         # Get cost estimate
@@ -398,6 +404,31 @@ class ResearchManager:
                     if success:
                         context.completed_stages.append(stage)
                         self.logger.info(f"Completed stage {stage.value} for task {context.task_id}")
+                        
+                        # If this was the planning stage, wait for approval before proceeding
+                        if stage == ResearchStage.PLANNING:
+                            self.logger.info(f"Planning stage completed for task {context.task_id}. Waiting for plan approval.")
+                            
+                            # Update task status to indicate planning is complete and waiting for approval
+                            try:
+                                task = self.db_manager.get_research_task(context.task_id)
+                                if task:
+                                    task.stage = "planning_complete"
+                                    task.status = "waiting_approval"
+                                    self.db_manager.update_research_task(task)
+                            except Exception as e:
+                                self.logger.error(f"Failed to update task status after planning: {e}")
+                            
+                            # Wait for plan approval (this will pause the workflow)
+                            approved = await self._wait_for_plan_approval(context.task_id)
+                            if not approved:
+                                self.logger.info(f"Research plan for task {context.task_id} was not approved. Stopping workflow.")
+                                context.stage = ResearchStage.FAILED
+                                await self._notify_completion(context, success=False)
+                                return
+                            else:
+                                self.logger.info(f"Research plan for task {context.task_id} approved. Continuing workflow.")
+                        
                     else:
                         context.failed_stages.append(stage)
                         self.logger.error(f"Failed stage {stage.value} for task {context.task_id}")
@@ -463,7 +494,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.conversation_id,
-                agent_type="reasoner",
+                agent_type="planning",
                 action="plan_research",
                 payload={
                     "query": context.query,
@@ -473,12 +504,28 @@ class ResearchManager:
                 }
             )
             
-            # Send to planning agent (using reasoning agent for now)
-            response = await self._send_to_agent("reasoner", action)
+            # Send to planning agent
+            response = await self._send_to_agent("planning", action)
             
             if response and response.status == "completed":
                 # Update context with planning results
                 context.context_data["research_plan"] = response.result
+                
+                # Store the research plan in the database
+                if response.result and "plan" in response.result:
+                    plan_data = response.result["plan"]
+                    try:
+                        result = self.db_manager.update_research_plan(
+                            context.task_id, 
+                            plan_data
+                        )
+                        if result:
+                            self.logger.info(f"Research plan stored in database for task {context.task_id}")
+                        else:
+                            self.logger.warning(f"Failed to store research plan in database for task {context.task_id}")
+                    except Exception as e:
+                        self.logger.error(f"Error storing research plan in database: {e}")
+                
                 return True
             
             return False
@@ -543,7 +590,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.conversation_id,
-                agent_type="reasoner",
+                agent_type="planning",
                 action="analyze_information",
                 payload={
                     "query": context.query,
@@ -553,8 +600,8 @@ class ResearchManager:
                 }
             )
             
-            # Send to reasoning agent
-            response = await self._send_to_agent("reasoner", action)
+            # Send to planning agent
+            response = await self._send_to_agent("planning", action)
             
             if response and response.status == "completed":
                 # Store reasoning output
@@ -624,7 +671,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.conversation_id,
-                agent_type="reasoner",
+                agent_type="planning",
                 action="synthesize_results",
                 payload={
                     "query": context.query,
@@ -634,8 +681,8 @@ class ResearchManager:
                 }
             )
             
-            # Send to reasoning agent for synthesis
-            response = await self._send_to_agent("reasoner", action)
+            # Send to planning agent for synthesis
+            response = await self._send_to_agent("planning", action)
             
             if response and response.status == "completed":
                 # Store synthesis
@@ -1073,7 +1120,7 @@ class ResearchManager:
             Dict[str, Any]: Cost estimation details
         """
         # Fallback synchronous implementation for backwards compatibility
-        agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "reasoner", "executor", "memory"]
+        agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "planning", "executor", "memory"]
         parallel_execution = not single_agent_mode
         
         estimate = self.cost_estimator.estimate_task_cost(
@@ -1179,7 +1226,7 @@ class ResearchManager:
                 'raw_response': "RM AI response for active research context",
                 'parsed_tasks': [
                     {'task_id': 'task_1', 'agent': 'retriever', 'action': 'search_web'},
-                    {'task_id': 'task_2', 'agent': 'reasoner', 'action': 'analyze_results'}
+                    {'task_id': 'task_2', 'agent': 'planning', 'action': 'analyze_results'}
                 ],
                 'created_at': datetime.now().isoformat(),
                 'execution_status': context.stage.value,
@@ -1248,10 +1295,71 @@ class ResearchManager:
                     'execution_status': context.stage.value,
                     'parsed_tasks': [
                         {'task_id': 'task_1', 'agent': 'retriever'},
-                        {'task_id': 'task_2', 'agent': 'reasoner'}
+                        {'task_id': 'task_2', 'agent': 'planning'}
                     ],
                     'modifications': []
                 })
         
         # Return only real active contexts, no mock data
         return plans[:limit]
+    
+    async def _wait_for_plan_approval(self, task_id: str, timeout_minutes: int = 60) -> bool:
+        """
+        Wait for plan approval for a specific task.
+        
+        This method polls the database to check if the research plan has been approved.
+        It will wait for up to the specified timeout period.
+        
+        Args:
+            task_id: The task ID to check for approval
+            timeout_minutes: Maximum time to wait in minutes
+            
+        Returns:
+            bool: True if approved, False if rejected or timeout
+        """
+        timeout_seconds = timeout_minutes * 60
+        check_interval = 5  # Check every 5 seconds
+        elapsed_time = 0
+        
+        self.logger.info(f"Waiting for plan approval for task {task_id} (timeout: {timeout_minutes} minutes)")
+        
+        while elapsed_time < timeout_seconds:
+            try:
+                # Check the task's approval status in the database
+                task = self.db_manager.get_research_task(task_id)
+                if task:
+                    if task.plan_approved:
+                        self.logger.info(f"Plan approved for task {task_id}")
+                        # Update task status to resume workflow
+                        task.status = "running"
+                        task.stage = "retrieval"
+                        self.db_manager.update_research_task(task)
+                        return True
+                    
+                    # Check if task was cancelled or failed
+                    if task.status in ["cancelled", "failed"]:
+                        self.logger.info(f"Task {task_id} was cancelled or failed while waiting for approval")
+                        return False
+                
+                # Wait before checking again
+                await asyncio.sleep(check_interval)
+                elapsed_time += check_interval
+                
+            except Exception as e:
+                self.logger.error(f"Error checking plan approval for task {task_id}: {e}")
+                await asyncio.sleep(check_interval)
+                elapsed_time += check_interval
+        
+        # Timeout reached
+        self.logger.warning(f"Timeout waiting for plan approval for task {task_id}")
+        
+        # Update task status to indicate timeout
+        try:
+            task = self.db_manager.get_research_task(task_id)
+            if task:
+                task.status = "waiting_approval_timeout"
+                self.db_manager.update_research_task(task)
+        except Exception as e:
+            self.logger.error(f"Failed to update task status after approval timeout: {e}")
+        
+        return False

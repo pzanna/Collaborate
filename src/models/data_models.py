@@ -126,6 +126,10 @@ class ResearchTask(BaseModel):
     max_results: int = 10
     progress: float = 0.0
     
+    # Research plan and approval
+    research_plan: Optional[Dict[str, Any]] = None
+    plan_approved: bool = False
+    
     # Research results
     search_results: List[Dict[str, Any]] = Field(default_factory=list)
     reasoning_output: Optional[str] = None

@@ -513,9 +513,9 @@ class ExportManager:
                     'status': data.get('status', 'active')
                 })()
                 self.project = type('obj', (object,), {
-                    'id': data.get('project_id', 'project-id'),
-                    'name': data.get('project_name', 'Test Project'),
-                    'description': data.get('project_description', 'Test project description')
+                    'id': data.get('project_id', 'unknown-project'),
+                    'name': data.get('project_name', 'Unnamed Project'),
+                    'description': data.get('project_description', 'No project description available')
                 })()
                 self.messages = []
                 # Convert messages if they exist
@@ -562,9 +562,9 @@ class ExportManager:
                     'status': data.get('status', 'active')
                 })()
                 self.project = type('obj', (object,), {
-                    'id': data.get('project_id', 'project-id'),
-                    'name': data.get('project_name', 'Test Project'),
-                    'description': data.get('project_description', 'Test project description')
+                    'id': data.get('project_id', 'unknown-project'),
+                    'name': data.get('project_name', 'Unnamed Project'),
+                    'description': data.get('project_description', 'No project description available')
                 })()
                 self.messages = []
                 # Convert messages if they exist
@@ -611,9 +611,9 @@ class ExportManager:
                     'status': data.get('status', 'active')
                 })()
                 self.project = type('obj', (object,), {
-                    'id': data.get('project_id', 'project-id'),
-                    'name': data.get('project_name', 'Test Project'),
-                    'description': data.get('project_description', 'Test project description')
+                    'id': data.get('project_id', 'unknown-project'),
+                    'name': data.get('project_name', 'Unnamed Project'),
+                    'description': data.get('project_description', 'No project description available')
                 })()
                 self.messages = []
                 # Convert messages if they exist

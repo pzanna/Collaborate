@@ -38,7 +38,7 @@ class TestProtocols:
         action = ResearchAction(
             task_id="test-priority",
             context_id="ctx-priority",
-            agent_type="reasoner",
+            agent_type="planning",
             action="analyze",
             payload={"data": "complex analysis"},
             priority="high",
@@ -142,11 +142,11 @@ class TestMCPIntegration:
         
         # Test different task types
         retrieval_action = create_research_action("retriever", "find documents")
-        reasoning_action = create_research_action("reasoner", "analyze data")
+        reasoning_action = create_research_action("planning", "analyze data")
         execution_action = create_research_action("executor", "run command")
         
         assert retrieval_action.agent_type == "retriever"
-        assert reasoning_action.agent_type == "reasoner"
+        assert reasoning_action.agent_type == "planning"
         assert execution_action.agent_type == "executor"
         
         assert retrieval_action.payload["query"] == "find documents"

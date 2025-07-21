@@ -67,7 +67,7 @@ The Eunice platform integrates various tools and services to support its researc
 
 - **Executor**: Handles code execution, API calls, data processing, and file operations for the research system.
 
-- **Reasoner**: Handles analysis, reasoning, and synthesis tasks for the research system.
+- **Planning**: Handles planning, analysis, reasoning, and synthesis tasks for the research system.
 
 ## AI Models
 

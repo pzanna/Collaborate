@@ -65,7 +65,7 @@ class TestResearchManagerDebugMethods:
         assert "parsed_tasks" in plan
         assert len(plan["parsed_tasks"]) == 2
         assert plan["parsed_tasks"][0]["agent"] == "retriever"
-        assert plan["parsed_tasks"][1]["agent"] == "reasoner"
+        assert plan["parsed_tasks"][1]["agent"] == "planning"
         assert "created_at" in plan
         
         # Ensure modifications field is always present and is a list

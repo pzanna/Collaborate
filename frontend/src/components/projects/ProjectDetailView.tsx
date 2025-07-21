@@ -192,15 +192,8 @@ const ProjectDetailView: React.FC = () => {
                   No research topics yet
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  Organize your research into focused topics and plans.
+                  Research topics are created via the research workspace.
                 </p>
-                <button
-                  onClick={() => navigate(`/projects/${projectId}/topics`)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <FolderIcon className="h-4 w-4 mr-2" />
-                  Create First Topic
-                </button>
               </div>
             ) : (
               <div className="divide-y divide-gray-200">

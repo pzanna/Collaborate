@@ -293,8 +293,8 @@ class TestAgentRegistry:
             timeout=30
         )
         registration3 = AgentRegistration(
-            agent_id="reasoner-001",
-            agent_type="reasoner", 
+            agent_id="planning-001",
+            agent_type="planning", 
             capabilities=["analyze", "reason"],
             max_concurrent=1,
             timeout=30
@@ -311,7 +311,7 @@ class TestAgentRegistry:
         
         analyze_agents = await agent_registry.get_available_agents("analyze")
         assert len(analyze_agents) == 1
-        assert "reasoner-001" in analyze_agents
+        assert "planning-001" in analyze_agents
     
     @pytest.mark.asyncio
     async def test_get_agent_capabilities(self, agent_registry: AgentRegistry):

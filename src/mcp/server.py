@@ -9,8 +9,10 @@ import asyncio
 import websockets
 import json
 import logging
+import os
 from typing import Dict, Any, Set, Optional, List
 from datetime import datetime
+from pathlib import Path
 import uuid
 import signal
 import sys
@@ -179,7 +181,7 @@ class MCPServer:
                 'type': 'connection_established',
                 'data': {'client_id': client_id},
                 'timestamp': datetime.now().isoformat()
-            }))
+            }, default=str))
             
             async for message in websocket:
                 try:
@@ -622,7 +624,7 @@ class MCPServer:
                         'timestamp': datetime.now().isoformat()
                     }
                     
-                    await self.clients[client_id].send(json.dumps(message))
+                    await self.clients[client_id].send(json.dumps(message, default=str))
                     self.stats['total_messages_sent'] += 1
                     logger.info(f"Sent task {action.task_id} to agent {agent_id}")
                     
@@ -642,7 +644,7 @@ class MCPServer:
         if client_id in self.clients:
             try:
                 message['timestamp'] = datetime.now().isoformat()
-                await self.clients[client_id].send(json.dumps(message))
+                await self.clients[client_id].send(json.dumps(message, default=str))
                 self.stats['total_messages_sent'] += 1
             except Exception as e:
                 logger.error(f"Error sending message to client {client_id}: {e}")
@@ -694,11 +696,17 @@ async def main():
     Path('logs').mkdir(exist_ok=True)
     
     # Setup logging
+    log_path = os.getenv("EUNICE_LOG_PATH", "logs")
+    log_level = os.getenv("EUNICE_LOG_LEVEL", "INFO")
+    
+    # Ensure log directory exists
+    Path(log_path).mkdir(parents=True, exist_ok=True)
+    
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, log_level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('logs/mcp_server.log'),
+            logging.FileHandler(os.path.join(log_path, 'mcp_server.log')),
             logging.StreamHandler()
         ]
     )

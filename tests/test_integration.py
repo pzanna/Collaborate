@@ -279,7 +279,7 @@ class TestEndToEndWorkflow:
             {
                 "user_query": user_message.content,
                 "research_plan": "1. Search for quantum computing papers 2. Analyze trends 3. Summarize findings",
-                "agents_needed": ["retriever", "reasoner"]
+                "agents_needed": ["retriever", "planning"]
             }
         )
         assert planning_trace_id is not None

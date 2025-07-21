@@ -15,7 +15,7 @@
             "system_prompt": ""
         },
         "xai": {
-            "model": "grok-3-mini-beta",
+            "model": "grok-3-mini",
             "name": "Grok",
             "temperature": 0.7,
             "max_tokens": 2000,
@@ -67,9 +67,10 @@
                 "scraping_timeout": 30
             }
         },
-        "reasoner": {
-            "type": "ReasonerAgent",
+        "planning": {
+            "type": "PlanningAgent",
             "capabilities": [
+                "plan_research",
                 "summarise_results",
                 "chain_of_thought",
                 "analysis",
