@@ -57,7 +57,6 @@ class HierarchicalDatabaseManager:
         
         self.db_path = db_path
         self._persistent_conn = None
-        self._persistent_conn = None
         self.max_retries = 3
         
         # For in-memory databases, we need to keep a persistent connection
