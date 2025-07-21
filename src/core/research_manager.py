@@ -22,7 +22,7 @@ try:
     from ..utils.error_handler import ErrorHandler
     from ..utils.performance import PerformanceMonitor
     from ..utils.id_utils import generate_timestamped_id
-    from ..storage.database import DatabaseManager
+    from ..storage.hierarchical_database import HierarchicalDatabaseManager
 except ImportError:
     # Fall back to absolute imports (when imported from outside src package)
     from mcp.client import MCPClient
@@ -32,7 +32,10 @@ except ImportError:
     from utils.error_handler import ErrorHandler
     from utils.performance import PerformanceMonitor
     from utils.id_utils import generate_timestamped_id
-    from storage.database import DatabaseManager
+    from storage.hierarchical_database import HierarchicalDatabaseManager
+
+# Type for database manager
+DatabaseManagerType = HierarchicalDatabaseManager
 
 
 class ResearchStage(Enum):
@@ -90,7 +93,7 @@ class ResearchManager:
     proper task completion.
     """
     
-    def __init__(self, config_manager: ConfigManager, db_manager: Optional[DatabaseManager] = None):
+    def __init__(self, config_manager: ConfigManager, db_manager: Optional[DatabaseManagerType] = None):
         """
         Initialize the Research Manager.
         
@@ -104,7 +107,7 @@ class ResearchManager:
         self.performance_monitor = PerformanceMonitor()
         
         # Database manager for storing research plans and results
-        self.db_manager = db_manager if db_manager else DatabaseManager()
+        self.db_manager = db_manager if db_manager else HierarchicalDatabaseManager()
         
         # Cost control
         self.cost_estimator = CostEstimator(config_manager)
@@ -413,8 +416,8 @@ class ResearchManager:
                             try:
                                 task = self.db_manager.get_research_task(context.task_id)
                                 if task:
-                                    task.stage = "planning_complete"
-                                    task.status = "waiting_approval"
+                                    task['stage'] = "planning_complete"
+                                    task['status'] = "waiting_approval"
                                     self.db_manager.update_research_task(task)
                             except Exception as e:
                                 self.logger.error(f"Failed to update task status after planning: {e}")
@@ -1328,16 +1331,16 @@ class ResearchManager:
                 # Check the task's approval status in the database
                 task = self.db_manager.get_research_task(task_id)
                 if task:
-                    if task.plan_approved:
+                    if task.get('plan_approved'):
                         self.logger.info(f"Plan approved for task {task_id}")
                         # Update task status to resume workflow
-                        task.status = "running"
-                        task.stage = "retrieval"
+                        task['status'] = "running"
+                        task['stage'] = "retrieval"
                         self.db_manager.update_research_task(task)
                         return True
                     
                     # Check if task was cancelled or failed
-                    if task.status in ["cancelled", "failed"]:
+                    if task.get('status') in ["cancelled", "failed"]:
                         self.logger.info(f"Task {task_id} was cancelled or failed while waiting for approval")
                         return False
                 
@@ -1357,7 +1360,7 @@ class ResearchManager:
         try:
             task = self.db_manager.get_research_task(task_id)
             if task:
-                task.status = "waiting_approval_timeout"
+                task['status'] = "waiting_approval_timeout"
                 self.db_manager.update_research_task(task)
         except Exception as e:
             self.logger.error(f"Failed to update task status after approval timeout: {e}")

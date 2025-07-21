@@ -54,6 +54,7 @@ class ResearchPlan(BaseModel):
     description: str = ""
     plan_type: str = "comprehensive"  # comprehensive, quick, deep, custom
     status: str = "draft"  # draft, active, completed, cancelled
+    plan_approved: bool = False
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     estimated_cost: float = 0.0

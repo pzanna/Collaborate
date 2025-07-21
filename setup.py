@@ -83,14 +83,14 @@ def test_foundation():
         sys.path.insert(0, str(Path(__file__).parent / "src"))
         
         from config.config_manager import ConfigManager
-        from storage.database import DatabaseManager
+        from storage.hierarchical_database import HierarchicalDatabaseManager
         
         # Test configuration
         config_manager = ConfigManager()
         print("✅ Configuration system working")
         
         # Test database
-        db_manager = DatabaseManager(":memory:")
+        db_manager = HierarchicalDatabaseManager(":memory:")
         print("✅ Database system working")
         
         return True

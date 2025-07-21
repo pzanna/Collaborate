@@ -10,11 +10,11 @@ import {
 
 interface ResearchPlan {
   raw_plan?: string
-  objectives?: string
-  key_areas?: string
-  questions?: string
-  sources?: string
-  outcomes?: string
+  objectives?: string[] | string
+  key_areas?: string[] | string
+  questions?: string[] | string
+  sources?: string[] | string
+  outcomes?: string[] | string
 }
 
 interface ResearchPlanData {
@@ -37,6 +37,73 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
   const [editedPlan, setEditedPlan] = useState<ResearchPlan>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Helper function to convert array to text for editing
+  const arrayToText = (arr: string[] | string | undefined): string => {
+    if (!arr) return ""
+
+    if (Array.isArray(arr)) {
+      return arr.join("\n")
+    } else if (typeof arr === "string") {
+      return arr
+    } else {
+      return String(arr)
+    }
+  }
+
+  // Helper function to convert text to array for saving
+  const textToArray = (text: string): string[] => {
+    return text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+  }
+
+  // Helper function to render array as list
+  const renderArrayAsList = (
+    arr: string[] | string | undefined
+  ): React.ReactNode => {
+    // Handle different data types that might be passed
+    let items: string[] = []
+
+    if (!arr) {
+      return null
+    }
+
+    if (Array.isArray(arr)) {
+      items = arr
+    } else if (typeof arr === "string") {
+      // If it's a string, split by newlines and clean up
+      items = arr
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    } else {
+      // Fallback: convert to string and handle as text
+      items = String(arr)
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    }
+
+    if (items.length === 0) return null
+
+    return (
+      <div className="space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-start space-x-3 p-2 rounded-md bg-white border border-gray-100"
+          >
+            <span className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></span>
+            <span className="text-sm text-gray-700 leading-relaxed">
+              {item}
+            </span>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   const loadPlan = useCallback(async () => {
     try {
@@ -230,21 +297,26 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
                   Research Objectives
                 </h4>
                 {editing ? (
-                  <textarea
-                    value={editedPlan.objectives || ""}
-                    onChange={(e) =>
-                      setEditedPlan((prev) => ({
-                        ...prev,
-                        objectives: e.target.value,
-                      }))
-                    }
-                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter research objectives..."
-                  />
+                  <div>
+                    <textarea
+                      value={arrayToText(editedPlan.objectives)}
+                      onChange={(e) =>
+                        setEditedPlan((prev) => ({
+                          ...prev,
+                          objectives: textToArray(e.target.value),
+                        }))
+                      }
+                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter research objectives (one per line)..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter each objective on a separate line
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                    {plan.objectives}
-                  </p>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    {renderArrayAsList(plan.objectives)}
+                  </div>
                 )}
               </div>
             )}
@@ -256,21 +328,26 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
                   Key Areas to Investigate
                 </h4>
                 {editing ? (
-                  <textarea
-                    value={editedPlan.key_areas || ""}
-                    onChange={(e) =>
-                      setEditedPlan((prev) => ({
-                        ...prev,
-                        key_areas: e.target.value,
-                      }))
-                    }
-                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter key areas to investigate..."
-                  />
+                  <div>
+                    <textarea
+                      value={arrayToText(editedPlan.key_areas)}
+                      onChange={(e) =>
+                        setEditedPlan((prev) => ({
+                          ...prev,
+                          key_areas: textToArray(e.target.value),
+                        }))
+                      }
+                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter key areas to investigate (one per line)..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter each area on a separate line
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                    {plan.key_areas}
-                  </p>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    {renderArrayAsList(plan.key_areas)}
+                  </div>
                 )}
               </div>
             )}
@@ -282,21 +359,26 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
                   Specific Questions
                 </h4>
                 {editing ? (
-                  <textarea
-                    value={editedPlan.questions || ""}
-                    onChange={(e) =>
-                      setEditedPlan((prev) => ({
-                        ...prev,
-                        questions: e.target.value,
-                      }))
-                    }
-                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter specific questions to answer..."
-                  />
+                  <div>
+                    <textarea
+                      value={arrayToText(editedPlan.questions)}
+                      onChange={(e) =>
+                        setEditedPlan((prev) => ({
+                          ...prev,
+                          questions: textToArray(e.target.value),
+                        }))
+                      }
+                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter specific questions to answer (one per line)..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter each question on a separate line
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                    {plan.questions}
-                  </p>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    {renderArrayAsList(plan.questions)}
+                  </div>
                 )}
               </div>
             )}
@@ -308,21 +390,26 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
                   Information Sources
                 </h4>
                 {editing ? (
-                  <textarea
-                    value={editedPlan.sources || ""}
-                    onChange={(e) =>
-                      setEditedPlan((prev) => ({
-                        ...prev,
-                        sources: e.target.value,
-                      }))
-                    }
-                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter information sources to consult..."
-                  />
+                  <div>
+                    <textarea
+                      value={arrayToText(editedPlan.sources)}
+                      onChange={(e) =>
+                        setEditedPlan((prev) => ({
+                          ...prev,
+                          sources: textToArray(e.target.value),
+                        }))
+                      }
+                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter information sources to consult (one per line)..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter each source on a separate line
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                    {plan.sources}
-                  </p>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    {renderArrayAsList(plan.sources)}
+                  </div>
                 )}
               </div>
             )}
@@ -334,21 +421,26 @@ const ResearchPlanViewer: React.FC<Props> = ({ taskId, onPlanApproved }) => {
                   Expected Outcomes
                 </h4>
                 {editing ? (
-                  <textarea
-                    value={editedPlan.outcomes || ""}
-                    onChange={(e) =>
-                      setEditedPlan((prev) => ({
-                        ...prev,
-                        outcomes: e.target.value,
-                      }))
-                    }
-                    className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter expected outcomes..."
-                  />
+                  <div>
+                    <textarea
+                      value={arrayToText(editedPlan.outcomes)}
+                      onChange={(e) =>
+                        setEditedPlan((prev) => ({
+                          ...prev,
+                          outcomes: textToArray(e.target.value),
+                        }))
+                      }
+                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter expected outcomes (one per line)..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter each outcome on a separate line
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
-                    {plan.outcomes}
-                  </p>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    {renderArrayAsList(plan.outcomes)}
+                  </div>
                 )}
               </div>
             )}

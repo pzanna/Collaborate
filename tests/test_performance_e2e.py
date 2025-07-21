@@ -19,8 +19,8 @@ from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
-from src.storage.database import DatabaseManager
-from src.models.data_models import Project, Conversation, Message
+from src.storage.hierarchical_database import HierarchicalDatabaseManager
+from src.models.data_models import Project
 from src.config.config_manager import ConfigManager
 from src.core.ai_client_manager import AIClientManager
 

@@ -11,9 +11,9 @@ from contextlib import contextmanager
 
 # Import existing models
 try:
-    from ..models.data_models import Project, Conversation, Message, ConversationSession, ResearchTask
+    from ..models.data_models import Project, ResearchTask
     from ..utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
-    from ..utils.id_utils import generate_timestamped_id
+    from ..utils.id_utils import generate_timestamped_id, generate_uuid_id
 except ImportError:
     # For direct execution or testing
     import sys
@@ -23,9 +23,9 @@ except ImportError:
     project_root = Path(__file__).parent.parent.parent
     sys.path.insert(0, str(project_root))
     
-    from src.models.data_models import Project, Conversation, Message, ConversationSession, ResearchTask
+    from src.models.data_models import Project, ResearchTask
     from src.utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
-    from src.utils.id_utils import generate_timestamped_id
+    from src.utils.id_utils import generate_timestamped_id, generate_uuid_id
 
 # Import new hierarchical models
 try:
@@ -115,7 +115,7 @@ class HierarchicalDatabaseManager:
             raise DatabaseError("Failed to initialize database", f"Database initialization failed: {e}")
     
     def _create_original_tables(self, conn: sqlite3.Connection) -> None:
-        """Create the original database tables."""
+        """Create the essential database tables with cleaned schema."""
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
@@ -126,34 +126,9 @@ class HierarchicalDatabaseManager:
                 metadata TEXT
             );
             
-            CREATE TABLE IF NOT EXISTS conversations (
-                id TEXT PRIMARY KEY,
-                project_id TEXT,
-                title TEXT NOT NULL,
-                description TEXT,
-                created_at TIMESTAMP,
-                updated_at TIMESTAMP,
-                participants TEXT,
-                status TEXT DEFAULT 'active',
-                metadata TEXT,
-                FOREIGN KEY (project_id) REFERENCES projects (id)
-            );
-            
-            CREATE TABLE IF NOT EXISTS messages (
-                id TEXT PRIMARY KEY,
-                conversation_id TEXT,
-                participant TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp TIMESTAMP,
-                message_type TEXT DEFAULT 'text',
-                metadata TEXT,
-                FOREIGN KEY (conversation_id) REFERENCES conversations (id)
-            );
-            
             CREATE TABLE IF NOT EXISTS research_tasks (
                 id TEXT PRIMARY KEY,
                 project_id TEXT,
-                conversation_id TEXT,
                 query TEXT NOT NULL,
                 name TEXT NOT NULL,
                 status TEXT DEFAULT 'pending',
@@ -176,17 +151,15 @@ class HierarchicalDatabaseManager:
                 task_type TEXT DEFAULT 'research',
                 task_order INTEGER DEFAULT 0,
                 FOREIGN KEY (project_id) REFERENCES projects (id),
-                FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+                FOREIGN KEY (plan_id) REFERENCES research_plans (id)
             );
             
-            CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id);
-            CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
-            CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
             CREATE INDEX IF NOT EXISTS idx_research_tasks_project_id ON research_tasks(project_id);
-            CREATE INDEX IF NOT EXISTS idx_research_tasks_conversation_id ON research_tasks(conversation_id);
             CREATE INDEX IF NOT EXISTS idx_research_tasks_status ON research_tasks(status);
             CREATE INDEX IF NOT EXISTS idx_research_tasks_created_at ON research_tasks(created_at);
+            CREATE INDEX IF NOT EXISTS idx_research_tasks_plan_id ON research_tasks(plan_id);
         """)
+    
     
     def _create_hierarchical_tables(self, conn: sqlite3.Connection) -> None:
         """Create the new hierarchical research tables."""
@@ -210,6 +183,7 @@ class HierarchicalDatabaseManager:
                 description TEXT DEFAULT '',
                 plan_type TEXT DEFAULT 'comprehensive',
                 status TEXT DEFAULT 'draft',
+                plan_approved BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 estimated_cost REAL DEFAULT 0.0,
@@ -245,6 +219,13 @@ class HierarchicalDatabaseManager:
             
             if 'task_order' not in columns:
                 conn.execute("ALTER TABLE research_tasks ADD COLUMN task_order INTEGER DEFAULT 0")
+            
+            # Check if research_plans table needs migration for plan_approved column
+            cursor = conn.execute("PRAGMA table_info(research_plans)")
+            plan_columns = [row[1] for row in cursor.fetchall()]
+            
+            if 'plan_approved' not in plan_columns:
+                conn.execute("ALTER TABLE research_plans ADD COLUMN plan_approved BOOLEAN DEFAULT FALSE")
                 
         except sqlite3.OperationalError:
             # Table might not exist yet, which is fine
@@ -349,9 +330,9 @@ class HierarchicalDatabaseManager:
             with self.get_connection() as conn:
                 conn.execute("""
                     INSERT INTO research_plans 
-                    (id, topic_id, name, description, plan_type, status, created_at, updated_at, 
+                    (id, topic_id, name, description, plan_type, status, plan_approved, created_at, updated_at, 
                      estimated_cost, actual_cost, plan_structure, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     plan_id,
                     plan_data['topic_id'],
@@ -359,6 +340,7 @@ class HierarchicalDatabaseManager:
                     plan_data.get('description', ''),
                     plan_data.get('plan_type', 'comprehensive'),
                     plan_data.get('status', 'draft'),
+                    plan_data.get('plan_approved', False),
                     datetime.now().isoformat(),
                     datetime.now().isoformat(),
                     plan_data.get('estimated_cost', 0.0),
@@ -442,36 +424,46 @@ class HierarchicalDatabaseManager:
         try:
             task_id = task_data.get('id', generate_timestamped_id('task'))
             
-            # Get project_id from the plan
-            plan = self.get_research_plan(task_data['plan_id'])
-            if not plan:
-                raise Exception(f"Plan {task_data['plan_id']} not found")
+            # Plan ID is optional - tasks can be created without plans initially
+            plan_id = task_data.get('plan_id')
+            project_id = task_data.get('project_id')
             
-            # Get project_id through topic
-            topic = self.get_research_topic(plan['topic_id'])
-            if not topic:
-                raise Exception(f"Topic {plan['topic_id']} not found")
+            if plan_id and not project_id:
+                # Get project_id from the plan if not provided directly
+                plan = self.get_research_plan(plan_id)
+                if not plan:
+                    raise Exception(f"Plan {plan_id} not found")
+                
+                # Get project_id through topic
+                topic = self.get_research_topic(plan['topic_id'])
+                if not topic:
+                    raise Exception(f"Topic {plan['topic_id']} not found")
+                
+                project_id = topic['project_id']
             
-            project_id = topic['project_id']
+            if not project_id:
+                raise Exception("project_id is required")
             
             with self.get_connection() as conn:
                 conn.execute("""
                     INSERT INTO research_tasks 
-                    (id, project_id, plan_id, name, description, query, status, stage, created_at, updated_at, 
-                     estimated_cost, actual_cost, cost_approved, single_agent_mode, 
-                     research_mode, max_results, progress, task_type, task_order, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, project_id, plan_id, name, query, status, stage, created_at, updated_at, 
+                     task_type, task_order, estimated_cost, actual_cost, cost_approved,
+                     single_agent_mode, research_mode, max_results, progress, search_results, 
+                     reasoning_output, execution_results, synthesis, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     task_id,
                     project_id,
-                    task_data['plan_id'],
-                    task_data['name'],
-                    task_data.get('description', ''),
+                    plan_id,  # Can be None
+                    task_data.get('name', ''),
                     task_data.get('query', ''),
                     task_data.get('status', 'pending'),
                     task_data.get('stage', 'planning'),
                     datetime.now().isoformat(),
                     datetime.now().isoformat(),
+                    task_data.get('task_type', 'research'),
+                    task_data.get('task_order', 0),
                     task_data.get('estimated_cost', 0.0),
                     task_data.get('actual_cost', 0.0),
                     task_data.get('cost_approved', False),
@@ -479,8 +471,10 @@ class HierarchicalDatabaseManager:
                     task_data.get('research_mode', 'comprehensive'),
                     task_data.get('max_results', 10),
                     task_data.get('progress', 0.0),
-                    task_data.get('task_type', 'research'),
-                    task_data.get('task_order', 0),
+                    json.dumps(task_data.get('search_results', [])),
+                    task_data.get('reasoning_output'),
+                    json.dumps(task_data.get('execution_results', [])),
+                    task_data.get('synthesis'),
                     json.dumps(task_data.get('metadata', {}))
                 ))
                 conn.commit()
@@ -508,9 +502,9 @@ class HierarchicalDatabaseManager:
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = self._get_default_value_for_field(field)
+                                task[field] = [] if field in ['search_results', 'execution_results'] else {}
                         else:
-                            task[field] = self._get_default_value_for_field(field)
+                            task[field] = [] if field in ['search_results', 'execution_results'] else {}
                     
                     # Ensure required fields have proper defaults
                     task.setdefault('description', '')
@@ -620,19 +614,31 @@ class HierarchicalDatabaseManager:
     
     @handle_errors(context="update_research_plan")
     def update_research_plan(self, plan_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Update a research plan."""
+        """Update a research plan.
+        
+        This method supports both new hierarchical usage (with plan_id) and 
+        legacy usage (with task_id for backwards compatibility with ResearchManager).
+        """
         try:
-            # Check if plan exists
+            # First check if plan_id refers to an existing plan
             plan = self.get_research_plan(plan_id)
-            if not plan:
-                return None
             
+            if not plan:
+                # Check if plan_id is actually a task_id (legacy usage)
+                task = self.get_task(plan_id)
+                if task:
+                    # This is legacy usage - create or update plan for this task
+                    return self._handle_legacy_plan_update(plan_id, update_data)
+                else:
+                    return None
+            
+            # Standard plan update
             # Build update query dynamically
             update_fields = []
             update_values = []
             
             for field, value in update_data.items():
-                if field in ['name', 'description', 'plan_type', 'status']:
+                if field in ['name', 'description', 'plan_type', 'status', 'plan_approved']:
                     update_fields.append(f"{field} = ?")
                     update_values.append(value)
                 elif field in ['plan_structure', 'metadata']:
@@ -660,6 +666,92 @@ class HierarchicalDatabaseManager:
             
         except Exception as e:
             raise DatabaseError("Failed to update research plan", f"Plan update failed: {e}")
+    
+    def _handle_legacy_plan_update(self, task_id: str, plan_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Handle legacy research plan updates where plan_data is associated with a task."""
+        try:
+            task = self.get_task(task_id)
+            if not task:
+                return None
+            
+            with self.get_connection() as conn:
+                # Check if task already has a plan_id
+                plan_id = task.get('plan_id')
+                
+                if plan_id:
+                    # Update existing plan
+                    existing_plan = self.get_research_plan(plan_id)
+                    if existing_plan:
+                        # Update the existing plan with new data
+                        plan_update = {
+                            'plan_structure': plan_data,
+                            'status': 'active',
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        
+                        conn.execute("""
+                            UPDATE research_plans 
+                            SET plan_structure = ?, status = ?, updated_at = ?
+                            WHERE id = ?
+                        """, (json.dumps(plan_data), 'active', datetime.now().isoformat(), plan_id))
+                        conn.commit()
+                        return self.get_research_plan(plan_id)
+                
+                # Create a new plan for this task
+                plan_id = generate_timestamped_id('plan')
+                
+                # We need a topic for the plan - create a default one if needed
+                project_id = task.get('project_id')
+                if not project_id:
+                    print(f"Warning: Task {task_id} has no project_id")
+                    return None
+                
+                # Check if there's already a default topic for this project
+                topics = self.get_research_topics_by_project(project_id)
+                if topics:
+                    topic_id = topics[0]['id']  # Use first available topic
+                else:
+                    # Create a default topic
+                    topic_data = {
+                        'project_id': project_id,
+                        'name': 'General Research',
+                        'description': 'Default topic for legacy research tasks',
+                        'status': 'active'
+                    }
+                    topic = self.create_research_topic(topic_data)
+                    if not topic:
+                        return None
+                    topic_id = topic['id']
+                
+                # Create the research plan
+                plan_creation_data = {
+                    'id': plan_id,
+                    'topic_id': topic_id,
+                    'name': f"Plan for Task: {task.get('name', task.get('query', 'Unnamed Task'))}",
+                    'description': f"Research plan generated for task {task_id}",
+                    'plan_type': 'comprehensive',
+                    'status': 'active',
+                    'plan_structure': plan_data,
+                    'metadata': {'legacy_task_id': task_id}
+                }
+                
+                created_plan = self.create_research_plan(plan_creation_data)
+                if not created_plan:
+                    return None
+                
+                # Link the task to the plan
+                conn.execute("""
+                    UPDATE research_tasks 
+                    SET plan_id = ?, updated_at = ?
+                    WHERE id = ?
+                """, (plan_id, datetime.now().isoformat(), task_id))
+                conn.commit()
+                
+                return created_plan
+                
+        except Exception as e:
+            print(f"Failed to handle legacy plan update: {e}")
+            return None
     
     @handle_errors(context="delete_research_plan")
     def delete_research_plan(self, plan_id: str) -> bool:
@@ -702,7 +794,386 @@ class HierarchicalDatabaseManager:
         except Exception as e:
             raise DatabaseError("Failed to delete task", f"Task deletion failed: {e}")
     
-    # Legacy methods for backward compatibility
+    # Legacy methods for backward compatibility with ResearchManager
+    def get_research_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get a research task by ID (legacy method for compatibility)."""
+        return self.get_task(task_id)
+    
+    def update_research_task(self, task_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a research task (legacy method for compatibility)."""
+        # Extract task ID from the data
+        task_id = task_data.get('id')
+        if not task_id:
+            return None
+        
+        try:
+            with self.get_connection() as conn:
+                # Build update query dynamically based on available fields
+                update_fields = []
+                update_values = []
+                
+                # Map common fields that might be updated
+                field_mapping = {
+                    'status': 'status',
+                    'stage': 'stage', 
+                    'progress': 'progress',
+                    'actual_cost': 'actual_cost',
+                    'search_results': 'search_results',
+                    'reasoning_output': 'reasoning_output',
+                    'execution_results': 'execution_results',
+                    'synthesis': 'synthesis',
+                    'metadata': 'metadata'
+                }
+                
+                for field, column in field_mapping.items():
+                    if field in task_data:
+                        update_fields.append(f"{column} = ?")
+                        value = task_data[field]
+                        # Convert lists/dicts to JSON strings
+                        if isinstance(value, (list, dict)):
+                            value = json.dumps(value)
+                        update_values.append(value)
+                
+                if not update_fields:
+                    return task_data  # No updates to apply
+                
+                # Add updated_at timestamp
+                update_fields.append("updated_at = ?")
+                update_values.append(datetime.now().isoformat())
+                update_values.append(task_id)  # WHERE clause
+                
+                update_query = f"""
+                    UPDATE research_tasks 
+                    SET {', '.join(update_fields)}
+                    WHERE id = ?
+                """
+                
+                conn.execute(update_query, update_values)
+                conn.commit()
+                
+                # Return updated task
+                return self.get_task(task_id)
+                
+        except Exception as e:
+            print(f"Failed to update research task: {e}")
+            return None
+
+    @handle_errors(context="create_research_task_with_hierarchy")
+    def create_research_task_with_hierarchy(self, task_data: Dict[str, Any], auto_create_topic: bool = True) -> Optional[Dict[str, Any]]:
+        """
+        Create a research task with proper hierarchical structure (topic → plan → task).
+        
+        Args:
+            task_data: Task data including project_id, query, name, etc.
+            auto_create_topic: Whether to automatically create a topic if none exists
+            
+        Returns:
+            Created task data with hierarchy in place
+        """
+        try:
+            project_id = task_data.get('project_id')
+            if not project_id:
+                raise Exception("project_id is required for hierarchical task creation")
+            
+            # Step 1: Find or create a research topic
+            topic_id = None
+            
+            # Look for existing topics in this project
+            existing_topics = self.get_research_topics_by_project(project_id)
+            
+            if existing_topics:
+                # Use the first active topic, or create a new one if all are inactive
+                active_topics = [t for t in existing_topics if t.get('status') == 'active']
+                if active_topics:
+                    topic_id = active_topics[0]['id']
+                else:
+                    topic_id = existing_topics[0]['id']  # Use any existing topic
+            
+            if not topic_id and auto_create_topic:
+                # Create a new topic based on the research query
+                query = task_data.get('query', '')
+                topic_name = self._generate_topic_name_from_query(query)
+                
+                topic_data = {
+                    'project_id': project_id,
+                    'name': topic_name,
+                    'description': f'Research topic for: {query[:100]}...' if len(query) > 100 else f'Research topic for: {query}',
+                    'status': 'active'
+                }
+                
+                created_topic = self.create_research_topic(topic_data)
+                if not created_topic:
+                    raise Exception("Failed to create research topic")
+                topic_id = created_topic['id']
+            
+            if not topic_id:
+                raise Exception("No topic available and auto_create_topic is disabled")
+            
+            # Step 2: Create a research plan
+            plan_id = generate_uuid_id('plan')  # Use UUID for better uniqueness
+            plan_data = {
+                'id': plan_id,
+                'topic_id': topic_id,
+                'name': f"Plan: {task_data.get('name', task_data.get('query', 'Research Task'))}",
+                'description': f"Research plan for: {task_data.get('query', 'N/A')}",
+                'plan_type': 'comprehensive',
+                'status': 'active',
+                'plan_structure': {
+                    'query': task_data.get('query'),
+                    'research_mode': task_data.get('research_mode', 'comprehensive'),
+                    'max_results': task_data.get('max_results', 10)
+                },
+                'metadata': {
+                    'created_from_task': True,
+                    'task_name': task_data.get('name')
+                }
+            }
+            
+            created_plan = self.create_research_plan(plan_data)
+            if not created_plan:
+                raise Exception("Failed to create research plan")
+            
+            # Step 3: Create the research task linked to the plan
+            enhanced_task_data = task_data.copy()
+            enhanced_task_data['plan_id'] = created_plan['id']
+            
+            created_task = self.create_task(enhanced_task_data)
+            if not created_task:
+                raise Exception("Failed to create research task")
+            
+            return created_task
+            
+        except Exception as e:
+            raise DatabaseError("Failed to create research task with hierarchy", f"Hierarchical task creation failed: {e}")
+    
+    def _generate_topic_name_from_query(self, query: str) -> str:
+        """Generate a meaningful topic name from a research query."""
+        if not query:
+            return "General Research"
+        
+        # Extract key terms from the query
+        words = query.split()
+        if len(words) <= 3:
+            return query.title()
+        
+        # Take the first few significant words
+        significant_words = []
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'what', 'why', 'when', 'where', 'who'}
+        
+        for word in words[:6]:  # Look at first 6 words
+            clean_word = word.strip('.,!?;:"()[]').lower()
+            if clean_word not in stop_words and len(clean_word) > 2:
+                significant_words.append(word.capitalize())
+            if len(significant_words) >= 3:
+                break
+        
+        if significant_words:
+            topic_name = ' '.join(significant_words)
+            return topic_name if len(topic_name) <= 50 else topic_name[:47] + '...'
+        
+        return "Research Topic"
+
+    # Legacy project methods for web server compatibility
+    def list_projects(self) -> List[Dict[str, Any]]:
+        """List all projects (legacy method for compatibility)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT * FROM projects ORDER BY created_at DESC
+                """)
+                projects = []
+                for row in cursor.fetchall():
+                    project = dict(row)
+                    projects.append(project)
+                return projects
+        except Exception as e:
+            print(f"Failed to list projects: {e}")
+            return []
+
+    def create_project(self, project_data) -> Optional[Dict[str, Any]]:
+        """Create a new project (legacy method for compatibility)."""
+        try:
+            # Handle both dict and object input
+            if hasattr(project_data, '__dict__'):
+                # Convert object to dict
+                data = {
+                    'id': project_data.id,
+                    'name': project_data.name,
+                    'description': project_data.description,
+                    'created_at': project_data.created_at.isoformat() if hasattr(project_data.created_at, 'isoformat') else str(project_data.created_at),
+                    'updated_at': project_data.updated_at.isoformat() if hasattr(project_data.updated_at, 'isoformat') else str(project_data.updated_at),
+                }
+            else:
+                data = project_data
+                
+            with self.get_connection() as conn:
+                conn.execute("""
+                    INSERT INTO projects (id, name, description, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    data['id'],
+                    data['name'],
+                    data['description'],
+                    data['created_at'],
+                    data['updated_at']
+                ))
+                conn.commit()
+                return data
+        except Exception as e:
+            print(f"Failed to create project: {e}")
+            return None
+
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project (legacy method for compatibility)."""
+        try:
+            with self.get_connection() as conn:
+                conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Failed to delete project: {e}")
+            return False
+
+    def get_research_tasks_by_project(self, project_id: str) -> List[Dict[str, Any]]:
+        """Get all research tasks for a project (legacy method for compatibility)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT * FROM research_tasks 
+                    WHERE project_id = ? 
+                    ORDER BY created_at DESC
+                """, (project_id,))
+                tasks = []
+                for row in cursor.fetchall():
+                    task = dict(row)
+                    # Parse JSON fields
+                    for field in ['search_results', 'execution_results', 'metadata']:
+                        if task.get(field):
+                            try:
+                                task[field] = json.loads(task[field])
+                            except (json.JSONDecodeError, TypeError):
+                                task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                        else:
+                            task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                    tasks.append(task)
+                return tasks
+        except Exception as e:
+            print(f"Failed to get research tasks by project: {e}")
+            return []
+
+    def get_research_task_count_by_project(self, project_id: str) -> int:
+        """Get count of research tasks for a project (legacy method for compatibility)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT COUNT(*) FROM research_tasks WHERE project_id = ?
+                """, (project_id,))
+                return cursor.fetchone()[0]
+        except Exception as e:
+            print(f"Failed to get research task count: {e}")
+            return 0
+
+    def list_research_tasks(self, project_id: Optional[str] = None, conversation_id: Optional[str] = None, 
+                           status_filter: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """List research tasks with filters (legacy method for compatibility)."""
+        try:
+            query = "SELECT * FROM research_tasks WHERE 1=1"
+            params = []
+            
+            if project_id:
+                query += " AND project_id = ?"
+                params.append(project_id)
+                
+            if status_filter:
+                query += " AND status = ?"
+                params.append(status_filter)
+            
+            # Note: conversation_id filter removed as conversations are no longer used
+            
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            
+            with self.get_connection() as conn:
+                cursor = conn.execute(query, params)
+                tasks = []
+                for row in cursor.fetchall():
+                    task = dict(row)
+                    # Parse JSON fields
+                    for field in ['search_results', 'execution_results', 'metadata']:
+                        if task.get(field):
+                            try:
+                                task[field] = json.loads(task[field])
+                            except (json.JSONDecodeError, TypeError):
+                                task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                        else:
+                            task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                    tasks.append(task)
+                return tasks
+        except Exception as e:
+            print(f"Failed to list research tasks: {e}")
+            return []
+
+    def create_research_task(self, task_data) -> Optional[Dict[str, Any]]:
+        """Create a research task (legacy method for compatibility)."""
+        try:
+            # Handle both dict and object input
+            if hasattr(task_data, '__dict__'):
+                # Convert ResearchTask object to dict
+                data = {
+                    'id': task_data.id,
+                    'project_id': task_data.project_id,
+                    'query': task_data.query,
+                    'name': task_data.name,
+                    'status': task_data.status,
+                    'stage': task_data.stage,
+                    'created_at': task_data.created_at.isoformat() if hasattr(task_data.created_at, 'isoformat') else str(task_data.created_at),
+                    'updated_at': task_data.updated_at.isoformat() if hasattr(task_data.updated_at, 'isoformat') else str(task_data.updated_at),
+                    'estimated_cost': task_data.estimated_cost,
+                    'actual_cost': task_data.actual_cost,
+                    'cost_approved': task_data.cost_approved,
+                    'single_agent_mode': task_data.single_agent_mode,
+                    'research_mode': task_data.research_mode,
+                    'max_results': task_data.max_results,
+                    'progress': task_data.progress,
+                    'search_results': json.dumps(task_data.search_results),
+                    'reasoning_output': task_data.reasoning_output,
+                    'execution_results': json.dumps(task_data.execution_results),
+                    'synthesis': task_data.synthesis,
+                    'metadata': json.dumps(task_data.metadata),
+                }
+            else:
+                data = task_data.copy()
+                # Ensure JSON fields are strings
+                for field in ['search_results', 'execution_results', 'metadata']:
+                    if field in data and not isinstance(data[field], str):
+                        data[field] = json.dumps(data[field])
+                        
+            with self.get_connection() as conn:
+                conn.execute("""
+                    INSERT INTO research_tasks 
+                    (id, project_id, query, name, status, stage, 
+                     created_at, updated_at, estimated_cost, actual_cost, cost_approved,
+                     single_agent_mode, research_mode, max_results, progress,
+                     search_results, reasoning_output, execution_results, synthesis, metadata,
+                     plan_id, task_type, task_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    data['id'], data['project_id'],
+                    data['query'], data['name'], data['status'], data['stage'],
+                    data['created_at'], data['updated_at'], data['estimated_cost'],
+                    data['actual_cost'], data['cost_approved'], data['single_agent_mode'],
+                    data['research_mode'], data['max_results'], data['progress'],
+                    data.get('search_results', '[]'), data.get('reasoning_output'),
+                    data.get('execution_results', '[]'), data.get('synthesis'),
+                    data.get('metadata', '{}'), data.get('plan_id'), 
+                    data.get('task_type', 'research'), data.get('task_order', 0)
+                ))
+                conn.commit()
+                return data
+        except Exception as e:
+            print(f"Failed to create research task: {e}")
+            return None
+
     def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
         """Get a project by ID (legacy method)."""
         # This would call the original implementation

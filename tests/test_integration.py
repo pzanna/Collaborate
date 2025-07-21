@@ -16,8 +16,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.core.ai_client_manager import AIClientManager
-from src.storage.database import DatabaseManager
-from src.models.data_models import Project, Conversation, Message, AIConfig
+from src.storage.hierarchical_database import HierarchicalDatabaseManager
+from src.models.data_models import Project, AIConfig
 from src.core.context_manager import ContextManager
 from src.config.config_manager import ConfigManager
 

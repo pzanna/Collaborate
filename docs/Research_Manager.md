@@ -611,7 +611,7 @@ print(f"Actual cost: ${task_details.actual_cost:.4f}")
 
 ```python
 # Database operations for research tasks
-from src.storage.database import DatabaseManager
+from src.storage.hierarchical_database import HierarchicalDatabaseManager
 from src.models.data_models import ResearchTask
 
 db_manager = DatabaseManager()

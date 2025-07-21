@@ -25,7 +25,7 @@ import uvicorn
 
 # Import existing Eunice components
 from src.config.config_manager import ConfigManager
-from src.storage.database import DatabaseManager
+from src.storage.hierarchical_database import HierarchicalDatabaseManager
 from src.core.ai_client_manager import AIClientManager
 from src.core.streaming_coordinator import StreamingResponseCoordinator
 from src.core.research_manager import ResearchManager
@@ -87,8 +87,6 @@ class ResearchTaskResponse(BaseModel):
     progress: float = 0.0
     estimated_cost: float = 0.0
     actual_cost: float = 0.0
-    research_plan: Optional[Dict[str, Any]] = None
-    plan_approved: bool = False
     results: Optional[Dict[str, Any]] = None
 
 class ProjectResponse(BaseModel):
@@ -165,7 +163,7 @@ class HealthResponse(BaseModel):
 
 # Global state
 config_manager: Optional[ConfigManager] = None
-db_manager: Optional[DatabaseManager] = None
+db_manager: Optional[HierarchicalDatabaseManager] = None  # Use hierarchical DB manager
 ai_manager: Optional[AIClientManager] = None
 streaming_coordinator: Optional[StreamingResponseCoordinator] = None
 research_manager: Optional[ResearchManager] = None
@@ -223,7 +221,7 @@ async def lifespan(app: FastAPI):
     # Set up logging first
     config_manager.setup_logging()
     
-    db_manager = DatabaseManager(config_manager.config.storage.database_path)
+    db_manager = HierarchicalDatabaseManager(config_manager.config.storage.database_path)
     export_manager = ExportManager(config_manager.config.storage.export_path)
     
     # Initialize context manager
@@ -602,29 +600,30 @@ async def list_projects(
         task_counts = {}
         for project in all_projects:
             if db_manager:
-                task_counts[project.id] = db_manager.get_research_task_count_by_project(project.id)
+                task_counts[project['id']] = db_manager.get_research_task_count_by_project(project['id'])
             else:
-                task_counts[project.id] = 0
+                task_counts[project['id']] = 0
         
         # Apply filtering
         filtered_projects = all_projects
         if filters.search:
             filtered_projects = [p for p in filtered_projects 
-                               if filters.search.lower() in p.name.lower() 
-                               or filters.search.lower() in p.description.lower()]
+                               if filters.search.lower() in p['name'].lower() 
+                               or filters.search.lower() in p['description'].lower()]
         
         if filters.created_after:
             from datetime import datetime
             after_date = datetime.fromisoformat(filters.created_after.replace('Z', '+00:00'))
-            filtered_projects = [p for p in filtered_projects if p.created_at >= after_date]
+            filtered_projects = [p for p in filtered_projects if datetime.fromisoformat(p['created_at']) >= after_date]
         
         # Apply sorting
         if pagination.sort_by:
+            from datetime import datetime
             reverse = pagination.sort_order == "desc"
             if pagination.sort_by == "name":
-                filtered_projects.sort(key=lambda x: x.name, reverse=reverse)
+                filtered_projects.sort(key=lambda x: x['name'], reverse=reverse)
             elif pagination.sort_by == "created_at":
-                filtered_projects.sort(key=lambda x: x.created_at, reverse=reverse)
+                filtered_projects.sort(key=lambda x: datetime.fromisoformat(x['created_at']), reverse=reverse)
         
         # Apply pagination
         total = len(filtered_projects)
@@ -635,12 +634,12 @@ async def list_projects(
         # Format response
         project_responses = [
             ProjectResponse(
-                id=project.id,
-                name=project.name,
-                description=project.description,
-                created_at=project.created_at.isoformat(),
-                updated_at=project.updated_at.isoformat(),
-                research_task_count=task_counts.get(project.id, 0)
+                id=project['id'],
+                name=project['name'],
+                description=project['description'],
+                created_at=project['created_at'],
+                updated_at=project['updated_at'],
+                research_task_count=task_counts.get(project['id'], 0)
             )
             for project in paginated_projects
         ]
@@ -680,11 +679,11 @@ async def create_project(project: ProjectCreate):
             raise HTTPException(status_code=400, detail="Failed to create project")
         
         return ProjectResponse(
-            id=created_project.id,
-            name=created_project.name,
-            description=created_project.description,
-            created_at=created_project.created_at.isoformat(),
-            updated_at=created_project.updated_at.isoformat(),
+            id=created_project['id'],
+            name=created_project['name'],
+            description=created_project.get('description', ''),
+            created_at=created_project['created_at'],
+            updated_at=created_project['updated_at'],
             research_task_count=0
         )
     except EuniceError as e:
@@ -723,17 +722,17 @@ async def list_project_research_tasks(project_id: str):
         
         return [
             ResearchTaskResponse(
-                task_id=task.id,
-                project_id=task.project_id,
-                query=task.query,
-                name=task.name,
-                status=task.status,
-                stage=task.stage,
-                created_at=task.created_at.isoformat(),
-                updated_at=task.updated_at.isoformat(),
-                progress=task.progress,
-                estimated_cost=task.estimated_cost,
-                actual_cost=task.actual_cost
+                task_id=task['id'],
+                project_id=task['project_id'],
+                query=task['query'],
+                name=task['name'],
+                status=task['status'],
+                stage=task['stage'],
+                created_at=task['created_at'],
+                updated_at=task['updated_at'],
+                progress=task['progress'],
+                estimated_cost=task['estimated_cost'],
+                actual_cost=task['actual_cost']
             )
             for task in research_tasks
         ]
@@ -760,17 +759,17 @@ async def list_all_research_tasks(
         
         return [
             ResearchTaskResponse(
-                task_id=task.id,
-                project_id=task.project_id,
-                query=task.query,
-                name=task.name,
-                status=task.status,
-                stage=task.stage,
-                created_at=task.created_at.isoformat(),
-                updated_at=task.updated_at.isoformat(),
-                progress=task.progress,
-                estimated_cost=task.estimated_cost,
-                actual_cost=task.actual_cost
+                task_id=task['id'],
+                project_id=task['project_id'],
+                query=task['query'],
+                name=task['name'],
+                status=task['status'],
+                stage=task['stage'],
+                created_at=task['created_at'],
+                updated_at=task['updated_at'],
+                progress=task['progress'],
+                estimated_cost=task['estimated_cost'],
+                actual_cost=task['actual_cost']
             )
             for task in research_tasks
         ]
@@ -811,28 +810,29 @@ async def start_research_task(request: ResearchRequest):
         # Get task details from research manager
         task_context = research_manager.get_task_context(task_id)
         
-        # Create database entry for the research task
-        from src.models.data_models import ResearchTask
+        # Create database entry with hierarchical structure (topic → plan → task)
+        task_data = {
+            'id': task_id,
+            'project_id': request.project_id,
+            'query': request.query,
+            'name': task_name,
+            'status': "running",
+            'stage': task_context.stage.value if task_context else "planning",
+            'estimated_cost': task_context.estimated_cost if task_context else 0.0,
+            'actual_cost': task_context.actual_cost if task_context else 0.0,
+            'cost_approved': task_context.cost_approved if task_context else False,
+            'single_agent_mode': task_context.single_agent_mode if task_context else False,
+            'research_mode': request.research_mode,
+            'max_results': request.max_results,
+            'progress': 0.0,
+            'metadata': {
+                'created_via': 'web_api',
+                'user_id': 'web_user'
+            }
+        }
         
-        research_task = ResearchTask(
-            id=task_id,
-            project_id=request.project_id,
-            conversation_id=None,  # No longer using conversations
-            query=request.query,
-            name=task_name,
-            status="running",
-            stage=task_context.stage.value if task_context else "planning",
-            estimated_cost=task_context.estimated_cost if task_context else 0.0,
-            actual_cost=task_context.actual_cost if task_context else 0.0,
-            cost_approved=task_context.cost_approved if task_context else False,
-            single_agent_mode=task_context.single_agent_mode if task_context else False,
-            research_mode=request.research_mode,
-            max_results=request.max_results,
-            progress=0.0
-        )
-        
-        # Save to database
-        created_task = db_manager.create_research_task(research_task)
+        # Save to database with hierarchical structure (auto-creates topic and plan)
+        created_task = db_manager.create_research_task_with_hierarchy(task_data, auto_create_topic=True)
         if not created_task:
             raise HTTPException(status_code=500, detail="Failed to save research task to database")
         
@@ -841,13 +841,13 @@ async def start_research_task(request: ResearchRequest):
             project_id=request.project_id,
             query=request.query,
             name=task_name,
-            status=created_task.status,
-            stage=created_task.stage,
-            created_at=created_task.created_at.isoformat(),
-            updated_at=created_task.updated_at.isoformat(),
-            progress=0.0,
-            estimated_cost=created_task.estimated_cost,
-            actual_cost=created_task.actual_cost
+            status=created_task.get('status', 'running'),
+            stage=created_task.get('stage', 'planning'),
+            created_at=created_task.get('created_at'),
+            updated_at=created_task.get('updated_at'),
+            progress=created_task.get('progress', 0.0),
+            estimated_cost=created_task.get('estimated_cost', 0.0),
+            actual_cost=created_task.get('actual_cost', 0.0)
         )
         
     except Exception as e:
@@ -873,43 +873,41 @@ async def get_research_task(task_id: str):
         task_context = research_manager.get_task_context(task_id)
         if task_context:
             # Update database with current progress
-            db_task.status = "running" if task_context.stage.value in ["planning", "retrieval", "reasoning", "execution", "synthesis"] else task_context.stage.value
-            db_task.stage = task_context.stage.value
-            db_task.progress = research_manager.calculate_task_progress(task_id)
-            db_task.actual_cost = task_context.actual_cost
-            db_task.search_results = task_context.search_results
-            db_task.reasoning_output = task_context.reasoning_output
-            db_task.execution_results = task_context.execution_results
-            db_task.synthesis = task_context.synthesis
+            db_task['status'] = "running" if task_context.stage.value in ["planning", "retrieval", "reasoning", "execution", "synthesis"] else task_context.stage.value
+            db_task['stage'] = task_context.stage.value
+            db_task['progress'] = research_manager.calculate_task_progress(task_id)
+            db_task['actual_cost'] = task_context.actual_cost
+            db_task['search_results'] = task_context.search_results
+            db_task['reasoning_output'] = task_context.reasoning_output
+            db_task['execution_results'] = task_context.execution_results
+            db_task['synthesis'] = task_context.synthesis
             
             # Update database
             db_manager.update_research_task(db_task)
         
         # Prepare results
         results = None
-        if db_task.stage == "complete":
+        if db_task.get('stage') == "complete":
             results = {
-                "search_results": db_task.search_results,
-                "reasoning_output": db_task.reasoning_output,
-                "execution_results": db_task.execution_results,
-                "synthesis": db_task.synthesis,
-                "metadata": db_task.metadata
+                "search_results": db_task.get('search_results', []),
+                "reasoning_output": db_task.get('reasoning_output'),
+                "execution_results": db_task.get('execution_results', []),
+                "synthesis": db_task.get('synthesis'),
+                "metadata": db_task.get('metadata', {})
             }
         
         return ResearchTaskResponse(
             task_id=task_id,
-            project_id=db_task.project_id,
-            query=db_task.query,
-            name=db_task.name,
-            status=db_task.status,
-            stage=db_task.stage,
-            created_at=db_task.created_at.isoformat(),
-            updated_at=db_task.updated_at.isoformat(),
-            progress=db_task.progress,
-            estimated_cost=db_task.estimated_cost,
-            actual_cost=db_task.actual_cost,
-            research_plan=db_task.research_plan,
-            plan_approved=db_task.plan_approved,
+            project_id=db_task['project_id'],
+            query=db_task['query'],
+            name=db_task['name'],
+            status=db_task['status'],
+            stage=db_task['stage'],
+            created_at=db_task['created_at'],
+            updated_at=db_task['updated_at'],
+            progress=db_task.get('progress', 0.0),
+            estimated_cost=db_task.get('estimated_cost', 0.0),
+            actual_cost=db_task.get('actual_cost', 0.0),
             results=results
         )
         
@@ -940,37 +938,81 @@ async def cancel_research_task(task_id: str):
 
 # Research plan management endpoints
 
-class ResearchPlanManagementResponse(BaseModel):
+# Research Plan Compatibility API Endpoints
+# These endpoints provide backward compatibility for the ResearchPlanViewer component
+# while working with the new hierarchical research structure
+
+class LegacyResearchPlanData(BaseModel):
     task_id: str
     research_plan: Optional[Dict[str, Any]] = None
     plan_approved: bool = False
     created_at: str
     updated_at: str
 
-class ResearchPlanUpdateRequest(BaseModel):
-    research_plan: Dict[str, Any]
-
-class ResearchPlanApprovalRequest(BaseModel):
-    approved: bool
-
-@app.get("/api/research/task/{task_id}/plan", response_model=ResearchPlanManagementResponse)
-async def get_research_plan(task_id: str):
-    """Get the research plan for a specific task."""
+@app.get("/api/research/task/{task_id}/plan")
+async def get_research_plan_for_task(task_id: str):
+    """Get research plan data for a task (compatibility endpoint)."""
     if not db_manager:
         raise HTTPException(status_code=503, detail="Database not available")
     
     try:
-        # Get task to verify it exists and get metadata
+        # Get the task
         task = db_manager.get_research_task(task_id)
         if not task:
-            raise HTTPException(status_code=404, detail="Research task not found")
+            raise HTTPException(status_code=404, detail="Task not found")
         
-        return ResearchPlanManagementResponse(
+        # Convert task to dict if it's not already
+        task_dict = task.__dict__ if hasattr(task, '__dict__') else task
+        
+        # Check if task has planning stage completed and has plan data
+        plan_data = None
+        plan_approved = False
+        
+        # For tasks in the new hierarchical system, get plan from the associated plan
+        if task_dict.get('plan_id'):
+            try:
+                plan = db_manager.get_research_plan(task_dict['plan_id'])
+                if plan and plan.get('plan_structure'):
+                    plan_structure = plan.get('plan_structure', {})
+                    # Convert hierarchical plan to legacy format
+                    # Support both legacy field names and new field names
+                    plan_data = {
+                        'raw_plan': plan_structure.get('raw_plan', ''),
+                        'objectives': plan_structure.get('objectives', plan_structure.get('research_objectives', '')),
+                        'key_areas': plan_structure.get('key_areas', plan_structure.get('methodology', '')),
+                        'questions': plan_structure.get('questions', plan_structure.get('research_questions', '')),
+                        'sources': plan_structure.get('sources', plan_structure.get('resources_needed', '')),
+                        'outcomes': plan_structure.get('outcomes', plan_structure.get('expected_outcomes', ''))
+                    }
+                    plan_approved = plan.get('plan_approved', False)
+            except Exception as e:
+                print(f"Error getting hierarchical plan: {e}")
+        
+        # For legacy tasks, try to get plan data from the task directly
+        if not plan_data and task_dict.get('research_plan'):
+            plan_data = task_dict['research_plan']
+            plan_approved = task_dict.get('plan_approved', False)
+        
+        # Check if planning stage is complete but waiting for approval
+        if not plan_data and task_dict.get('stage') == "planning_complete":
+            # Get the plan data from the research manager if available
+            if research_manager:
+                try:
+                    context = research_manager.get_task_context(task_id)
+                    if context and context.context_data.get('research_plan'):
+                        plan_response = context.context_data['research_plan']
+                        if plan_response and 'plan' in plan_response:
+                            plan_data = plan_response['plan']
+                            plan_approved = task_dict.get('status') != "waiting_approval"
+                except Exception as e:
+                    print(f"Error getting plan from research manager: {e}")
+        
+        return LegacyResearchPlanData(
             task_id=task_id,
-            research_plan=task.research_plan,
-            plan_approved=task.plan_approved,
-            created_at=task.created_at.isoformat(),
-            updated_at=task.updated_at.isoformat()
+            research_plan=plan_data,
+            plan_approved=plan_approved,
+            created_at=task_dict.get('created_at', datetime.now().isoformat()),
+            updated_at=task_dict.get('updated_at', datetime.now().isoformat())
         )
         
     except HTTPException:
@@ -978,62 +1020,115 @@ async def get_research_plan(task_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get research plan: {str(e)}")
 
-@app.put("/api/research/task/{task_id}/plan", response_model=SuccessResponse)
-async def update_research_plan(task_id: str, request: ResearchPlanUpdateRequest):
-    """Update the research plan for a specific task."""
+@app.put("/api/research/task/{task_id}/plan")
+async def update_research_plan_for_task(task_id: str, request: Dict[str, Any]):
+    """Update research plan data for a task (compatibility endpoint)."""
     if not db_manager:
         raise HTTPException(status_code=503, detail="Database not available")
     
     try:
-        # Verify task exists
         task = db_manager.get_research_task(task_id)
         if not task:
-            raise HTTPException(status_code=404, detail="Research task not found")
+            raise HTTPException(status_code=404, detail="Task not found")
         
-        # Update the research plan
-        success = db_manager.update_research_plan(task_id, request.research_plan)
-        if not success:
+        task_dict = task.__dict__ if hasattr(task, '__dict__') else task
+        research_plan = request.get('research_plan', {})
+        
+        # For tasks in the new hierarchical system, update the associated plan
+        if task_dict.get('plan_id'):
+            try:
+                plan_update_data = {
+                    'plan_structure': research_plan,
+                    'plan_approved': False  # Editing resets approval status
+                }
+                result = db_manager.update_research_plan(task_dict['plan_id'], plan_update_data)
+                if result:
+                    return {"success": True, "message": "Research plan updated"}
+            except Exception as e:
+                print(f"Failed to update hierarchical plan: {e}")
+        
+        # Fallback to legacy method
+        success = db_manager.update_research_plan(task_id, research_plan)
+        if success:
+            return {"success": True, "message": "Research plan updated"}
+        else:
             raise HTTPException(status_code=500, detail="Failed to update research plan")
-        
-        # Reset approval status when plan is updated
-        db_manager.approve_research_plan(task_id, False)
-        
-        return SuccessResponse(success=True, message="Research plan updated successfully")
-        
+            
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update research plan: {str(e)}")
 
-@app.post("/api/research/task/{task_id}/plan/approve", response_model=SuccessResponse)
-async def approve_research_plan(task_id: str, request: ResearchPlanApprovalRequest):
-    """Approve or reject a research plan."""
+@app.post("/api/research/task/{task_id}/plan/approve")
+async def approve_research_plan_for_task(task_id: str, request: Dict[str, Any]):
+    """Approve or reject research plan for a task (compatibility endpoint)."""
     if not db_manager:
         raise HTTPException(status_code=503, detail="Database not available")
     
     try:
-        # Verify task exists
         task = db_manager.get_research_task(task_id)
         if not task:
-            raise HTTPException(status_code=404, detail="Research task not found")
+            raise HTTPException(status_code=404, detail="Task not found")
         
-        # Check if task has a research plan
-        if not task.research_plan:
-            raise HTTPException(status_code=400, detail="No research plan to approve")
+        task_dict = task.__dict__ if hasattr(task, '__dict__') else task
+        approved = request.get('approved', False)
         
-        # Update approval status
-        success = db_manager.approve_research_plan(task_id, request.approved)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to update approval status")
+        # Update task status based on approval
+        if approved:
+            # For tasks in the new hierarchical system
+            if task_dict.get('plan_id'):
+                try:
+                    # Update plan approval status and set status to active
+                    plan_update_data = {
+                        'status': 'active',
+                        'plan_approved': True
+                    }
+                    db_manager.update_research_plan(task_dict['plan_id'], plan_update_data)
+                except Exception as e:
+                    print(f"Failed to update hierarchical plan status: {e}")
+            
+            # Update task to proceed with research
+            update_data = {
+                'id': task_id,
+                'status': 'running',
+                'stage': 'retrieval',
+                'plan_approved': True,
+                **task_dict  # Include existing task data
+            }
+            db_manager.update_research_task(update_data)
+            
+            # Restart the research workflow if research manager is available
+            if research_manager:
+                try:
+                    context = research_manager.get_task_context(task_id)
+                    if context:
+                        # Continue the research workflow
+                        asyncio.create_task(research_manager._orchestrate_research_task(context))
+                except Exception as e:
+                    print(f"Failed to restart research workflow: {e}")
+        else:
+            # Plan rejected - mark plan as not approved and task as failed
+            if task_dict.get('plan_id'):
+                try:
+                    # Update plan approval status
+                    plan_update_data = {
+                        'plan_approved': False
+                    }
+                    db_manager.update_research_plan(task_dict['plan_id'], plan_update_data)
+                except Exception as e:
+                    print(f"Failed to update hierarchical plan approval status: {e}")
+            
+            # Mark task as failed
+            update_data = {
+                'id': task_id,
+                'status': 'failed',
+                'stage': 'failed',
+                'plan_approved': False,
+                **task_dict  # Include existing task data
+            }
+            db_manager.update_research_task(update_data)
         
-        # If approved, update task status to allow proceeding to next stage
-        if request.approved:
-            task.plan_approved = True
-            task.status = "ready"  # Ready to proceed to next stage
-            db_manager.update_research_task(task)
-        
-        message = "Research plan approved" if request.approved else "Research plan rejected"
-        return SuccessResponse(success=True, message=message, data={"approved": request.approved})
+        return {"success": True, "approved": approved}
         
     except HTTPException:
         raise
@@ -1119,8 +1214,8 @@ async def get_active_tasks():
         status_counts = {}
         agent_counts = {}
         for task in tasks:
-            status_counts[task.status] = status_counts.get(task.status, 0) + 1
-            agent_counts[task.agent_type] = agent_counts.get(task.agent_type, 0) + 1
+            status_counts[task['status']] = status_counts.get(task['status'], 0) + 1
+            agent_counts[task['agent_type']] = agent_counts.get(task['agent_type'], 0) + 1
         
         statistics = {
             "total_tasks": len(tasks),

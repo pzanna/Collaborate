@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from src.config.config_manager import ConfigManager
-from src.storage.database import DatabaseManager
+from src.storage.hierarchical_database import HierarchicalDatabaseManager
 from src.mcp.server import MCPServer
 from src.mcp.protocols import ResearchAction, Priority
 from src.core.context_manager import ContextManager
@@ -101,10 +101,10 @@ def config_manager(test_config: Dict[str, Any], temp_dir: Path) -> ConfigManager
 
 
 @pytest.fixture
-def database_manager(temp_dir: Path) -> DatabaseManager:
-    """Create a DatabaseManager instance for testing."""
+def database_manager(temp_dir: Path) -> HierarchicalDatabaseManager:
+    """Create a HierarchicalDatabaseManager instance for testing."""
     db_path = ":memory:"  # Use in-memory database for testing
-    manager = DatabaseManager(db_path)
+    manager = HierarchicalDatabaseManager(db_path)
     return manager
 
 
@@ -223,7 +223,7 @@ def sample_export_data():
 
 
 @pytest.fixture
-def sample_project(database_manager: DatabaseManager):
+def sample_project(database_manager: HierarchicalDatabaseManager):
     """Create a sample project for testing."""
     from src.models.data_models import Project
     from datetime import datetime
@@ -239,25 +239,6 @@ def sample_project(database_manager: DatabaseManager):
     # Create the project in the database
     created_project = database_manager.create_project(project)
     return created_project or project
-
-
-@pytest.fixture
-def sample_conversation(database_manager: DatabaseManager, sample_project):
-    """Create a sample conversation for testing."""
-    from src.models.data_models import Conversation
-    from datetime import datetime
-    
-    conversation = Conversation(
-        id=str(uuid.uuid4()),
-        project_id=sample_project.id,
-        title="Test Conversation",
-        created_at=datetime.now(),
-        updated_at=datetime.now()
-    )
-    
-    # Create the conversation in the database
-    created_conversation = database_manager.create_conversation(conversation)
-    return created_conversation or conversation
 
 
 @pytest.fixture

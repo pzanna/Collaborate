@@ -30,6 +30,7 @@ export interface ResearchPlan {
   description: string
   plan_type: 'comprehensive' | 'quick' | 'deep' | 'custom'
   status: 'draft' | 'active' | 'completed' | 'cancelled'
+  plan_approved: boolean
   created_at: string
   updated_at: string
   estimated_cost: number

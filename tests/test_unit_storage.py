@@ -16,8 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
-from src.storage.database import DatabaseManager
-from src.models.data_models import Project, Conversation, Message, AIConfig, ConversationSession
+from src.storage.hierarchical_database import HierarchicalDatabaseManager
+from src.models.data_models import Project, AIConfig
 from src.utils.export_manager import ExportManager
 
 
