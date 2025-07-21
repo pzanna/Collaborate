@@ -76,6 +76,8 @@ class ResearchTaskResponse(BaseModel):
     progress: float = 0.0
     estimated_cost: float = 0.0
     actual_cost: float = 0.0
+    research_plan: Optional[Dict[str, Any]] = None
+    plan_approved: bool = False
     results: Optional[Dict[str, Any]] = None
 
 class MessageResponse(BaseModel):
@@ -218,8 +220,8 @@ async def lifespan(app: FastAPI):
         if await mcp_client.connect():
             print("✓ MCP client connected successfully")
             
-            # Initialize research manager with MCP client
-            research_manager = ResearchManager(config_manager)
+            # Initialize research manager with MCP client and database
+            research_manager = ResearchManager(config_manager, db_manager)
             await research_manager.initialize(mcp_client)
             
             # Register completion callback to notify WebSocket clients
@@ -399,6 +401,9 @@ async def list_projects():
 @app.post("/api/projects", response_model=ProjectResponse)
 async def create_project(project: ProjectCreate):
     """Create a new project."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         new_project = Project(name=project.name, description=project.description)
         created_project = db_manager.create_project(new_project)
@@ -423,6 +428,9 @@ async def create_project(project: ProjectCreate):
 @app.delete("/api/projects/{project_id}")
 async def delete_project(project_id: str):
     """Delete a project and all its conversations and messages."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         success = db_manager.delete_project(project_id)
         if not success:
@@ -508,6 +516,9 @@ async def list_all_research_tasks(
 @app.get("/api/conversations", response_model=List[ConversationResponse])
 async def list_conversations(project_id: Optional[str] = None):
     """Get all conversations, optionally filtered by project."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         conversations = db_manager.list_conversations()
         
@@ -538,6 +549,9 @@ async def list_conversations(project_id: Optional[str] = None):
 @app.post("/api/conversations", response_model=ConversationResponse)
 async def create_conversation(conversation: ConversationCreate):
     """Create a new conversation."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         new_conversation = Conversation(
             project_id=conversation.project_id,
@@ -566,6 +580,9 @@ async def create_conversation(conversation: ConversationCreate):
 @app.delete("/api/conversations/{conversation_id}")
 async def delete_conversation(conversation_id: str):
     """Delete a conversation and all its messages."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         success = db_manager.delete_conversation(conversation_id)
         if not success:
@@ -581,6 +598,9 @@ async def delete_conversation(conversation_id: str):
 @app.get("/api/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 async def get_conversation_messages(conversation_id: str):
     """Get all messages in a conversation."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     try:
         session = db_manager.get_conversation_session(conversation_id)
         if not session:
@@ -734,6 +754,8 @@ async def get_research_task(task_id: str):
             progress=db_task.progress,
             estimated_cost=db_task.estimated_cost,
             actual_cost=db_task.actual_cost,
+            research_plan=db_task.research_plan,
+            plan_approved=db_task.plan_approved,
             results=results
         )
         
@@ -760,6 +782,109 @@ async def cancel_research_task(task_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel research task: {str(e)}")
+
+
+# Research plan management endpoints
+
+class ResearchPlanResponse(BaseModel):
+    task_id: str
+    research_plan: Optional[Dict[str, Any]] = None
+    plan_approved: bool = False
+    created_at: str
+    updated_at: str
+
+class ResearchPlanUpdateRequest(BaseModel):
+    research_plan: Dict[str, Any]
+
+class ResearchPlanApprovalRequest(BaseModel):
+    approved: bool
+
+@app.get("/api/research/task/{task_id}/plan", response_model=ResearchPlanResponse)
+async def get_research_plan(task_id: str):
+    """Get the research plan for a specific task."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Get task to verify it exists and get metadata
+        task = db_manager.get_research_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Research task not found")
+        
+        return ResearchPlanResponse(
+            task_id=task_id,
+            research_plan=task.research_plan,
+            plan_approved=task.plan_approved,
+            created_at=task.created_at.isoformat(),
+            updated_at=task.updated_at.isoformat()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get research plan: {str(e)}")
+
+@app.put("/api/research/task/{task_id}/plan")
+async def update_research_plan(task_id: str, request: ResearchPlanUpdateRequest):
+    """Update the research plan for a specific task."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Verify task exists
+        task = db_manager.get_research_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Research task not found")
+        
+        # Update the research plan
+        success = db_manager.update_research_plan(task_id, request.research_plan)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update research plan")
+        
+        # Reset approval status when plan is updated
+        db_manager.approve_research_plan(task_id, False)
+        
+        return {"success": True, "message": "Research plan updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update research plan: {str(e)}")
+
+@app.post("/api/research/task/{task_id}/plan/approve")
+async def approve_research_plan(task_id: str, request: ResearchPlanApprovalRequest):
+    """Approve or reject a research plan."""
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Verify task exists
+        task = db_manager.get_research_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Research task not found")
+        
+        # Check if task has a research plan
+        if not task.research_plan:
+            raise HTTPException(status_code=400, detail="No research plan to approve")
+        
+        # Update approval status
+        success = db_manager.approve_research_plan(task_id, request.approved)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update approval status")
+        
+        # If approved, update task status to allow proceeding to next stage
+        if request.approved:
+            task.plan_approved = True
+            task.status = "ready"  # Ready to proceed to next stage
+            db_manager.update_research_task(task)
+        
+        message = "Research plan approved" if request.approved else "Research plan rejected"
+        return {"success": True, "message": message, "approved": request.approved}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to approve research plan: {str(e)}")
 
 
 # ===== Context Tracking API Endpoints =====
@@ -1516,10 +1641,11 @@ if Path("frontend/dist").exists():
 def main():
     """Run the web server."""
     import argparse
+    import os
     
     parser = argparse.ArgumentParser(description='Eunice Web Server')
-    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
-    parser.add_argument('--port', type=int, default=8000, help='Port to bind to')
+    parser.add_argument('--host', default=os.getenv('EUNICE_HOST', '127.0.0.1'), help='Host to bind to')
+    parser.add_argument('--port', type=int, default=int(os.getenv('EUNICE_WEB_PORT', '8000')), help='Port to bind to')
     parser.add_argument('--reload', action='store_true', help='Enable auto-reload for development')
     
     args = parser.parse_args()
@@ -1528,6 +1654,14 @@ def main():
     print("📱 Web UI available at the above URL")
     print("🔌 WebSocket streaming enabled for real-time chat")
     print("🔬 Research system integration enabled")
+    
+    uvicorn.run(
+        "web_server:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload
+    )
+
     
 # =============================================================================
 # HIERARCHICAL RESEARCH API ENDPOINTS (V2)
@@ -1696,6 +1830,25 @@ async def get_research_topic(topic_id: str):
     except Exception as e:
         print(f"Error getting research topic: {e}")
         raise HTTPException(status_code=404, detail="Research topic not found")
+
+@app.delete("/api/v2/topics/{topic_id}")
+async def delete_research_topic(topic_id: str):
+    """Delete a research topic and all its plans and tasks."""
+    try:
+        if hasattr(db_manager, 'delete_research_topic'):
+            success = db_manager.delete_research_topic(topic_id)
+            if success:
+                return {"message": f"Research topic {topic_id} deleted successfully"}
+            else:
+                raise HTTPException(status_code=404, detail="Research topic not found")
+        else:
+            # If delete method is not available, return method not allowed
+            raise HTTPException(status_code=405, detail="Delete method not supported")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting research topic: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete research topic: {str(e)}")
 
 # Research Plans Endpoints
 @app.post("/api/v2/topics/{topic_id}/plans", response_model=ResearchPlanResponse)
@@ -1980,14 +2133,6 @@ async def legacy_start_research(request: ResearchRequest):
 # =============================================================================
 # END HIERARCHICAL RESEARCH API ENDPOINTS
 # =============================================================================
-
-    
-    uvicorn.run(
-        "web_server:app",
-        host=args.host,
-        port=args.port,
-        reload=args.reload
-    )
 
 
 if __name__ == "__main__":

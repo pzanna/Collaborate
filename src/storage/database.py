@@ -22,7 +22,12 @@ except ImportError:
 class DatabaseManager:
     """Manages database operations for the Eunice application with enhanced error handling."""
     
-    def __init__(self, db_path: str = "data/eunice.db"):
+    def __init__(self, db_path: Optional[str] = None):
+        # Use environment variable for default path if none provided
+        if db_path is None:
+            data_path = os.getenv("EUNICE_DATA_PATH", "data")
+            db_path = os.path.join(data_path, "eunice.db")
+        
         self.db_path = db_path
         self._persistent_conn = None
         self.max_retries = 3
@@ -181,6 +186,20 @@ class DatabaseManager:
             # Add description column if it doesn't exist
             cursor.execute("ALTER TABLE conversations ADD COLUMN description TEXT")
             print("✓ Added description column to conversations table")
+        
+        # Check if research_tasks table has research_plan and plan_approved columns
+        cursor.execute("PRAGMA table_info(research_tasks)")
+        research_columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'research_plan' not in research_columns:
+            # Add research_plan column if it doesn't exist
+            cursor.execute("ALTER TABLE research_tasks ADD COLUMN research_plan TEXT")
+            print("✓ Added research_plan column to research_tasks table")
+        
+        if 'plan_approved' not in research_columns:
+            # Add plan_approved column if it doesn't exist
+            cursor.execute("ALTER TABLE research_tasks ADD COLUMN plan_approved BOOLEAN DEFAULT 0")
+            print("✓ Added plan_approved column to research_tasks table")
     
     # Project operations
     @handle_errors(context="create_project", reraise=False, fallback_return=None)
@@ -632,8 +651,9 @@ class DatabaseManager:
                         id, project_id, conversation_id, query, name, status, stage,
                         created_at, updated_at, estimated_cost, actual_cost, cost_approved,
                         single_agent_mode, research_mode, max_results, progress,
-                        search_results, reasoning_output, execution_results, synthesis, metadata
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        search_results, reasoning_output, execution_results, synthesis, 
+                        research_plan, plan_approved, metadata
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     research_task.id,
                     research_task.project_id,
@@ -655,6 +675,8 @@ class DatabaseManager:
                     research_task.reasoning_output,
                     json.dumps(research_task.execution_results),
                     research_task.synthesis,
+                    json.dumps(research_task.research_plan) if research_task.research_plan else None,
+                    research_task.plan_approved,
                     json.dumps(research_task.metadata)
                 ))
                 
@@ -695,6 +717,8 @@ class DatabaseManager:
                     reasoning_output=row['reasoning_output'],
                     execution_results=json.loads(row['execution_results']) if row['execution_results'] else [],
                     synthesis=row['synthesis'],
+                    research_plan=json.loads(row['research_plan']) if row.get('research_plan') else None,
+                    plan_approved=bool(row.get('plan_approved', False)),
                     metadata=json.loads(row['metadata']) if row['metadata'] else {}
                 )
             return None
@@ -709,7 +733,8 @@ class DatabaseManager:
                        estimated_cost = ?, actual_cost = ?, cost_approved = ?,
                        single_agent_mode = ?, research_mode = ?, max_results = ?,
                        progress = ?, search_results = ?, reasoning_output = ?,
-                       execution_results = ?, synthesis = ?, metadata = ?
+                       execution_results = ?, synthesis = ?, research_plan = ?, 
+                       plan_approved = ?, metadata = ?
                    WHERE id = ?""",
                 (research_task.query, research_task.name, research_task.status,
                  research_task.stage, research_task.updated_at, research_task.estimated_cost,
@@ -718,7 +743,9 @@ class DatabaseManager:
                  research_task.max_results, research_task.progress,
                  json.dumps(research_task.search_results), research_task.reasoning_output,
                  json.dumps(research_task.execution_results), research_task.synthesis,
-                 json.dumps(research_task.metadata), research_task.id)
+                 json.dumps(research_task.research_plan) if research_task.research_plan else None,
+                 research_task.plan_approved, json.dumps(research_task.metadata), 
+                 research_task.id)
             )
             conn.commit()
 
@@ -776,10 +803,50 @@ class DatabaseManager:
                     reasoning_output=row['reasoning_output'],
                     execution_results=json.loads(row['execution_results']) if row['execution_results'] else [],
                     synthesis=row['synthesis'],
+                    research_plan=json.loads(row['research_plan']) if row.get('research_plan') else None,
+                    plan_approved=bool(row.get('plan_approved', False)),
                     metadata=json.loads(row['metadata']) if row['metadata'] else {}
                 )
                 for row in rows
             ]
+    
+    def update_research_plan(self, task_id: str, research_plan: Dict[str, Any]) -> bool:
+        """Update the research plan for a task."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE research_tasks 
+                   SET research_plan = ?, updated_at = ?
+                   WHERE id = ?""",
+                (json.dumps(research_plan), datetime.now(), task_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def approve_research_plan(self, task_id: str, approved: bool = True) -> bool:
+        """Approve or reject a research plan."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE research_tasks 
+                   SET plan_approved = ?, updated_at = ?
+                   WHERE id = ?""",
+                (approved, datetime.now(), task_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_research_plan_for_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get the research plan for a specific task."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT research_plan FROM research_tasks WHERE id = ?", 
+                (task_id,)
+            ).fetchone()
+            
+            if row and row['research_plan']:
+                return json.loads(row['research_plan'])
+            return None
 
     def get_research_tasks_by_project(self, project_id: str) -> List[ResearchTask]:
         """Get all research tasks for a specific project."""
@@ -791,3 +858,161 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM research_tasks WHERE project_id = ?", (project_id,))
             return cursor.fetchone()[0]
+
+    # Hierarchical Database Methods
+    def delete_research_topic(self, topic_id: str) -> bool:
+        """Delete a research topic and all its plans and tasks."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if hierarchical tables exist
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name IN ('research_topics', 'research_plans')
+                """)
+                tables = cursor.fetchall()
+                if len(tables) < 2:
+                    # Hierarchical tables don't exist, return False
+                    return False
+                
+                # Check if topic exists
+                cursor.execute("SELECT id FROM research_topics WHERE id = ?", (topic_id,))
+                if not cursor.fetchone():
+                    return False
+                
+                # Delete all tasks for plans in this topic
+                cursor.execute("""
+                    DELETE FROM research_tasks 
+                    WHERE plan_id IN (
+                        SELECT id FROM research_plans WHERE topic_id = ?
+                    )
+                """, (topic_id,))
+                
+                # Delete all plans for this topic
+                cursor.execute("DELETE FROM research_plans WHERE topic_id = ?", (topic_id,))
+                
+                # Delete the topic
+                cursor.execute("DELETE FROM research_topics WHERE id = ?", (topic_id,))
+                
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            print(f"Error deleting research topic: {e}")
+            return False
+    
+    def get_research_topic(self, topic_id: str) -> Optional[Dict[str, Any]]:
+        """Get a research topic by ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if hierarchical tables exist
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='research_topics'
+                """)
+                if not cursor.fetchone():
+                    return None
+                
+                cursor.execute("SELECT * FROM research_topics WHERE id = ?", (topic_id,))
+                row = cursor.fetchone()
+                if row:
+                    topic = dict(row)
+                    # Parse JSON fields
+                    if topic.get('metadata'):
+                        try:
+                            topic['metadata'] = json.loads(topic['metadata'])
+                        except (json.JSONDecodeError, TypeError):
+                            topic['metadata'] = {}
+                    return topic
+                return None
+        except Exception as e:
+            print(f"Error getting research topic: {e}")
+            return None
+    
+    def get_research_topics_by_project(self, project_id: str, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all research topics for a project."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Check if hierarchical tables exist
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='research_topics'
+                """)
+                if not cursor.fetchone():
+                    return []
+                
+                query = "SELECT * FROM research_topics WHERE project_id = ?"
+                params = [project_id]
+                
+                if status_filter:
+                    query += " AND status = ?"
+                    params.append(status_filter)
+                
+                query += " ORDER BY created_at DESC"
+                
+                cursor.execute(query, params)
+                topics = []
+                for row in cursor.fetchall():
+                    topic = dict(row)
+                    # Parse JSON fields
+                    if topic.get('metadata'):
+                        try:
+                            topic['metadata'] = json.loads(topic['metadata'])
+                        except (json.JSONDecodeError, TypeError):
+                            topic['metadata'] = {}
+                    topics.append(topic)
+                
+                return topics
+        except Exception as e:
+            print(f"Error getting research topics: {e}")
+            return []
+    
+    def create_research_topic(self, topic_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Create a new research topic."""
+        # For now, return None to indicate this method isn't fully implemented
+        return None
+    
+    def get_research_plans_by_topic(self, topic_id: str, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all research plans for a topic."""
+        # For now, return empty list
+        return []
+    
+    def create_research_plan(self, plan_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Create a new research plan."""
+        # For now, return None
+        return None
+    
+    def delete_research_plan(self, plan_id: str) -> bool:
+        """Delete a research plan and all its tasks."""
+        # For now, return False
+        return False
+    
+    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get a task by ID."""
+        # For now, return None
+        return None
+    
+    def get_tasks_by_plan(self, plan_id: str, status_filter: Optional[str] = None, type_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all tasks for a plan."""
+        # For now, return empty list
+        return []
+    
+    def create_task(self, task_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Create a new task."""
+        # For now, return None
+        return None
+    
+    def delete_task(self, task_id: str) -> bool:
+        """Delete a task."""
+        # For now, return False
+        return False
+    
+    def get_project_hierarchy(self, project_id: str) -> Dict[str, Any]:
+        """Get complete hierarchy for a project."""
+        # For now, return empty dict
+        return {}

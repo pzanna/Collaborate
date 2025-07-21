@@ -9,8 +9,10 @@ import asyncio
 import websockets
 import json
 import logging
+import os
 from typing import Dict, Any, Set, Optional, List
 from datetime import datetime
+from pathlib import Path
 import uuid
 import signal
 import sys
@@ -694,11 +696,17 @@ async def main():
     Path('logs').mkdir(exist_ok=True)
     
     # Setup logging
+    log_path = os.getenv("EUNICE_LOG_PATH", "logs")
+    log_level = os.getenv("EUNICE_LOG_LEVEL", "INFO")
+    
+    # Ensure log directory exists
+    Path(log_path).mkdir(parents=True, exist_ok=True)
+    
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, log_level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('logs/mcp_server.log'),
+            logging.FileHandler(os.path.join(log_path, 'mcp_server.log')),
             logging.StreamHandler()
         ]
     )

@@ -44,6 +44,10 @@ async def test_plan_research_production(query: str, context: Optional[Dict] = No
         print("📋 Initializing ConfigManager...")
         config_manager = ConfigManager()
         
+        # Set up logging (required for AI API logging to ai_api.log)
+        print("📝 Setting up logging...")
+        config_manager.setup_logging()
+        
         # Create planning agent with real configuration
         print("🤖 Creating PlanningAgent...")
         agent = PlanningAgent(config_manager)

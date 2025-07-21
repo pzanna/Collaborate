@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
 """
-Agent Launcher - Starts all research agents
-
-This script starts all the research agents (Retriever, Planning, Executor, Memory)
-that connect to the MCP server to handle research tasks.
+Agent Launcher for Eunice
+Launches and manages multiple research agents
 """
 
 import asyncio
-import logging
-import signal
-import sys
 import os
+import sys
+import signal
+import logging
 from pathlib import Path
-from typing import List
 
-# Add src directory to path
+# Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/agents.log'),
-        logging.StreamHandler()
-    ]
-)
+if __name__ == "__main__":
+    # Set up logging
+    log_path = os.getenv("EUNICE_LOG_PATH", "logs")
+    log_level = os.getenv("EUNICE_LOG_LEVEL", "INFO")
+    
+    # Ensure log directory exists
+    Path(log_path).mkdir(parents=True, exist_ok=True)
+    
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(os.path.join(log_path, 'agents.log')),
+        ]
+    )
 
 logger = logging.getLogger(__name__)
 

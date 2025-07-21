@@ -4,14 +4,15 @@ import {
   ClipboardDocumentListIcon,
   DocumentTextIcon,
   PlayIcon,
-  FolderIcon,
 } from "@heroicons/react/24/outline"
 import { apiService, Project } from "../../services/api"
+import ResearchPlanViewer from "./ResearchPlanViewer"
 
 interface ResearchTask {
   id: string
   title: string
-  status: "pending" | "running" | "completed" | "error"
+  status: "pending" | "running" | "completed" | "error" | "waiting_approval"
+  stage?: string
   query: string
   results?: string
   createdAt: Date
@@ -23,6 +24,7 @@ const ResearchWorkspace: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>("")
   const [isLoadingProjects, setIsLoadingProjects] = useState(true)
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
 
   // Load projects on component mount
   useEffect(() => {
@@ -134,15 +136,30 @@ const ResearchWorkspace: React.FC = () => {
         if (response.ok) {
           const task = await response.json()
 
+          // Map status from API response
+          let uiStatus: ResearchTask["status"] = "running"
+          if (task.status === "completed") {
+            uiStatus = "completed"
+          } else if (task.status === "failed") {
+            uiStatus = "error"
+          } else if (
+            task.status === "waiting_approval" ||
+            task.stage === "planning_complete"
+          ) {
+            uiStatus = "waiting_approval"
+          } else if (task.status === "running" || task.status === "pending") {
+            uiStatus = "running"
+          }
+
           if (task.status === "completed" || task.status === "failed") {
-            // Task completed
+            // Task completed or failed
             setTasks((prev) =>
               prev.map((t) =>
                 t.id === localTaskId || t.id === taskId
                   ? {
                       ...t,
-                      status:
-                        task.status === "completed" ? "completed" : "error",
+                      status: uiStatus,
+                      stage: task.stage,
                       results: task.results
                         ? JSON.stringify(task.results, null, 2)
                         : task.status === "failed"
@@ -152,7 +169,33 @@ const ResearchWorkspace: React.FC = () => {
                   : t
               )
             )
+          } else if (uiStatus === "waiting_approval") {
+            // Task is waiting for plan approval
+            setTasks((prev) =>
+              prev.map((t) =>
+                t.id === localTaskId || t.id === taskId
+                  ? { ...t, status: "waiting_approval", stage: task.stage }
+                  : t
+              )
+            )
+            // Don't continue polling for tasks waiting approval
+            return
           } else if (pollCount < maxPolls) {
+            // Task still running - update status and continue polling
+            setTasks((prev) =>
+              prev.map((t) =>
+                t.id === localTaskId || t.id === taskId
+                  ? {
+                      ...t,
+                      status: uiStatus,
+                      stage: task.stage,
+                      results: task.progress
+                        ? `Progress: ${Math.round(task.progress)}%`
+                        : undefined,
+                    }
+                  : t
+              )
+            )
             // Continue polling
             pollCount++
             setTimeout(poll, 10000) // Poll every 10 seconds
@@ -186,6 +229,8 @@ const ResearchWorkspace: React.FC = () => {
         return "text-green-500 bg-green-100"
       case "error":
         return "text-red-500 bg-red-100"
+      case "waiting_approval":
+        return "text-yellow-500 bg-yellow-100"
     }
   }
 
@@ -199,6 +244,8 @@ const ResearchWorkspace: React.FC = () => {
         return DocumentTextIcon
       case "error":
         return DocumentTextIcon
+      case "waiting_approval":
+        return ClipboardDocumentListIcon
     }
   }
 
@@ -272,7 +319,7 @@ const ResearchWorkspace: React.FC = () => {
       {/* Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Tasks panel */}
-        <div className="w-1/3 bg-white border-r border-gray-200 p-4 overflow-y-auto">
+        <div className="w-1/4 bg-white border-r border-gray-200 p-4 overflow-y-auto">
           <h3 className="text-lg font-semibold mb-4">Research Tasks</h3>
 
           {tasks.length === 0 ? (
@@ -285,10 +332,16 @@ const ResearchWorkspace: React.FC = () => {
             <div className="space-y-3">
               {tasks.map((task) => {
                 const StatusIcon = getStatusIcon(task.status)
+                const isSelected = selectedTaskId === task.id
                 return (
                   <div
                     key={task.id}
-                    className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    onClick={() => setSelectedTaskId(task.id)}
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:bg-gray-50"
+                    }`}
                   >
                     <div className="flex items-start space-x-3">
                       <StatusIcon className="h-5 w-5 mt-0.5 text-gray-400" />
@@ -304,13 +357,39 @@ const ResearchWorkspace: React.FC = () => {
                             task.status
                           )}`}
                         >
-                          {task.status}
+                          {task.status === "waiting_approval"
+                            ? "awaiting approval"
+                            : task.status}
                         </span>
                       </div>
                     </div>
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Research Plan panel */}
+        <div className="w-1/2 border-r border-gray-200 overflow-y-auto">
+          {selectedTaskId ? (
+            <div className="p-4">
+              <ResearchPlanViewer
+                taskId={selectedTaskId}
+                onPlanApproved={() => {
+                  // Refresh task list to update status
+                  // You could implement task refresh logic here
+                }}
+              />
+            </div>
+          ) : (
+            <div className="p-4 text-center text-gray-500 mt-8">
+              <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>Select a research task to view its plan</p>
+              <p className="text-sm">
+                Click on a task from the left panel to see details and manage
+                the research plan
+              </p>
             </div>
           )}
         </div>

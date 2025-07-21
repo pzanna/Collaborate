@@ -49,8 +49,14 @@ except ImportError:
 class HierarchicalDatabaseManager:
     """Enhanced database manager with hierarchical research support."""
     
-    def __init__(self, db_path: str = "data/eunice.db"):
+    def __init__(self, db_path: Optional[str] = None):
+        # Use environment variable for default path if none provided
+        if db_path is None:
+            data_path = os.getenv("EUNICE_DATA_PATH", "data")
+            db_path = os.path.join(data_path, "eunice.db")
+        
         self.db_path = db_path
+        self._persistent_conn = None
         self._persistent_conn = None
         self.max_retries = 3
         
@@ -546,6 +552,78 @@ class HierarchicalDatabaseManager:
             
         except Exception as e:
             raise DatabaseError("Failed to get project hierarchy", f"Hierarchy retrieval failed: {e}")
+    
+    # Delete methods
+    @handle_errors(context="delete_research_topic")
+    def delete_research_topic(self, topic_id: str) -> bool:
+        """Delete a research topic and all its plans and tasks."""
+        try:
+            with self.get_connection() as conn:
+                # Check if topic exists
+                cursor = conn.execute("SELECT id FROM research_topics WHERE id = ?", (topic_id,))
+                if not cursor.fetchone():
+                    return False
+                
+                # Delete all tasks for plans in this topic
+                conn.execute("""
+                    DELETE FROM research_tasks 
+                    WHERE plan_id IN (
+                        SELECT id FROM research_plans WHERE topic_id = ?
+                    )
+                """, (topic_id,))
+                
+                # Delete all plans for this topic
+                conn.execute("DELETE FROM research_plans WHERE topic_id = ?", (topic_id,))
+                
+                # Delete the topic
+                conn.execute("DELETE FROM research_topics WHERE id = ?", (topic_id,))
+                
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            raise DatabaseError("Failed to delete research topic", f"Topic deletion failed: {e}")
+    
+    @handle_errors(context="delete_research_plan")
+    def delete_research_plan(self, plan_id: str) -> bool:
+        """Delete a research plan and all its tasks."""
+        try:
+            with self.get_connection() as conn:
+                # Check if plan exists
+                cursor = conn.execute("SELECT id FROM research_plans WHERE id = ?", (plan_id,))
+                if not cursor.fetchone():
+                    return False
+                
+                # Delete all tasks for this plan
+                conn.execute("DELETE FROM research_tasks WHERE plan_id = ?", (plan_id,))
+                
+                # Delete the plan
+                conn.execute("DELETE FROM research_plans WHERE id = ?", (plan_id,))
+                
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            raise DatabaseError("Failed to delete research plan", f"Plan deletion failed: {e}")
+    
+    @handle_errors(context="delete_task")
+    def delete_task(self, task_id: str) -> bool:
+        """Delete a task."""
+        try:
+            with self.get_connection() as conn:
+                # Check if task exists
+                cursor = conn.execute("SELECT id FROM research_tasks WHERE id = ?", (task_id,))
+                if not cursor.fetchone():
+                    return False
+                
+                # Delete the task
+                conn.execute("DELETE FROM research_tasks WHERE id = ?", (task_id,))
+                
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            raise DatabaseError("Failed to delete task", f"Task deletion failed: {e}")
     
     # Legacy methods for backward compatibility
     def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
