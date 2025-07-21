@@ -411,7 +411,7 @@ class HierarchicalDatabaseManager:
     def create_task(self, task_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
-            task_id = task_data.get('id', f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            task_id = task_data.get('id', generate_timestamped_id('task'))
             
             # Get project_id from the plan
             plan = self.get_research_plan(task_data['plan_id'])

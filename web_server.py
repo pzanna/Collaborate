@@ -32,7 +32,7 @@ from src.core.research_manager import ResearchManager
 from src.core.context_manager import ContextManager
 from src.models.data_models import Project, Conversation, Message
 from src.utils.export_manager import ExportManager
-from src.utils.id_utils import generate_timestamped_id
+from src.utils.id_utils import generate_timestamped_id, generate_task_name
 from src.utils.error_handler import (
     ErrorHandler, 
     EuniceError,
@@ -614,7 +614,6 @@ async def start_research_task(request: ResearchRequest):
     
     try:
         # Generate task name if not provided
-        from src.utils.id_utils import generate_task_name
         task_name = generate_task_name(request.query, request.name)
         
         # Create options dict from request parameters
