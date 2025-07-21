@@ -457,15 +457,16 @@ class HierarchicalDatabaseManager:
             with self.get_connection() as conn:
                 conn.execute("""
                     INSERT INTO research_tasks 
-                    (id, project_id, plan_id, name, query, status, stage, created_at, updated_at, 
+                    (id, project_id, plan_id, name, description, query, status, stage, created_at, updated_at, 
                      estimated_cost, actual_cost, cost_approved, single_agent_mode, 
                      research_mode, max_results, progress, task_type, task_order, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     task_id,
                     project_id,
                     task_data['plan_id'],
                     task_data['name'],
+                    task_data.get('description', ''),
                     task_data.get('query', ''),
                     task_data.get('status', 'pending'),
                     task_data.get('stage', 'planning'),
@@ -501,13 +502,23 @@ class HierarchicalDatabaseManager:
                 row = cursor.fetchone()
                 if row:
                     task = dict(row)
-                    # Parse JSON fields
+                    # Parse JSON fields and ensure proper defaults
                     for field in ['search_results', 'execution_results', 'metadata']:
                         if task.get(field):
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = []
+                                task[field] = self._get_default_value_for_field(field)
+                        else:
+                            task[field] = self._get_default_value_for_field(field)
+                    
+                    # Ensure required fields have proper defaults
+                    task.setdefault('description', '')
+                    task.setdefault('search_results', [])
+                    task.setdefault('execution_results', [])
+                    task.setdefault('reasoning_output', None)
+                    task.setdefault('synthesis', None)
+                    
                     return task
                 return None
                 
@@ -606,6 +617,49 @@ class HierarchicalDatabaseManager:
                 
         except Exception as e:
             raise DatabaseError("Failed to delete research topic", f"Topic deletion failed: {e}")
+    
+    @handle_errors(context="update_research_plan")
+    def update_research_plan(self, plan_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a research plan."""
+        try:
+            # Check if plan exists
+            plan = self.get_research_plan(plan_id)
+            if not plan:
+                return None
+            
+            # Build update query dynamically
+            update_fields = []
+            update_values = []
+            
+            for field, value in update_data.items():
+                if field in ['name', 'description', 'plan_type', 'status']:
+                    update_fields.append(f"{field} = ?")
+                    update_values.append(value)
+                elif field in ['plan_structure', 'metadata']:
+                    update_fields.append(f"{field} = ?")
+                    update_values.append(json.dumps(value))
+            
+            if not update_fields:
+                return plan  # No updates to apply
+            
+            update_values.append(datetime.now().isoformat())  # updated_at
+            update_values.append(plan_id)  # WHERE clause
+            
+            update_query = f"""
+                UPDATE research_plans 
+                SET {', '.join(update_fields)}, updated_at = ?
+                WHERE id = ?
+            """
+            
+            with self.get_connection() as conn:
+                conn.execute(update_query, update_values)
+                conn.commit()
+            
+            # Return updated plan
+            return self.get_research_plan(plan_id)
+            
+        except Exception as e:
+            raise DatabaseError("Failed to update research plan", f"Plan update failed: {e}")
     
     @handle_errors(context="delete_research_plan")
     def delete_research_plan(self, plan_id: str) -> bool:

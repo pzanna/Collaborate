@@ -3,10 +3,16 @@
  * Handles Project → Research Topic → Plan → Tasks API calls
  */
 
+// Note: Keeping these types here for future API integration
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   Project,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ResearchTopic,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ResearchPlan,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   Task,
   ResearchTopicRequest,
   ResearchPlanRequest,

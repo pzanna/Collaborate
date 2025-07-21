@@ -302,3 +302,13 @@ class TaskRequest(BaseModel):
     max_results: int = 10
     single_agent_mode: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+# Update request models (all fields optional)
+class ResearchPlanUpdate(BaseModel):
+    """Request model for updating research plans."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    plan_type: Optional[str] = None
+    plan_structure: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
