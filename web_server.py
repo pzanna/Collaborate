@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import List, Dict, Optional, AsyncGenerator, Any
 from contextlib import asynccontextmanager
 
-import sys
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
