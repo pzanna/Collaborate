@@ -2,30 +2,58 @@
 
 import os
 import sys
-import time
 import logging
 import asyncio
-from typing import Dict, List, Optional, Any, AsyncGenerator, Generator
 from datetime import datetime
+from uuid import uuid4
+from typing import Dict, List, Optional, Any, AsyncGenerator
+from pydantic import BaseModel, Field
+from datetime import datetime
+
+def generate_uuid() -> str:
+    """Generate a unique ID."""
+    return str(uuid4())
 
 # Import models and config
 try:
-    from ..models.data_models import Message, AIConfig
     from ..config.config_manager import ConfigManager
-    from ..ai_clients.openai_client import OpenAIClient
+    from ..ai_clients.openai_client import OpenAIClient, AIProviderConfig as OpenAIAIProviderConfig
     from ..ai_clients.xai_client import XAIClient
     from .simplified_coordinator import SimplifiedCoordinator
     from ..utils.error_handler import handle_errors, APIError, NetworkError, safe_execute
     from ..mcp.cost_estimator import CostEstimator
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from models.data_models import Message, AIConfig
     from config.config_manager import ConfigManager
-    from ai_clients.openai_client import OpenAIClient
+    from ai_clients.openai_client import OpenAIClient, AIProviderConfig as OpenAIAIProviderConfig
     from ai_clients.xai_client import XAIClient
     from core.simplified_coordinator import SimplifiedCoordinator
     from utils.error_handler import handle_errors, APIError, NetworkError, safe_execute
     from mcp.cost_estimator import CostEstimator
+
+class Message(BaseModel):
+    """Message model for individual chat messages."""
+    id: str = Field(default_factory=generate_uuid)
+    conversation_id: str
+    participant: str  # user, openai, xai
+    content: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+    message_type: str = "text"  # text, system, command, error
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def add_metadata(self, key: str, value: Any) -> None:
+        """Add metadata to the message."""
+        self.metadata[key] = value
+
+
+class AIProviderConfig(BaseModel):
+    """AI configuration model."""
+    provider: str  # openai, xai
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 2000
+    system_prompt: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AIClientManager:
@@ -68,6 +96,9 @@ class AIClientManager:
                     raise APIError("OpenAI API key not found", "openai")
                 
                 config = self.config_manager.config.ai_providers["openai"]
+                # Convert config to OpenAIAIProviderConfig if necessary
+                if not isinstance(config, OpenAIAIProviderConfig):
+                    config = OpenAIAIProviderConfig(**config.__dict__)
                 self.clients["openai"] = OpenAIClient(api_key, config)
                 print("✓ OpenAI client initialized")
             except Exception as e:

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { apiService, ResearchTaskResponse } from "../../services/api"
+import { apiService, Task } from "../../services/api"
 import { formatDistanceToNow } from "date-fns"
 import {
   ArrowLeftIcon,
@@ -16,7 +16,7 @@ import {
 const ResearchTaskDetailView: React.FC = () => {
   const { taskId } = useParams<{ taskId: string }>()
   const navigate = useNavigate()
-  const [task, setTask] = useState<ResearchTaskResponse | null>(null)
+  const [task, setTask] = useState<Task | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -206,49 +206,48 @@ const ResearchTaskDetailView: React.FC = () => {
         </div>
 
         {/* Results */}
-        {task.results && (
+        {task.search_results && (
           <div className="space-y-6">
             {/* Search Results */}
-            {task.results.search_results &&
-              task.results.search_results.length > 0 && (
-                <div className="bg-white rounded-lg shadow">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Search Results
-                    </h2>
-                  </div>
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      {task.results.search_results.map((result, index) => (
-                        <div key={index} className="border rounded-lg p-4">
-                          <h3 className="font-medium text-blue-600 hover:text-blue-800">
-                            <a
-                              href={result.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {result.title}
-                            </a>
-                          </h3>
-                          <p className="text-gray-600 text-sm mt-1">
-                            {result.snippet}
-                          </p>
-                          <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                            <span>{result.url}</span>
-                            <span>
-                              Relevance:{" "}
-                              {Math.round(result.relevance_score * 100)}%
-                            </span>
-                          </div>
+            {task.search_results && task.search_results.length > 0 && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Search Results
+                  </h2>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {task.search_results.map((result: any, index: number) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <h3 className="font-medium text-blue-600 hover:text-blue-800">
+                          <a
+                            href={result.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {result.title}
+                          </a>
+                        </h3>
+                        <p className="text-gray-600 text-sm mt-1">
+                          {result.snippet}
+                        </p>
+                        <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                          <span>{result.url}</span>
+                          <span>
+                            Relevance:{" "}
+                            {Math.round(result.relevance_score * 100)}%
+                          </span>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
             {/* Reasoning Output */}
-            {task.results.reasoning_output && (
+            {task.reasoning_output && (
               <div className="bg-white rounded-lg shadow">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -258,7 +257,7 @@ const ResearchTaskDetailView: React.FC = () => {
                 <div className="p-6">
                   <div className="prose max-w-none">
                     <pre className="whitespace-pre-wrap font-sans text-gray-800">
-                      {task.results.reasoning_output}
+                      {task.reasoning_output}
                     </pre>
                   </div>
                 </div>
@@ -266,7 +265,7 @@ const ResearchTaskDetailView: React.FC = () => {
             )}
 
             {/* Synthesis */}
-            {task.results.synthesis && (
+            {task.synthesis && (
               <div className="bg-white rounded-lg shadow">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -276,7 +275,7 @@ const ResearchTaskDetailView: React.FC = () => {
                 <div className="p-6">
                   <div className="prose max-w-none">
                     <pre className="whitespace-pre-wrap font-sans text-gray-800">
-                      {task.results.synthesis}
+                      {task.synthesis}
                     </pre>
                   </div>
                 </div>
@@ -284,21 +283,20 @@ const ResearchTaskDetailView: React.FC = () => {
             )}
 
             {/* Execution Results */}
-            {task.results.execution_results &&
-              task.results.execution_results.length > 0 && (
-                <div className="bg-white rounded-lg shadow">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Execution Results
-                    </h2>
-                  </div>
-                  <div className="p-6">
-                    <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
-                      {JSON.stringify(task.results.execution_results, null, 2)}
-                    </pre>
-                  </div>
+            {task.execution_results && task.execution_results.length > 0 && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Execution Results
+                  </h2>
                 </div>
-              )}
+                <div className="p-6">
+                  <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
+                    {JSON.stringify(task.execution_results, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -4,10 +4,15 @@ export interface Project {
   id: string;
   name: string;
   description: string;
+  status: 'active' | 'archived';
   created_at: string;
   updated_at: string;
-  item_count: number;
-  research_task_count: number;
+  topics_count: number;
+  plans_count: number;
+  tasks_count: number;
+  total_cost: number;
+  completion_rate: number;
+  metadata: Record<string, any>;
 }
 
 interface ProjectsState {

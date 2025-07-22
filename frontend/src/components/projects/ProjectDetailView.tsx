@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { apiService, ResearchTaskResponse } from "../../services/api"
+import { apiService, Task } from "../../services/api"
 import { hierarchicalAPI } from "../../services/hierarchicalAPI"
 import { ResearchTopicResponse } from "../../types/hierarchical"
 import { formatDistanceToNow } from "date-fns"
@@ -19,16 +19,22 @@ interface Project {
   id: string
   name: string
   description: string
+  status: "active" | "archived"
   created_at: string
   updated_at: string
-  research_task_count: number
+  topics_count: number
+  plans_count: number
+  tasks_count: number
+  total_cost: number
+  completion_rate: number
+  metadata: Record<string, any>
 }
 
 const ProjectDetailView: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [project, setProject] = useState<Project | null>(null)
-  const [researchTasks, setResearchTasks] = useState<ResearchTaskResponse[]>([])
+  const [researchTasks, setResearchTasks] = useState<Task[]>([])
   const [researchTopics, setResearchTopics] = useState<ResearchTopicResponse[]>(
     []
   )
@@ -278,9 +284,9 @@ const ProjectDetailView: React.FC = () => {
             <div className="divide-y divide-gray-200">
               {researchTasks.map((task) => (
                 <div
-                  key={task.task_id}
+                  key={task.id}
                   className="p-6 hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => handleTaskClick(task.task_id)}
+                  onClick={() => handleTaskClick(task.id)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">

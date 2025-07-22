@@ -11,7 +11,6 @@ from contextlib import contextmanager
 
 # Import existing models
 try:
-    from ..models.data_models import Project, ResearchTask
     from ..utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
     from ..utils.id_utils import generate_timestamped_id, generate_uuid_id
 except ImportError:
@@ -23,7 +22,6 @@ except ImportError:
     project_root = Path(__file__).parent.parent.parent
     sys.path.insert(0, str(project_root))
     
-    from src.models.data_models import Project, ResearchTask
     from src.utils.error_handler import handle_errors, DatabaseError, ValidationError, safe_execute
     from src.utils.id_utils import generate_timestamped_id, generate_uuid_id
 
@@ -219,6 +217,9 @@ class HierarchicalDatabaseManager:
             
             if 'task_order' not in columns:
                 conn.execute("ALTER TABLE research_tasks ADD COLUMN task_order INTEGER DEFAULT 0")
+                
+            if 'description' not in columns:
+                conn.execute("ALTER TABLE research_tasks ADD COLUMN description TEXT DEFAULT ''")
             
             # Check if research_plans table needs migration for plan_approved column
             cursor = conn.execute("PRAGMA table_info(research_plans)")
@@ -226,6 +227,13 @@ class HierarchicalDatabaseManager:
             
             if 'plan_approved' not in plan_columns:
                 conn.execute("ALTER TABLE research_plans ADD COLUMN plan_approved BOOLEAN DEFAULT FALSE")
+                
+            # Check if projects table needs migration for status column
+            cursor = conn.execute("PRAGMA table_info(projects)")
+            project_columns = [row[1] for row in cursor.fetchall()]
+            
+            if 'status' not in project_columns:
+                conn.execute("ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'active'")
                 
         except sqlite3.OperationalError:
             # Table might not exist yet, which is fine
@@ -251,7 +259,7 @@ class HierarchicalDatabaseManager:
                     topic_data.get('status', 'active'),
                     datetime.now().isoformat(),
                     datetime.now().isoformat(),
-                    json.dumps(topic_data.get('metadata', {}))
+                    topic_data.get('metadata', '{}')
                 ))
                 conn.commit()
                 
@@ -363,8 +371,8 @@ class HierarchicalDatabaseManager:
                     datetime.now().isoformat(),
                     plan_data.get('estimated_cost', 0.0),
                     plan_data.get('actual_cost', 0.0),
-                    json.dumps(plan_data.get('plan_structure', {})),
-                    json.dumps(plan_data.get('metadata', {}))
+                    plan_data.get('plan_structure', '{}'),
+                    plan_data.get('metadata', '{}')
                 ))
                 conn.commit()
                 
@@ -380,7 +388,7 @@ class HierarchicalDatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.execute("""
                     SELECT p.*, 
-                           COUNT(DISTINCT rt.id) as task_count,
+                           COUNT(DISTINCT rt.id) as tasks_count,
                            COUNT(CASE WHEN rt.status = 'completed' THEN 1 END) as completed_tasks,
                            AVG(CASE WHEN rt.progress IS NOT NULL THEN rt.progress ELSE 0 END) as progress
                     FROM research_plans p
@@ -392,7 +400,17 @@ class HierarchicalDatabaseManager:
                 row = cursor.fetchone()
                 if row:
                     plan = dict(row)
-                    plan['plan_structure'] = json.loads(plan.get('plan_structure', '{}'))
+                    
+                    # Handle plan_structure parsing
+                    try:
+                        plan_structure_raw = plan.get('plan_structure', '{}')
+                        if isinstance(plan_structure_raw, str):
+                            plan['plan_structure'] = json.loads(plan_structure_raw)
+                        else:
+                            plan['plan_structure'] = plan_structure_raw
+                    except (json.JSONDecodeError, TypeError):
+                        plan['plan_structure'] = {}
+                    
                     # Handle metadata parsing with double-encoded JSON
                     metadata_raw = plan.get('metadata', '{}')
                     try:
@@ -416,7 +434,7 @@ class HierarchicalDatabaseManager:
             with self.get_connection() as conn:
                 query = """
                     SELECT p.*, 
-                           COUNT(DISTINCT rt.id) as task_count,
+                           COUNT(DISTINCT rt.id) as tasks_count,
                            COUNT(CASE WHEN rt.status = 'completed' THEN 1 END) as completed_tasks,
                            AVG(CASE WHEN rt.progress IS NOT NULL THEN rt.progress ELSE 0 END) as progress
                     FROM research_plans p
@@ -511,7 +529,7 @@ class HierarchicalDatabaseManager:
                     task_data.get('reasoning_output'),
                     json.dumps(task_data.get('execution_results', [])),
                     task_data.get('synthesis'),
-                    json.dumps(task_data.get('metadata', {}))
+                    task_data.get('metadata', '{}')
                 ))
                 conn.commit()
                 
@@ -1044,17 +1062,21 @@ class HierarchicalDatabaseManager:
                 
             with self.get_connection() as conn:
                 conn.execute("""
-                    INSERT INTO projects (id, name, description, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO projects (id, name, description, status, created_at, updated_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     data['id'],
                     data['name'],
                     data['description'],
+                    data.get('status', 'active'),
                     data['created_at'],
-                    data['updated_at']
+                    data['updated_at'],
+                    data.get('metadata', '{}')
                 ))
                 conn.commit()
-                return data
+                
+                # Return the created project by fetching it back (this will handle JSON conversion)
+                return self.get_project(data['id'])
         except Exception as e:
             print(f"Failed to create project: {e}")
             return None
@@ -1212,13 +1234,385 @@ class HierarchicalDatabaseManager:
             return None
 
     def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """Get a project by ID (legacy method)."""
-        # This would call the original implementation
-        # For now, return a mock
-        return {
-            'id': project_id,
-            'name': 'Sample Project',
-            'description': 'A sample project for testing',
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
+        """Get a project by ID."""
+        try:
+            with self.get_connection() as conn:
+                result = conn.execute(
+                    "SELECT * FROM projects WHERE id = ?",
+                    (project_id,)
+                ).fetchone()
+                
+                if result:
+                    data = dict(result)
+                    data['metadata'] = json.loads(data.get('metadata', '{}'))
+                    
+                    # Add computed fields
+                    stats = self.get_project_stats(project_id)
+                    if stats:
+                        data.update(stats)
+                    
+                    return data
+                return None
+                
+        except Exception as e:
+            print(f"Failed to get project: {e}")
+            return None
+
+    def get_projects(self, status_filter: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get all projects with optional filters."""
+        try:
+            with self.get_connection() as conn:
+                query = "SELECT * FROM projects"
+                params = []
+                
+                if status_filter:
+                    query += " WHERE status = ?"
+                    params.append(status_filter)
+                
+                query += " ORDER BY updated_at DESC"
+                
+                if limit:
+                    query += " LIMIT ?"
+                    params.append(limit)
+                
+                results = conn.execute(query, params).fetchall()
+                
+                projects = []
+                for result in results:
+                    data = dict(result)
+                    data['metadata'] = json.loads(data.get('metadata', '{}'))
+                    
+                    # Add computed fields
+                    stats = self.get_project_stats(data['id'])
+                    if stats:
+                        data.update(stats)
+                    
+                    projects.append(data)
+                
+                return projects
+                
+        except Exception as e:
+            print(f"Failed to get projects: {e}")
+            return []
+
+    def update_project(self, project_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a project."""
+        try:
+            with self.get_connection() as conn:
+                # Build SET clause dynamically
+                set_clauses = []
+                params = []
+                
+                for key, value in update_data.items():
+                    if key == 'metadata':
+                        set_clauses.append("metadata = ?")
+                        params.append(json.dumps(value))
+                    else:
+                        set_clauses.append(f"{key} = ?")
+                        params.append(value)
+                
+                # Always update the timestamp
+                set_clauses.append("updated_at = ?")
+                params.append(datetime.now().isoformat())
+                
+                params.append(project_id)
+                
+                query = f"UPDATE projects SET {', '.join(set_clauses)} WHERE id = ?"
+                conn.execute(query, params)
+                conn.commit()
+                
+                return self.get_project(project_id)
+                
+        except Exception as e:
+            print(f"Failed to update project: {e}")
+            return None
+
+    def update_research_topic(self, topic_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a research topic."""
+        try:
+            with self.get_connection() as conn:
+                # Build SET clause dynamically
+                set_clauses = []
+                params = []
+                
+                for key, value in update_data.items():
+                    if key == 'metadata':
+                        set_clauses.append("metadata = ?")
+                        params.append(json.dumps(value))
+                    else:
+                        set_clauses.append(f"{key} = ?")
+                        params.append(value)
+                
+                # Always update the timestamp
+                set_clauses.append("updated_at = ?")
+                params.append(datetime.now().isoformat())
+                
+                params.append(topic_id)
+                
+                query = f"UPDATE research_topics SET {', '.join(set_clauses)} WHERE id = ?"
+                conn.execute(query, params)
+                conn.commit()
+                
+                return self.get_research_topic(topic_id)
+                
+        except Exception as e:
+            print(f"Failed to update research topic: {e}")
+            return None
+
+    def update_task(self, task_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a task."""
+        try:
+            with self.get_connection() as conn:
+                # Build SET clause dynamically
+                set_clauses = []
+                params = []
+                
+                for key, value in update_data.items():
+                    if key in ['metadata', 'search_results', 'execution_results']:
+                        set_clauses.append(f"{key} = ?")
+                        params.append(json.dumps(value) if value else '[]')
+                    else:
+                        set_clauses.append(f"{key} = ?")
+                        params.append(value)
+                
+                # Always update the timestamp
+                set_clauses.append("updated_at = ?")
+                params.append(datetime.now().isoformat())
+                
+                params.append(task_id)
+                
+                query = f"UPDATE research_tasks SET {', '.join(set_clauses)} WHERE id = ?"
+                conn.execute(query, params)
+                conn.commit()
+                
+                return self.get_task(task_id)
+                
+        except Exception as e:
+            print(f"Failed to update task: {e}")
+            return None
+
+    def get_project_stats(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """Get project statistics."""
+        try:
+            with self.get_connection() as conn:
+                # Count topics
+                topics_count = conn.execute(
+                    "SELECT COUNT(*) FROM research_topics WHERE project_id = ?",
+                    (project_id,)
+                ).fetchone()[0]
+                
+                # Count plans
+                plans_count = conn.execute(
+                    """SELECT COUNT(*) FROM research_plans rp 
+                       JOIN research_topics rt ON rp.topic_id = rt.id 
+                       WHERE rt.project_id = ?""",
+                    (project_id,)
+                ).fetchone()[0]
+                
+                # Count tasks
+                tasks_count = conn.execute(
+                    """SELECT COUNT(*) FROM research_tasks rt2 
+                       JOIN research_plans rp ON rt2.plan_id = rp.id 
+                       JOIN research_topics rt ON rp.topic_id = rt.id 
+                       WHERE rt.project_id = ?""",
+                    (project_id,)
+                ).fetchone()[0]
+                
+                # Calculate total cost
+                total_cost_result = conn.execute(
+                    """SELECT SUM(rt2.actual_cost) FROM research_tasks rt2 
+                       JOIN research_plans rp ON rt2.plan_id = rp.id 
+                       JOIN research_topics rt ON rp.topic_id = rt.id 
+                       WHERE rt.project_id = ?""",
+                    (project_id,)
+                ).fetchone()
+                
+                total_cost = total_cost_result[0] if total_cost_result[0] else 0.0
+                
+                # Calculate completion rate
+                completed_tasks = conn.execute(
+                    """SELECT COUNT(*) FROM research_tasks rt2 
+                       JOIN research_plans rp ON rt2.plan_id = rp.id 
+                       JOIN research_topics rt ON rp.topic_id = rt.id 
+                       WHERE rt.project_id = ? AND rt2.status = 'completed'""",
+                    (project_id,)
+                ).fetchone()[0]
+                
+                completion_rate = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                
+                return {
+                    'topics_count': topics_count,
+                    'plans_count': plans_count,
+                    'tasks_count': tasks_count,
+                    'total_cost': total_cost,
+                    'completion_rate': completion_rate
+                }
+                
+        except Exception as e:
+            print(f"Failed to get project stats: {e}")
+            return None
+
+    def get_topic_stats(self, topic_id: str) -> Optional[Dict[str, Any]]:
+        """Get topic statistics."""
+        try:
+            with self.get_connection() as conn:
+                # Count plans
+                plans_count = conn.execute(
+                    "SELECT COUNT(*) FROM research_plans WHERE topic_id = ?",
+                    (topic_id,)
+                ).fetchone()[0]
+                
+                # Count tasks
+                tasks_count = conn.execute(
+                    """SELECT COUNT(*) FROM research_tasks rt 
+                       JOIN research_plans rp ON rt.plan_id = rp.id 
+                       WHERE rp.topic_id = ?""",
+                    (topic_id,)
+                ).fetchone()[0]
+                
+                # Calculate total cost
+                total_cost_result = conn.execute(
+                    """SELECT SUM(actual_cost) FROM research_tasks rt 
+                       JOIN research_plans rp ON rt.plan_id = rp.id 
+                       WHERE rp.topic_id = ?""",
+                    (topic_id,)
+                ).fetchone()
+                
+                total_cost = total_cost_result[0] if total_cost_result[0] else 0.0
+                
+                # Calculate completion rate
+                completed_tasks = conn.execute(
+                    """SELECT COUNT(*) FROM research_tasks rt 
+                       JOIN research_plans rp ON rt.plan_id = rp.id 
+                       WHERE rp.topic_id = ? AND rt.status = 'completed'""",
+                    (topic_id,)
+                ).fetchone()[0]
+                
+                completion_rate = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                
+                return {
+                    'plans_count': plans_count,
+                    'tasks_count': tasks_count,
+                    'total_cost': total_cost,
+                    'completion_rate': completion_rate
+                }
+                
+        except Exception as e:
+            print(f"Failed to get topic stats: {e}")
+            return None
+
+    def get_plan_stats(self, plan_id: str) -> Optional[Dict[str, Any]]:
+        """Get plan statistics."""
+        try:
+            with self.get_connection() as conn:
+                # Count tasks
+                tasks_count = conn.execute(
+                    "SELECT COUNT(*) FROM research_tasks WHERE plan_id = ?",
+                    (plan_id,)
+                ).fetchone()[0]
+                
+                # Count completed tasks
+                completed_tasks = conn.execute(
+                    "SELECT COUNT(*) FROM research_tasks WHERE plan_id = ? AND status = 'completed'",
+                    (plan_id,)
+                ).fetchone()[0]
+                
+                # Calculate total cost
+                total_cost_result = conn.execute(
+                    "SELECT SUM(actual_cost) FROM research_tasks WHERE plan_id = ?",
+                    (plan_id,)
+                ).fetchone()
+                
+                total_cost = total_cost_result[0] if total_cost_result[0] else 0.0
+                
+                # Calculate progress
+                progress = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                
+                return {
+                    'tasks_count': tasks_count,
+                    'completed_tasks': completed_tasks,
+                    'total_cost': total_cost,
+                    'progress': progress
+                }
+                
+        except Exception as e:
+            print(f"Failed to get plan stats: {e}")
+            return None
+
+    def search_project_hierarchy(self, project_id: str, query: str, 
+                                entity_types: Optional[List[str]] = None, 
+                                status_filters: Optional[List[str]] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """Search across project hierarchy."""
+        results = {
+            'topics': [],
+            'plans': [],
+            'tasks': []
         }
+        
+        try:
+            with self.get_connection() as conn:
+                # Search topics
+                if not entity_types or 'topic' in entity_types:
+                    topic_query = """
+                        SELECT * FROM research_topics 
+                        WHERE project_id = ? AND (name LIKE ? OR description LIKE ?)
+                    """
+                    params = [project_id, f'%{query}%', f'%{query}%']
+                    
+                    if status_filters:
+                        topic_query += f" AND status IN ({','.join(['?'] * len(status_filters))})"
+                        params.extend(status_filters)
+                    
+                    topic_results = conn.execute(topic_query, params).fetchall()
+                    for result in topic_results:
+                        data = dict(result)
+                        data['metadata'] = json.loads(data.get('metadata', '{}'))
+                        results['topics'].append(data)
+                
+                # Search plans
+                if not entity_types or 'plan' in entity_types:
+                    plan_query = """
+                        SELECT rp.* FROM research_plans rp
+                        JOIN research_topics rt ON rp.topic_id = rt.id
+                        WHERE rt.project_id = ? AND (rp.name LIKE ? OR rp.description LIKE ?)
+                    """
+                    params = [project_id, f'%{query}%', f'%{query}%']
+                    
+                    if status_filters:
+                        plan_query += f" AND rp.status IN ({','.join(['?'] * len(status_filters))})"
+                        params.extend(status_filters)
+                    
+                    plan_results = conn.execute(plan_query, params).fetchall()
+                    for result in plan_results:
+                        data = dict(result)
+                        data['metadata'] = json.loads(data.get('metadata', '{}'))
+                        data['plan_structure'] = json.loads(data.get('plan_structure', '{}'))
+                        results['plans'].append(data)
+                
+                # Search tasks
+                if not entity_types or 'task' in entity_types:
+                    task_query = """
+                        SELECT rt2.* FROM research_tasks rt2
+                        JOIN research_plans rp ON rt2.plan_id = rp.id
+                        JOIN research_topics rt ON rp.topic_id = rt.id
+                        WHERE rt.project_id = ? AND (rt2.name LIKE ? OR rt2.description LIKE ? OR rt2.query LIKE ?)
+                    """
+                    params = [project_id, f'%{query}%', f'%{query}%', f'%{query}%']
+                    
+                    if status_filters:
+                        task_query += f" AND rt2.status IN ({','.join(['?'] * len(status_filters))})"
+                        params.extend(status_filters)
+                    
+                    task_results = conn.execute(task_query, params).fetchall()
+                    for result in task_results:
+                        data = dict(result)
+                        data['metadata'] = json.loads(data.get('metadata', '{}'))
+                        data['search_results'] = json.loads(data.get('search_results', '[]'))
+                        data['execution_results'] = json.loads(data.get('execution_results', '[]'))
+                        results['tasks'].append(data)
+                
+                return results
+                
+        except Exception as e:
+            print(f"Failed to search project hierarchy: {e}")
+            return results

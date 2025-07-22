@@ -5,20 +5,44 @@ import os
 import sys
 import logging
 import time
+from datetime import datetime
+from uuid import uuid4
 from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-# Import models
-try:
-    from ..models.data_models import Message, AIConfig
-except ImportError:
-    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from models.data_models import Message, AIConfig
+def generate_uuid() -> str:
+    """Generate a unique ID."""
+    return str(uuid4())
 
+class Message(BaseModel):
+    """Message model for individual chat messages."""
+    id: str = Field(default_factory=generate_uuid)
+    conversation_id: str
+    participant: str  # user, openai, xai
+    content: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+    message_type: str = "text"  # text, system, command, error
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def add_metadata(self, key: str, value: Any) -> None:
+        """Add metadata to the message."""
+        self.metadata[key] = value
+
+
+class AIProviderConfig(BaseModel):
+    """AI configuration model."""
+    provider: str  # openai, xai
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 2000
+    system_prompt: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 class OpenAIClient:
     """OpenAI client wrapper."""
     
-    def __init__(self, api_key: str, config: AIConfig):
+    def __init__(self, api_key: str, config: AIProviderConfig):
         self.client = openai.OpenAI(api_key=api_key)
         self.config = config
         self.logger = logging.getLogger(__name__)

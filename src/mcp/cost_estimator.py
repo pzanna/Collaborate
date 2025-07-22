@@ -6,14 +6,30 @@ for managing token usage and operational costs across AI providers.
 """
 
 import logging
-import time
+from uuid import uuid4
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, field
 from enum import Enum
-import json
+from pydantic import BaseModel, Field
 
-from ..models.data_models import Message
+def generate_uuid() -> str:
+    """Generate a unique ID."""
+    return str(uuid4())
+
+class Message(BaseModel):
+    """Message model for individual chat messages."""
+    id: str = Field(default_factory=generate_uuid)
+    conversation_id: str
+    participant: str  # user, openai, xai
+    content: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+    message_type: str = "text"  # text, system, command, error
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def add_metadata(self, key: str, value: Any) -> None:
+        """Add metadata to the message."""
+        self.metadata[key] = value
 
 
 class CostTier(Enum):
