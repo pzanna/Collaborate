@@ -43,7 +43,6 @@ from src.mcp.client import MCPClient
 # V2 Hierarchical Research API
 from src.api.v2_hierarchical_api import v2_router, set_database_manager, set_research_manager
 from functools import wraps
-import logging
 
 logger = logging.getLogger(__name__)
 
