@@ -203,7 +203,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.error("⚠ Failed to initialize AIClientManager", exc_info=True)
         ai_manager = None
-        streaming_coordinator = None
+        
     
     print("✓ Eunice Web Server initialized successfully!")
     
