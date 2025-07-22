@@ -8,13 +8,14 @@ The platform specializes in hierarchical research organization, multi-agent coll
 
 ## 🚀 Key Features
 
-### Core Functionality
+### Multi-Agent Coordination
 
 - **Project Management**: Comprehensive project organization with hierarchical research topics
 - **Conversation Tracking**: Advanced conversation management with persistent storage
 - **Research Task Organization**: Structured task management with dependency tracking
 - **Hierarchical Data Models**: Complex research structures with nested relationships
 - **Multi-Agent Coordination**: Intelligent agent personas for specialized research domains
+- **Persona Consultation System**: Real-time expert consultation through specialized AI personas
 
 ### Research Capabilities
 
@@ -26,11 +27,12 @@ The platform specializes in hierarchical research organization, multi-agent coll
 
 ### Technical Features
 
-- **MCP (Model Context Protocol) Server**: Advanced microservices coordination
-- **Real-time WebSocket Communication**: Live updates and collaboration
+- **MCP (Model Context Protocol) Server**: Advanced microservices coordination with persona integration
+- **Real-time WebSocket Communication**: Live updates, collaboration, and expert consultations
 - **RESTful API**: Comprehensive backend API for all platform operations
 - **Modern React Frontend**: Responsive web interface with TypeScript
 - **SQLite Database**: Reliable data persistence with asynchronous operations
+- **Persona System**: AI-powered expert consultation with domain-specific knowledge
 
 ## 🏗️ Architecture
 
@@ -38,24 +40,48 @@ Eunice follows a microservices architecture with the following key components:
 
 - **Web Interface**: React/TypeScript frontend with Redux state management
 - **API Gateway**: FastAPI-based backend with WebSocket support
-- **MCP Server**: Microservices control plane for agent coordination
+- **MCP Server**: Microservices control plane for agent coordination and persona consultations
 - **Research Manager**: Oversees research operations and agent coordination
 - **Agent System**: Specialized AI agents for different research domains
+- **Persona System**: Expert consultation agents with domain-specific knowledge
 - **Storage Layer**: SQLite databases for conversations, memory, and collaboration data
 
 For detailed architecture information, see [Architecture Documentation](docs/Architecture.md).
 
 ## 🧬 Research Agent Personas
 
-The platform includes specialized agent personas for interdisciplinary research:
+The platform includes specialized agent personas for interdisciplinary research consultation:
 
-- **Neurobiologist**: Brain mapping, neuron extraction, and viability assessments
-- **Computational Neuroscientist**: Neural activity modeling and bio-digital interfacing
+- **Neurobiologist**: Brain mapping, neuron extraction, viability assessments, and culture maintenance
+- **Computational Neuroscientist**: Neural activity modeling and bio-digital interfacing protocols
 - **AI/ML Engineer & Data Scientist**: ANN development and experimental data analysis
+- **Biomedical Systems Engineer**: Hardware/software interface development and integration
 - **Animal Biologist & Bioethics Specialist**: Animal welfare and regulatory compliance
 - **Technical/Scientific Writer**: Documentation, manuscripts, and grant proposals
 
-See [Research Team Documentation](docs/Research_team.md) for detailed role descriptions.
+### 🎯 Persona Consultation System
+
+The platform provides an advanced persona consultation system through the MCP server:
+
+- **Expert Consultation**: Request specialized advice from domain experts
+- **Multi-Persona Support**: Automatic routing to appropriate expertise areas
+- **Real-time Responses**: WebSocket-based consultation with immediate feedback
+- **Consultation History**: Persistent tracking of all expert interactions
+- **Confidence Scoring**: AI-generated confidence metrics for consultation quality
+
+**Example Usage:**
+
+```python
+# Request neurobiologist consultation
+consultation_response = await mcp_client.request_persona_consultation(
+    expertise_area="neuron_preparation",
+    query="What are optimal conditions for hippocampal neuron culture?",
+    context={"experiment_type": "LTP", "culture_duration": "21+ days"},
+    preferred_persona="neurobiologist"
+)
+```
+
+See [Persona Documentation](docs/Personas/README.md) for detailed role descriptions and consultation capabilities.
 
 ## 🛠️ Installation & Setup
 
@@ -121,8 +147,9 @@ Eunice/
 │   ├── agents/            # AI agent implementations
 │   ├── ai_clients/        # AI service integrations
 │   ├── core/              # Core platform logic
-│   ├── mcp/              # Model Context Protocol server
+│   ├── mcp/              # Model Context Protocol server with persona integration
 │   ├── models/           # Data models
+│   ├── personas/         # Expert consultation persona agents
 │   ├── storage/          # Database and storage
 │   └── utils/            # Utility functions
 ├── frontend/             # React TypeScript frontend
@@ -148,6 +175,9 @@ pytest
 pytest tests/test_unit_*.py          # Unit tests
 pytest tests/test_integration.py     # Integration tests
 pytest tests/test_performance_e2e.py # Performance tests
+
+# Test persona consultation system
+python tests/test_mcp_persona_client.py
 ```
 
 ## 📊 Monitoring & Logs
@@ -157,7 +187,8 @@ The platform generates detailed logs for monitoring:
 - `logs/agents.log` - Agent coordination and activities
 - `logs/ai_api.log` - AI service interactions
 - `logs/eunice.log` - Collaboration events
-- `logs/mcp_server.log` - MCP server operations
+- `logs/mcp_server.log` - MCP server operations and persona consultations
+- `logs/mcp_tasks.log` - Task processing and persona integration
 
 ## 🔧 Configuration
 
@@ -171,8 +202,11 @@ Key configuration files:
 
 - [Architecture Overview](docs/Architecture.md)
 - [Research Manager](docs/Research_Manager.md)
-- [Research Team Roles](docs/Research_team.md)
+- [MCP Persona System](docs/MCP_Persona_System.md)
+- [Persona Quick Start](docs/Persona_Quick_Start.md)
+- [Persona Roles](docs/Personas/README.md)
 - [Cost Estimation System](docs/Cost_Estimation_System.md)
+- [Hierarchical Research Structure](docs/Hierarchical_Research_Structure.md)
 
 ## 🤝 Contributing
 

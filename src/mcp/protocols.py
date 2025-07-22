@@ -300,6 +300,70 @@ class QueryMemoryRequest:
         return cls(**data)
 
 
+@dataclass
+class PersonaConsultationRequest:
+    """Request for expert consultation from persona agents"""
+    request_id: str
+    expertise_area: str
+    query: str
+    context: Dict[str, Any] = field(default_factory=dict)
+    preferred_persona: Optional[str] = None
+    priority: str = "normal"
+    created_at: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'request_id': self.request_id,
+            'expertise_area': self.expertise_area,
+            'query': self.query,
+            'context': self.context,
+            'preferred_persona': self.preferred_persona,
+            'priority': self.priority,
+            'created_at': self.created_at.isoformat()
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PersonaConsultationRequest':
+        """Create from dictionary"""
+        data = data.copy()
+        if 'created_at' in data and isinstance(data['created_at'], str):
+            data['created_at'] = datetime.fromisoformat(data['created_at'])
+        return cls(**data)
+
+
+@dataclass
+class PersonaConsultationResponse:
+    """Response from persona consultation"""
+    request_id: str
+    persona_type: str
+    status: str
+    expert_response: Optional[str] = None
+    confidence: Optional[float] = None
+    error: Optional[str] = None
+    completed_at: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            'request_id': self.request_id,
+            'persona_type': self.persona_type,
+            'status': self.status,
+            'expert_response': self.expert_response,
+            'confidence': self.confidence,
+            'error': self.error,
+            'completed_at': self.completed_at.isoformat()
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PersonaConsultationResponse':
+        """Create from dictionary"""
+        data = data.copy()
+        if 'completed_at' in data and isinstance(data['completed_at'], str):
+            data['completed_at'] = datetime.fromisoformat(data['completed_at'])
+        return cls(**data)
+
+
 # Message type mapping for serialization
 MESSAGE_TYPES = {
     'research_action': ResearchAction,
@@ -309,7 +373,9 @@ MESSAGE_TYPES = {
     'register_capabilities': RegisterCapabilities,
     'timeout_event': TimeoutEvent,
     'store_memory_request': StoreMemoryRequest,
-    'query_memory_request': QueryMemoryRequest
+    'query_memory_request': QueryMemoryRequest,
+    'persona_consultation_request': PersonaConsultationRequest,
+    'persona_consultation_response': PersonaConsultationResponse
 }
 
 

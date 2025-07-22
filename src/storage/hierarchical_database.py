@@ -559,11 +559,14 @@ class HierarchicalDatabaseManager:
                     task = dict(row)
                     # Parse JSON fields
                     for field in ['search_results', 'execution_results', 'metadata']:
-                        if task.get(field):
+                        if task.get(field) is not None:
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = []
+                                task[field] = [] if field in ['search_results', 'execution_results'] else {}
+                        else:
+                            # Handle NULL values properly
+                            task[field] = [] if field in ['search_results', 'execution_results'] else {}
                     tasks.append(task)
                 
                 return tasks

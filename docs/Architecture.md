@@ -19,7 +19,7 @@ It also implements security measures such as encryption, authentication, and aut
 
 ## MCP Server
 
-The MCP (Microservices Control Plane) server is the core component of the Eunice platform, responsible for managing the microservices architecture. It provides the following functionalities:
+The MCP (Microservices Control Plane) server is the core component of the Eunice platform, responsible for managing the microservices architecture and coordinating expert consultations. It provides the following functionalities:
 
 - **Service Discovery**: Automatically detects and registers microservices, allowing them to communicate with each other seamlessly.
 
@@ -29,25 +29,68 @@ The MCP (Microservices Control Plane) server is the core component of the Eunice
 
 - **Configuration Management**: Centralizes configuration settings for microservices, allowing for dynamic updates without requiring service restarts.
 
+- **Persona Integration**: Manages expert consultation requests and routes them to appropriate specialized persona agents.
+
+- **Real-time Communication**: Provides WebSocket-based communication for live updates and expert consultations.
+
 ## Researcher Manager
 
 The [Researcher Manager](docs/Research_Manager.md) oversees the operational aspects of the research projects, including agent coordination, resource management and usage costs. It also supports the user in strategic planning, project management, and ensuring a project's efficient execution while fostering interdisciplinary collaboration.
 
 ## Agent Personas
 
-The platform features several agent personas, each with distinct roles and capabilities:
+The platform features specialized agent personas that provide expert consultations through the MCP server:
 
-- **Neurobiologist**: Lead the biological aspects of neuron interfacing, including brain mapping, neuron extraction/isolation, and viability assessments. Collaborate on experiment design to ensure ethical and effective interfacing with computer systems.
+### Core Persona Agents
 
-- **Computational Neuroscientist**: Bridges biology and computing by modeling neural activity and designing protocols to interface neurons with digital systems, while comparing to ANN benchmarks.
+- **Neurobiologist**: Leads biological aspects of neuron interfacing, including brain mapping, neuron extraction/isolation, viability assessments, and culture maintenance. Provides expert guidance on experimental design to ensure ethical and effective biological system integration.
 
-- **AI/ML Engineer & Data Scientist**: Build and train artificial neural networks as benchmarks for comparison, integrate them with biological interfaces, and analyze experimental data using statistical methods to validate performance outcomes.
+- **Computational Neuroscientist**: Bridges biology and computing by modeling neural activity and designing protocols to interface neurons with digital systems. Specializes in bio-digital communication protocols and neural signal processing.
 
-- **Animal Biologist & Bioethics Specialist**: Oversee animal welfare for subjects while advising on ethical implications of bio-digital interfacing, securing regulatory approvals, and ensuring compliance with biosafety and data privacy standards.
+- **AI/ML Engineer & Data Scientist**: Builds and trains artificial neural networks as benchmarks for comparison, integrates them with biological interfaces, and analyzes experimental data using statistical methods to validate performance outcomes.
 
-- **Technical/Scientific Writer**: Document research methodologies, findings, and comparisons between neurons and ANNs; prepare manuscripts for publication, grant proposals, and reports; ensure clear, accurate communication of complex technical concepts to diverse audiences.
+- **Biomedical Systems Engineer**: Develops hardware/software interfaces between biological and digital systems, ensuring proper signal acquisition, processing, and system integration.
 
-_Refer to the [Research Team Roles](Research_team.md) for more details._
+- **Animal Biologist & Bioethics Specialist**: Oversees animal welfare for research subjects while advising on ethical implications of bio-digital interfacing, securing regulatory approvals, and ensuring compliance with biosafety and data privacy standards.
+
+- **Technical/Scientific Writer**: Documents research methodologies, findings, and comparisons between biological neurons and ANNs; prepares manuscripts for publication, grant proposals, and reports; ensures clear, accurate communication of complex technical concepts to diverse audiences.
+
+### Persona Consultation System
+
+The persona system provides real-time expert consultations through the MCP protocol:
+
+- **Expert Routing**: Automatically routes consultation requests to appropriate domain experts
+- **Multi-Modal Queries**: Supports text-based queries with contextual information
+- **Confidence Scoring**: Provides AI-generated confidence metrics for consultation quality
+- **Persistent History**: Maintains consultation history for research continuity
+- **Real-time Responses**: WebSocket-based communication for immediate expert feedback
+
+### Consultation Protocol
+
+```python
+# Example consultation request
+consultation_response = await mcp_client.request_persona_consultation(
+    expertise_area="neuron_preparation",
+    query="What are optimal buffer conditions for hippocampal neuron isolation?",
+    context={
+        "experiment_type": "patch_clamp",
+        "animal_model": "rat",
+        "age": "P14-P21"
+    },
+    preferred_persona="neurobiologist"
+)
+```
+
+### Integration Architecture
+
+The persona system integrates with the MCP server through:
+
+- **PersonaMCPIntegration**: Main integration layer managing persona lifecycle
+- **PersonaRegistry**: Manages persona agent registration and capabilities
+- **ConsultationHistory**: Persistent storage of all expert interactions
+- **CapabilityMapping**: Routes expertise areas to appropriate persona agents
+
+_Refer to the [Persona System Documentation](Personas/README.md) for more details._
 
 ## Project Structure
 
