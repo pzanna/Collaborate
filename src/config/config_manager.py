@@ -284,30 +284,37 @@ class ConfigManager:
                 force=True  # Override any existing configuration
             )
             
-            # Set up AI API logging if enabled
+            # Set up AI API logging if enabled - MUST be done after basicConfig
             if logging_config.enable_ai_api_logging:
                 ai_api_log_path = Path(logging_config.ai_api_log_file)
                 ai_api_log_path.parent.mkdir(exist_ok=True)
-                
-                # Create dedicated logger for AI API calls
-                ai_api_logger = logging.getLogger('ai_api')
-                ai_api_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
                 
                 # Create file handler for AI API logs
                 ai_api_handler = logging.FileHandler(logging_config.ai_api_log_file)
                 ai_api_handler.setFormatter(logging.Formatter(
                     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
                 ))
-                ai_api_logger.addHandler(ai_api_handler)
                 
-                # Prevent propagation to root logger to avoid duplicate logs
-                ai_api_logger.propagate = False
+                # Set up individual AI client loggers with dedicated handler
+                # Handle various import path scenarios (direct import, src.*, personas.*, etc.)
+                ai_client_names = [
+                    'src.ai_clients.openai_client', 'src.ai_clients.xai_client', 'src.core.ai_client_manager',
+                    'ai_clients.openai_client', 'ai_clients.xai_client', 'core.ai_client_manager',
+                    'personas.ai_clients.openai_client', 'personas.ai_clients.xai_client',
+                    '__main__.src.ai_clients.openai_client', '__main__.ai_clients.openai_client'
+                ]
                 
-                # Also set up individual AI client loggers
-                for client_name in ['src.ai_clients.openai_client', 'src.ai_clients.xai_client', 'src.core.ai_client_manager']:
+                for client_name in ai_client_names:
                     client_logger = logging.getLogger(client_name)
-                    client_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
+                    
+                    # Clear any existing handlers to avoid duplicates
+                    client_logger.handlers.clear()
+                    
+                    # Add only our dedicated AI API handler
                     client_logger.addHandler(ai_api_handler)
+                    client_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
+                    
+                    # CRITICAL: Prevent propagation to root logger to avoid logs going to mcp_server.log
                     client_logger.propagate = False
             
             # Set up MCP task logging if enabled

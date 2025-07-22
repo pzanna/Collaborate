@@ -28,11 +28,22 @@ except ImportError:
     from src.config.config_manager import ConfigManager
 from .protocols import (
     ResearchAction, AgentResponse, AgentRegistration, TaskUpdate,
-    serialize_message, deserialize_message, MESSAGE_TYPES, RegisterCapabilities, TimeoutEvent
+    serialize_message, deserialize_message, MESSAGE_TYPES, RegisterCapabilities, TimeoutEvent,
+    PersonaConsultationRequest, PersonaConsultationResponse
 )
 from .registry import AgentRegistry
 from .queue import TaskQueue
 from .structured_logger import get_mcp_logger
+
+# Import persona integration conditionally
+try:
+    from src.personas.mcp_integration import PersonaMCPIntegration
+except ImportError:
+    # Fallback for different import paths
+    try:
+        from personas.mcp_integration import PersonaMCPIntegration  
+    except ImportError:
+        PersonaMCPIntegration = None
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +53,10 @@ class MCPServer:
     
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
+        
+        # Initialize logging configuration first to ensure AI API logging works
+        config_manager.setup_logging()
+        
         # Load config with fallback
         try:
             self.config = config_manager.config.mcp_server
@@ -75,6 +90,9 @@ class MCPServer:
             retry_attempts=self.config.retry_attempts
         )
         
+        # Initialize persona system
+        self.persona_integration = None
+        
         # Connection management
         self.clients: Dict[str, Any] = {}
         self.agent_to_client: Dict[str, str] = {}  # agent_id -> client_id mapping
@@ -100,6 +118,19 @@ class MCPServer:
         try:
             # Set running flag first
             self.is_running = True
+            
+            # Initialize persona system
+            logger.info("Initializing persona system...")
+            if PersonaMCPIntegration:
+                self.persona_integration = PersonaMCPIntegration(self.config_manager)
+                persona_init_success = await self.persona_integration.initialize()
+                
+                if persona_init_success:
+                    logger.info("✅ Persona system initialized successfully")
+                else:
+                    logger.warning("⚠️ Persona system initialization failed - consultations will be unavailable")
+            else:
+                logger.warning("⚠️ Persona system not available - import failed")
             
             # Start background tasks
             await self._start_background_tasks()
@@ -128,6 +159,12 @@ class MCPServer:
         logger.info("Stopping MCP server...")
         
         self.is_running = False
+        
+        # Stop persona system
+        if self.persona_integration:
+            logger.info("Shutting down persona system...")
+            await self.persona_integration.shutdown()
+            self.persona_integration = None
         
         # Stop background tasks
         for task in self._background_tasks:
@@ -251,6 +288,12 @@ class MCPServer:
             await self._handle_get_task_details(client_id, message_data)
         elif message_type == 'identify_research_manager':
             await self._handle_identify_research_manager(client_id, message_data)
+        elif message_type == 'persona_consultation_request':
+            await self._handle_persona_consultation_request(client_id, message_data)
+        elif message_type == 'get_persona_capabilities':
+            await self._handle_get_persona_capabilities(client_id, message_data)
+        elif message_type == 'get_persona_history':
+            await self._handle_get_persona_history(client_id, message_data)
         else:
             logger.warning(f"Unknown message type from {client_id}: {message_type}")
     
@@ -547,6 +590,147 @@ class MCPServer:
                         'error': str(e)
                     }
                 })
+    
+    # Background Task Methods
+    
+    async def _handle_persona_consultation_request(self, client_id: str, data: Dict[str, Any]):
+        """Handle request for expert consultation from persona agents"""
+        try:
+            request = PersonaConsultationRequest.from_dict(data)
+            logger.info(f"Persona consultation request {request.request_id} from client {client_id}")
+            
+            if not self.persona_integration:
+                # Persona system not available
+                response = PersonaConsultationResponse(
+                    request_id=request.request_id,
+                    persona_type="system",
+                    status="error",
+                    error="Persona system not available"
+                )
+                await self._send_to_client(client_id, {
+                    'type': 'persona_consultation_response',
+                    'data': response.to_dict()
+                })
+                return
+            
+            # Request consultation from persona system
+            agent_response = await self.persona_integration.request_expert_consultation(
+                expertise_area=request.expertise_area,
+                query=request.query,
+                context=request.context,
+                preferred_persona=request.preferred_persona
+            )
+            
+            # Convert AgentResponse to PersonaConsultationResponse
+            if agent_response and agent_response.result:
+                response = PersonaConsultationResponse(
+                    request_id=request.request_id,
+                    persona_type=agent_response.agent_type,
+                    status=agent_response.status,
+                    expert_response=agent_response.result.get('expert_response'),
+                    confidence=agent_response.result.get('confidence'),
+                    error=agent_response.error
+                )
+            else:
+                response = PersonaConsultationResponse(
+                    request_id=request.request_id,
+                    persona_type="unknown",
+                    status="error",
+                    error=agent_response.error if agent_response else "No response from persona"
+                )
+            
+            # Send response to client
+            await self._send_to_client(client_id, {
+                'type': 'persona_consultation_response',
+                'data': response.to_dict()
+            })
+            
+        except Exception as e:
+            logger.error(f"Error handling persona consultation request: {e}")
+            # Send error response
+            error_response = PersonaConsultationResponse(
+                request_id=data.get('request_id', 'unknown'),
+                persona_type="system",
+                status="error",
+                error=str(e)
+            )
+            await self._send_to_client(client_id, {
+                'type': 'persona_consultation_response',
+                'data': error_response.to_dict()
+            })
+    
+    async def _handle_get_persona_capabilities(self, client_id: str, data: Dict[str, Any]):
+        """Handle request for persona capabilities information"""
+        response_id = data.get('response_id')
+        
+        try:
+            if not self.persona_integration:
+                capabilities = {
+                    'available': False,
+                    'error': 'Persona system not initialized'
+                }
+            else:
+                capabilities = await self.persona_integration.get_persona_capabilities()
+            
+            await self._send_to_client(client_id, {
+                'type': 'persona_capabilities_response',
+                'data': {
+                    'response_id': response_id,
+                    'capabilities': capabilities
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting persona capabilities: {e}")
+            await self._send_to_client(client_id, {
+                'type': 'persona_capabilities_response',
+                'data': {
+                    'response_id': response_id,
+                    'capabilities': {
+                        'available': False,
+                        'error': str(e)
+                    }
+                }
+            })
+    
+    async def _handle_get_persona_history(self, client_id: str, data: Dict[str, Any]):
+        """Handle request for persona consultation history"""
+        response_id = data.get('response_id')
+        limit = data.get('limit', 10)
+        
+        try:
+            if not self.persona_integration:
+                history = {
+                    'consultations': [],
+                    'error': 'Persona system not initialized'
+                }
+            else:
+                history_data = await self.persona_integration.get_consultation_history(limit=limit)
+                history = {
+                    'consultations': history_data.get('recent_consultations', []),
+                    'statistics': history_data.get('statistics', {})
+                }
+            
+            await self._send_to_client(client_id, {
+                'type': 'persona_history_response',
+                'data': {
+                    'response_id': response_id,
+                    'history': history
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting persona history: {e}")
+            await self._send_to_client(client_id, {
+                'type': 'persona_history_response',
+                'data': {
+                    'response_id': response_id,
+                    'history': {
+                        'consultations': [],
+                        'error': str(e)
+                    }
+                }
+            })
     
     async def _process_tasks(self):
         """Background task to process the task queue"""
