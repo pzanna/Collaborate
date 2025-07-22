@@ -9,6 +9,10 @@ echo "🚀 Starting Eunice Web UI..."
 cleanup() {
     echo "Stopping services..."
     kill $MCP_PID $AGENTS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null
+    
+    # Also ensure all agent launchers are killed
+    pkill -f "agent_launcher.py" 2>/dev/null
+    
     exit 0
 }
 
@@ -22,6 +26,7 @@ stop_existing_services() {
     # Stop any existing Python processes for this project
     pkill -f "python -m src.mcp" 2>/dev/null && echo "  ✓ Stopped existing MCP server"
     pkill -f "python agent_launcher.py" 2>/dev/null && echo "  ✓ Stopped existing agents"
+    pkill -f "agent_launcher.py" 2>/dev/null && echo "  ✓ Stopped any remaining agent launchers"
     pkill -f "python web_server.py" 2>/dev/null && echo "  ✓ Stopped existing web server"
     
     # Kill processes using the ports we need

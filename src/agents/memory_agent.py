@@ -901,36 +901,20 @@ class MemoryAgent(BaseAgent):
     
     def _row_to_memory(self, row: Any) -> MemoryRecord:
         """Convert database row to memory record."""
-        # Handle both old and new schema
         try:
-            if len(row) >= 11:  # New enhanced schema
-                return MemoryRecord(
-                    id=row[0],
-                    context_id=row[1],
-                    content=row[2],
-                    memory_type=row[3] or "general",
-                    metadata=json.loads(row[4]) if row[4] else {},
-                    importance=row[5],
-                    access_count=row[6],
-                    timestamp=datetime.fromisoformat(row[7]),
-                    last_accessed=datetime.fromisoformat(row[8]) if row[8] else None,
-                    tags=json.loads(row[9]) if row[9] else [],
-                    source_task_id=row[10]
-                )
-            else:  # Old schema - backward compatibility
-                return MemoryRecord(
-                    id=row[0],
-                    context_id=row[1],
-                    content=row[2],
-                    memory_type="general",
-                    metadata=json.loads(row[3]) if len(row) > 3 and row[3] else {},
-                    importance=row[4] if len(row) > 4 else 0.5,
-                    access_count=row[5] if len(row) > 5 else 0,
-                    timestamp=datetime.fromisoformat(row[6]) if len(row) > 6 else datetime.now(),
-                    last_accessed=datetime.fromisoformat(row[7]) if len(row) > 7 and row[7] else None,
-                    tags=[],
-                    source_task_id=None
-                )
+            return MemoryRecord(
+                id=row[0],
+                context_id=row[1],
+                content=row[2],
+                memory_type=row[3] or "general",
+                metadata=json.loads(row[4]) if row[4] else {},
+                importance=row[5],
+                access_count=row[6],
+                timestamp=datetime.fromisoformat(row[7]),
+                last_accessed=datetime.fromisoformat(row[8]) if row[8] else None,
+                tags=json.loads(row[9]) if row[9] else [],
+                source_task_id=row[10]
+            )
         except (IndexError, ValueError, TypeError) as e:
             # Fallback for malformed rows
             self.logger.warning(f"Error parsing memory row: {e}")
@@ -1158,23 +1142,6 @@ class MemoryAgent(BaseAgent):
             await self.db_connection.commit()
         except Exception as e:
             self.logger.error(f"Failed to delete memory {memory_id}: {e}")
-    
-    async def _get_memory_from_db(self, memory_id: str) -> Optional[MemoryRecord]:
-        """Get memory from database."""
-        if not self.db_connection:
-            return None
-        
-        try:
-            async with self.db_connection.execute(
-                'SELECT * FROM memories WHERE id = ?', (memory_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    return self._row_to_memory(row)
-        except Exception as e:
-            self.logger.error(f"Failed to get memory {memory_id}: {e}")
-        
-        return None
     
     async def _insert_knowledge_node(self, node: KnowledgeNode) -> None:
         """Insert knowledge node into database."""

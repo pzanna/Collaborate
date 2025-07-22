@@ -477,16 +477,12 @@ class PlanningAgent(BaseAgent):
             raise RuntimeError("No AI client available")
         
         try:
-            # Create Message objects for the AI client
-            from ..models.data_models import Message
-            messages = [Message(
-                conversation_id="planning_task",
-                participant="user",
-                content=prompt
-            )]
-            
             # Get response using the correct method name
-            response = self.default_client.get_response(messages=messages)
+            # The AI client expects string parameters, not Message objects
+            # Use run_in_executor to handle the synchronous AI client call
+            import asyncio
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, lambda: self.default_client.get_response(user_message=prompt))
             
             return str(response)
             

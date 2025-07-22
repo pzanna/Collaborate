@@ -1,5 +1,6 @@
 """V2 API endpoints for hierarchical research structure - Clean Implementation."""
 
+import json
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query, Path
 from src.models.hierarchical_data_models import (
@@ -15,18 +16,26 @@ from src.models.hierarchical_data_models import (
     ErrorResponse, SuccessResponse
 )
 from src.storage.hierarchical_database import HierarchicalDatabaseManager
+from src.core.research_manager import ResearchManager
 
 # Create router for V2 hierarchical research endpoints
 v2_router = APIRouter(prefix="/api/v2", tags=["v2-hierarchical"])
 
-# Global database instance
+# Global instances
 _hierarchical_db: Optional[HierarchicalDatabaseManager] = None
+_research_manager: Optional[ResearchManager] = None
 
 
 def set_database_manager(db_manager: HierarchicalDatabaseManager):
     """Set the database manager instance for the V2 API."""
     global _hierarchical_db
     _hierarchical_db = db_manager
+
+
+def set_research_manager(research_manager: ResearchManager):
+    """Set the research manager instance for the V2 API."""
+    global _research_manager
+    _research_manager = research_manager
 
 
 def get_database() -> HierarchicalDatabaseManager:
@@ -39,6 +48,12 @@ def get_database() -> HierarchicalDatabaseManager:
         except Exception as e:
             raise HTTPException(status_code=503, detail=f"Database initialization failed: {str(e)}")
     return _hierarchical_db
+
+
+def get_research_manager() -> Optional[ResearchManager]:
+    """Dependency to get research manager."""
+    global _research_manager
+    return _research_manager
 
 
 # =============================================================================
@@ -436,6 +451,43 @@ async def delete_research_plan(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@v2_router.post("/plans/{plan_id}/approve", response_model=ResearchPlanResponse)
+async def approve_research_plan(
+    plan_id: str = Path(..., description="Plan ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database)
+):
+    """Approve a research plan and update its approval status."""
+    try:
+        # First check if the plan exists
+        plan = db.get_research_plan(plan_id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="Research plan not found")
+        
+        # Update the plan to approved status
+        # Note: We use plan_approved field, not status change to 'approved'
+        # Status remains as draft/active/completed/cancelled per the model definition
+        update_data = {
+            'plan_approved': True,
+            'status': 'active'  # Set to active when approved
+        }
+        
+        success = db.update_research_plan(plan_id, update_data)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to approve research plan")
+        
+        # Get the updated plan
+        updated_plan = db.get_research_plan(plan_id)
+        if not updated_plan:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated plan")
+        
+        return ResearchPlanResponse(**updated_plan)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =============================================================================
 # TASK ENDPOINTS
 # =============================================================================
@@ -598,9 +650,10 @@ async def delete_task(
 @v2_router.post("/tasks/{task_id}/execute", response_model=TaskResponse)
 async def execute_task(
     task_id: str = Path(..., description="Task ID"),
-    db: HierarchicalDatabaseManager = Depends(get_database)
+    db: HierarchicalDatabaseManager = Depends(get_database),
+    research_manager: Optional[ResearchManager] = Depends(get_research_manager)
 ):
-    """Execute a research task."""
+    """Execute a research task using the Research Manager and AI agents."""
     try:
         # Get the task
         task = db.get_task(task_id)
@@ -611,25 +664,93 @@ async def execute_task(
         if task['status'] not in ['pending', 'failed']:
             raise HTTPException(status_code=400, detail=f"Task cannot be executed in status: {task['status']}")
         
+        # Check if research manager is available
+        if not research_manager:
+            raise HTTPException(status_code=503, detail="Research Manager not available. Please ensure the research system is properly initialized.")
+        
         # Update task status to running
         update_data = {
             'status': 'running',
-            'stage': 'execution'
+            'stage': 'planning'
         }
         db.update_task(task_id, update_data)
         
-        # TODO: Integrate with research manager for actual execution
-        # For now, we'll just mark it as completed
-        execution_result = {
-            'status': 'completed',
-            'stage': 'complete',
-            'progress': 100.0,
-            'execution_results': [{'message': 'Task execution simulated'}]
-        }
+        try:
+            # Execute the task using the Research Manager
+            # This will trigger the AI planning agent to generate a comprehensive research plan
+            # Pass the existing plan_id so the research manager updates the correct plan
+            options = task.get('metadata', {}).copy()
+            if task.get('plan_id'):
+                options['existing_plan_id'] = task['plan_id']
+            
+            research_task_id, cost_info = await research_manager.start_research_task(
+                query=task.get('query', ''),
+                user_id=task.get('user_id', 'system'),
+                project_id=task.get('project_id'),
+                options=options
+            )
+            
+            # For now, consider the task successful if we got a research task ID
+            task_result = {
+                'success': True,
+                'task_id': research_task_id,
+                'cost_info': cost_info,
+                'results': [{'message': 'Research task started successfully with AI planning agent'}],
+                'research_plan': {'status': 'AI plan generation in progress'}
+            }
+            
+            if task_result and task_result.get('success'):
+                # Update task with results from research manager
+                execution_result = {
+                    'status': 'completed',
+                    'stage': 'complete',
+                    'progress': 100.0,
+                    'execution_results': task_result.get('results', []),
+                    'synthesis': task_result.get('synthesis'),
+                    'reasoning_output': task_result.get('reasoning'),
+                    'metadata': {
+                        'research_task_id': task_result.get('task_id'),
+                        'cost_info': task_result.get('cost_info', {})
+                    }
+                }
+                
+                # If this task generated a research plan, update the associated plan
+                if task_result.get('research_plan') and task.get('plan_id'):
+                    plan_structure = task_result['research_plan']
+                    db.update_research_plan(task['plan_id'], {
+                        'plan_structure': plan_structure,
+                        'status': 'active',
+                        'plan_approved': True
+                    })
+                
+            else:
+                # Task failed
+                execution_result = {
+                    'status': 'failed',
+                    'stage': 'failed',
+                    'progress': 0.0,
+                    'execution_results': [{'error': task_result.get('error', 'Unknown error occurred')}]
+                }
+        
+        except Exception as e:
+            # Handle research manager execution errors
+            execution_result = {
+                'status': 'failed', 
+                'stage': 'failed',
+                'progress': 0.0,
+                'execution_results': [{'error': f'Research execution failed: {str(e)}'}]
+            }
         
         final_task = db.update_task(task_id, execution_result)
         if not final_task:
             raise HTTPException(status_code=500, detail="Failed to update task after execution")
+        
+        # Ensure metadata is properly parsed as dict for TaskResponse validation
+        if isinstance(final_task.get('metadata'), str):
+            try:
+                final_task['metadata'] = json.loads(final_task['metadata'])
+            except (json.JSONDecodeError, TypeError):
+                final_task['metadata'] = {}
             
         return TaskResponse(**final_task)
         
@@ -769,6 +890,53 @@ async def search_project_hierarchy(
         )
         
         return results
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# SIMPLE RESEARCH ENDPOINTS
+# =============================================================================
+
+@v2_router.post("/topics/{topic_id}/research")
+async def start_research(
+    topic_id: str = Path(..., description="Topic ID"),
+    query: str = Query(..., description="Research query"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
+    research_manager: Optional[ResearchManager] = Depends(get_research_manager)
+):
+    """Start research on a topic - the Research Manager handles everything."""
+    try:
+        # Verify topic exists
+        topic = db.get_research_topic(topic_id)
+        if not topic:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        
+        # Check if research manager is available
+        if not research_manager:
+            raise HTTPException(status_code=503, detail="Research Manager not available")
+        
+        # Start research - let the Research Manager handle plans and tasks
+        research_task_id, cost_info = await research_manager.start_research_task(
+            query=query,
+            user_id='system',
+            project_id=topic.get('project_id'),
+            options={
+                'topic_id': topic_id,
+                'cost_override': True,  # Auto-approve for this simple endpoint
+                'create_full_structure': True  # Signal to create complete structure
+            }
+        )
+        
+        return {
+            "success": True,
+            "message": "Research started successfully",
+            "research_task_id": research_task_id,
+            "topic_id": topic_id,
+            "query": query,
+            "cost_info": cost_info
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

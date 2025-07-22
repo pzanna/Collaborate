@@ -79,7 +79,6 @@ CREATE TABLE research_tasks (
     id TEXT PRIMARY KEY,
     plan_id TEXT NOT NULL,
     project_id TEXT,  -- Inherited from plan hierarchy
-    conversation_id TEXT,
     query TEXT,
     name TEXT NOT NULL,
     description TEXT,
@@ -102,8 +101,7 @@ CREATE TABLE research_tasks (
     synthesis TEXT,
     metadata TEXT,
     FOREIGN KEY (plan_id) REFERENCES research_plans (id),
-    FOREIGN KEY (project_id) REFERENCES projects (id),
-    FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+    FOREIGN KEY (project_id) REFERENCES projects (id)
 );
 ```
 
@@ -484,14 +482,6 @@ The Research Manager integrates with the FastAPI web server through comprehensiv
 - `DELETE /api/tasks/{task_id}` - Delete task
 - `POST /api/tasks/{task_id}/execute` - Execute research task
 - `GET /api/tasks/{task_id}/results` - Get execution results
-
-#### Legacy Research Task Endpoints (Maintained for Compatibility)
-
-- `POST /api/research/start` - Start new research task (auto-creates plan structure)
-- `GET /api/research/task/{task_id}` - Get task status and results
-- `DELETE /api/research/task/{task_id}` - Cancel active task
-- `GET /api/projects/{project_id}/research-tasks` - List tasks for a project
-- `GET /api/research-tasks` - List all tasks with filters
 
 #### Enhanced Data Models
 
@@ -969,57 +959,7 @@ async def completion_handler(completion_data):
 research_manager.register_completion_callback(completion_handler)
 ```
 
-## Migration and Upgrade Notes
-
-### Upgrading to Project-Based Research Tasks
-
-**Breaking Changes:**
-
-- **Required project_id**: All new research tasks must specify a `project_id` in the request
-- **Updated API contracts**: `ResearchRequest` and `ResearchTaskResponse` models have new required fields
-- **Database schema changes**: New `research_tasks` table with foreign key relationships
-
-**Migration Steps:**
-
-1. **Update API Clients**: Modify all research task creation calls to include `project_id`
-
-```typescript
-// Before
-const request = {
-  conversation_id: "conv_123",
-  query: "Research query",
-}
-
-// After
-const request = {
-  project_id: "proj_456", // Required
-  conversation_id: "conv_123",
-  query: "Research query",
-  name: "Task Name", // Optional but recommended
-}
-```
-
-1. **Database Migration**: The system automatically creates the new `research_tasks` table on startup
-
-2. **Frontend Updates**: Update components to handle project selection and task navigation
-
-**Backward Compatibility:**
-
-- Existing research workflows continue to work but require project selection
-- Historical research data is preserved in the existing conversation system
-- Cost estimation and tracking APIs remain unchanged
-
-**Recommended Migration Path:**
-
-1. **Create default projects** for existing conversations
-2. **Update frontend components** to include project selection
-3. **Modify API calls** to include project_id
-4. **Test task creation and retrieval** workflows
-5. **Update monitoring and analytics** to use project-based views
-
-> **📘 Detailed Cost Documentation**: For comprehensive information about cost estimation algorithms, thresholds, and optimization strategies, see [Cost Estimation System Documentation](Cost_Estimation_System.md).
-
-### Cost Estimation API
+## Cost Estimation API
 
 The Research Manager now uses a centralized cost estimation approach through the `_estimate_task_cost()` method:
 
@@ -1027,7 +967,6 @@ The Research Manager now uses a centralized cost estimation approach through the
 # Centralized cost estimation with enhanced features
 cost_info, should_proceed, single_agent_mode = await research_manager._estimate_task_cost(
     query="Analyze market trends in quantum computing",
-    conversation_id="conv_123",
     options={'single_agent_mode': False}
 )
 
@@ -1048,7 +987,6 @@ estimate = await research_manager.estimate_query_cost_async(
     single_agent_mode=False
 )
 
-# Sync version (backwards compatibility)
 estimate = research_manager.estimate_query_cost(
     query="Complex market analysis",
     single_agent_mode=False

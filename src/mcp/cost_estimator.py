@@ -11,25 +11,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, field
 from enum import Enum
-from pydantic import BaseModel, Field
-
-def generate_uuid() -> str:
-    """Generate a unique ID."""
-    return str(uuid4())
-
-class Message(BaseModel):
-    """Message model for individual chat messages."""
-    id: str = Field(default_factory=generate_uuid)
-    conversation_id: str
-    participant: str  # user, openai, xai
-    content: str
-    timestamp: datetime = Field(default_factory=datetime.now)
-    message_type: str = "text"  # text, system, command, error
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-    def add_metadata(self, key: str, value: Any) -> None:
-        """Add metadata to the message."""
-        self.metadata[key] = value
 
 
 class CostTier(Enum):
@@ -38,6 +19,13 @@ class CostTier(Enum):
     MEDIUM = "medium"  # Multi-agent, moderate complexity  
     HIGH = "high"    # Complex research, parallel execution
     CRITICAL = "critical"  # Emergency stop threshold
+
+import logging
+from uuid import uuid4
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Union
+from dataclasses import dataclass, field
+from enum import Enum
 
 
 @dataclass
@@ -117,7 +105,7 @@ class CostEstimator:
     
     def estimate_task_cost(self, query: str, agents: List[str], 
                           parallel_execution: bool = False,
-                          context_messages: Optional[List[Message]] = None) -> CostEstimate:
+                          context_content: Optional[str] = None) -> CostEstimate:
         """
         Estimate cost for a research task.
         
@@ -125,7 +113,7 @@ class CostEstimator:
             query: Research query
             agents: List of agent types to be used
             parallel_execution: Whether agents run in parallel
-            context_messages: Existing conversation context
+            context_content: Existing conversation context as text
             
         Returns:
             CostEstimate: Detailed cost estimation
@@ -134,9 +122,8 @@ class CostEstimator:
         query_tokens = self._estimate_tokens_for_text(query)
         context_tokens = 0
         
-        if context_messages:
-            context_tokens = sum(self._estimate_tokens_for_text(msg.content) 
-                               for msg in context_messages)
+        if context_content:
+            context_tokens = self._estimate_tokens_for_text(context_content)
         
         # Determine task complexity
         complexity = self._assess_task_complexity(query, agents, parallel_execution)

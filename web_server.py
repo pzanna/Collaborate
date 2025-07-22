@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import List, Dict, Optional, AsyncGenerator, Any
 from contextlib import asynccontextmanager
 
+import sys
+
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
@@ -40,7 +42,7 @@ from src.utils.error_handler import (
 )
 from src.mcp.client import MCPClient
 # V2 Hierarchical Research API
-from src.api.v2_hierarchical_api import v2_router
+from src.api.v2_hierarchical_api import v2_router, set_database_manager, set_research_manager
 from functools import wraps
 import logging
 
@@ -67,7 +69,6 @@ def handle_api_errors(func):
 class APIVersionInfo(BaseModel):
     version: str
     supported_versions: List[str]
-    deprecated_versions: List[str]
     migration_guide_url: Optional[str] = None
 
 class HealthResponse(BaseModel):
@@ -161,6 +162,9 @@ async def lifespan(app: FastAPI):
             # Initialize research manager with MCP client and database
             research_manager = ResearchManager(config_manager, db_manager)
             await research_manager.initialize(mcp_client)
+            
+            # Set research manager for API access
+            set_research_manager(research_manager)
             
             # Register completion callback to notify WebSocket clients
             async def research_completion_callback(completion_data):
@@ -278,7 +282,6 @@ app.add_middleware(
 )
 
 # Include V2 hierarchical research API router
-from src.api.v2_hierarchical_api import v2_router, set_database_manager
 # Import ErrorResponse from V2 API for exception handlers
 from src.models.hierarchical_data_models import ErrorResponse
 # Set the database manager for V2 API (will be set during startup)
@@ -375,7 +378,6 @@ async def get_api_version():
     return APIVersionInfo(
         version="2.0.0",
         supported_versions=["2.0"],
-        deprecated_versions=["1.0"],
         migration_guide_url="/docs"
     )
 

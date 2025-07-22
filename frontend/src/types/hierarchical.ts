@@ -185,14 +185,6 @@ export interface TaskResponse extends Task {
   agent_used?: string[]
 }
 
-// Legacy models for backward compatibility
-export interface LegacyResearchTask extends Task {
-  // Legacy fields that may still be referenced
-  conversation_id?: string
-  project_id?: string // duplicated from hierarchical structure
-  research_mode?: string
-}
-
 // Utility types for component props
 export type HierarchyLevel = 'project' | 'topic' | 'plan' | 'task'
 

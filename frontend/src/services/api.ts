@@ -194,14 +194,11 @@ class ApiService {
     });
   }
 
-  // Legacy compatibility methods for gradual migration
   async getResearchTask(taskId: string): Promise<Task> {
-    // For backward compatibility, map to new Task interface
     return this.request<Task>(`/tasks/${taskId}`);
   }
 
   async getProjectResearchTasks(projectId: string): Promise<Task[]> {
-    // For backward compatibility, return all tasks from all plans in all topics
     try {
       const topics = await this.getResearchTopics(projectId);
       const allTasks: Task[] = [];

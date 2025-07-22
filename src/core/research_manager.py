@@ -56,8 +56,7 @@ class ResearchContext:
     task_id: str
     query: str
     user_id: str
-    conversation_id: str
-    project_id: Optional[str] = None  # New field for project association
+    project_id: Optional[str] = None  # Project association
     stage: ResearchStage = ResearchStage.PLANNING
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -230,7 +229,7 @@ class ResearchManager:
     async def _estimate_task_cost(
         self,
         query: str,
-        conversation_id: str,
+        task_id: str,
         options: Optional[Dict[str, Any]] = None
     ) -> tuple[Dict[str, Any], bool, bool]:
         """
@@ -238,7 +237,7 @@ class ResearchManager:
         
         Args:
             query: Research query to process
-            conversation_id: ID of the conversation for cost tracking
+            task_id: ID of the task for cost tracking
             options: Optional task configuration including single_agent_mode
             
         Returns:
@@ -263,7 +262,7 @@ class ResearchManager:
         
         # Check if task should proceed based on cost
         should_proceed, cost_reason = self.cost_estimator.should_proceed_with_task(
-            cost_estimate, conversation_id
+            cost_estimate, task_id
         )
         
         # Get cost recommendations
@@ -290,7 +289,7 @@ class ResearchManager:
         self, 
         query: str, 
         user_id: str, 
-        conversation_id: str,
+        project_id: Optional[str] = None,
         options: Optional[Dict[str, Any]] = None
     ) -> tuple[str, Dict[str, Any]]:
         """
@@ -299,7 +298,7 @@ class ResearchManager:
         Args:
             query: Research query to process
             user_id: ID of the user making the request
-            conversation_id: ID of the conversation
+            project_id: ID of the project (optional)
             options: Optional task configuration including cost_override
             
         Returns:
@@ -313,7 +312,7 @@ class ResearchManager:
             
             # Estimate cost for the research task
             cost_info, should_proceed, single_agent_mode = await self._estimate_task_cost(
-                query, conversation_id, options
+                query, task_id, options
             )
             
             # Create research context
@@ -321,8 +320,7 @@ class ResearchManager:
                 task_id=task_id,
                 query=query,
                 user_id=user_id,
-                conversation_id=conversation_id,
-                project_id=options.get('project_id') if options else None,  # Extract project_id from options
+                project_id=project_id or (options.get('project_id') if options else None),
                 estimated_cost=cost_info['estimate']['cost_usd'],
                 single_agent_mode=single_agent_mode
             )
@@ -331,6 +329,9 @@ class ResearchManager:
             if options:
                 context.max_retries = options.get('max_retries', context.max_retries)
                 context.metadata.update(options.get('metadata', {}))
+                # Add topic_id from options to metadata if provided
+                if options.get('topic_id'):
+                    context.metadata['topic_id'] = options['topic_id']
                 # Check for cost override
                 context.cost_approved = options.get('cost_override', False)
             
@@ -352,7 +353,7 @@ class ResearchManager:
                     # Continue with task execution even if database creation fails
                 
                 # Start cost tracking
-                self.cost_estimator.start_cost_tracking(task_id, conversation_id)
+                self.cost_estimator.start_cost_tracking(task_id, task_id)
                 
                 # Store context
                 self.active_contexts[task_id] = context
@@ -528,14 +529,14 @@ class ResearchManager:
             # Create planning action
             action = ResearchAction(
                 task_id=context.task_id,
-                context_id=context.conversation_id,
+                context_id=context.task_id,
                 agent_type="planning",
                 action="plan_research",
                 payload={
                     "query": context.query,
                     "context": context.context_data,
                     "user_id": context.user_id,
-                    "conversation_id": context.conversation_id
+                    "task_id": context.task_id
                 }
             )
             
@@ -547,24 +548,42 @@ class ResearchManager:
                 context.context_data["research_plan"] = response.result
                 
                 # Store the research plan in the database
-                if response.result and "plan" in response.result:
-                    plan_data = response.result["plan"]
-                    try:
-                        # Get the correct plan ID from context metadata
-                        plan_id = context.metadata.get('plan_id')
-                        if plan_id:
-                            result = self.db_manager.update_research_plan(
-                                plan_id, 
-                                plan_data
-                            )
-                            if result:
-                                self.logger.info(f"Research plan stored in database for plan {plan_id}")
-                            else:
-                                self.logger.warning(f"Failed to store research plan in database for plan {plan_id}")
+                if response.result:
+                    # The planning agent should return the detailed research plan
+                    # Try different possible structures for the plan data
+                    plan_data = None
+                    
+                    if isinstance(response.result, dict):
+                        if "plan" in response.result:
+                            plan_data = response.result["plan"]
                         else:
-                            self.logger.warning(f"No plan_id found in context metadata for task {context.task_id}")
-                    except Exception as e:
-                        self.logger.error(f"Error storing research plan in database: {e}")
+                            # The entire result might be the plan data
+                            plan_data = response.result
+                    
+                    if plan_data:
+                        try:
+                            # Get the correct plan ID from context metadata
+                            plan_id = context.metadata.get('plan_id')
+                            if plan_id:
+                                # Update the plan structure with the AI-generated plan
+                                result = self.db_manager.update_research_plan(
+                                    plan_id, 
+                                    {
+                                        'plan_structure': plan_data,
+                                        'status': 'active',
+                                        'plan_approved': True
+                                    }
+                                )
+                                if result:
+                                    self.logger.info(f"Research plan stored in database for plan {plan_id}")
+                                else:
+                                    self.logger.warning(f"Failed to store research plan in database for plan {plan_id}")
+                            else:
+                                self.logger.warning(f"No plan_id found in context metadata for task {context.task_id}")
+                        except Exception as e:
+                            self.logger.error(f"Error storing research plan in database: {e}")
+                    else:
+                        self.logger.warning(f"No valid plan data found in response for task {context.task_id}")
                 
                 return True
             
@@ -588,7 +607,7 @@ class ResearchManager:
             # Create retrieval action
             action = ResearchAction(
                 task_id=context.task_id,
-                context_id=context.conversation_id,
+                context_id=context.task_id,
                 agent_type="retriever",
                 action="search_information",
                 payload={
@@ -629,7 +648,7 @@ class ResearchManager:
             # Create reasoning action
             action = ResearchAction(
                 task_id=context.task_id,
-                context_id=context.conversation_id,
+                context_id=context.task_id,
                 agent_type="planning",
                 action="analyze_information",
                 payload={
@@ -670,7 +689,7 @@ class ResearchManager:
             # Create execution action
             action = ResearchAction(
                 task_id=context.task_id,
-                context_id=context.conversation_id,
+                context_id=context.task_id,
                 agent_type="executor",
                 action="execute_research",
                 payload={
@@ -710,7 +729,7 @@ class ResearchManager:
             # Create synthesis action
             action = ResearchAction(
                 task_id=context.task_id,
-                context_id=context.conversation_id,
+                context_id=context.task_id,
                 agent_type="planning",
                 action="synthesize_results",
                 payload={
@@ -1156,7 +1175,6 @@ class ResearchManager:
                 'metadata': json.dumps({
                     'task_id': context.task_id,
                     'user_id': context.user_id,
-                    'conversation_id': context.conversation_id,
                     **context.metadata
                 })
             }
@@ -1188,7 +1206,6 @@ class ResearchManager:
                 'metadata': json.dumps({
                     'task_id': context.task_id,
                     'user_id': context.user_id,
-                    'conversation_id': context.conversation_id,
                     'is_main_task': True,
                     **context.metadata
                 }),
@@ -1223,12 +1240,22 @@ class ResearchManager:
             Optional[str]: Topic ID if successful
         """
         try:
-            # Generate a topic ID based on the conversation or create a new one
-            # Handle empty conversation_id for web API requests
-            if context.conversation_id:
-                topic_id = f"topic_{context.conversation_id}"
+            # Check if an existing topic_id is provided in metadata
+            existing_topic_id = context.metadata.get('topic_id')
+            if existing_topic_id:
+                # Verify the topic exists
+                existing_topic = self.db_manager.get_research_topic(existing_topic_id)
+                if existing_topic:
+                    self.logger.info(f"Using existing research topic {existing_topic_id}")
+                    return existing_topic_id
+                else:
+                    self.logger.warning(f"Specified topic {existing_topic_id} not found, creating new topic")
+            
+            # Generate a topic ID based on the task or create a new one
+            if context.task_id:
+                topic_id = f"topic_{context.task_id}"
             else:
-                # For web API requests without conversation_id, use task_id or generate timestamp-based ID
+                # For web API requests without task_id, generate timestamp-based ID
                 from src.utils.id_utils import generate_timestamped_id
                 topic_id = f"topic_{context.task_id}" if context.task_id else generate_timestamped_id('topic')
             
@@ -1242,10 +1269,9 @@ class ResearchManager:
                 'id': topic_id,
                 'project_id': context.project_id or 'default_project',
                 'name': f"Research Topic: {context.query[:60]}{'...' if len(context.query) > 60 else ''}",
-                'description': f"Research topic for task {context.task_id}" if not context.conversation_id else f"Research topic for conversation {context.conversation_id}",
+                'description': f"Research topic for task {context.task_id}",
                 'status': 'active',
                 'metadata': json.dumps({
-                    'conversation_id': context.conversation_id or '',
                     'created_from_task': context.task_id
                 })
             }
@@ -1332,7 +1358,6 @@ class ResearchManager:
                 'metadata': json.dumps({
                     'main_task_id': context.task_id,
                     'user_id': context.user_id,
-                    'conversation_id': context.conversation_id,
                     'stage_order': stage_order,
                     'total_stages': len(all_stages),
                     **context.metadata
@@ -1396,7 +1421,6 @@ class ResearchManager:
                 'metadata': json.dumps({
                     'main_task_id': context.task_id,
                     'user_id': context.user_id,
-                    'conversation_id': context.conversation_id,
                     'retry_count': context.retry_count,
                     'completed_stages': [stage.value for stage in context.completed_stages],
                     'failed_stages': [stage.value for stage in context.failed_stages],
@@ -1460,7 +1484,6 @@ class ResearchManager:
                 'metadata': json.dumps({
                     'main_task_id': context.task_id,
                     'user_id': context.user_id,
-                    'conversation_id': context.conversation_id,
                     'overall_progress': progress,
                     'current_stage': context.stage.value,
                     'completed_stages': [stage.value for stage in context.completed_stages],
@@ -1507,7 +1530,7 @@ class ResearchManager:
         options = {'single_agent_mode': single_agent_mode}
         cost_info, _, _ = await self._estimate_task_cost(
             query=query,
-            conversation_id="estimate_only",  # Dummy conversation ID for estimation
+            task_id="estimate_only",  # Dummy task ID for estimation
             options=options
         )
         
@@ -1529,7 +1552,6 @@ class ResearchManager:
         Returns:
             Dict[str, Any]: Cost estimation details
         """
-        # Fallback synchronous implementation for backwards compatibility
         agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "planning", "executor", "memory"]
         parallel_execution = not single_agent_mode
         

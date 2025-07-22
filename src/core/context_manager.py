@@ -33,12 +33,10 @@ class ContextTrace:
 class SessionContext:
     """Represents a complete session context."""
     context_id: str
-    conversation_id: str
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     status: str = "active"
     current_stage: Optional[str] = None
-    messages: List[Any] = field(default_factory=list)
     research_tasks: List[Dict[str, Any]] = field(default_factory=list)
     context_traces: List[ContextTrace] = field(default_factory=list)
     active_agents: List[str] = field(default_factory=list)
@@ -101,7 +99,6 @@ class ContextManager:
         await self.db_connection.execute('''
             CREATE TABLE IF NOT EXISTS contexts (
                 context_id TEXT PRIMARY KEY,
-                conversation_id TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'active',
@@ -136,7 +133,7 @@ class ContextManager:
             
         try:
             async with self.db_connection.execute('''
-                SELECT context_id, conversation_id, created_at, updated_at, status, 
+                SELECT context_id, created_at, updated_at, status, 
                        current_stage, active_agents, memory_references, metadata, settings
                 FROM contexts 
                 WHERE status IN ('active', 'paused')
@@ -145,15 +142,14 @@ class ContextManager:
                 async for row in cursor:
                     context = SessionContext(
                         context_id=row[0],
-                        conversation_id=row[1],
-                        created_at=datetime.fromisoformat(row[2]),
-                        updated_at=datetime.fromisoformat(row[3]),
-                        status=row[4],
-                        current_stage=row[5],
-                        active_agents=json.loads(row[6]) if row[6] else [],
-                        memory_references=json.loads(row[7]) if row[7] else [],
-                        metadata=json.loads(row[8]) if row[8] else {},
-                        settings=json.loads(row[9]) if row[9] else {}
+                        created_at=datetime.fromisoformat(row[1]),
+                        updated_at=datetime.fromisoformat(row[2]),
+                        status=row[3],
+                        current_stage=row[4],
+                        active_agents=json.loads(row[5]) if row[5] else [],
+                        memory_references=json.loads(row[6]) if row[6] else [],
+                        metadata=json.loads(row[7]) if row[7] else {},
+                        settings=json.loads(row[8]) if row[8] else {}
                     )
                     self.active_contexts[row[0]] = context
                     
@@ -181,11 +177,11 @@ class ContextManager:
             context.updated_at = datetime.now()
             await self.db_connection.execute('''
                 INSERT OR REPLACE INTO contexts 
-                (context_id, conversation_id, created_at, updated_at, status, current_stage,
+                (context_id, created_at, updated_at, status, current_stage,
                  active_agents, memory_references, metadata, settings)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                context.context_id, context.conversation_id,
+                context.context_id,
                 context.created_at.isoformat(), context.updated_at.isoformat(),
                 context.status, context.current_stage,
                 json.dumps(context.active_agents), json.dumps(context.memory_references),
@@ -197,7 +193,7 @@ class ContextManager:
     
     # Public API Methods
     
-    async def create_context(self, conversation_id: str, context_id: Optional[str] = None) -> str:
+    async def create_context(self, context_id: Optional[str] = None) -> str:
         """Create a new session context."""
         try:
             if context_id is None:
@@ -207,11 +203,11 @@ class ContextManager:
                 self.logger.warning(f"Context {context_id} already exists")
                 return context_id
             
-            context = SessionContext(context_id=context_id, conversation_id=conversation_id)
+            context = SessionContext(context_id=context_id)
             self.active_contexts[context_id] = context
             await self._save_context(context)
             
-            self.logger.info(f"Created new context: {context_id} for conversation: {conversation_id}")
+            self.logger.info(f"Created new context: {context_id}")
             return context_id
             
         except Exception as e:
@@ -228,7 +224,7 @@ class ContextManager:
                 return None
                 
             async with self.db_connection.execute('''
-                SELECT context_id, conversation_id, created_at, updated_at, status, 
+                SELECT context_id, created_at, updated_at, status, 
                        current_stage, active_agents, memory_references, metadata, settings
                 FROM contexts 
                 WHERE context_id = ?
@@ -236,14 +232,14 @@ class ContextManager:
                 row = await cursor.fetchone()
                 if row:
                     context = SessionContext(
-                        context_id=row[0], conversation_id=row[1],
-                        created_at=datetime.fromisoformat(row[2]),
-                        updated_at=datetime.fromisoformat(row[3]),
-                        status=row[4], current_stage=row[5],
-                        active_agents=json.loads(row[6]) if row[6] else [],
-                        memory_references=json.loads(row[7]) if row[7] else [],
-                        metadata=json.loads(row[8]) if row[8] else {},
-                        settings=json.loads(row[9]) if row[9] else {}
+                        context_id=row[0],
+                        created_at=datetime.fromisoformat(row[1]),
+                        updated_at=datetime.fromisoformat(row[2]),
+                        status=row[3], current_stage=row[4],
+                        active_agents=json.loads(row[5]) if row[5] else [],
+                        memory_references=json.loads(row[6]) if row[6] else [],
+                        metadata=json.loads(row[7]) if row[7] else {},
+                        settings=json.loads(row[8]) if row[8] else {}
                     )
                     if context.status in ['active', 'paused']:
                         self.active_contexts[context_id] = context
@@ -335,8 +331,7 @@ class ContextManager:
             self.logger.error(f"Failed to get context traces for {context_id}: {e}")
             return []
     
-    async def list_contexts(self, conversation_id: Optional[str] = None, 
-                          status: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    async def list_contexts(self, status: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         """List contexts with optional filtering."""
         try:
             if not self.db_connection:
@@ -345,17 +340,13 @@ class ContextManager:
             conditions = []
             params = []
             
-            if conversation_id:
-                conditions.append("conversation_id = ?")
-                params.append(conversation_id)
-            
             if status:
                 conditions.append("status = ?")
                 params.append(status)
             
             where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
             query = f'''
-                SELECT context_id, conversation_id, created_at, updated_at, 
+                SELECT context_id, created_at, updated_at, 
                        status, current_stage, metadata
                 FROM contexts 
                 {where_clause}
@@ -368,10 +359,10 @@ class ContextManager:
             async with self.db_connection.execute(query, params) as cursor:
                 async for row in cursor:
                     contexts.append({
-                        'context_id': row[0], 'conversation_id': row[1],
-                        'created_at': row[2], 'updated_at': row[3],
-                        'status': row[4], 'current_stage': row[5],
-                        'metadata': json.loads(row[6]) if row[6] else {}
+                        'context_id': row[0],
+                        'created_at': row[1], 'updated_at': row[2],
+                        'status': row[3], 'current_stage': row[4],
+                        'metadata': json.loads(row[5]) if row[5] else {}
                     })
             return contexts
         except Exception as e:
