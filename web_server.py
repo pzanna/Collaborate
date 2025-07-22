@@ -201,6 +201,7 @@ async def lifespan(app: FastAPI):
         available_providers = ai_manager.get_available_providers()
         print(f"✓ AI providers available: {', '.join(available_providers)}")
     except Exception as e:
+        logging.error("⚠ Failed to initialize AIClientManager", exc_info=True)
         ai_manager = None
         streaming_coordinator = None
     
