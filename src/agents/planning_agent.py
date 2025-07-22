@@ -159,7 +159,7 @@ class PlanningAgent(BaseAgent):
         4. Information sources to consult
         5. Expected outcomes
         
-        Format your response i JSON with the following structure:
+        Format your response in JSON with the following structure:
         {{
             "objectives": ["Objective 1", "Objective 2"],
             "key_areas": ["Area 1", "Area 2"],

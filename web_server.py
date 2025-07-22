@@ -796,10 +796,13 @@ async def start_research_task(request: ResearchRequest):
             'research_mode': request.research_mode,
             'max_results': request.max_results,
             'project_id': request.project_id,  # Pass project_id in options
-            'metadata': {}
+            'metadata': {
+                'created_via': 'web_api',
+                'user_id': 'web_user'
+            }
         }
         
-        # Create research task with proper parameters
+        # Create research task with proper parameters - let research manager handle all database operations
         task_id, cost_info = await research_manager.start_research_task(
             query=request.query,
             user_id="web_user",  # Default user ID for web requests
@@ -807,48 +810,39 @@ async def start_research_task(request: ResearchRequest):
             options=options
         )
         
-        # Get task details from research manager
+        # Get task details from research manager after it has created the database entries
         task_context = research_manager.get_task_context(task_id)
         
-        # Create database entry with hierarchical structure (topic → plan → task)
-        task_data = {
-            'id': task_id,
-            'project_id': request.project_id,
-            'query': request.query,
-            'name': task_name,
-            'status': "running",
-            'stage': task_context.stage.value if task_context else "planning",
-            'estimated_cost': task_context.estimated_cost if task_context else 0.0,
-            'actual_cost': task_context.actual_cost if task_context else 0.0,
-            'cost_approved': task_context.cost_approved if task_context else False,
-            'single_agent_mode': task_context.single_agent_mode if task_context else False,
-            'research_mode': request.research_mode,
-            'max_results': request.max_results,
-            'progress': 0.0,
-            'metadata': {
-                'created_via': 'web_api',
-                'user_id': 'web_user'
-            }
-        }
-        
-        # Save to database with hierarchical structure (auto-creates topic and plan)
-        created_task = db_manager.create_research_task_with_hierarchy(task_data, auto_create_topic=True)
-        if not created_task:
-            raise HTTPException(status_code=500, detail="Failed to save research task to database")
-        
-        return ResearchTaskResponse(
-            task_id=task_id,
-            project_id=request.project_id,
-            query=request.query,
-            name=task_name,
-            status=created_task.get('status', 'running'),
-            stage=created_task.get('stage', 'planning'),
-            created_at=created_task.get('created_at'),
-            updated_at=created_task.get('updated_at'),
-            progress=created_task.get('progress', 0.0),
-            estimated_cost=created_task.get('estimated_cost', 0.0),
-            actual_cost=created_task.get('actual_cost', 0.0)
-        )
+        # Return response based on context if available
+        if task_context:
+            return ResearchTaskResponse(
+                task_id=task_id,
+                project_id=request.project_id,
+                query=request.query,
+                name=task_name,
+                status="running",  # Default status since ResearchContext doesn't have status
+                stage=task_context.stage.value if hasattr(task_context.stage, 'value') else str(task_context.stage),
+                created_at=datetime.now().isoformat(),
+                updated_at=datetime.now().isoformat(),
+                progress=0.0,  # Default progress since ResearchContext doesn't have progress
+                estimated_cost=task_context.estimated_cost,
+                actual_cost=task_context.actual_cost
+            )
+        else:
+            # Fallback response if context not available
+            return ResearchTaskResponse(
+                task_id=task_id,
+                project_id=request.project_id,
+                query=request.query,
+                name=task_name,
+                status="running",
+                stage="planning",
+                created_at=datetime.now().isoformat(),
+                updated_at=datetime.now().isoformat(),
+                progress=0.0,
+                estimated_cost=cost_info.get('estimated_cost', 0.0) if cost_info else 0.0,
+                actual_cost=0.0
+            )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start research task: {str(e)}")
@@ -1047,12 +1041,8 @@ async def update_research_plan_for_task(task_id: str, request: Dict[str, Any]):
             except Exception as e:
                 print(f"Failed to update hierarchical plan: {e}")
         
-        # Fallback to legacy method
-        success = db_manager.update_research_plan(task_id, research_plan)
-        if success:
-            return {"success": True, "message": "Research plan updated"}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to update research plan")
+        # No fallback - only update through proper plan IDs, not task IDs
+        raise HTTPException(status_code=500, detail="Failed to update research plan - no valid plan_id found")
             
     except HTTPException:
         raise

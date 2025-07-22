@@ -16,7 +16,7 @@
 
 ## Overview
 
-The **Planning Agent** is a core component of the Eunice research system responsible for planning, analysis, reasoning, and synthesis tasks. It serves as the strategic brain of the research workflow, orchestrating how research tasks are approached and executed.
+The **Planning Agent** is a core component of the Eunice research system responsible for planning, analysis, reasoning, and synthesis tasks. It serves as the strategic brain of the research workflow, orchestrating how research tasks are approached and executed within the hierarchical project structure.
 
 ### Primary Responsibilities
 
@@ -26,6 +26,7 @@ The **Planning Agent** is a core component of the Eunice research system respons
 - **Chain of Thought Reasoning**: Perform step-by-step logical reasoning
 - **Content Processing**: Summarize, extract insights, and evaluate content
 - **Source Evaluation**: Compare and assess the credibility of information sources
+- **Hierarchical Integration**: Support project → topic → plan → task workflows
 
 ### Key Features
 
@@ -35,6 +36,9 @@ The **Planning Agent** is a core component of the Eunice research system respons
 - Error handling and graceful degradation
 - Async/await pattern for efficient processing
 - Comprehensive logging and monitoring
+- **Hierarchical research structure integration**
+- **Cost-aware planning and optimization**
+- **JSON-structured plan generation**
 
 ---
 
@@ -42,7 +46,7 @@ The **Planning Agent** is a core component of the Eunice research system respons
 
 ### Class Hierarchy
 
-```
+```text
 BaseAgent
 └── PlanningAgent
 ```
@@ -54,6 +58,7 @@ BaseAgent
 - **Config Manager**: Configuration and API key management
 - **MCP Protocols**: Research action definitions and data structures
 - **Data Models**: Message and response data structures
+- **Hierarchical Database**: Integration with project/plan/task structure
 
 ### Core Components
 
@@ -72,6 +77,10 @@ class PlanningAgent(BaseAgent):
     async def _extract_insights(self, payload: Dict[str, Any]) -> Dict[str, Any]
     async def _compare_sources(self, payload: Dict[str, Any]) -> Dict[str, Any]
     async def _evaluate_credibility(self, payload: Dict[str, Any]) -> Dict[str, Any]
+
+    # AI interaction and parsing
+    async def _get_ai_response(self, prompt: str) -> str
+    def _parse_research_plan(self, response: str) -> Dict[str, Any]
 ```
 
 ---
@@ -96,16 +105,33 @@ payload = {
 ```python
 {
     'query': str,                    # Original query
-    'plan': {                        # Structured research plan
-        'raw_plan': str,             # Full AI response
-        'objectives': str,           # Research objectives
-        'key_areas': str,            # Areas to investigate
-        'questions': str,            # Specific questions to answer
-        'sources': str,              # Information sources to consult
-        'outcomes': str              # Expected outcomes
+    'plan': {                        # Structured research plan (parsed from JSON)
+        'objectives': List[str],     # Research objectives list
+        'key_areas': List[str],      # Areas to investigate list
+        'questions': List[str],      # Specific questions list
+        'sources': List[str],        # Information sources list
+        'outcomes': List[str],       # Expected outcomes list
+        'raw_plan': str             # Full AI response (fallback)
     },
     'raw_response': str,             # Complete AI response
-    'planning_model': str            # AI model used
+    'planning_model': str            # AI model used (e.g., "gpt-4")
+}
+```
+
+**Enhanced JSON Planning Format**:
+
+The agent now uses structured JSON prompts to generate more consistent, parseable research plans:
+
+```json
+{
+  "objectives": ["Define research scope", "Identify key metrics"],
+  "key_areas": ["Market analysis", "Technology assessment"],
+  "questions": [
+    "What are the market trends?",
+    "Which technologies are emerging?"
+  ],
+  "sources": ["Industry reports", "Academic publications"],
+  "outcomes": ["Comprehensive market overview", "Technology roadmap"]
 }
 ```
 
@@ -115,16 +141,32 @@ payload = {
 - Academic research planning
 - Market research preparation
 - Investigation roadmap creation
+- **Hierarchical task planning within projects**
+- **Cost-optimized research planning**
 
 **Example**:
 
 ```python
+# Basic research planning
 result = await planning_agent._plan_research({
     'query': 'Impact of AI on healthcare diagnostics',
     'context': {
         'domain': 'healthcare',
         'focus': 'diagnostic_accuracy',
-        'stakeholders': ['doctors', 'patients', 'hospitals']
+        'stakeholders': ['doctors', 'patients', 'hospitals'],
+        'project_id': 'proj_healthcare_ai_2025',  # Hierarchical context
+        'plan_id': 'plan_diagnostic_impact_study'
+    }
+})
+
+# Planning with cost considerations
+result = await planning_agent._plan_research({
+    'query': 'Comprehensive AI market analysis',
+    'context': {
+        'cost_budget': 50.0,  # USD budget constraint
+        'time_constraint': '2_weeks',
+        'research_depth': 'comprehensive',
+        'single_agent_mode': False  # Multi-agent approach
     }
 })
 ```
@@ -371,32 +413,89 @@ payload = {
 
 ## Usage Patterns
 
-### 1. Research Workflow Integration
+### 1. Hierarchical Research Workflow Integration
 
-The Planning Agent typically operates within a larger research workflow:
+The Planning Agent operates seamlessly within the hierarchical project structure:
 
 ```python
-# 1. Initial Planning
-plan_result = await planning_agent._plan_research({
-    'query': research_query,
-    'context': initial_context
-})
-
-# 2. Information Analysis (after data collection)
-analysis_result = await planning_agent._analyze_information({
-    'query': research_query,
+# 1. Project-level Planning (Strategic Overview)
+project_plan = await planning_agent._plan_research({
+    'query': 'AI Healthcare Research Initiative',
     'context': {
-        'search_results': collected_data
+        'project_id': 'proj_ai_healthcare_2025',
+        'scope': 'strategic_overview',
+        'timeline': '12_months',
+        'budget_range': '100000_usd'
     }
 })
 
-# 3. Final Synthesis
-synthesis_result = await planning_agent._synthesize_results({
-    'query': research_query,
+# 2. Topic-specific Planning (Detailed Investigation)
+topic_plan = await planning_agent._plan_research({
+    'query': 'AI diagnostic accuracy in radiology',
     'context': {
-        'search_results': collected_data,
-        'reasoning_output': analysis_result['analysis']['findings'],
-        'execution_results': []
+        'project_id': 'proj_ai_healthcare_2025',
+        'topic_id': 'topic_radiology_ai',
+        'research_depth': 'comprehensive',
+        'stakeholders': ['radiologists', 'technicians', 'patients']
+    }
+})
+
+# 3. Task-level Analysis (After Data Collection)
+task_analysis = await planning_agent._analyze_information({
+    'query': 'Radiological AI accuracy studies',
+    'context': {
+        'task_id': 'task_accuracy_analysis',
+        'plan_id': 'plan_radiology_study',
+        'search_results': collected_research_data,
+        'cost_constraints': {'max_cost': 25.0}
+    }
+})
+
+# 4. Multi-task Synthesis (Plan Completion)
+plan_synthesis = await planning_agent._synthesize_results({
+    'query': 'Complete radiology AI assessment',
+    'context': {
+        'plan_id': 'plan_radiology_study',
+        'task_results': [task1_results, task2_results, task3_results],
+        'search_results': all_collected_data,
+        'reasoning_outputs': [analysis1, analysis2, analysis3],
+        'execution_results': additional_research
+    }
+})
+```
+
+### 2. Cost-Optimized Planning Workflow
+
+The agent now supports cost-aware planning and optimization:
+
+```python
+# Cost-constrained research planning
+cost_optimized_plan = await planning_agent._plan_research({
+    'query': 'Market analysis with budget constraints',
+    'context': {
+        'cost_budget': 30.0,  # USD budget limit
+        'optimization_mode': 'cost_effective',
+        'single_agent_preference': True,  # 60% cost reduction
+        'quality_threshold': 'good'  # vs 'excellent' for comprehensive
+    }
+})
+
+# Multi-agent vs single-agent planning comparison
+comprehensive_plan = await planning_agent._plan_research({
+    'query': 'Detailed competitive analysis',
+    'context': {
+        'research_mode': 'comprehensive',  # Multi-agent approach
+        'cost_budget': 100.0,
+        'quality_threshold': 'excellent'
+    }
+})
+
+efficient_plan = await planning_agent._plan_research({
+    'query': 'Detailed competitive analysis',
+    'context': {
+        'research_mode': 'efficient',  # Single-agent approach
+        'cost_budget': 40.0,
+        'quality_threshold': 'good'
     }
 })
 ```
@@ -418,30 +517,77 @@ insights = await planning_agent._extract_insights({
 })
 ```
 
-### 3. Batch Processing
+### 3. Standalone Usage
 
-Multiple operations can be performed in sequence:
+Individual functions can be used independently for specific tasks:
 
 ```python
-async def comprehensive_analysis(content_list):
+# Quick content summarization with cost tracking
+summary = await planning_agent._summarize_content({
+    'content': long_article,
+    'max_length': 300,
+    'context': {
+        'task_id': 'task_summary_001',
+        'cost_tracking': True
+    }
+})
+
+# Insight extraction with hierarchical context
+insights = await planning_agent._extract_insights({
+    'content': research_report,
+    'context': {
+        'project_id': 'proj_market_research',
+        'plan_id': 'plan_competitor_analysis'
+    }
+})
+
+# Source comparison for validation
+comparison = await planning_agent._compare_sources({
+    'sources': [source1, source2, source3],
+    'context': {
+        'validation_purpose': 'fact_checking',
+        'credibility_threshold': 0.8
+    }
+})
+```
+
+### 4. Batch Processing
+
+Multiple operations with cost optimization:
+
+```python
+async def cost_optimized_batch_analysis(content_list, budget_limit: float):
     results = []
+    total_cost = 0.0
+
     for content in content_list:
-        # Summarize each piece
+        # Estimate cost before processing
+        estimated_cost = await estimate_processing_cost(content)
+
+        if total_cost + estimated_cost > budget_limit:
+            # Switch to efficient mode or skip
+            continue
+
+        # Process with cost tracking
         summary = await planning_agent._summarize_content({
-            'content': content
+            'content': content,
+            'context': {'cost_tracking': True}
         })
 
-        # Extract insights
         insights = await planning_agent._extract_insights({
-            'content': content
+            'content': content,
+            'context': {'cost_tracking': True}
         })
 
         results.append({
             'summary': summary,
-            'insights': insights
+            'insights': insights,
+            'processing_cost': summary.get('cost', 0) + insights.get('cost', 0)
         })
 
-    return results
+        total_cost += results[-1]['processing_cost']
+
+    return results, total_cost
 ```
 
 ---
@@ -450,20 +596,37 @@ async def comprehensive_analysis(content_list):
 
 ### AI Client Configuration
 
-The Planning Agent supports multiple AI providers through configuration:
+The Planning Agent supports multiple AI providers with enhanced configuration:
 
 ```json
 {
   "ai_providers": {
     "openai": {
-      "model": "gpt-4",
+      "model": "gpt-4o",
       "temperature": 0.7,
-      "max_tokens": 2000
+      "max_tokens": 2000,
+      "cost_per_1k_tokens": {
+        "input": 0.005,
+        "output": 0.015
+      }
     },
     "xai": {
       "model": "grok-beta",
       "temperature": 0.7,
-      "max_tokens": 2000
+      "max_tokens": 2000,
+      "cost_per_1k_tokens": {
+        "input": 0.003,
+        "output": 0.012
+      }
+    }
+  },
+  "planning_agent": {
+    "default_provider": "openai",
+    "fallback_provider": "xai",
+    "cost_optimization": {
+      "enable_single_agent_mode": true,
+      "cost_threshold_usd": 10.0,
+      "auto_approve_threshold": 5.0
     }
   }
 }
@@ -559,120 +722,181 @@ The test suite covers:
 
 ## Examples
 
-### Example 1: Academic Research Planning
+### Example 1: Hierarchical Academic Research Planning
 
 ```python
 import asyncio
 from src.agents.planning_agent import PlanningAgent
 from src.config.config_manager import ConfigManager
 
-async def academic_research_example():
+async def hierarchical_academic_research():
     config_manager = ConfigManager()
     agent = PlanningAgent(config_manager)
     await agent._initialize_agent()
 
     try:
-        result = await agent._plan_research({
-            'query': 'Impact of machine learning on climate change research',
+        # Project-level strategic planning
+        project_plan = await agent._plan_research({
+            'query': 'Machine Learning in Climate Science Research Initiative',
             'context': {
+                'project_id': 'proj_ml_climate_2025',
                 'academic_level': 'graduate',
-                'research_type': 'systematic_review',
-                'timeline': '6_months',
-                'focus_areas': ['prediction_models', 'data_analysis', 'visualization']
+                'research_type': 'multi_year_initiative',
+                'timeline': '3_years',
+                'budget_estimate': 150000,
+                'scope': 'strategic_overview'
             }
         })
 
-        print("Research Plan Generated:")
-        print(f"Objectives: {result['plan']['objectives']}")
-        print(f"Key Areas: {result['plan']['key_areas']}")
+        # Topic-specific detailed planning
+        topic_plan = await agent._plan_research({
+            'query': 'ML models for climate prediction accuracy',
+            'context': {
+                'project_id': 'proj_ml_climate_2025',
+                'topic_id': 'topic_prediction_models',
+                'research_type': 'systematic_review',
+                'timeline': '6_months',
+                'focus_areas': ['prediction_models', 'data_analysis', 'validation'],
+                'cost_budget': 25.0  # USD for this planning phase
+            }
+        })
+
+        # Task-level execution planning
+        task_plan = await agent._plan_research({
+            'query': 'Comparative analysis of LSTM vs Transformer models for climate data',
+            'context': {
+                'project_id': 'proj_ml_climate_2025',
+                'topic_id': 'topic_prediction_models',
+                'plan_id': 'plan_model_comparison',
+                'task_type': 'comparative_analysis',
+                'single_agent_mode': True,  # Cost optimization
+                'research_depth': 'focused'
+            }
+        })
+
+        print("Hierarchical Research Plans Generated:")
+        print(f"Project Objectives: {project_plan['plan']['objectives']}")
+        print(f"Topic Key Areas: {topic_plan['plan']['key_areas']}")
+        print(f"Task Questions: {task_plan['plan']['questions']}")
 
     finally:
         await agent._cleanup_agent()
 
 # Run the example
-asyncio.run(academic_research_example())
+asyncio.run(hierarchical_academic_research())
 ```
 
-### Example 2: Market Research Analysis
+### Example 2: Cost-Optimized Market Research
 
 ```python
-async def market_research_example():
+async def cost_optimized_market_research():
     config_manager = ConfigManager()
     agent = PlanningAgent(config_manager)
     await agent._initialize_agent()
 
     try:
-        # Analyze market data
-        analysis = await agent._analyze_information({
-            'query': 'Electric vehicle market trends 2024',
+        # High-budget comprehensive analysis
+        comprehensive_plan = await agent._plan_research({
+            'query': 'Complete electric vehicle market analysis 2025',
             'context': {
+                'project_id': 'proj_ev_market_analysis',
+                'cost_budget': 75.0,  # Higher budget allows multi-agent
+                'research_mode': 'comprehensive',
+                'quality_target': 'excellent',
+                'coverage': 'global'
+            }
+        })
+
+        # Cost-constrained efficient analysis
+        efficient_plan = await agent._plan_research({
+            'query': 'Electric vehicle market key trends 2025',
+            'context': {
+                'project_id': 'proj_ev_market_analysis',
+                'cost_budget': 20.0,  # Limited budget
+                'research_mode': 'efficient',
+                'single_agent_mode': True,  # 60% cost reduction
+                'quality_target': 'good',
+                'coverage': 'regional'
+            }
+        })
+
+        # Analyze collected market data with cost tracking
+        analysis = await agent._analyze_information({
+            'query': 'EV market trends analysis',
+            'context': {
+                'task_id': 'task_trend_analysis',
+                'plan_id': 'plan_ev_research',
+                'cost_tracking': True,
                 'search_results': [
                     {
                         'title': 'EV Market Report 2024',
                         'content': 'Electric vehicle sales increased by 40%...',
-                        'source': 'MarketResearch.com'
+                        'source': 'MarketResearch.com',
+                        'credibility_score': 0.9
+                    },
+                    {
+                        'title': 'Global EV Adoption Trends',
+                        'content': 'Regional adoption varies significantly...',
+                        'source': 'BloombergNEF',
+                        'credibility_score': 0.95
                     }
-                    # ... more search results
                 ]
             }
         })
 
-        # Extract actionable insights
-        insights = await agent._extract_insights({
-            'content': analysis['raw_response']
-        })
-
-        print("Market Analysis:")
-        print(analysis['analysis']['findings'])
-        print("\nKey Insights:")
-        print(insights['insights'])
+        print("Cost-Optimized Research Results:")
+        print(f"Comprehensive Plan Cost Estimate: ${comprehensive_plan.get('estimated_cost', 0):.2f}")
+        print(f"Efficient Plan Cost Estimate: ${efficient_plan.get('estimated_cost', 0):.2f}")
+        print(f"Analysis Cost: ${analysis.get('actual_cost', 0):.2f}")
 
     finally:
         await agent._cleanup_agent()
 ```
 
-### Example 3: Content Processing Pipeline
+### Example 3: Complete Hierarchical Research Workflow
 
 ```python
-async def content_processing_pipeline(documents):
+async def complete_hierarchical_workflow():
+    """
+    Demonstrates the complete hierarchical research workflow from
+    project creation through task execution and synthesis.
+    """
     config_manager = ConfigManager()
     agent = PlanningAgent(config_manager)
     await agent._initialize_agent()
 
     try:
-        processed_docs = []
+        # 1. Project-level strategic planning
+        project_strategy = await agent._plan_research({
+            'query': 'AI-Powered Healthcare Diagnostics Research Program',
+            'context': {
+                'project_scope': 'multi_year_research_initiative',
+                'funding_level': 'major_grant',
+                'stakeholders': ['hospitals', 'tech_companies', 'researchers'],
+                'timeline': '3_years',
+                'expected_impact': 'clinical_implementation'
+            }
+        })
 
-        for doc in documents:
-            # Summarize document
-            summary = await agent._summarize_content({
-                'content': doc['content'],
-                'max_length': 200
-            })
-
-            # Extract insights
-            insights = await agent._extract_insights({
-                'content': doc['content']
-            })
-
-            processed_docs.append({
-                'title': doc['title'],
-                'summary': summary['summary'],
-                'insights': insights['insights'],
-                'compression_ratio': summary['compression_ratio']
-            })
-
-        # Compare all documents
-        comparison = await agent._compare_sources({
-            'sources': processed_docs
+        # 2. Cross-topic synthesis
+        final_synthesis = await agent._synthesize_results({
+            'query': 'Complete AI healthcare diagnostics research synthesis',
+            'context': {
+                'project_strategy': project_strategy,
+                'synthesis_goal': 'actionable_recommendations'
+            }
         })
 
         return {
-            'processed_documents': processed_docs,
-            'comparison_analysis': comparison['comparison']
+            'project_strategy': project_strategy,
+            'final_synthesis': final_synthesis
         }
 
     finally:
         await agent._cleanup_agent()
+
+# Run the complete workflow
+workflow_result = asyncio.run(complete_hierarchical_workflow())
 ```
 
 ---

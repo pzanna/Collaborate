@@ -279,7 +279,16 @@ class HierarchicalDatabaseManager:
                 row = cursor.fetchone()
                 if row:
                     topic = dict(row)
-                    topic['metadata'] = json.loads(topic.get('metadata', '{}'))
+                    # Handle metadata parsing with double-encoded JSON
+                    metadata_raw = topic.get('metadata', '{}')
+                    try:
+                        metadata = json.loads(metadata_raw)
+                        # If metadata is a string (double-encoded JSON), parse it again
+                        if isinstance(metadata, str):
+                            metadata = json.loads(metadata)
+                        topic['metadata'] = metadata
+                    except (json.JSONDecodeError, TypeError):
+                        topic['metadata'] = {}
                     return topic
                 return None
                 
@@ -312,7 +321,16 @@ class HierarchicalDatabaseManager:
                 topics = []
                 for row in cursor.fetchall():
                     topic = dict(row)
-                    topic['metadata'] = json.loads(topic.get('metadata', '{}'))
+                    # Handle metadata parsing with double-encoded JSON
+                    metadata_raw = topic.get('metadata', '{}')
+                    try:
+                        metadata = json.loads(metadata_raw)
+                        # If metadata is a string (double-encoded JSON), parse it again
+                        if isinstance(metadata, str):
+                            metadata = json.loads(metadata)
+                        topic['metadata'] = metadata
+                    except (json.JSONDecodeError, TypeError):
+                        topic['metadata'] = {}
                     topics.append(topic)
                 
                 return topics
@@ -329,7 +347,7 @@ class HierarchicalDatabaseManager:
             
             with self.get_connection() as conn:
                 conn.execute("""
-                    INSERT INTO research_plans 
+                    INSERT OR IGNORE INTO research_plans 
                     (id, topic_id, name, description, plan_type, status, plan_approved, created_at, updated_at, 
                      estimated_cost, actual_cost, plan_structure, metadata)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -375,7 +393,16 @@ class HierarchicalDatabaseManager:
                 if row:
                     plan = dict(row)
                     plan['plan_structure'] = json.loads(plan.get('plan_structure', '{}'))
-                    plan['metadata'] = json.loads(plan.get('metadata', '{}'))
+                    # Handle metadata parsing with double-encoded JSON
+                    metadata_raw = plan.get('metadata', '{}')
+                    try:
+                        metadata = json.loads(metadata_raw)
+                        # If metadata is a string (double-encoded JSON), parse it again
+                        if isinstance(metadata, str):
+                            metadata = json.loads(metadata)
+                        plan['metadata'] = metadata
+                    except (json.JSONDecodeError, TypeError):
+                        plan['metadata'] = {}
                     return plan
                 return None
                 
@@ -409,7 +436,16 @@ class HierarchicalDatabaseManager:
                 for row in cursor.fetchall():
                     plan = dict(row)
                     plan['plan_structure'] = json.loads(plan.get('plan_structure', '{}'))
-                    plan['metadata'] = json.loads(plan.get('metadata', '{}'))
+                    # Handle metadata parsing with double-encoded JSON
+                    metadata_raw = plan.get('metadata', '{}')
+                    try:
+                        metadata = json.loads(metadata_raw)
+                        # If metadata is a string (double-encoded JSON), parse it again
+                        if isinstance(metadata, str):
+                            metadata = json.loads(metadata)
+                        plan['metadata'] = metadata
+                    except (json.JSONDecodeError, TypeError):
+                        plan['metadata'] = {}
                     plans.append(plan)
                 
                 return plans
@@ -1149,8 +1185,9 @@ class HierarchicalDatabaseManager:
                         data[field] = json.dumps(data[field])
                         
             with self.get_connection() as conn:
+                # Use INSERT OR IGNORE to prevent duplicate creation
                 conn.execute("""
-                    INSERT INTO research_tasks 
+                    INSERT OR IGNORE INTO research_tasks 
                     (id, project_id, query, name, status, stage, 
                      created_at, updated_at, estimated_cost, actual_cost, cost_approved,
                      single_agent_mode, research_mode, max_results, progress,
