@@ -2,30 +2,44 @@
 
 import os
 import sys
-import time
 import logging
 import asyncio
-from typing import Dict, List, Optional, Any, AsyncGenerator, Generator
 from datetime import datetime
+from uuid import uuid4
+from typing import Dict, List, Optional, Any, AsyncGenerator
+from pydantic import BaseModel, Field
+from datetime import datetime
+
+def generate_uuid() -> str:
+    """Generate a unique ID."""
+    return str(uuid4())
 
 # Import models and config
 try:
-    from ..models.data_models import Message, AIConfig
     from ..config.config_manager import ConfigManager
-    from ..ai_clients.openai_client import OpenAIClient
-    from ..ai_clients.xai_client import XAIClient
+    from ..ai_clients.openai_client import OpenAIClient, AIProviderConfig as OpenAIAIProviderConfig
+    from ..ai_clients.xai_client import XAIClient, AIProviderConfig as XAIAIProviderConfig
     from .simplified_coordinator import SimplifiedCoordinator
     from ..utils.error_handler import handle_errors, APIError, NetworkError, safe_execute
     from ..mcp.cost_estimator import CostEstimator
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from models.data_models import Message, AIConfig
     from config.config_manager import ConfigManager
-    from ai_clients.openai_client import OpenAIClient
-    from ai_clients.xai_client import XAIClient
+    from ai_clients.openai_client import OpenAIClient, AIProviderConfig as OpenAIAIProviderConfig
+    from ai_clients.xai_client import XAIClient, AIProviderConfig as XAIAIProviderConfig
     from core.simplified_coordinator import SimplifiedCoordinator
     from utils.error_handler import handle_errors, APIError, NetworkError, safe_execute
     from mcp.cost_estimator import CostEstimator
+
+
+class AIProviderConfig(BaseModel):
+    """AI configuration model."""
+    provider: str  # openai, xai
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 2000
+    system_prompt: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AIClientManager:
@@ -68,6 +82,9 @@ class AIClientManager:
                     raise APIError("OpenAI API key not found", "openai")
                 
                 config = self.config_manager.config.ai_providers["openai"]
+                # Convert config to OpenAIAIProviderConfig if necessary
+                if not isinstance(config, OpenAIAIProviderConfig):
+                    config = OpenAIAIProviderConfig(**config.__dict__)
                 self.clients["openai"] = OpenAIClient(api_key, config)
                 print("✓ OpenAI client initialized")
             except Exception as e:
@@ -82,6 +99,9 @@ class AIClientManager:
                     raise APIError("xAI API key not found", "xai")
                 
                 config = self.config_manager.config.ai_providers["xai"]
+                # Convert config to XAI AIProviderConfig if necessary
+                if not isinstance(config, XAIAIProviderConfig):
+                    config = XAIAIProviderConfig(**config.__dict__)
                 self.clients["xai"] = XAIClient(api_key, config)
                 print("✓ xAI client initialized")
             except Exception as e:
@@ -89,7 +109,7 @@ class AIClientManager:
                 self.failed_providers["xai"] = 1
     
     @handle_errors(context="get_response", reraise=False, fallback_return="")
-    def get_response(self, provider: str, messages: List[Message], 
+    def get_response(self, provider: str, user_message: str, 
                     system_prompt: Optional[str] = None, retry_count: int = 0,
                     task_id: Optional[str] = None, agent_type: Optional[str] = None) -> str:
         """Get response from a specific AI provider with error handling and retries."""
@@ -106,7 +126,7 @@ class AIClientManager:
         
         # Log the request
         self.logger.info(f"AI Manager: Requesting response from {provider} "
-                        f"(retry: {retry_count}, messages: {len(messages)})")
+                        f"(retry: {retry_count}, message length: {len(user_message)})")
         
         try:
             client = self.clients[provider]
@@ -115,24 +135,18 @@ class AIClientManager:
             input_tokens = 0
             if hasattr(client, 'estimate_tokens'):
                 try:
-                    input_tokens = client.estimate_tokens(messages, system_prompt)
+                    input_tokens = client.estimate_tokens(user_message)
                 except Exception as e:
                     self.logger.warning(f"Token estimation failed for {provider}: {e}")
             
             # Get response
-            response = client.get_response(messages, system_prompt)
+            response = client.get_response(user_message, system_prompt)
             
             # Estimate output tokens
             output_tokens = 0
             if hasattr(client, 'estimate_tokens') and response:
                 try:
-                    # Create a temporary message for output token estimation
-                    output_msg = Message(
-                        conversation_id="temp",
-                        participant="assistant", 
-                        content=response
-                    )
-                    output_tokens = client.estimate_tokens([output_msg])
+                    output_tokens = client.estimate_tokens(response)
                 except Exception as e:
                     self.logger.warning(f"Output token estimation failed for {provider}: {e}")
             
@@ -167,7 +181,7 @@ class AIClientManager:
             if retry_count < self.max_retries:
                 self.logger.info(f"AI Manager: Retrying {provider} request "
                                f"(attempt {retry_count + 1}/{self.max_retries})")
-                return self.get_response(provider, messages, system_prompt, retry_count + 1, task_id, agent_type)
+                return self.get_response(provider, user_message, system_prompt, retry_count + 1, task_id, agent_type)
             
             # Convert to appropriate error type
             if "timeout" in str(e).lower() or "connection" in str(e).lower():
@@ -176,17 +190,15 @@ class AIClientManager:
                 raise APIError(f"API error with {provider}: {str(e)}", provider, original_error=e)
     
     @handle_errors(context="get_smart_responses", reraise=False, fallback_return={})
-    def get_smart_responses(self, messages: List[Message], 
+    def get_smart_responses(self, user_message: str, 
                             system_prompt: Optional[str] = None,
                             task_id: Optional[str] = None) -> Dict[str, str]:
         """Get responses from participating AIs using simplified coordination"""
         
-        if not messages:
-            self.logger.info("AI Manager: No messages provided for smart responses")
+        if not user_message:
+            self.logger.info("AI Manager: No message provided for smart responses")
             return {}
             
-        user_message = messages[-1]
-        conversation_history = messages[:-1]
         available_providers = self.get_available_providers()
         
         if not available_providers:
@@ -195,34 +207,24 @@ class AIClientManager:
         
         # Determine participants using simple rules
         participants = self.coordinator.get_participating_providers(
-            user_message.content, available_providers, conversation_history
+            user_message, available_providers, []
         )
         
         self.logger.info(f"AI Manager: Coordination decision - Participants: {', '.join(participants)} "
                         f"(from available: {', '.join(available_providers)})")
         
         responses = {}
-        shared_context = messages  # All AIs see the same context
         
         for provider in participants:
             try:
                 # Simple system prompt for group participation
                 group_prompt = self._create_group_prompt(provider, system_prompt)
                 
-                response = self.get_response(provider, shared_context, group_prompt, 
+                response = self.get_response(provider, user_message, group_prompt, 
                                            task_id=task_id, agent_type="coordinator")
                 
                 if response and not response.startswith("Error:"):
                     responses[provider] = response
-                    
-                    # Add this response to shared context for next provider
-                    ai_message = Message(
-                        conversation_id=user_message.conversation_id,
-                        participant=provider,
-                        content=response,
-                        timestamp=datetime.now()
-                    )
-                    shared_context.append(ai_message)
                         
             except Exception as e:
                 print(f"❌ Error from {provider}: {e}")
@@ -263,8 +265,7 @@ class AIClientManager:
         else:
             self.failed_providers.clear()
     
-    def adapt_system_prompt(self, provider: str, user_message: str, 
-                           conversation_history: List[Message]) -> str:
+    def adapt_system_prompt(self, provider: str, user_message: str) -> str:
         """Adapt system prompt for provider (simplified version)"""
         return self._create_group_prompt(provider)
     
@@ -284,15 +285,13 @@ class AIClientManager:
                 setattr(self.coordinator, key, value)
     
     # Streaming methods for compatibility
-    async def stream_responses(self, messages: List[Message], 
+    async def stream_responses(self, user_message: str, 
                               system_prompt: Optional[str] = None) -> AsyncGenerator[Dict[str, Any], None]:
         """Stream responses from participating AIs"""
         
-        if not messages:
+        if not user_message:
             return
             
-        user_message = messages[-1]
-        conversation_history = messages[:-1]
         available_providers = self.get_available_providers()
         
         if not available_providers:
@@ -301,7 +300,7 @@ class AIClientManager:
         
         # Get participants
         participants = self.coordinator.get_participating_providers(
-            user_message.content, available_providers, conversation_history
+            user_message, available_providers, []
         )
         
         yield {
@@ -311,8 +310,6 @@ class AIClientManager:
         }
         
         # Stream responses from each participant
-        shared_context = messages
-        
         for i, provider in enumerate(participants):
             yield {
                 'type': 'provider_starting',
@@ -327,7 +324,7 @@ class AIClientManager:
                 
                 # Get response
                 response = await asyncio.get_event_loop().run_in_executor(
-                    None, self.get_response, provider, shared_context, group_prompt
+                    None, self.get_response, provider, user_message, group_prompt
                 )
                 
                 if response and not response.startswith("Error:"):
@@ -337,15 +334,6 @@ class AIClientManager:
                         'chunk': response,
                         'partial_response': response
                     }
-                    
-                    # Add to shared context for next provider
-                    ai_message = Message(
-                        conversation_id=user_message.conversation_id,
-                        participant=provider,
-                        content=response,
-                        timestamp=datetime.now()
-                    )
-                    shared_context.append(ai_message)
                     
                     yield {
                         'type': 'provider_completed',

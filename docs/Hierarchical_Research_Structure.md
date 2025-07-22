@@ -89,20 +89,9 @@ DELETE /api/v2/tasks/{task_id}
 GET    /api/v2/projects/{project_id}/hierarchy
 ```
 
-### Backward Compatibility
-
-Legacy V1 endpoints remain available with deprecation warnings:
-
-```
-# Legacy endpoints (deprecated)
-POST   /api/research/start              -> Use /api/v2/plans/{plan_id}/tasks
-GET    /api/research/task/{task_id}     -> Use /api/v2/tasks/{task_id}
-GET    /api/research-tasks              -> Use /api/v2/tasks/search
-```
-
 ## Database Schema
 
-### New Tables
+### Tables
 
 ```sql
 -- Research Topics
@@ -134,46 +123,11 @@ CREATE TABLE research_plans (
     metadata TEXT DEFAULT '{}',
     FOREIGN KEY (topic_id) REFERENCES research_topics (id)
 );
-
--- Updated Tasks Table
-ALTER TABLE research_tasks ADD COLUMN plan_id TEXT;
-ALTER TABLE research_tasks ADD COLUMN task_type TEXT DEFAULT 'research';
-ALTER TABLE research_tasks ADD COLUMN task_order INTEGER DEFAULT 0;
 ```
-
-## Migration Process
-
-### Automatic Migration
-
-The system includes an automatic migration that:
-
-1. **Creates new tables** for topics and plans
-2. **Migrates existing data** by creating default topics and plans
-3. **Updates task references** to link to the new plan structure
-4. **Preserves all existing data** while adding the new hierarchy
-
-### Running Migration
-
-```bash
-# Automatic migration on startup
-python web_server.py  # Migration runs automatically
-
-# Manual migration (if needed)
-python hierarchical_migration.py data/eunice.db
-```
-
-### Migration Results
-
-For existing projects with research tasks:
-
-- Creates a default topic: "General Research"
-- Creates a default plan: "Comprehensive Research Plan"
-- Links all existing tasks to the default plan
-- Preserves all task data and functionality
 
 ## Frontend Navigation
 
-### New Navigation Flow
+### Navigation Flow
 
 1. **Projects List** → Select project
 2. **Project Detail** → View topics, plans overview
@@ -183,7 +137,7 @@ For existing projects with research tasks:
 
 ### URL Structure
 
-```
+```bash
 /projects                           # Projects list
 /projects/{project_id}              # Project detail
 /projects/{project_id}/topics       # Topics list
@@ -272,23 +226,6 @@ const tasks = await api.getPlanTasks(planId)
 const hierarchy = await api.getProjectHierarchy(projectId)
 ```
 
-## Migration Checklist
-
-- [x] Database schema updated
-- [x] Data models created
-- [x] Migration script implemented
-- [x] API endpoints designed
-- [ ] Frontend components updated
-- [ ] Documentation updated
-- [ ] Testing completed
-- [ ] Migration deployed
-
 ## Next Steps
-
-1. **Complete API Implementation**: Finish implementing the database operations for the new endpoints
-2. **Update Frontend Components**: Create new React components for the hierarchical navigation
-3. **Testing**: Comprehensive testing of migration and new functionality
-4. **Documentation**: Update all user-facing documentation
-5. **Training**: Update any training materials or user guides
 
 The hierarchical structure provides a much clearer and more scalable approach to organizing research work, making it easier for users to understand and navigate their research projects.

@@ -51,6 +51,10 @@ class AgentLauncher:
             from src.config.config_manager import ConfigManager
             config_manager = ConfigManager()
             
+            # Set up proper logging configuration (including AI API logging)
+            config_manager.setup_logging()
+            logger.info("Logging configuration set up for agents")
+            
             # Import all agent classes
             from src.agents.retriever_agent import RetrieverAgent
             from src.agents.planning_agent import PlanningAgent

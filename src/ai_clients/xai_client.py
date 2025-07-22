@@ -6,32 +6,37 @@ import logging
 import time
 from xai_sdk import Client
 from xai_sdk.chat import user, system, assistant
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-# Import models
-try:
-    from ..models.data_models import Message, AIConfig
-except ImportError:
-    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from models.data_models import Message, AIConfig
+
+class AIProviderConfig(BaseModel):
+    """AI configuration model."""
+    provider: str  # openai, xai
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 2000
+    system_prompt: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class XAIClient:
     """xAI client wrapper."""
     
-    def __init__(self, api_key: str, config: AIConfig):
+    def __init__(self, api_key: str, config: AIProviderConfig):
         self.client = Client(api_key=api_key)
         self.config = config
         self.logger = logging.getLogger(__name__)
     
-    def get_response(self, messages: List[Message], system_prompt: Optional[str] = None) -> str:
+    def get_response(self, user_message: str, system_prompt: Optional[str] = None) -> str:
         """Get response from xAI."""
         start_time = time.time()
-        estimated_tokens = self.estimate_tokens(messages)
+        estimated_tokens = self.estimate_tokens(user_message)
         
         # Log API request details
         self.logger.info(f"xAI API Request - Model: {self.config.model}, "
-                        f"Messages: {len(messages)}, Estimated tokens: {estimated_tokens}, "
+                        f"Message length: {len(user_message)}, Estimated tokens: {estimated_tokens}, "
                         f"Temperature: {self.config.temperature}, Max tokens: {self.config.max_tokens}")
         
         try:
@@ -44,15 +49,8 @@ class XAIClient:
             elif self.config.system_prompt:
                 chat.append(system(self.config.system_prompt))
             
-            # Add messages in chronological order
-            for message in messages:
-                if message.participant == "user":
-                    chat.append(user(message.content))
-                elif message.participant == "xai":
-                    chat.append(assistant(message.content))
-                elif message.participant == "openai":
-                    # Include OpenAI responses as user messages for context
-                    chat.append(user(f"[OpenAI]: {message.content}"))
+            # Add user message
+            chat.append(user(user_message))
             
             # Get response from the chat
             response = chat.sample()
@@ -88,11 +86,10 @@ class XAIClient:
             
             raise Exception(error_msg)
     
-    def estimate_tokens(self, messages: List[Message]) -> int:
-        """Estimate token count for messages."""
+    def estimate_tokens(self, message: str) -> int:
+        """Estimate token count for a message."""
         # Simple approximation: ~4 characters per token
-        total_chars = sum(len(msg.content) for msg in messages)
-        return total_chars // 4
+        return len(message) // 4
     
     def update_config(self, **kwargs) -> None:
         """Update client configuration."""

@@ -71,13 +71,7 @@ class MCPLogger:
     """Structured logger for MCP server components"""
     
     def __init__(self, name: Optional[str] = None, log_level: str = "INFO", config_manager=None):
-        # Support both old and new constructor signatures
-        if config_manager is not None:
-            # Old interface compatibility
-            logger_name = "mcp.structured_logger"
-        else:
-            logger_name = name or "mcp.default"
-            
+        logger_name = name or "mcp.default"
         self.logger = logging.getLogger(logger_name)
         self.logger.setLevel(getattr(logging, log_level.upper()))
         
@@ -212,100 +206,11 @@ class MCPLogger:
             LogLevel.INFO, event_type, message,
             details=details or {}
         )
-    
-    # Backward compatibility methods for tests
-    def legacy_log_event(self, component: str, event: str, data: Dict[str, Any], level: str = "INFO"):
-        """Legacy log_event method for backward compatibility"""
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "level": level,
-            "component": component,
-            "event": event,
-            "data": data
-        }
-        getattr(self.logger, level.lower())(json.dumps(log_entry))
-    
-    def log_task_start(self, research_action):
-        """Legacy log_task_start method for backward compatibility"""
-        data = {
-            "task_id": research_action.task_id,
-            "agent_type": research_action.agent_type.value if hasattr(research_action.agent_type, 'value') else str(research_action.agent_type),
-            "action": research_action.action
-        }
-        self.legacy_log_event("task_manager", "task_started", data, "INFO")
-    
-    def legacy_log_task_completion(self, task_id: str, result: Dict[str, Any]):
-        """Legacy log_task_completion method for backward compatibility"""
-        data = {
-            "task_id": task_id,
-            "result": result
-        }
-        self.legacy_log_event("task_manager", "task_completed", data, "INFO")
-    
-    def log_task_failure(self, task_id: str, error: str):
-        """Legacy log_task_failure method for backward compatibility"""
-        data = {
-            "task_id": task_id,
-            "error": error
-        }
-        self.legacy_log_event("task_manager", "task_failed", data, "ERROR")
-    
-    def legacy_log_agent_registration(self, agent_id: str, agent_type: str, capabilities: List[str]):
-        """Legacy log_agent_registration method for backward compatibility"""
-        data = {
-            "agent_id": agent_id,
-            "agent_type": agent_type,
-            "capabilities": capabilities
-        }
-        self.legacy_log_event("agent_registry", "agent_registered", data, "INFO")
 
 
 def get_mcp_logger(component_name: str, log_level: str = "INFO") -> MCPLogger:
     """Factory function to create MCP logger instances"""
     return MCPLogger(f"mcp.{component_name}", log_level)
-
-
-class StructuredLogger:
-    """Legacy StructuredLogger class for backward compatibility with tests"""
-    
-    def __init__(self, config_manager=None):
-        self.mcp_logger = MCPLogger("structured_logger", "INFO", config_manager)
-    
-    def __getattr__(self, name: str):
-        """
-        Delegate attribute access to the underlying MCPLogger instance.
-        
-        This method is called when an attribute is not found in the usual places.
-        It delegates the attribute access to the `MCPLogger` instance, allowing
-        the `StructuredLogger` class to act as a proxy for `MCPLogger`.
-        
-        Parameters:
-            name (str): The name of the attribute being accessed.
-            
-        Returns:
-            Any: The corresponding attribute or method from the `MCPLogger` instance.
-        """
-        return getattr(self.mcp_logger, name)
-    
-    def log_event(self, component: str, event: str, data: Dict[str, Any], level: str = "INFO"):
-        """Log event method compatible with tests"""
-        self.mcp_logger.legacy_log_event(component, event, data, level)
-    
-    def log_task_start(self, research_action):
-        """Log task start method compatible with tests"""
-        self.mcp_logger.log_task_start(research_action)
-    
-    def log_task_completion(self, task_id: str, result: Dict[str, Any]):
-        """Log task completion method compatible with tests"""
-        self.mcp_logger.legacy_log_task_completion(task_id, result)
-    
-    def log_task_failure(self, task_id: str, error: str):
-        """Log task failure method compatible with tests"""
-        self.mcp_logger.log_task_failure(task_id, error)
-    
-    def log_agent_registration(self, agent_id: str, agent_type: str, capabilities: List[str]):
-        """Log agent registration method compatible with tests"""
-        self.mcp_logger.legacy_log_agent_registration(agent_id, agent_type, capabilities)
 
 
 # Default logger instance for the MCP server

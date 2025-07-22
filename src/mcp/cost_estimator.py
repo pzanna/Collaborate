@@ -6,14 +6,11 @@ for managing token usage and operational costs across AI providers.
 """
 
 import logging
-import time
+from uuid import uuid4
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, field
 from enum import Enum
-import json
-
-from ..models.data_models import Message
 
 
 class CostTier(Enum):
@@ -22,6 +19,13 @@ class CostTier(Enum):
     MEDIUM = "medium"  # Multi-agent, moderate complexity  
     HIGH = "high"    # Complex research, parallel execution
     CRITICAL = "critical"  # Emergency stop threshold
+
+import logging
+from uuid import uuid4
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Union
+from dataclasses import dataclass, field
+from enum import Enum
 
 
 @dataclass
@@ -101,7 +105,7 @@ class CostEstimator:
     
     def estimate_task_cost(self, query: str, agents: List[str], 
                           parallel_execution: bool = False,
-                          context_messages: Optional[List[Message]] = None) -> CostEstimate:
+                          context_content: Optional[str] = None) -> CostEstimate:
         """
         Estimate cost for a research task.
         
@@ -109,7 +113,7 @@ class CostEstimator:
             query: Research query
             agents: List of agent types to be used
             parallel_execution: Whether agents run in parallel
-            context_messages: Existing conversation context
+            context_content: Existing conversation context as text
             
         Returns:
             CostEstimate: Detailed cost estimation
@@ -118,9 +122,8 @@ class CostEstimator:
         query_tokens = self._estimate_tokens_for_text(query)
         context_tokens = 0
         
-        if context_messages:
-            context_tokens = sum(self._estimate_tokens_for_text(msg.content) 
-                               for msg in context_messages)
+        if context_content:
+            context_tokens = self._estimate_tokens_for_text(context_content)
         
         # Determine task complexity
         complexity = self._assess_task_complexity(query, agents, parallel_execution)

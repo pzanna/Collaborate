@@ -159,7 +159,16 @@ class PlanningAgent(BaseAgent):
         4. Information sources to consult
         5. Expected outcomes
         
-        Format your response as a structured plan.
+        Format your response in JSON with the following structure:
+        {{
+            "objectives": ["Objective 1", "Objective 2"],
+            "key_areas": ["Area 1", "Area 2"],
+            "questions": ["Question 1", "Question 2"],
+            "sources": ["Source 1", "Source 2"],
+            "outcomes": ["Outcome 1", "Outcome 2"]
+        }}
+        Please be thorough and consider all relevant aspects of the research topic.
+        If you need to make assumptions, please state them clearly.
         """
         
         # Get AI response
@@ -468,16 +477,12 @@ class PlanningAgent(BaseAgent):
             raise RuntimeError("No AI client available")
         
         try:
-            # Create Message objects for the AI client
-            from ..models.data_models import Message
-            messages = [Message(
-                conversation_id="planning_task",
-                participant="user",
-                content=prompt
-            )]
-            
             # Get response using the correct method name
-            response = self.default_client.get_response(messages=messages)
+            # The AI client expects string parameters, not Message objects
+            # Use run_in_executor to handle the synchronous AI client call
+            import asyncio
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, lambda: self.default_client.get_response(user_message=prompt))
             
             return str(response)
             
@@ -515,15 +520,54 @@ class PlanningAgent(BaseAgent):
     
     def _parse_research_plan(self, response: str) -> Dict[str, Any]:
         """Parse research plan from AI response."""
-        # Simple parsing - in production, you'd use more sophisticated parsing
-        return {
-            'raw_plan': response,
-            'objectives': self._extract_section(response, 'objectives'),
-            'key_areas': self._extract_section(response, 'key areas'),
-            'questions': self._extract_section(response, 'questions'),
-            'sources': self._extract_section(response, 'sources'),
-            'outcomes': self._extract_section(response, 'outcomes')
-        }
+        try:
+            # Try to extract JSON from the response
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                plan_json = json.loads(json_str)
+                
+                # Return the parsed JSON structure with the raw response
+                return {
+                    'raw_plan': response,
+                    'objectives': plan_json.get('objectives', []),
+                    'key_areas': plan_json.get('key_areas', []),
+                    'questions': plan_json.get('questions', []),
+                    'sources': plan_json.get('sources', []),
+                    'outcomes': plan_json.get('outcomes', [])
+                }
+            else:
+                # Fallback to text extraction if JSON parsing fails
+                self.logger.warning("No JSON found in response, falling back to text extraction")
+                return {
+                    'raw_plan': response,
+                    'objectives': self._extract_section_as_list(response, 'objectives'),
+                    'key_areas': self._extract_section_as_list(response, 'key areas'),
+                    'questions': self._extract_section_as_list(response, 'questions'),
+                    'sources': self._extract_section_as_list(response, 'sources'),
+                    'outcomes': self._extract_section_as_list(response, 'outcomes')
+                }
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"JSON parsing failed: {e}, falling back to text extraction")
+            # Fallback to text extraction
+            return {
+                'raw_plan': response,
+                'objectives': self._extract_section_as_list(response, 'objectives'),
+                'key_areas': self._extract_section_as_list(response, 'key areas'),
+                'questions': self._extract_section_as_list(response, 'questions'),
+                'sources': self._extract_section_as_list(response, 'sources'),
+                'outcomes': self._extract_section_as_list(response, 'outcomes')
+            }
+        except Exception as e:
+            self.logger.error(f"Error parsing research plan: {e}")
+            return {
+                'raw_plan': response,
+                'objectives': [],
+                'key_areas': [],
+                'questions': [],
+                'sources': [],
+                'outcomes': []
+            }
     
     def _parse_analysis(self, response: str) -> Dict[str, Any]:
         """Parse analysis from AI response."""
@@ -588,6 +632,29 @@ class PlanningAgent(BaseAgent):
                     return content.strip()
         
         return ''
+
+    def _extract_section_as_list(self, text: str, section_name: str) -> List[str]:
+        """Extract a section from structured text and return as list."""
+        content = self._extract_section(text, section_name)
+        if not content:
+            return []
+        
+        # Split content into items
+        items = []
+        lines = content.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Remove bullet points, numbers, dashes, etc.
+            line = re.sub(r'^[-•*\d+\.)\s]+', '', line).strip()
+            
+            if line:
+                items.append(line)
+        
+        return items
 
 
 if __name__ == "__main__":

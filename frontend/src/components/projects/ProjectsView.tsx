@@ -10,7 +10,6 @@ import {
   addProject,
 } from "../../store/slices/projectsSlice"
 import { apiService } from "../../services/api"
-import { hierarchicalAPI } from "../../services/hierarchicalAPI"
 import { formatDistanceToNow } from "date-fns"
 import { FolderIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline"
 
@@ -29,33 +28,12 @@ const ProjectsView: React.FC = () => {
     description: "",
   })
   const [isCreating, setIsCreating] = useState(false)
-  const [researchTopicsCounts, setResearchTopicsCounts] = useState<
-    Record<string, number>
-  >({})
 
   const loadProjects = useCallback(async () => {
     dispatch(setLoading(true))
     try {
       const projectsData = await apiService.getProjects()
       dispatch(setProjects(projectsData))
-
-      // Load research topics counts for each project
-      const topicsCounts: Record<string, number> = {}
-      await Promise.all(
-        projectsData.map(async (project) => {
-          try {
-            const topics = await hierarchicalAPI.getResearchTopics(project.id)
-            topicsCounts[project.id] = topics.length
-          } catch (error) {
-            console.warn(
-              `Failed to load topics for project ${project.id}:`,
-              error
-            )
-            topicsCounts[project.id] = 0
-          }
-        })
-      )
-      setResearchTopicsCounts(topicsCounts)
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to load projects"
@@ -226,9 +204,7 @@ const ProjectsView: React.FC = () => {
                         d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                       />
                     </svg>
-                    <span>
-                      {researchTopicsCounts[project.id] || 0} Research Topics
-                    </span>
+                    <span>{project.topics_count || 0} Research Topics</span>
                   </div>
                 </div>
                 <span>

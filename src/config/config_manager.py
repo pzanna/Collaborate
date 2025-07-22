@@ -11,31 +11,11 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Import AIConfig from models
-try:
-    from ..models.data_models import AIConfig as AIProviderConfig
-except ImportError:
-    # If running as a script, try different import path
-    import sys
-    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from models.data_models import AIConfig as AIProviderConfig
-
-
 class ConversationConfig(BaseModel):
     """Configuration for conversation management."""
     max_context_tokens: int = 8000
     auto_save: bool = True
     max_response_length: int = 1500
-
-
-import os
-import sys
-import json
-import logging
-from datetime import datetime
-from pathlib import Path
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
 
 
 class StorageConfig(BaseModel):
@@ -97,6 +77,16 @@ class ResearchManagerConfig(BaseModel):
     name: str = "Sky"
     max_tokens: int = 2000
     system_prompt: str = ""
+
+
+class AIProviderConfig(BaseModel):
+    """AI configuration model."""
+    provider: str  # openai, xai
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 2000
+    system_prompt: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class Config(BaseModel):

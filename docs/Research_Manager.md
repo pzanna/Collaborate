@@ -1,34 +1,89 @@
 # Research Manager Documentation
 
-_Last Updated: July 21, 2025_
+_Last Updated: July 22, 2025_
 
 ## Overview
 
-The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Retriever, Planning, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **project-based task organization**.
+The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Retriever, Planning, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **hierarchical project-based organization**.
 
 > **📘 Related Documentation**: For detailed information about the cost estimation system, see [Cost Estimation System Documentation](Cost_Estimation_System.md).
 
-## Key Updates in Project Integration
+## Key Updates in Hierarchical Project Integration
 
 ### New Features Added
 
-1. **Project-Based Task Organization**: All research tasks are now linked to specific projects
-2. **Enhanced Database Integration**: Research tasks are persistently stored with full metadata
-3. **Project Task Listing**: API endpoints to list and view research tasks by project
-4. **Task Detail Views**: Comprehensive task detail pages with results, cost, and status information
-5. **Enhanced Frontend Integration**: Updated UI components for project-aware research workflows
+1. **Hierarchical Organization**: Complete project → topic → plan → task structure
+2. **Enhanced Database Schema**: Full hierarchical database with research topics, plans, and tasks
+3. **Comprehensive API Coverage**: REST endpoints for all hierarchical entities
+4. **Advanced Task Management**: Individual task execution with detailed progress tracking
+5. **Cost Management**: Granular cost tracking at task and plan levels
+6. **Project Dashboard Integration**: Full frontend support for hierarchical navigation
+7. **Research Workflow Automation**: Automated plan creation and task generation
 
-### Database Schema Extensions
+### Enhanced Database Schema
 
-New `research_tasks` table with the following structure:
+The system now supports a complete hierarchical structure with four main entities:
+
+#### Projects Table
+
+```sql
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    metadata TEXT
+);
+```
+
+#### Research Topics Table
+
+```sql
+CREATE TABLE research_topics (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    metadata TEXT,
+    FOREIGN KEY (project_id) REFERENCES projects (id)
+);
+```
+
+#### Research Plans Table
+
+```sql
+CREATE TABLE research_plans (
+    id TEXT PRIMARY KEY,
+    topic_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    plan_type TEXT DEFAULT 'comprehensive',
+    status TEXT DEFAULT 'draft',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    estimated_cost REAL DEFAULT 0.0,
+    actual_cost REAL DEFAULT 0.0,
+    metadata TEXT,
+    FOREIGN KEY (topic_id) REFERENCES research_topics (id)
+);
+```
+
+#### Research Tasks Table (Enhanced)
 
 ```sql
 CREATE TABLE research_tasks (
     id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL,
-    conversation_id TEXT,
-    query TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
+    project_id TEXT,  -- Inherited from plan hierarchy
+    query TEXT,
     name TEXT NOT NULL,
+    description TEXT,
+    task_type TEXT DEFAULT 'research',
+    task_order INTEGER DEFAULT 0,
     status TEXT DEFAULT 'pending',
     stage TEXT DEFAULT 'planning',
     created_at TIMESTAMP,
@@ -45,8 +100,8 @@ CREATE TABLE research_tasks (
     execution_results TEXT,
     synthesis TEXT,
     metadata TEXT,
-    FOREIGN KEY (project_id) REFERENCES projects (id),
-    FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+    FOREIGN KEY (plan_id) REFERENCES research_plans (id),
+    FOREIGN KEY (project_id) REFERENCES projects (id)
 );
 ```
 
@@ -73,13 +128,13 @@ class ResearchStage(Enum):
 
 Each research task is tracked using a `ResearchContext` dataclass that maintains:
 
-- **Task Metadata**: ID, query, user, conversation references, **project association**
+- **Task Metadata**: ID, query, user, conversation references, **hierarchical associations** (project, plan)
 - **Stage Progression**: Current stage, completed/failed stages, retry logic
 - **Research Data**: Search results, reasoning output, execution results, synthesis
 - **Cost Tracking**: Estimated vs actual costs, approval status
 - **Context Management**: Data persistence and metadata
 
-**Enhanced ResearchContext with Project Support:**
+**Enhanced ResearchContext with Hierarchical Support:**
 
 ```python
 @dataclass
@@ -88,39 +143,90 @@ class ResearchContext:
     query: str
     user_id: str
     conversation_id: str
-    project_id: Optional[str] = None  # New: Project association
+    project_id: Optional[str] = None      # Project association
+    plan_id: Optional[str] = None         # Research plan association
     stage: ResearchStage = ResearchStage.PLANNING
-    # ... other fields
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+
+    # Research execution data
+    search_results: List[Dict[str, Any]] = field(default_factory=list)
+    reasoning_output: Optional[str] = None
+    execution_results: List[Dict[str, Any]] = field(default_factory=list)
+    synthesis: Optional[str] = None
+
+    # Progress and stage tracking
+    completed_stages: List[ResearchStage] = field(default_factory=list)
+    failed_stages: List[ResearchStage] = field(default_factory=list)
+    retry_count: int = 0
+    max_retries: int = 3
+
+    # Cost management
+    estimated_cost: float = 0.0
+    actual_cost: float = 0.0
+    cost_approved: bool = False
+    single_agent_mode: bool = False
+
+    # Task configuration and metadata
+    context_data: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 ```
 
-#### 3. Database Integration
+#### 3. Hierarchical Data Models
 
-**Research Task Data Model:**
+The system uses enhanced Pydantic models for complete hierarchical structure:
+
+**Task Model:**
 
 ```python
-class ResearchTask(BaseModel):
+class Task(BaseModel):
+    """Individual work unit within a research plan."""
     id: str = Field(default_factory=generate_uuid)
-    project_id: str  # Required project association
-    conversation_id: Optional[str] = None
-    query: str
-    name: str  # Human-readable task name
-    status: str = "pending"  # pending, running, completed, failed, cancelled
-    stage: str = "planning"  # Current research stage
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-    # Cost and progress tracking
+    plan_id: str
+    name: str
+    description: str = ""
+    task_type: str = "research"  # research, analysis, synthesis, validation
+    task_order: int = 0
+    status: str = "pending"      # pending, running, completed, failed, cancelled
+    stage: str = "planning"      # planning, retrieval, reasoning, execution, synthesis
+
+    # Cost and execution tracking
     estimated_cost: float = 0.0
     actual_cost: float = 0.0
     cost_approved: bool = False
     single_agent_mode: bool = False
     progress: float = 0.0
-    # Research results
+
+    # Task execution data
+    query: Optional[str] = None
     search_results: List[Dict[str, Any]] = Field(default_factory=list)
     reasoning_output: Optional[str] = None
     execution_results: List[Dict[str, Any]] = Field(default_factory=list)
     synthesis: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
 ```
+
+class ResearchTask(BaseModel):
+id: str = Field(default_factory=generate_uuid)
+project_id: str # Required project association
+conversation_id: Optional[str] = None
+query: str
+name: str # Human-readable task name
+status: str = "pending" # pending, running, completed, failed, cancelled
+stage: str = "planning" # Current research stage
+created_at: datetime = Field(default_factory=datetime.now)
+updated_at: datetime = Field(default_factory=datetime.now) # Cost and progress tracking
+estimated_cost: float = 0.0
+actual_cost: float = 0.0
+cost_approved: bool = False
+single_agent_mode: bool = False
+progress: float = 0.0 # Research results
+search_results: List[Dict[str, Any]] = Field(default_factory=list)
+reasoning_output: Optional[str] = None
+execution_results: List[Dict[str, Any]] = Field(default_factory=list)
+synthesis: Optional[str] = None
+metadata: Dict[str, Any] = Field(default_factory=dict)
+
+````
 
 #### 3. Agent Communication
 
@@ -142,7 +248,7 @@ async def start_research_task(
     conversation_id: str,
     options: Optional[Dict[str, Any]] = None
 ) -> tuple[str, Dict[str, Any]]
-```
+````
 
 **Process:**
 
@@ -339,45 +445,87 @@ if context.retry_count < context.max_retries:
 
 ### 4. Web API Integration
 
-The Research Manager integrates with the FastAPI web server through dedicated endpoints:
+The Research Manager integrates with the FastAPI web server through comprehensive hierarchical endpoints:
 
-#### Research Task Endpoints
+#### Hierarchical Research Endpoints
 
-- `POST /api/research/start` - Start new research task (**now requires project_id**)
-- `GET /api/research/task/{task_id}` - Get task status and results
-- `DELETE /api/research/task/{task_id}` - Cancel active task
-- `GET /api/projects/{project_id}/research-tasks` - **New**: List tasks for a project
-- `GET /api/research-tasks` - **New**: List all tasks with filters
+**Project Management:**
 
-#### Enhanced Research Request Format
+- `POST /api/projects` - Create new project
+- `GET /api/projects` - List all projects
+- `GET /api/projects/{project_id}` - Get project details
+- `PUT /api/projects/{project_id}` - Update project
+- `DELETE /api/projects/{project_id}` - Delete project
+
+**Research Topics:**
+
+- `POST /api/projects/{project_id}/topics` - Create research topic
+- `GET /api/projects/{project_id}/topics` - List project topics
+- `GET /api/topics/{topic_id}` - Get topic details
+- `PUT /api/topics/{topic_id}` - Update topic
+- `DELETE /api/topics/{topic_id}` - Delete topic
+
+**Research Plans:**
+
+- `POST /api/topics/{topic_id}/plans` - Create research plan
+- `GET /api/topics/{topic_id}/plans` - List topic plans
+- `GET /api/plans/{plan_id}` - Get plan details
+- `PUT /api/plans/{plan_id}` - Update plan
+- `DELETE /api/plans/{plan_id}` - Delete plan
+
+**Research Tasks:**
+
+- `POST /api/plans/{plan_id}/tasks` - Create task within plan
+- `GET /api/plans/{plan_id}/tasks` - List plan tasks
+- `GET /api/tasks/{task_id}` - Get task details
+- `PUT /api/tasks/{task_id}` - Update task
+- `DELETE /api/tasks/{task_id}` - Delete task
+- `POST /api/tasks/{task_id}/execute` - Execute research task
+- `GET /api/tasks/{task_id}/results` - Get execution results
+
+#### Enhanced Data Models
+
+**Task Request Format:**
 
 ```python
-class ResearchRequest(BaseModel):
-    project_id: str  # New required field
-    conversation_id: str
-    query: str
-    name: Optional[str] = None  # Optional human-readable name
-    research_mode: str = "comprehensive"
+class TaskRequest(BaseModel):
+    plan_id: str  # Required plan association
+    name: str
+    description: str = ""
+    task_type: str = "research"  # research, analysis, synthesis, validation
+    task_order: int = 1
+    query: Optional[str] = None  # For research tasks
     max_results: int = 10
+    research_mode: str = "comprehensive"
 ```
 
-#### Enhanced Research Response Format
+**Task Response Format:**
 
 ```python
-class ResearchTaskResponse(BaseModel):
-    task_id: str
-    project_id: str  # New field
-    conversation_id: str
-    query: str
-    name: str  # Human-readable name
-    status: str
-    stage: str  # Current stage
-    created_at: str
-    updated_at: str
+class TaskResponse(BaseModel):
+    id: str
+    plan_id: str
+    name: str
+    description: str
+    task_type: str
+    task_order: int
+    status: str  # pending, running, completed, failed, cancelled
+    stage: str   # planning, retrieval, reasoning, execution, synthesis
     progress: float = 0.0
-    estimated_cost: float = 0.0  # New field
-    actual_cost: float = 0.0     # New field
-    results: Optional[Dict[str, Any]] = None
+    estimated_cost: float = 0.0
+    actual_cost: float = 0.0
+    cost_approved: bool = False
+
+    # Execution data (when available)
+    query: Optional[str] = None
+    search_results: List[Dict[str, Any]] = []
+    reasoning_output: Optional[str] = None
+    execution_results: List[Dict[str, Any]] = []
+    synthesis: Optional[str] = None
+
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
 ```
 
 #### WebSocket Streaming
@@ -385,25 +533,40 @@ class ResearchTaskResponse(BaseModel):
 - `/api/research/stream/{task_id}` - Real-time progress updates
 - Task completion notifications
 - Error and status change notifications
+- Hierarchical progress tracking (plan and task level)
 
 #### Example API Usage
 
 ```python
-# Start research task with project association
-response = await start_research_task(ResearchRequest(
-    project_id="proj_123",  # Required project ID
-    conversation_id="conv_123",
-    query="Analyze market trends in AI",
-    name="AI Market Analysis",  # Optional readable name
-    research_mode="comprehensive",
-    max_results=10
-))
+# Create hierarchical research structure
+project = await create_project({
+    "name": "AI Market Research",
+    "description": "Comprehensive analysis of AI market trends"
+})
 
-# Get all tasks for a project
-project_tasks = await get_project_research_tasks("proj_123")
+topic = await create_research_topic(project["id"], {
+    "name": "Market Trends Analysis",
+    "description": "Current and projected AI market trends"
+})
 
-# Get task details with results and cost information
-task_details = await get_research_task("task_456")
+plan = await create_research_plan(topic["id"], {
+    "name": "Q3 2025 Analysis",
+    "description": "AI market analysis for Q3 2025"
+})
+
+# Create and execute research task
+task = await create_task(plan["id"], {
+    "name": "Market Size Analysis",
+    "query": "Analyze AI market size and growth projections for 2025",
+    "task_type": "research",
+    "task_order": 1
+})
+
+# Execute the task
+execution_result = await execute_task(task["id"])
+
+# Get results
+results = await get_task_results(task["id"])
 ```
 
 ### 5. Project Integration Features
@@ -611,7 +774,7 @@ print(f"Actual cost: ${task_details.actual_cost:.4f}")
 
 ```python
 # Database operations for research tasks
-from src.storage.database import DatabaseManager
+from src.storage.hierarchical_database import HierarchicalDatabaseManager
 from src.models.data_models import ResearchTask
 
 db_manager = DatabaseManager()
@@ -796,57 +959,7 @@ async def completion_handler(completion_data):
 research_manager.register_completion_callback(completion_handler)
 ```
 
-## Migration and Upgrade Notes
-
-### Upgrading to Project-Based Research Tasks
-
-**Breaking Changes:**
-
-- **Required project_id**: All new research tasks must specify a `project_id` in the request
-- **Updated API contracts**: `ResearchRequest` and `ResearchTaskResponse` models have new required fields
-- **Database schema changes**: New `research_tasks` table with foreign key relationships
-
-**Migration Steps:**
-
-1. **Update API Clients**: Modify all research task creation calls to include `project_id`
-
-```typescript
-// Before
-const request = {
-  conversation_id: "conv_123",
-  query: "Research query",
-}
-
-// After
-const request = {
-  project_id: "proj_456", // Required
-  conversation_id: "conv_123",
-  query: "Research query",
-  name: "Task Name", // Optional but recommended
-}
-```
-
-1. **Database Migration**: The system automatically creates the new `research_tasks` table on startup
-
-2. **Frontend Updates**: Update components to handle project selection and task navigation
-
-**Backward Compatibility:**
-
-- Existing research workflows continue to work but require project selection
-- Historical research data is preserved in the existing conversation system
-- Cost estimation and tracking APIs remain unchanged
-
-**Recommended Migration Path:**
-
-1. **Create default projects** for existing conversations
-2. **Update frontend components** to include project selection
-3. **Modify API calls** to include project_id
-4. **Test task creation and retrieval** workflows
-5. **Update monitoring and analytics** to use project-based views
-
-> **📘 Detailed Cost Documentation**: For comprehensive information about cost estimation algorithms, thresholds, and optimization strategies, see [Cost Estimation System Documentation](Cost_Estimation_System.md).
-
-### Cost Estimation API
+## Cost Estimation API
 
 The Research Manager now uses a centralized cost estimation approach through the `_estimate_task_cost()` method:
 
@@ -854,7 +967,6 @@ The Research Manager now uses a centralized cost estimation approach through the
 # Centralized cost estimation with enhanced features
 cost_info, should_proceed, single_agent_mode = await research_manager._estimate_task_cost(
     query="Analyze market trends in quantum computing",
-    conversation_id="conv_123",
     options={'single_agent_mode': False}
 )
 
@@ -875,7 +987,6 @@ estimate = await research_manager.estimate_query_cost_async(
     single_agent_mode=False
 )
 
-# Sync version (backwards compatibility)
 estimate = research_manager.estimate_query_cost(
     query="Complex market analysis",
     single_agent_mode=False
