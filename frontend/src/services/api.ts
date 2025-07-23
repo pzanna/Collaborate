@@ -80,6 +80,8 @@ export interface Task {
   metadata?: Record<string, any>;
 }
 
+
+
 class ApiService {
   private async request<T>(
     endpoint: string,
@@ -244,6 +246,8 @@ class ApiService {
 
     return response.json();
   }
+
+
 }
 
 export const apiService = new ApiService();
