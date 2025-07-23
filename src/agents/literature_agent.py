@@ -1436,25 +1436,23 @@ class LiteratureAgent(BaseAgent):
         self.literature_logger.info(f"🔍 Fact Verification Started: '{claim}' | Require Academic: {require_academic}")
         
         try:
-            # Academic sources
-            academic_verification = await self._search_academic_papers({
-                'query': f"{claim} research paper study",
-                'max_results': 5
-            })
-            
-            # News and tech sources
-            news_verification = await self._search_information({
-                'query': f"{claim} news announcement",
-                'max_results': 5,
-                'search_engines': ['google', 'bing']
-            })
-            
-            # Official documentation search
-            official_verification = await self._search_information({
-                'query': f"{claim} official documentation",
-                'max_results': 3,
-                'search_engines': ['google']
-            })
+            # Perform searches concurrently
+            academic_verification, news_verification, official_verification = await asyncio.gather(
+                self._search_academic_papers({
+                    'query': f"{claim} research paper study",
+                    'max_results': 5
+                }),
+                self._search_information({
+                    'query': f"{claim} news announcement",
+                    'max_results': 5,
+                    'search_engines': ['google', 'bing']
+                }),
+                self._search_information({
+                    'query': f"{claim} official documentation",
+                    'max_results': 3,
+                    'search_engines': ['google']
+                })
+            )
             
             # Extract content for detailed analysis
             all_urls = []
