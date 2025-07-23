@@ -849,8 +849,8 @@ Notes: {row.notes or 'None'}
 
 
 # Example usage functions
-async def example_evidence_synthesis():
-    """Example usage of the evidence synthesis engine."""
+async def example_evidence_synthesis(research_question: Optional[str] = None, example_domain: str = "research"):
+    """Example usage of the evidence synthesis engine with configurable research question."""
     
     from ..storage.systematic_review_database import SystematicReviewDatabase
     from ..ai_clients.openai_client import OpenAIClient
@@ -864,23 +864,27 @@ async def example_evidence_synthesis():
     # Initialize synthesis engine
     synthesis_engine = EvidenceSynthesisEngine(db, ai_client)
     
-    # Example included studies
+    # Default research question if none provided
+    if not research_question:
+        research_question = "What are the current approaches and methodologies in the research domain?"
+    
+    # Example included studies - GENERIC template, no hardcoded content
     included_studies = [
         {
             'id': 'study_001',
-            'title': 'Effects of AI on Diagnostic Accuracy',
-            'authors': 'Smith et al.',
+            'title': f'Methodological Approaches in {example_domain.title()} Research',
+            'authors': 'Author A et al.',
             'year': 2023,
-            'abstract': 'This RCT examined AI-assisted diagnosis...',
+            'abstract': f'This study examined methodological approaches in {example_domain} research...',
             'quality_score': 'High',
             'bias_assessment': 'Low risk'
         },
         {
             'id': 'study_002', 
-            'title': 'AI Diagnostic Tools in Clinical Practice',
-            'authors': 'Johnson et al.',
+            'title': f'Contemporary Practices in {example_domain.title()} Studies',
+            'authors': 'Author B et al.',
             'year': 2023,
-            'abstract': 'A cohort study of AI diagnostic tools...',
+            'abstract': f'A comprehensive study of contemporary practices in {example_domain} research...',
             'quality_score': 'Moderate',
             'bias_assessment': 'Moderate risk'
         }
@@ -889,8 +893,8 @@ async def example_evidence_synthesis():
     # Build evidence table
     evidence_rows = await synthesis_engine.build_evidence_table(
         included_studies=included_studies,
-        research_question="What is the effectiveness of AI-assisted diagnostic tools?",
-        outcomes=["diagnostic_accuracy", "time_to_diagnosis"]
+        research_question=research_question,
+        outcomes=["methodology", "effectiveness"]
     )
     
     # Perform synthesis
@@ -898,7 +902,7 @@ async def example_evidence_synthesis():
         evidence_rows=evidence_rows,
         synthesis_method=SynthesisMethod.NARRATIVE,
         task_id="task_001",
-        research_question="What is the effectiveness of AI-assisted diagnostic tools?"
+        research_question=research_question
     )
     
     print(f"Synthesis completed: {synthesis_result.synthesis_id}")
@@ -908,4 +912,6 @@ async def example_evidence_synthesis():
 
 
 if __name__ == "__main__":
-    asyncio.run(example_evidence_synthesis())
+    # Example with configurable research question
+    example_question = "How can neuron cells be cultured in a laboratory using accessible materials and techniques?"
+    asyncio.run(example_evidence_synthesis(example_question, "cell culture"))

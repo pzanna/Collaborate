@@ -6,7 +6,7 @@ The Eunice Thesis Generation System transforms PRISMA systematic review data int
 
 ## Architecture
 
-```
+```plaintext
 src/thesis/
 ├── __init__.py                 # Main module exports
 ├── generators/                 # Core generation engines
