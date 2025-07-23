@@ -220,6 +220,10 @@ class ConfigManager:
             return os.getenv("ANTHROPIC_API_KEY", "")
         elif provider == "semantic_scholar":
             return os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
+        elif provider == "pubmed":
+            return os.getenv("PUBMED_API_KEY", "")
+        elif provider == "ncbi":
+            return os.getenv("NCBI_API_KEY", "")
         else:
             raise ValueError(f"Unknown provider: {provider}")
     

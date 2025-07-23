@@ -289,6 +289,134 @@ class TestLiteratureAgent:
         # May have empty results but should not error
     
     @pytest.mark.asyncio
+    async def test_pubmed_search_functionality(self, literature_agent):
+        """Test PubMed search integration."""
+        # Test direct PubMed search
+        results = await literature_agent._search_pubmed(
+            "diabetes treatment", max_results=5
+        )
+        
+        assert len(results) > 0, "PubMed API should return results"
+        
+        # Verify result structure
+        first_result = results[0]
+        assert "title" in first_result
+        assert "source" in first_result
+        assert first_result["source"] == "pubmed"
+        assert first_result["type"] == "biomedical_article"
+        assert "metadata" in first_result
+        
+        metadata = first_result["metadata"]
+        expected_metadata_fields = ["pmid", "authors", "journal"]
+        for field in expected_metadata_fields:
+            assert field in metadata, f"Missing metadata field: {field}"
+    
+    @pytest.mark.asyncio  
+    async def test_pubmed_search_action(self, literature_agent):
+        """Test PubMed search through action interface."""
+        action = ResearchAction(
+            task_id="test_pubmed",
+            context_id="test_context",
+            agent_type="Literature",
+            action="search_pubmed",
+            payload={
+                "query": "COVID-19 vaccine",
+                "max_results": 5
+            }
+        )
+        
+        result = await literature_agent.process_task(action)
+        
+        assert result.status == "completed"
+        assert "results" in result.result
+        assert "search_type" in result.result
+        assert result.result["search_type"] == "pubmed_biomedical"
+        assert len(result.result["results"]) > 0
+        
+        # Verify biomedical article structure
+        first_result = result.result["results"][0]
+        assert first_result["type"] == "biomedical_article"
+        assert "pmid" in first_result["metadata"]
+    
+    @pytest.mark.asyncio
+    async def test_biomedical_research_workflow(self, literature_agent):
+        """Test biomedical research workflow."""
+        action = ResearchAction(
+            task_id="test_biomedical",
+            context_id="test_context", 
+            agent_type="Literature",
+            action="biomedical_research_workflow",
+            payload={
+                "research_topic": "cancer immunotherapy",
+                "max_papers": 10
+            }
+        )
+        
+        result = await literature_agent.process_task(action)
+        
+        assert result.status == "completed"
+        result_data = result.result
+        
+        # Should include PubMed results
+        assert "pubmed_search" in result_data
+        assert "academic_search" in result_data
+        assert "biomedical_focus" in result_data
+        assert result_data["biomedical_focus"] is True
+        
+        # Verify structure includes biomedical components
+        pubmed_results = result_data["pubmed_search"]["results"]
+        assert len(pubmed_results) > 0
+        
+        # Should have extracted some content
+        assert "content_extracted" in result_data
+        assert result_data["content_extracted"] >= 0
+    
+    @pytest.mark.asyncio
+    async def test_comprehensive_pipeline_with_pubmed(self, literature_agent):
+        """Test comprehensive research pipeline with automatic PubMed detection."""
+        # Test with biomedical topic (should auto-include PubMed)
+        action = ResearchAction(
+            task_id="test_pipeline_pubmed",
+            context_id="test_context",
+            agent_type="Literature", 
+            action="comprehensive_research_pipeline",
+            payload={
+                "topic": "diabetes treatment drug therapy",  # Biomedical keywords
+                "include_academic": True,
+                "include_news": False,
+                "max_results": 8
+            }
+        )
+        
+        result = await literature_agent.process_task(action)
+        
+        assert result.status == "completed"
+        result_data = result.result
+        
+        # Should auto-detect biomedical topic and include PubMed
+        assert "pubmed_search" in result_data
+        assert result_data["pubmed_search"] is not None
+        
+        # Test explicit PubMed inclusion
+        action_explicit = ResearchAction(
+            task_id="test_pipeline_explicit",
+            context_id="test_context",
+            agent_type="Literature",
+            action="comprehensive_research_pipeline", 
+            payload={
+                "topic": "artificial intelligence",  # Non-biomedical topic
+                "include_pubmed": True,  # Explicitly include PubMed
+                "max_results": 5
+            }
+        )
+        
+        result_explicit = await literature_agent.process_task(action_explicit)
+        
+        assert result_explicit.status == "completed"
+        assert "pubmed_search" in result_explicit.result
+        assert result_explicit.result["pubmed_search"] is not None
+    
+    @pytest.mark.asyncio
     async def test_capabilities_registration(self, literature_agent):
         """Test that all workflow capabilities are properly registered."""
         capabilities = literature_agent._get_capabilities()
@@ -297,7 +425,9 @@ class TestLiteratureAgent:
             "search_information",
             "extract_web_content", 
             "search_academic_papers",
+            "search_pubmed",
             "academic_research_workflow",
+            "biomedical_research_workflow", 
             "multi_source_validation",
             "cost_optimized_search",
             "comprehensive_research_pipeline",
@@ -330,6 +460,8 @@ async def run_standalone_tests():
             ("Basic Search", test_suite.test_basic_search_functionality),
             ("Semantic Scholar", test_suite.test_semantic_scholar_integration),
             ("Academic Workflow", test_suite.test_academic_research_workflow),
+            ("Biomedical Workflow", test_suite.test_biomedical_research_workflow),
+            ("Comprehensive Workflow", test_suite.test_comprehensive_pipeline_with_pubmed),
             ("Cost Optimization", test_suite.test_cost_optimized_search),
             ("Capabilities", test_suite.test_capabilities_registration)
         ]

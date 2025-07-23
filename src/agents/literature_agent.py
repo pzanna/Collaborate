@@ -48,7 +48,8 @@ class LiteratureAgent(BaseAgent):
             'bing': 'https://www.bing.com/search',
             'yahoo': 'https://search.yahoo.com/search',
             'google_scholar': 'https://scholar.google.com/scholar',
-            'semantic_scholar': 'https://api.semanticscholar.org/graph/v1'
+            'semantic_scholar': 'https://api.semanticscholar.org/graph/v1',
+            'pubmed': 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
         }
         
         # HTTP session for requests
@@ -120,10 +121,12 @@ class LiteratureAgent(BaseAgent):
             'search_information',
             'extract_web_content',
             'search_academic_papers',
+            'search_pubmed',
             'retrieve_documents',
             'filter_results',
             'rank_relevance',
             'academic_research_workflow',
+            'biomedical_research_workflow',
             'multi_source_validation',
             'cost_optimized_search',
             'comprehensive_research_pipeline',
@@ -198,6 +201,8 @@ class LiteratureAgent(BaseAgent):
             return await self._extract_web_content(payload)
         elif action == 'search_academic_papers':
             return await self._search_academic_papers(payload)
+        elif action == 'search_pubmed':
+            return await self._search_pubmed_action(payload)
         elif action == 'retrieve_documents':
             return await self._retrieve_documents(payload)
         elif action == 'filter_results':
@@ -206,6 +211,11 @@ class LiteratureAgent(BaseAgent):
             return await self._rank_relevance(payload)
         elif action == 'academic_research_workflow':
             return await self.academic_research_workflow(
+                payload.get('research_topic', ''),
+                payload.get('max_papers', 20)
+            )
+        elif action == 'biomedical_research_workflow':
+            return await self.biomedical_research_workflow(
                 payload.get('research_topic', ''),
                 payload.get('max_papers', 20)
             )
@@ -221,6 +231,7 @@ class LiteratureAgent(BaseAgent):
                 payload.get('topic', ''),
                 payload.get('include_academic', True),
                 payload.get('include_news', True),
+                payload.get('include_pubmed', None),
                 payload.get('max_results', 10)
             )
         elif action == 'fact_verification_workflow':
@@ -301,6 +312,8 @@ class LiteratureAgent(BaseAgent):
             return await self._search_google_scholar(query, max_results)
         elif engine == 'semantic_scholar':
             return await self._search_semantic_scholar(query, max_results)
+        elif engine == 'pubmed':
+            return await self._search_pubmed(query, max_results)
         else:
             raise ValueError(f"Unknown search engine: {engine}")
 
@@ -825,6 +838,195 @@ class LiteratureAgent(BaseAgent):
             self.logger.error(f"Google Scholar search failed: {e}")
             return []
     
+    async def _search_pubmed(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search PubMed using NCBI E-utilities API.
+        
+        Args:
+            query: Search query
+            max_results: Maximum number of results
+            
+        Returns:
+            List[Dict[str, Any]]: Search results
+        """
+        try:
+            if not self.session:
+                raise RuntimeError("HTTP session not initialized")
+            
+            self.logger.info(f"Searching PubMed for: {query}")
+            self.literature_logger.info(f"🧬 PubMed Search: '{query}' | Max Results: {max_results}")
+            
+            # Step 1: Use ESearch to get PMIDs
+            search_url = f"{self.search_engines['pubmed']}/esearch.fcgi"
+            
+            # Build search parameters
+            search_params = {
+                'db': 'pubmed',
+                'term': query,
+                'retmax': min(max_results, 100),  # PubMed API limit
+                'retmode': 'json',
+                'sort': 'relevance',
+                'tool': 'EuniceLiteratureAgent',
+                'email': 'eunice@research.ai'  # Should be configurable
+            }
+            
+            # Add API key if available (gracefully handle missing keys)
+            api_key = None
+            try:
+                api_key = self.config.get_api_key("pubmed") or self.config.get_api_key("ncbi")
+            except ValueError:
+                # API keys not configured, continue without them
+                self.logger.debug("PubMed/NCBI API keys not configured, using without authentication")
+            
+            if api_key:
+                search_params['api_key'] = api_key
+            
+            # Perform search request
+            async with self.session.get(search_url, params=search_params) as response:
+                if response.status != 200:
+                    self.logger.warning(f"PubMed ESearch returned status {response.status}")
+                    return []
+                
+                search_data = await response.json()
+                
+                if 'esearchresult' not in search_data:
+                    self.logger.warning("No esearchresult in PubMed response")
+                    return []
+                
+                search_result = search_data['esearchresult']
+                pmids = search_result.get('idlist', [])
+                
+                if not pmids:
+                    self.logger.info("No PMIDs found in PubMed search")
+                    return []
+                
+                self.logger.info(f"Found {len(pmids)} PMIDs from PubMed search")
+                
+                # Step 2: Use ESummary to get article details
+                summary_url = f"{self.search_engines['pubmed']}/esummary.fcgi"
+                
+                # Batch process PMIDs (ESummary can handle multiple IDs)
+                summary_params = {
+                    'db': 'pubmed',
+                    'id': ','.join(pmids),
+                    'retmode': 'json',
+                    'tool': 'EuniceLiteratureAgent',
+                    'email': 'eunice@research.ai'
+                }
+                
+                if api_key:
+                    summary_params['api_key'] = api_key
+                
+                async with self.session.get(summary_url, params=summary_params) as response:
+                    if response.status != 200:
+                        self.logger.warning(f"PubMed ESummary returned status {response.status}")
+                        return []
+                    
+                    summary_data = await response.json()
+                    
+                    if 'result' not in summary_data:
+                        self.logger.warning("No result in PubMed ESummary response")
+                        return []
+                    
+                    results = []
+                    summary_result = summary_data['result']
+                    
+                    # Process each article
+                    for i, pmid in enumerate(pmids):
+                        if pmid not in summary_result:
+                            continue
+                        
+                        article = summary_result[pmid]
+                        
+                        # Extract article information
+                        title = article.get('title', 'Untitled Article')
+                        authors = self._extract_pubmed_authors(article.get('authors', []))
+                        journal = article.get('source', 'Unknown Journal')
+                        pub_date = article.get('pubdate', 'Unknown Date')
+                        doi = article.get('elocationid', '')
+                        
+                        # Clean DOI if present
+                        if doi and doi.startswith('doi: '):
+                            doi = doi[5:]
+                        
+                        # Build PubMed URL
+                        pubmed_url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+                        
+                        # Prefer DOI URL if available
+                        final_url = pubmed_url
+                        link_type = "pubmed"
+                        
+                        if doi:
+                            final_url = f"https://doi.org/{doi}"
+                            link_type = "doi"
+                        
+                        # Build content description
+                        content_parts = [f"PubMed article: {title}"]
+                        if authors:
+                            content_parts.append(f"Authors: {authors}")
+                        if journal:
+                            content_parts.append(f"Journal: {journal}")
+                        if pub_date:
+                            content_parts.append(f"Published: {pub_date}")
+                        if doi:
+                            content_parts.append(f"DOI: {doi}")
+                        
+                        content = " | ".join(content_parts)
+                        
+                        # Create result entry
+                        result = {
+                            'title': title,
+                            'url': final_url,
+                            'content': content,
+                            'source': 'pubmed',
+                            'type': 'biomedical_article',
+                            'link_type': link_type,
+                            'relevance_score': max_results - i,
+                            'metadata': {
+                                'pmid': pmid,
+                                'authors': authors,
+                                'journal': journal,
+                                'publication_date': pub_date,
+                                'doi': doi,
+                                'pubmed_url': pubmed_url
+                            }
+                        }
+                        
+                        results.append(result)
+                    
+                    self.logger.info(f"Retrieved {len(results)} articles from PubMed")
+                    self.literature_logger.info(f"📚 PubMed Results: {len(results)} articles | DOIs: {sum(1 for r in results if r.get('link_type') == 'doi')}")
+                    
+                    return results
+                    
+        except Exception as e:
+            self.logger.error(f"PubMed API search failed: {e}")
+            return []
+    
+    def _extract_pubmed_authors(self, authors_data: List[Dict[str, Any]]) -> str:
+        """
+        Extract and format author names from PubMed author data.
+        
+        Args:
+            authors_data: List of author dictionaries from PubMed
+            
+        Returns:
+            str: Formatted author string
+        """
+        if not authors_data:
+            return ""
+        
+        author_names = []
+        for author in authors_data[:5]:  # Limit to first 5 authors
+            name = author.get('name', '')
+            if name:
+                author_names.append(name)
+        
+        if len(authors_data) > 5:
+            author_names.append('et al.')
+        
+        return ', '.join(author_names)
+    
     async def _extract_web_content(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extract content from web pages with enhanced error handling.
@@ -862,9 +1064,24 @@ class LiteratureAgent(BaseAgent):
                     elif response.status != 200:
                         raise Exception(f"Failed to fetch URL {url}: status {response.status}")
                     
-                    # Success - extract content
-                    html = await response.text()
-                    soup = BeautifulSoup(html, 'html.parser')
+                    # Success - extract content with proper encoding handling
+                    try:
+                        # Try to get content as text with proper encoding
+                        content_bytes = await response.read()
+                        
+                        # Try UTF-8 first, then fallback to other encodings
+                        try:
+                            html = content_bytes.decode('utf-8')
+                        except UnicodeDecodeError:
+                            try:
+                                html = content_bytes.decode('latin-1')
+                            except UnicodeDecodeError:
+                                html = content_bytes.decode('utf-8', errors='ignore')
+                                self.logger.warning(f"Used fallback encoding for {url}")
+                        
+                        soup = BeautifulSoup(html, 'html.parser')
+                    except Exception as encoding_error:
+                        raise Exception(f"Content encoding error for {url}: {encoding_error}")
                     
                     # Extract title
                     title = soup.find('title')
@@ -986,7 +1203,12 @@ class LiteratureAgent(BaseAgent):
             'doi.org/',  # Usually redirects, not direct content
             'dx.doi.org/',  # DOI redirect service
             'abstract_only=true',  # Abstract-only pages
-            'citation_only=true'   # Citation-only pages
+            'citation_only=true',   # Citation-only pages
+            'mdpi.com/',  # Often returns 403 errors
+            'zhihu.com/',  # Often blocks automated access
+            'artificialaiming.net/',  # Known to return 403
+            'scindeks-clanci.ceon.rs/',  # PDF with encoding issues
+            '/pdf?version=',  # Direct PDF links often blocked
         ]
         
         # Skip if URL contains any problematic patterns
@@ -1087,6 +1309,37 @@ class LiteratureAgent(BaseAgent):
             'total_found': total_found,
             'search_type': 'academic_papers',
             'search_method': search_method
+        }
+    
+    async def _search_pubmed_action(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Search PubMed for biomedical literature.
+        
+        Args:
+            payload: Dictionary containing query and max_results
+            
+        Returns:
+            Dict[str, Any]: Search results with metadata
+        """
+        query = payload.get('query', '')
+        max_results = payload.get('max_results', 10)
+        
+        if not query:
+            raise ValueError("Query is required for PubMed search")
+        
+        self.logger.info(f"Starting PubMed search for: {query}")
+        results = await self._search_pubmed(query, max_results)
+        
+        # Log search performance
+        total_found = len(results)
+        self.logger.info(f"PubMed search completed: {total_found} results found")
+        
+        return {
+            'query': query,
+            'results': results,
+            'total_found': total_found,
+            'search_type': 'pubmed_biomedical',
+            'search_method': 'ncbi_eutils_api'
         }
     
     async def _retrieve_documents(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -1224,6 +1477,94 @@ class LiteratureAgent(BaseAgent):
             self.logger.error(f"Academic research workflow failed: {e}")
             raise
 
+    async def biomedical_research_workflow(self, research_topic: str, max_papers: int = 20) -> Dict[str, Any]:
+        """
+        Complete biomedical research workflow using PubMed and other sources.
+        
+        Args:
+            research_topic: Biomedical research topic or keywords
+            max_papers: Maximum number of papers to search for initially
+            
+        Returns:
+            Dict containing all biomedical research results and analysis
+        """
+        self.logger.info(f"Starting biomedical research workflow for: {research_topic}")
+        self.literature_logger.info(f"🧬 Biomedical Research Workflow Started: '{research_topic}' | Max Papers: {max_papers}")
+        
+        try:
+            # 1. Primary PubMed search
+            pubmed_search = await self._search_pubmed_action({
+                'query': research_topic,
+                'max_results': max_papers
+            })
+            
+            # 2. Supplementary academic search (Semantic Scholar, Google Scholar)
+            academic_search = await self._search_academic_papers({
+                'query': research_topic,
+                'max_results': max_papers // 2
+            })
+            
+            # 3. Extract content from top biomedical papers (prioritize DOI links)
+            paper_urls = []
+            for result in pubmed_search['results'][:10]:  # Check more results
+                url = result['url']
+                # Prefer DOI links over PubMed page links for content extraction
+                if result.get('link_type') == 'doi' or not self._should_skip_url_for_content_extraction(url):
+                    paper_urls.append(url)
+                    if len(paper_urls) >= 5:  # Limit to 5 for content extraction
+                        break
+            
+            # Add some academic papers if we need more URLs
+            if len(paper_urls) < 5:
+                for result in academic_search['results'][:5]:
+                    if result['url'] not in paper_urls and not self._should_skip_url_for_content_extraction(result['url']):
+                        paper_urls.append(result['url'])
+                        if len(paper_urls) >= 5:
+                            break
+            
+            paper_content = await self._retrieve_documents({
+                'urls': paper_urls
+            })
+            
+            # 4. Filter for high-quality biomedical results
+            combined_results = pubmed_search['results'] + academic_search['results']
+            filtered_results = await self._filter_results({
+                'results': combined_results,
+                'min_relevance_score': 0.6  # Slightly lower threshold for biomedical specificity
+            })
+            
+            # 5. Focused clinical/treatment search if appropriate
+            clinical_search = None
+            clinical_keywords = ['treatment', 'therapy', 'clinical', 'trial', 'intervention', 'drug']
+            if any(keyword in research_topic.lower() for keyword in clinical_keywords):
+                clinical_search = await self._search_pubmed_action({
+                    'query': f"{research_topic} clinical trial treatment",
+                    'max_results': 10
+                })
+            
+            # Log workflow completion summary
+            total_pubmed = pubmed_search['total_found']
+            total_academic = academic_search['total_found']
+            total_clinical = clinical_search['total_found'] if clinical_search else 0
+            
+            self.literature_logger.info(f"✅ Biomedical Research Complete: PubMed: {total_pubmed} | Academic: {total_academic} | Clinical: {total_clinical} | Content: {paper_content['total_retrieved']}/{len(paper_urls)} | Filtered: {filtered_results['total_filtered']}")
+            
+            return {
+                'research_topic': research_topic,
+                'pubmed_search': pubmed_search,
+                'academic_search': academic_search,
+                'clinical_search': clinical_search,
+                'paper_content': paper_content,
+                'filtered_results': filtered_results,
+                'total_papers_found': total_pubmed + total_academic + total_clinical,
+                'content_extracted': paper_content['total_retrieved'],
+                'biomedical_focus': True
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Biomedical research workflow failed: {e}")
+            raise
+
     async def multi_source_validation(self, claim: str) -> Dict[str, Any]:
         """
         Validate information across multiple sources and types.
@@ -1326,7 +1667,7 @@ class LiteratureAgent(BaseAgent):
             raise
 
     async def comprehensive_research_pipeline(self, topic: str, include_academic: bool = True, 
-                                           include_news: bool = True, max_results: int = 10) -> Dict[str, Any]:
+                                           include_news: bool = True, include_pubmed: Optional[bool] = None, max_results: int = 10) -> Dict[str, Any]:
         """
         Complete research pipeline combining multiple search strategies.
         
@@ -1334,19 +1675,32 @@ class LiteratureAgent(BaseAgent):
             topic: Research topic
             include_academic: Whether to include academic sources
             include_news: Whether to include news sources
+            include_pubmed: Whether to include PubMed biomedical sources (auto-detected if None)
             max_results: Maximum results per search type
             
         Returns:
             Dict containing comprehensive research results
         """
         self.logger.info(f"Starting comprehensive research pipeline for: {topic}")
-        self.literature_logger.info(f"🔬 Comprehensive Research Pipeline Started: '{topic}' | Academic: {include_academic} | News: {include_news} | Max Results: {max_results}")
+        
+        # Auto-detect if PubMed should be included based on biomedical keywords
+        if include_pubmed is None:
+            biomedical_keywords = [
+                'medical', 'medicine', 'health', 'disease', 'drug', 'treatment', 'therapy',
+                'clinical', 'patient', 'diagnosis', 'cancer', 'virus', 'bacteria', 'gene',
+                'protein', 'dna', 'rna', 'cell', 'biology', 'biomedical', 'pharmaceutical',
+                'vaccine', 'antibody', 'hormone', 'neurology', 'cardiology', 'oncology'
+            ]
+            include_pubmed = any(keyword in topic.lower() for keyword in biomedical_keywords)
+        
+        self.literature_logger.info(f"🔬 Comprehensive Research Pipeline Started: '{topic}' | Academic: {include_academic} | News: {include_news} | PubMed: {include_pubmed} | Max Results: {max_results}")
         
         try:
             results = {
                 'topic': topic,
                 'web_search': None,
                 'academic_search': None,
+                'pubmed_search': None,
                 'news_search': None,
                 'content_analysis': None,
                 'filtered_results': None,
@@ -1367,7 +1721,14 @@ class LiteratureAgent(BaseAgent):
                     'max_results': max_results // 2
                 })
             
-            # 3. News search if requested
+            # 3. PubMed biomedical search if requested
+            if include_pubmed:
+                results['pubmed_search'] = await self._search_pubmed_action({
+                    'query': topic,
+                    'max_results': max_results // 2
+                })
+            
+            # 4. News search if requested
             if include_news:
                 results['news_search'] = await self._search_information({
                     'query': f"{topic} news recent",
@@ -1375,10 +1736,12 @@ class LiteratureAgent(BaseAgent):
                     'search_engines': ['yahoo', 'bing']
                 })
             
-            # 4. Content extraction from top results
+            # 5. Content extraction from top results
             all_urls = [r['url'] for r in results['web_search']['results'][:3]]
             if results['academic_search']:
                 all_urls.extend([r['url'] for r in results['academic_search']['results'][:2]])
+            if results['pubmed_search']:
+                all_urls.extend([r['url'] for r in results['pubmed_search']['results'][:2]])
             if results['news_search']:
                 all_urls.extend([r['url'] for r in results['news_search']['results'][:2]])
             
@@ -1386,10 +1749,12 @@ class LiteratureAgent(BaseAgent):
                 'urls': all_urls
             })
             
-            # 5. Filter and rank all results
+            # 6. Filter and rank all results
             all_search_results = results['web_search']['results']
             if results['academic_search']:
                 all_search_results.extend(results['academic_search']['results'])
+            if results['pubmed_search']:
+                all_search_results.extend(results['pubmed_search']['results'])
             if results['news_search']:
                 all_search_results.extend(results['news_search']['results'])
             
