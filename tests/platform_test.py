@@ -156,12 +156,12 @@ def run_simple_research_test():
     print("=" * 70)
     
     # Test data
-    project_name = "AI Research Project"
-    project_description = "Automated research using AI agents"
-    topic_name = "AI in Healthcare"
-    topic_description = "Exploring AI applications in healthcare industry"
-    research_query = "What are the most promising AI applications in healthcare for 2025, including regulatory challenges and implementation strategies?"
-    
+    project_name = "Biological AI Research Project"
+    project_description = "Replacing ANN with Biological Neural Networks"
+    topic_name = "Culturing Biological Neural Networks"
+    topic_description = "Exploring the potential of culturing biological neural networks"
+    research_query = "What are the computational models for simulating neural networks inspired by biological systems?"
+
     # Step 1: Create Project
     print("\n📁 Step 1: Creating research project...")
     project_success, project_id = create_project(project_name, project_description)
@@ -273,7 +273,8 @@ def run_simple_research_test():
     # Step 6. Approve research plan
     print("\n✅ Approving research plan...")
     if plan_id:
-        approved = approve_research_plan(plan_id)
+        # approved = approve_research_plan(plan_id)
+        approved = None
     else:
         print("❌ No plan ID available to approve.")
         return

@@ -284,7 +284,7 @@ Tracks costs per agent type:
 
 ```python
 agent_breakdown = {
-    'retriever': {'tokens': 1200, 'cost': 0.036},
+    'literature': {'tokens': 1200, 'cost': 0.036},
     'planning': {'tokens': 800, 'cost': 0.024},
     'executor': {'tokens': 300, 'cost': 0.009}
 }
@@ -366,17 +366,17 @@ def get_cost_recommendations(self, estimate: CostEstimate) -> Dict[str, Any]:
 
 ```python
 # High Performance (Default)
-agents = ["retriever", "planning", "executor", "memory"]
+agents = ["literature", "planning", "executor", "memory"]
 parallel_execution = True
 complexity_multiplier = 1.0
 
 # Balanced Performance
-agents = ["retriever", "planning"]
+agents = ["literature", "planning"]
 parallel_execution = True
 complexity_multiplier = 0.6
 
 # Cost-Optimized
-agents = ["retriever"]
+agents = ["literature"]
 parallel_execution = False
 complexity_multiplier = 0.4
 ```
@@ -396,7 +396,7 @@ async def _estimate_task_cost(
 ) -> tuple[Dict[str, Any], bool, bool]:
     # Determine agent configuration
     single_agent_mode = options.get('single_agent_mode', False)
-    agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "planning", "executor", "memory"]
+    agents_to_use = ["literature"] if single_agent_mode else ["literature", "planning", "executor", "memory"]
 
     # Get cost estimate
     cost_estimate = self.cost_estimator.estimate_task_cost(
@@ -449,7 +449,7 @@ self.cost_estimator.record_usage(
     model="gpt-4o-mini",
     input_tokens=request_tokens,
     output_tokens=response_tokens,
-    agent_type="retriever"
+    agent_type="literature"
 )
 ```
 
@@ -516,7 +516,7 @@ if final_usage:
             "openai": {"tokens": 2650, "cost": 0.082}
         },
         "agent_breakdown": {
-            "retriever": {"tokens": 1200, "cost": 0.036},
+            "literature": {"tokens": 1200, "cost": 0.036},
             "planning": {"tokens": 1450, "cost": 0.046}
         }
     }

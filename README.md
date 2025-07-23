@@ -19,6 +19,8 @@ The platform specializes in hierarchical research organization, multi-agent coll
 
 ### Research Capabilities
 
+- **Enhanced Academic Search**: Semantic Scholar API integration for high-quality academic papers
+- **Multi-Source Research**: Web search across Google, Bing, Yahoo with academic source prioritization
 - **Cost Estimation System**: Budget tracking and resource management
 - **Dependency Management**: Automatic task dependency resolution
 - **Parallelism Coordination**: Efficient multi-threaded research execution
@@ -192,7 +194,27 @@ The platform generates detailed logs for monitoring:
 
 ## 🔧 Configuration
 
-Key configuration files:
+### Environment Variables
+
+Create a `.env` file with your API keys:
+
+```bash
+# Required AI API Keys
+OPENAI_API_KEY=your_openai_api_key_here
+XAI_API_KEY=your_xai_api_key_here
+
+# Optional: Semantic Scholar API Key (recommended for better academic search)
+SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
+```
+
+**Semantic Scholar API Key Benefits:**
+
+- Higher rate limits for academic searches
+- Better performance and reliability
+- Priority access during high traffic
+- Get your free API key at: [https://www.semanticscholar.org/product/api#api-key](https://www.semanticscholar.org/product/api#api-key)
+
+### Configuration Files
 
 - `.env` - API keys and environment variables
 - `config/default_config.json` - Default platform settings

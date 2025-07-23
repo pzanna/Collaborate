@@ -4,7 +4,7 @@ _Last Updated: July 22, 2025_
 
 ## Overview
 
-The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Retriever, Planning, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **hierarchical project-based organization**.
+The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Literature, Planning, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **hierarchical project-based organization**.
 
 > **📘 Related Documentation**: For detailed information about the cost estimation system, see [Cost Estimation System Documentation](Cost_Estimation_System.md).
 
@@ -116,7 +116,7 @@ The research process follows a structured pipeline defined by `ResearchStage` en
 ```python
 class ResearchStage(Enum):
     PLANNING = "planning"        # Research plan generation
-    RETRIEVAL = "retrieval"      # Information gathering
+    LITERATURE_REVIEW = "literature_review"      # Information gathering
     REASONING = "reasoning"      # Analysis and reasoning
     EXECUTION = "execution"      # Task execution
     SYNTHESIS = "synthesis"      # Results combination
@@ -188,7 +188,7 @@ class Task(BaseModel):
     task_type: str = "research"  # research, analysis, synthesis, validation
     task_order: int = 0
     status: str = "pending"      # pending, running, completed, failed, cancelled
-    stage: str = "planning"      # planning, retrieval, reasoning, execution, synthesis
+    stage: str = "planning"      # planning, literature_review, reasoning, execution, synthesis
 
     # Cost and execution tracking
     estimated_cost: float = 0.0
@@ -203,7 +203,7 @@ class Task(BaseModel):
     reasoning_output: Optional[str] = None
     execution_results: List[Dict[str, Any]] = Field(default_factory=list)
     synthesis: Optional[str] = None
-```
+
 
 class ResearchTask(BaseModel):
 id: str = Field(default_factory=generate_uuid)
@@ -225,8 +225,7 @@ reasoning_output: Optional[str] = None
 execution_results: List[Dict[str, Any]] = Field(default_factory=list)
 synthesis: Optional[str] = None
 metadata: Dict[str, Any] = Field(default_factory=dict)
-
-````
+```
 
 #### 3. Agent Communication
 
@@ -248,7 +247,7 @@ async def start_research_task(
     conversation_id: str,
     options: Optional[Dict[str, Any]] = None
 ) -> tuple[str, Dict[str, Any]]
-````
+```
 
 **Process:**
 
@@ -279,11 +278,15 @@ The `_orchestrate_research_task` method executes research stages:
    - Uses Planning agent for strategic planning
    - Establishes research objectives and approach
 
-2. **Retrieval Stage** (`_execute_retrieval_stage`)
+2. **Literature Review Stage** (`_execute_literature_review_stage`)
 
-   - Executes information gathering
-   - Uses Retriever agent for web search and data collection
-   - Configurable search depth and result limits
+   - Executes comprehensive information gathering
+   - Uses Literature agent for multi-source research including:
+     - Multi-engine web search across Google, Bing, Yahoo
+     - Academic paper search via Semantic Scholar API
+     - High-level research workflows for automated data collection
+     - Content extraction and analysis with quality filtering
+   - Configurable search depth and result limits with cost optimization
 
 3. **Reasoning Stage** (`_execute_reasoning_stage`)
 
@@ -304,7 +307,11 @@ The `_orchestrate_research_task` method executes research stages:
 
 #### Single-Agent Mode (Cost-Optimized)
 
-- **Planning + Retrieval Only**: Uses only Retriever agent
+- **Planning + Literature Review Only**: Uses Literature agent with comprehensive research capabilities including:
+  - Multi-source search and validation
+  - Academic research workflows
+  - Cost-optimized search strategies
+  - Automated fact verification
 - **Reduced Complexity**: Optimized for cost-sensitive operations
 - **Faster Execution**: Streamlined workflow for simple queries
 
@@ -317,12 +324,12 @@ The `_orchestrate_research_task` method executes research stages:
 action = ResearchAction(
     task_id=context.task_id,
     context_id=context.conversation_id,
-    agent_type="retriever",
+    agent_type="literature",
     action="search_information",
     payload={...}
 )
 
-response = await self._send_to_agent("retriever", action)
+response = await self._send_to_agent("literature", action)
 ```
 
 #### Response Handling
@@ -381,7 +388,7 @@ self.cost_estimator.record_usage(
     model="gpt-4o-mini",
     input_tokens=request_tokens,
     output_tokens=response_tokens,
-    agent_type="retriever"
+    agent_type="literature"
 )
 
 # Get final usage with breakdowns
@@ -391,7 +398,7 @@ final_usage = self.cost_estimator.end_cost_tracking(task_id)
 **Enhanced Tracking Features:**
 
 - **Provider-Specific Tracking**: Separate cost tracking for each AI provider
-- **Agent-Level Breakdown**: Cost attribution per agent type (retriever, planning, executor, memory)
+- **Agent-Level Breakdown**: Cost attribution per agent type (literature, planning, executor, memory)
 - **Token Distribution**: Separate tracking of input vs output tokens
 - **Session Aggregation**: Cumulative costs across related tasks in a conversation
 - **Daily Usage Monitoring**: Automatic daily cost accumulation and threshold checking
@@ -510,7 +517,7 @@ class TaskResponse(BaseModel):
     task_type: str
     task_order: int
     status: str  # pending, running, completed, failed, cancelled
-    stage: str   # planning, retrieval, reasoning, execution, synthesis
+    stage: str   # planning, literature_review, reasoning, execution, synthesis
     progress: float = 0.0
     estimated_cost: float = 0.0
     actual_cost: float = 0.0
@@ -527,13 +534,6 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 ```
-
-#### WebSocket Streaming
-
-- `/api/research/stream/{task_id}` - Real-time progress updates
-- Task completion notifications
-- Error and status change notifications
-- Hierarchical progress tracking (plan and task level)
 
 #### Example API Usage
 
@@ -653,11 +653,14 @@ The new task detail page provides comprehensive information:
 
 #### Supported Agent Types
 
-- **RetrieverAgent** (`src/agents/retriever_agent.py`)
+- **LiteratureAgent** (`src/agents/literature_agent.py`)
 
-  - Web search and information gathering
-  - Document retrieval and processing
-  - Source validation and ranking
+  - Multi-engine web search and academic paper retrieval
+  - Semantic Scholar API integration with rich metadata
+  - Document extraction and content analysis
+  - High-level research workflows (academic research, fact verification, multi-source validation)
+  - Cost-optimized search strategies
+  - Source validation and relevance ranking
 
 - **PlanningAgent** (`src/agents/planning_agent.py`)
 
@@ -932,7 +935,7 @@ task_id, cost_info = await research_manager.start_research_task(
     conversation_id="conv_456",
     options={
         'project_id': 'proj_456',  # Required project association
-        'single_agent_mode': True,  # Use only retriever
+        'single_agent_mode': True,  # Use only literature
         'max_results': 5
     }
 )

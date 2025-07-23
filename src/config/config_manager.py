@@ -218,6 +218,8 @@ class ConfigManager:
             return os.getenv("XAI_API_KEY", "")
         elif provider == "anthropic":
             return os.getenv("ANTHROPIC_API_KEY", "")
+        elif provider == "semantic_scholar":
+            return os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
         else:
             raise ValueError(f"Unknown provider: {provider}")
     
@@ -257,7 +259,7 @@ class ConfigManager:
         if hasattr(self.config, 'agents') and self.config.agents:
             return self.config.agents if isinstance(self.config.agents, dict) else self.config.agents.dict()
         return {
-            'retriever': {'enabled': True, 'max_results': 10},
+            'literature': {'enabled': True, 'max_results': 10},
             'planning': {'enabled': True, 'model': 'gpt-4'},
             'executor': {'enabled': True, 'timeout': 60},
             'memory': {'enabled': True, 'max_entries': 1000}

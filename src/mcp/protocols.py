@@ -29,7 +29,7 @@ class Priority(Enum):
 
 class AgentType(Enum):
     """Available agent types"""
-    RETRIEVER = "Retriever"
+    LITERATURE = "Literature"
     PLANNING = "Planning"
     EXECUTOR = "Executor"
     MEMORY = "Memory"

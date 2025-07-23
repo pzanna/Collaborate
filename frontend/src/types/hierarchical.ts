@@ -50,7 +50,7 @@ export interface Task {
   task_type: 'research' | 'analysis' | 'synthesis' | 'validation'
   task_order: number
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  stage: 'planning' | 'retrieval' | 'reasoning' | 'execution' | 'synthesis' | 'complete' | 'failed'
+  stage: 'planning' | 'literature_review' | 'reasoning' | 'execution' | 'synthesis' | 'complete' | 'failed'
   created_at: string
   updated_at: string
   estimated_cost: number

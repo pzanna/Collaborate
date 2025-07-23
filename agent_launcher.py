@@ -56,14 +56,14 @@ class AgentLauncher:
             logger.info("Logging configuration set up for agents")
             
             # Import all agent classes
-            from src.agents.retriever_agent import RetrieverAgent
+            from src.agents.literature_agent import LiteratureAgent
             from src.agents.planning_agent import PlanningAgent
             from src.agents.executor_agent import ExecutorAgent
             from src.agents.memory_agent import MemoryAgent
             
             # Create and initialize agents
             agent_classes = [
-                ("Retriever", RetrieverAgent),
+                ("Literature", LiteratureAgent),
                 ("Planning", PlanningAgent),
                 ("Executor", ExecutorAgent),
                 ("Memory", MemoryAgent)
