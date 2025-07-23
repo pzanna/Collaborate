@@ -160,7 +160,7 @@ def run_simple_research_test():
     project_description = "Replacing ANN with Biological Neural Networks"
     topic_name = "Culturing Biological Neural Networks"
     topic_description = "Exploring the potential of culturing biological neural networks"
-    research_query = "How do I culture neurons using grocery store ingredients and nutritional supplements?"
+    research_query = "What are the computational models for simulating neural networks inspired by biological systems?"
 
     # Step 1: Create Project
     print("\n📁 Step 1: Creating research project...")
