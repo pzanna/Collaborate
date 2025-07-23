@@ -8,10 +8,10 @@
 
 ## 0. Change Log
 
-| Version | Date       | Author | Summary of Changes |
-|---------|------------|--------|--------------------|
+| Version | Date       | Author | Summary of Changes                                                                                                                                                                                                                                                                                                        |
+| ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | v2      | 23-07-2025 | Sky    | Added provenance/auditability, deterministic modes, PRISMA logging schema, de‑duplication, security/threat model, quality appraisal plugin interface, evaluation automation, scalability/job orchestration, config schema, and expanded NFRs. Reorganised FRs, inserted mermaid diagrams, and clarified testing strategy. |
-| v1      | —          | Paul   | Original document. |
+| v1      | —          | Paul   | Original document.                                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -20,11 +20,13 @@
 The system automates end‑to‑end systematic (or scoping/rapid) literature reviews: from parsing a research plan to producing a PRISMA‑compliant report with transparent provenance and reproducibility. It supports human checkpoints and operates under constrained budgets and API rate limits.
 
 ### In Scope
+
 - Protocol ingestion, query formulation, multi‑source retrieval, screening, quality appraisal, synthesis, and report generation.
 - LLM‑assisted reasoning with deterministic re‑runs.
 - Audit trails, security, and licensing compliance.
 
 ### Out of Scope
+
 - In vivo research assistance.
 - Closed, proprietary databases that forbid automated access (unless explicit licence is obtained).
 
@@ -38,23 +40,38 @@ flowchart LR
     B --> C[Query Generator]
     C --> D[Multi-Source Retriever]
     D --> E[Deduper & Study Clustering]
-    E --> F[Screening Classifier \(incl/excl\)]
-    F --> G[PRISMA Logger (counters + reasons)]
+    E --> F[Screening Classifier (incl/excl)]
+    F --> G[PRISMA Logger]
     G --> H[Study Type Classifier]
     H --> I[Quality/Bias Appraisal Plugins]
     I --> J[Evidence Table Builder]
     J --> K[Synthesis Engine (narrative/meta-agg)]
     K --> L[Report Generator (Markdown/PDF/JSON)]
-    subgraph Provenance Store
-        P1[Prompts, model versions, params]:::prov
-        P2[Hashes, timestamps, source metadata]:::prov
+
+    subgraph Provenance_Store
+        P1[Prompts, model versions, params]
+        P2[Hashes, timestamps, source metadata]
     end
-    B & C & D & E & F & G & H & I & J & K & L --> Provenance Store
+
+    B --> P1
+    C --> P1
+    D --> P2
+    E --> P2
+    F --> P1
+    F --> P2
+    G --> P2
+    H --> P1
+    I --> P1
+    J --> P2
+    K --> P1
+    L --> P2
+
     subgraph Orchestrator
         O1[State Machine / Workflow Engine]
     end
-    O1 -->|Triggers & checkpoints| all
-classDef prov fill:#f9f,stroke:#333,stroke-width:1px
+
+    O1 --> A
+    O1 --> L
 ```
 
 ---
@@ -105,12 +122,13 @@ classDef prov fill:#f9f,stroke:#333,stroke-width:1px
 
 ### FR‑6 Output Generation (was FR‑6)
 
-6.1 Generate:  
-- PRISMA 2020 flow diagram (SVG/PNG) from JSON counters.  
-- Full report (Markdown) + PDF export.  
+6.1 Generate:
+
+- PRISMA 2020 flow diagram (SVG/PNG) from JSON counters.
+- Full report (Markdown) + PDF export.
 - Appendices: search strategies, evidence tables, risk‑of‑bias tables, audit log.  
-6.2 Support CSL citation styles (e.g., Vancouver, APA) via `citeproc`.  
-6.3 All figures shall include alt-text for accessibility.
+  6.2 Support CSL citation styles (e.g., Vancouver, APA) via `citeproc`.  
+  6.3 All figures shall include alt-text for accessibility.
 
 ### FR‑7 User Interaction & Configuration (was FR‑7)
 
@@ -153,16 +171,16 @@ classDef prov fill:#f9f,stroke:#333,stroke-width:1px
 
 ## 4. Non‑Functional Requirements (NFR)
 
-| ID   | Requirement                                    | Target / Detail |
-|------|-------------------------------------------------|------------------|
-| NFR‑1 | **Performance**                                | 95th percentile end‑to‑end review ≤ X hours on corpus of 5k records; single query roundtrip ≤ 5 s (cached) |
-| NFR‑2 | **Determinism Mode**                           | Option to run with fully deterministic settings; diffable outputs |
-| NFR‑3 | **Security & Compliance**                      | Threat model maintained; OWASP top 10 mitigated; GDPR/APP compliance |
-| NFR‑4 | **Reliability & Fault Tolerance**              | Auto‑retry with exponential backoff; orchestrator restarts failed tasks |
-| NFR‑5 | **Maintainability & Extensibility**            | Plugin interfaces for sources and appraisal tools; 80% unit test coverage |
-| NFR‑6 | **Accessibility**                              | WCAG 2.1 AA for UI and generated docs (alt-text, headings) |
-| NFR‑7 | **Cost Efficiency**                            | Track cost per run; configurable model/source tiers |
-| NFR‑8 | **Usability**                                  | CLI + minimal web UI with guided wizard; clear error messages |
+| ID    | Requirement                         | Target / Detail                                                                                            |
+| ----- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| NFR‑1 | **Performance**                     | 95th percentile end‑to‑end review ≤ X hours on corpus of 5k records; single query roundtrip ≤ 5 s (cached) |
+| NFR‑2 | **Determinism Mode**                | Option to run with fully deterministic settings; diffable outputs                                          |
+| NFR‑3 | **Security & Compliance**           | Threat model maintained; OWASP top 10 mitigated; GDPR/APP compliance                                       |
+| NFR‑4 | **Reliability & Fault Tolerance**   | Auto‑retry with exponential backoff; orchestrator restarts failed tasks                                    |
+| NFR‑5 | **Maintainability & Extensibility** | Plugin interfaces for sources and appraisal tools; 80% unit test coverage                                  |
+| NFR‑6 | **Accessibility**                   | WCAG 2.1 AA for UI and generated docs (alt-text, headings)                                                 |
+| NFR‑7 | **Cost Efficiency**                 | Track cost per run; configurable model/source tiers                                                        |
+| NFR‑8 | **Usability**                       | CLI + minimal web UI with guided wizard; clear error messages                                              |
 
 ---
 
@@ -170,26 +188,26 @@ classDef prov fill:#f9f,stroke:#333,stroke-width:1px
 
 ### 5.1 Core Entities
 
-- **StudyRecord:** `id`, `title`, `authors[]`, `year`, `doi`, `source`, `abstract`, `full_text_path`, `hash`, `license`.  
-- **ScreeningDecision:** `record_id`, `stage` (title/abstract/fulltext), `decision` (include/exclude), `reason_code`, `actor`, `timestamp`, `model_id`, `prompt_hash`.  
-- **BiasAssessment:** `record_id`, `tool_id`, `scores{{}}`, `justification`, `assessor`, `timestamp`.  
-- **EvidenceRow:** `record_id`, `outcome`, `effect_size`, `units`, `direction`, `confidence`.  
+- **StudyRecord:** `id`, `title`, `authors[]`, `year`, `doi`, `source`, `abstract`, `full_text_path`, `hash`, `license`.
+- **ScreeningDecision:** `record_id`, `stage` (title/abstract/fulltext), `decision` (include/exclude), `reason_code`, `actor`, `timestamp`, `model_id`, `prompt_hash`.
+- **BiasAssessment:** `record_id`, `tool_id`, `scores{{}}`, `justification`, `assessor`, `timestamp`.
+- **EvidenceRow:** `record_id`, `outcome`, `effect_size`, `units`, `direction`, `confidence`.
 - **ProvenanceEvent:** `event_type`, `payload`, `timestamp`, `hashes`, `software_versions`.
 
 ### 5.2 Example JSON Schema Snippets
 
 ```json
 {
- "type": "object",
- "required": ["objective","population","outcomes"],
- "properties": {
-   "objective": {"type":"string"},
-   "population": {"type":"string"},
-   "intervention": {"type":"string"},
-   "comparison": {"type":"string"},
-   "outcomes": {"type":"array","items":{"type":"string"}},
-   "timeframe": {"type":"string"}
- }
+  "type": "object",
+  "required": ["objective", "population", "outcomes"],
+  "properties": {
+    "objective": { "type": "string" },
+    "population": { "type": "string" },
+    "intervention": { "type": "string" },
+    "comparison": { "type": "string" },
+    "outcomes": { "type": "array", "items": { "type": "string" } },
+    "timeframe": { "type": "string" }
+  }
 }
 ```
 
@@ -207,8 +225,8 @@ Counters stored in `prisma_log.json`:
   "excluded_full_text": 1400,
   "included": 110,
   "reasons": [
-    {"code":"WRONG_POP","count":420},
-    {"code":"NOT_PEER_REVIEWED","count":210}
+    { "code": "WRONG_POP", "count": 420 },
+    { "code": "NOT_PEER_REVIEWED", "count": 210 }
   ]
 }
 ```
@@ -229,8 +247,8 @@ scoring:
 output_schema:
   type: object
   properties:
-    overall_risk: {"type":"string"}
-    domain_scores: {"type":"object"}
+    overall_risk: { "type": "string" }
+    domain_scores: { "type": "object" }
 ```
 
 Plugins register via entry points; orchestrator selects based on study design metadata.
@@ -239,27 +257,27 @@ Plugins register via entry points; orchestrator selects based on study design me
 
 ## 7. Testing & QA Strategy
 
-- **Unit Tests:** schema validation, deduper correctness, prompt templates.  
-- **Integration Tests:** full pipeline on a toy corpus; simulate API failures, malformed PDFs.  
-- **Regression Tests:** snapshot outputs from “golden” reviews.  
-- **Security Tests:** prompt injection test set, malicious PDF suite.  
+- **Unit Tests:** schema validation, deduper correctness, prompt templates.
+- **Integration Tests:** full pipeline on a toy corpus; simulate API failures, malformed PDFs.
+- **Regression Tests:** snapshot outputs from “golden” reviews.
+- **Security Tests:** prompt injection test set, malicious PDF suite.
 - **Monitoring:** metrics dashboard for recall/precision on curated benchmarks.
 
 ---
 
 ## 8. Threat Model (Summary)
 
-- **Assets:** API keys, user data, unpublished manuscripts, generated reports.  
-- **Attack Vectors:** prompt injection via scraped text; malicious PDFs; supply‑chain (model update), API credential leakage.  
+- **Assets:** API keys, user data, unpublished manuscripts, generated reports.
+- **Attack Vectors:** prompt injection via scraped text; malicious PDFs; supply‑chain (model update), API credential leakage.
 - **Mitigations:** content sanitisation, least‑privilege tokens, signed container images, dependency scanning, model output filters.
 
 ---
 
 ## 9. Operational Considerations
 
-- **Deployment:** Docker Compose for local; optional K8s.  
-- **Job Orchestration:** Celery/RQ + Redis or AWS SQS.  
-- **Observability Stack:** Prometheus, Grafana, Sentry.  
+- **Deployment:** Docker Compose for local; optional K8s.
+- **Job Orchestration:** Celery/RQ + Redis or AWS SQS.
+- **Observability Stack:** Prometheus, Grafana, Sentry.
 - **Backups:** daily DB snapshot; artefact store in S3/minio with versioning.
 
 ---
@@ -298,5 +316,3 @@ output:
 | Study ID | Year | Design | Population | Intervention | Comparator | Outcome | Effect Size | Units | Direction | Bias Score | Confidence | Notes |
 
 ---
-
-_End of document_
