@@ -493,6 +493,63 @@ async def get_health():
         )
 
 
+class PendingItem(BaseModel):
+    """Pending item model for the welcome page."""
+    id: str = Field(..., description="Unique identifier for the item")
+    title: str = Field(..., description="Title or description of the item")
+    type: str = Field(..., description="Type of item (task, project, topic)")
+    status: str = Field(..., description="Current status of the item")
+    created_at: str = Field(..., description="ISO timestamp when item was created")
+
+
+class PendingItemsResponse(BaseModel):
+    """Response model for pending items API."""
+    items: List[PendingItem] = Field(..., description="List of pending items")
+    total_count: int = Field(..., description="Total number of pending items")
+
+
+@app.get("/api/welcome/pending-items", response_model=PendingItemsResponse, tags=["welcome"])
+@handle_api_errors
+async def get_pending_items():
+    """Get pending items for the welcome page."""
+    try:
+        # TODO: Replace with actual database queries when data models are available
+        # For now, return mock data similar to what's in the frontend
+        from datetime import datetime, timedelta
+        
+        mock_items = [
+            PendingItem(
+                id="1",
+                title="Complete literature review for AI research project",
+                type="task",
+                status="pending",
+                created_at=datetime.now().isoformat()
+            ),
+            PendingItem(
+                id="2",
+                title="Review draft for Neural Networks topic",
+                type="topic",
+                status="active",
+                created_at=(datetime.now() - timedelta(days=1)).isoformat()
+            ),
+            PendingItem(
+                id="3",
+                title="Machine Learning Research Project",
+                type="project",
+                status="active", 
+                created_at=(datetime.now() - timedelta(days=2)).isoformat()
+            )
+        ]
+        
+        return PendingItemsResponse(
+            items=mock_items,
+            total_count=len(mock_items)
+        )
+    except Exception as e:
+        logger.error(f"Failed to get pending items: {e}")
+        return PendingItemsResponse(items=[], total_count=0)
+
+
 # Connection manager instance already defined earlier in the file
 
 

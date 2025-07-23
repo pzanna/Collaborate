@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom"
 import { toggleSidebar } from "../../store/slices/uiSlice"
 import {
   XMarkIcon,
+  HomeIcon,
   FolderIcon,
   BeakerIcon,
   ClipboardDocumentListIcon,
@@ -17,6 +18,7 @@ const Sidebar: React.FC = () => {
   const location = useLocation()
 
   const menuItems = [
+    { id: "home", label: "Home", icon: HomeIcon, path: "/" },
     { id: "projects", label: "Projects", icon: FolderIcon, path: "/projects" },
     { id: "research", label: "Research", icon: BeakerIcon, path: "/research" },
     {

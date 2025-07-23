@@ -1,6 +1,7 @@
 import React from "react"
-import { Routes, Route, Navigate } from "react-router-dom"
+import { Routes, Route } from "react-router-dom"
 import MainLayout from "./components/layout/MainLayout"
+import WelcomePage from "./components/welcome/WelcomePage"
 import ResearchWorkspace from "./components/research/ResearchWorkspace"
 import ProjectsView from "./components/projects/ProjectsView"
 import ProjectDetailView from "./components/projects/ProjectDetailView"
@@ -16,7 +17,7 @@ function App() {
     <div className="h-screen bg-gray-50">
       <MainLayout>
         <Routes>
-          <Route path="/" element={<Navigate to="/projects" replace />} />
+          <Route path="/" element={<WelcomePage />} />
           <Route path="/research" element={<ResearchWorkspace />} />
           <Route path="/research/:sessionId" element={<ResearchWorkspace />} />
           <Route
