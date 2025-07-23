@@ -80,18 +80,7 @@ export interface Task {
   metadata?: Record<string, any>;
 }
 
-export interface PendingItem {
-  id: string;
-  title: string;
-  type: 'task' | 'project' | 'topic';
-  status: string;
-  created_at: string;
-}
 
-export interface PendingItemsResponse {
-  items: PendingItem[];
-  total_count: number;
-}
 
 class ApiService {
   private async request<T>(
@@ -258,28 +247,7 @@ class ApiService {
     return response.json();
   }
 
-  // Welcome page methods
-  async getPendingItems(): Promise<PendingItemsResponse> {
-    // Use base API URL without v2 prefix for welcome endpoints
-    const baseUrl = process.env.NODE_ENV === 'development' 
-      ? 'http://localhost:8000/api'
-      : '/api';
-    
-    const url = `${baseUrl}/welcome/pending-items`;
-    
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  }
 }
 
 export const apiService = new ApiService();

@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card"
 import { ClockIcon, ChatBubbleLeftRightIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline"
-import { apiService, PendingItem } from "../../services/api"
+
+interface PendingItem {
+  id: string;
+  title: string;
+  type: 'task' | 'project' | 'topic';
+  status: string;
+  created_at: string;
+}
 
 const academicQuotes = [
   "The important thing is not to stop questioning. - Albert Einstein",
@@ -40,42 +47,38 @@ const WelcomePage: React.FC = () => {
     setQuote(academicQuotes[randomIndex])
   }, [])
 
-  // Load pending items
+  // Load pending items (using mock data)
   useEffect(() => {
     const loadPendingItems = async () => {
-      try {
-        const response = await apiService.getPendingItems()
-        setPendingItems(response.items)
-      } catch (error) {
-        console.error("Failed to load pending items:", error)
-        // Fallback to mock data if API fails
-        const mockPendingItems: PendingItem[] = [
-          {
-            id: "1",
-            title: "Complete literature review for AI research project",
-            type: "task",
-            status: "pending",
-            created_at: new Date().toISOString()
-          },
-          {
-            id: "2", 
-            title: "Review draft for Neural Networks topic",
-            type: "topic",
-            status: "active",
-            created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            id: "3",
-            title: "Machine Learning Research Project",
-            type: "project", 
-            status: "active",
-            created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-          }
-        ]
-        setPendingItems(mockPendingItems)
-      } finally {
-        setLoading(false)
-      }
+      // Simulate loading delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Use mock data for pending items
+      const mockPendingItems: PendingItem[] = [
+        {
+          id: "1",
+          title: "Complete literature review for AI research project",
+          type: "task",
+          status: "pending",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: "2", 
+          title: "Review draft for Neural Networks topic",
+          type: "topic",
+          status: "active",
+          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          id: "3",
+          title: "Machine Learning Research Project",
+          type: "project", 
+          status: "active",
+          created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+        }
+      ]
+      setPendingItems(mockPendingItems)
+      setLoading(false)
     }
 
     loadPendingItems()
