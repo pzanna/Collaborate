@@ -57,7 +57,7 @@ const TaskGraph: React.FC<TaskGraphProps> = ({
 
   const getAgentIcon = (agentType: string) => {
     switch (agentType.toLowerCase()) {
-      case "retriever":
+      case "literature":
         return "🔍"
       case "planning":
         return "🧠"

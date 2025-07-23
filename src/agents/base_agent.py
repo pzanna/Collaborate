@@ -2,7 +2,7 @@
 Base Agent class for all research agents.
 
 This module provides the abstract base class that all specialized agents
-(Retriever, Planning, Executor, Memory) inherit from.
+(Literature, Planning, Executor, Memory) inherit from.
 """
 
 import asyncio
@@ -47,7 +47,7 @@ class BaseAgent(ABC):
         Initialize the base agent.
         
         Args:
-            agent_type: Type of agent (e.g., 'retriever', 'planning')
+            agent_type: Type of agent (e.g., 'literature', 'planning')
             config_manager: Configuration manager instance
         """
         self.agent_type = agent_type

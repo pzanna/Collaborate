@@ -2,7 +2,7 @@
 Research Manager - Orchestrates multi-agent research tasks using MCP protocol.
 
 This module provides the core Research Manager that coordinates between different
-AI agents (Retriever, Planning, Executor, Memory) to perform complex research tasks.
+AI agents (Literature, Planning, Executor, Memory) to perform complex research tasks.
 """
 
 import asyncio
@@ -42,7 +42,7 @@ DatabaseManagerType = HierarchicalDatabaseManager
 class ResearchStage(Enum):
     """Stages of research process."""
     PLANNING = "planning"
-    RETRIEVAL = "retrieval"
+    LITERATURE_REVIEW = "literature_review"
     REASONING = "reasoning"
     EXECUTION = "execution"
     SYNTHESIS = "synthesis"
@@ -247,10 +247,10 @@ class ResearchManager:
         single_agent_mode = options.get('single_agent_mode', False) if options else False
         
         if single_agent_mode:
-            agents_to_use = ["retriever"]  # Use only retriever in single agent mode
+            agents_to_use = ["literature"]  # Use only literature in single agent mode
             parallel_execution = False
         else:
-            agents_to_use = ["retriever", "planning", "executor", "memory"]
+            agents_to_use = ["literature", "planning", "executor", "memory"]
             parallel_execution = True
         
         # Get cost estimate
@@ -389,17 +389,17 @@ class ResearchManager:
             
             # Execute research stages sequentially (or single agent if specified)
             if context.single_agent_mode:
-                # Single agent mode - only use retriever
+                # Single agent mode - only use literature
                 stages = [
                     (ResearchStage.PLANNING, self._execute_planning_stage),
-                    (ResearchStage.RETRIEVAL, self._execute_retrieval_stage),
+                    (ResearchStage.LITERATURE_REVIEW, self._execute_literature_review_stage),
                 ]
                 self.logger.info(f"Running task {context.task_id} in single-agent mode (cost-optimized)")
             else:
                 # Full multi-agent mode
                 stages = [
                     (ResearchStage.PLANNING, self._execute_planning_stage),
-                    (ResearchStage.RETRIEVAL, self._execute_retrieval_stage),
+                    (ResearchStage.LITERATURE_REVIEW, self._execute_literature_review_stage),
                     (ResearchStage.REASONING, self._execute_reasoning_stage),
                     (ResearchStage.EXECUTION, self._execute_execution_stage),
                     (ResearchStage.SYNTHESIS, self._execute_synthesis_stage),
@@ -592,11 +592,11 @@ class ResearchManager:
         except Exception as e:
             self.logger.error(f"Planning stage failed: {e}")
             return False
-    
-    async def _execute_retrieval_stage(self, context: ResearchContext) -> bool:
+
+    async def _execute_literature_review_stage(self, context: ResearchContext) -> bool:
         """
-        Execute the retrieval stage of research.
-        
+        Execute the literature review stage of research.
+
         Args:
             context: Research context
             
@@ -604,11 +604,11 @@ class ResearchManager:
             bool: True if successful
         """
         try:
-            # Create retrieval action
+            # Create literature review action
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="retriever",
+                agent_type="literature",
                 action="search_information",
                 payload={
                     "query": context.query,
@@ -618,8 +618,8 @@ class ResearchManager:
                 }
             )
             
-            # Send to retrieval agent
-            response = await self._send_to_agent("retriever", action)
+            # Send to literature agent
+            response = await self._send_to_agent("literature", action)
             
             if response and response.status == "completed":
                 # Store search results
@@ -631,7 +631,7 @@ class ResearchManager:
             return False
             
         except Exception as e:
-            self.logger.error(f"Retrieval stage failed: {e}")
+            self.logger.error(f"Literature review stage failed: {e}")
             return False
     
     async def _execute_reasoning_stage(self, context: ResearchContext) -> bool:
@@ -1046,8 +1046,8 @@ class ResearchManager:
         context = self.active_contexts.get(task_id)
         if not context:
             return 0.0
-        
-        total_stages = 5  # planning, retrieval, reasoning, execution, synthesis
+
+        total_stages = 5  # planning, literature review, reasoning, execution, synthesis
         completed_stages = len(context.completed_stages)
         
         if context.stage == ResearchStage.COMPLETE:
@@ -1299,9 +1299,9 @@ class ResearchManager:
             List[str]: List of stage names
         """
         if single_agent_mode:
-            return ["planning", "retrieval"]
+            return ["planning", "literature_review"]
         else:
-            return ["planning", "retrieval", "reasoning", "execution", "synthesis"]
+            return ["planning", "literature_review", "reasoning", "execution", "synthesis"]
 
     def _create_stage_task_in_database(self, context: ResearchContext) -> bool:
         """
@@ -1388,10 +1388,10 @@ class ResearchManager:
         try:
             # Calculate progress percentage
             if context.single_agent_mode:
-                total_stages = 2  # planning, retrieval only
+                total_stages = 2  # planning, literature review only
             else:
-                total_stages = 5  # planning, retrieval, reasoning, execution, synthesis
-            
+                total_stages = 5  # planning, literature review, reasoning, execution, synthesis
+
             progress = (len(context.completed_stages) / total_stages) * 100.0
             
             # Update the specific stage task
@@ -1429,7 +1429,7 @@ class ResearchManager:
             }
             
             # Add stage-specific results
-            if context.stage == ResearchStage.RETRIEVAL:
+            if context.stage == ResearchStage.LITERATURE_REVIEW:
                 stage_task_data['search_results'] = json.dumps(context.search_results)
             elif context.stage == ResearchStage.REASONING:
                 stage_task_data['reasoning_output'] = context.reasoning_output
@@ -1552,7 +1552,7 @@ class ResearchManager:
         Returns:
             Dict[str, Any]: Cost estimation details
         """
-        agents_to_use = ["retriever"] if single_agent_mode else ["retriever", "planning", "executor", "memory"]
+        agents_to_use = ["literature"] if single_agent_mode else ["literature", "planning", "executor", "memory"]
         parallel_execution = not single_agent_mode
         
         estimate = self.cost_estimator.estimate_task_cost(
@@ -1657,7 +1657,7 @@ class ResearchManager:
                 'prompt': f"Research plan for: {context.query}",
                 'raw_response': "RM AI response for active research context",
                 'parsed_tasks': [
-                    {'task_id': 'task_1', 'agent': 'retriever', 'action': 'search_web'},
+                    {'task_id': 'task_1', 'agent': 'literature', 'action': 'search_web'},
                     {'task_id': 'task_2', 'agent': 'planning', 'action': 'analyze_results'}
                 ],
                 'created_at': datetime.now().isoformat(),
@@ -1726,7 +1726,7 @@ class ResearchManager:
                     'created_at': context.created_at.isoformat(),
                     'execution_status': context.stage.value,
                     'parsed_tasks': [
-                        {'task_id': 'task_1', 'agent': 'retriever'},
+                        {'task_id': 'task_1', 'agent': 'literature'},
                         {'task_id': 'task_2', 'agent': 'planning'}
                     ],
                     'modifications': []

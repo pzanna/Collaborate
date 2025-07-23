@@ -65,7 +65,7 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
 
   const getAgentIcon = (agentType: string) => {
     switch (agentType.toLowerCase()) {
-      case "retriever":
+      case "literature":
         return "🔍"
       case "planning":
         return "🧠"

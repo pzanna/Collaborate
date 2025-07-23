@@ -51,8 +51,8 @@
         "task_log_file": "logs/mcp_tasks.log"
     },
     "agents": {
-        "retriever": {
-            "type": "RetrieverAgent",
+        "literature_agent": {
+            "type": "LiteratureAgent",
             "capabilities": [
                 "web_search",
                 "document_extraction",

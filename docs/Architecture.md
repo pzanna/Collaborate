@@ -106,7 +106,14 @@ The Eunice platform integrates various tools and services to support its researc
 
 - **Memory**: Utilises a local knowledge base for storing research data, documents, and findings.
 
-- **Retriever**: Leverages the Internet for gathering information, literature reviews, research papers and staying updated with the latest research in neuroscience and AI.
+- **Literature**: Leverages multiple search engines and academic databases for comprehensive information gathering, including:
+
+  - Multi-engine web search (Google, Bing, Yahoo)
+  - Semantic Scholar API integration for academic papers
+  - Google Scholar fallback for scholarly content
+  - Advanced content extraction and analysis
+  - High-level research workflows for automated data collection
+  - Multi-source fact verification capabilities
 
 - **Executor**: Handles code execution, API calls, data processing, and file operations for the research system.
 
