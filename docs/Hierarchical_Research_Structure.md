@@ -4,7 +4,9 @@
 
 The Eunice research platform now uses a clear, hierarchical structure for organizing research work:
 
-**Project → Research Topic → Plan → Tasks**
+**_Project → Research Topic → Research Plan → Task_**
+
+Each research project contains multiple topics, each topic contains one or more research plans, and each plan is made up of individual tasks. This hierarchy ensures a logical flow from broad initiatives down to actionable work items.
 
 This provides better organization, clearer separation of concerns, and more intuitive navigation.
 
@@ -40,7 +42,7 @@ This provides better organization, clearer separation of concerns, and more intu
 
 ## Example Hierarchy
 
-```
+```plaintext
 📁 AI Safety Research Project
 ├── 📋 AI Ethics Frameworks (Research Topic)
 │   ├── 📝 Comprehensive Literature Review (Plan)
@@ -63,7 +65,7 @@ This provides better organization, clearer separation of concerns, and more intu
 
 The new hierarchical API follows RESTful patterns:
 
-```
+```plaintext
 # Research Topics
 GET    /api/v2/projects/{project_id}/topics
 POST   /api/v2/projects/{project_id}/topics

@@ -203,7 +203,7 @@ class Task(BaseModel):
     reasoning_output: Optional[str] = None
     execution_results: List[Dict[str, Any]] = Field(default_factory=list)
     synthesis: Optional[str] = None
-```
+
 
 class ResearchTask(BaseModel):
 id: str = Field(default_factory=generate_uuid)
@@ -225,8 +225,7 @@ reasoning_output: Optional[str] = None
 execution_results: List[Dict[str, Any]] = Field(default_factory=list)
 synthesis: Optional[str] = None
 metadata: Dict[str, Any] = Field(default_factory=dict)
-
-````
+```
 
 #### 3. Agent Communication
 
@@ -248,7 +247,7 @@ async def start_research_task(
     conversation_id: str,
     options: Optional[Dict[str, Any]] = None
 ) -> tuple[str, Dict[str, Any]]
-````
+```
 
 **Process:**
 
@@ -527,13 +526,6 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 ```
-
-#### WebSocket Streaming
-
-- `/api/research/stream/{task_id}` - Real-time progress updates
-- Task completion notifications
-- Error and status change notifications
-- Hierarchical progress tracking (plan and task level)
 
 #### Example API Usage
 
