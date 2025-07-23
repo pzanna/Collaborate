@@ -622,7 +622,7 @@ The Phase 1 implementation includes comprehensive tests:
 
 #### Test Results (Phase 1)
 
-```
+```plaintext
 🏁 Phase 1 Integration Test Results
 ============================================================
 Database       : ✅ PASSED

@@ -50,7 +50,7 @@
 
 ## 🏗️ Architecture Overview
 
-```
+```plaintext
 Phase 4B Collaboration Platform
 ├── Real-time Engine (WebSocket Server)
 │   ├── User Session Management
@@ -123,7 +123,7 @@ Phase 4B Collaboration Platform
 
 ### Test Results Summary
 
-```
+```plaintext
 Phase 4B Integration Tests
 ├── realtime_collaboration........ ✅ PASSED
 ├── conflict_resolution........... ✅ PASSED

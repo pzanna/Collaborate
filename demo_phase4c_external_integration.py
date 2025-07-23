@@ -194,8 +194,9 @@ class Phase4CDemo:
             f.write(sample_bibtex)
         
         # Parse BibTeX
-        bibtex_manager = BibTeXManager()
-        references = await bibtex_manager.parse_file(bibtex_file)
+        bibtex_manager = BibTeXManager(bibtex_file)
+        library = await bibtex_manager.import_library("demo_library")
+        references = library.references
         
         print(f"   ✅ Parsed {len(references)} references from BibTeX file")
         print(f"   📚 Reference types: {set(ref.get('type', 'unknown') for ref in references)}")
