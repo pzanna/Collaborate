@@ -37,20 +37,20 @@ The system automates end‑to‑end systematic (or scoping/rapid) literature rev
 ```mermaid
 flowchart LR
     A[Research Plan Input] --> B[Input Parser & Validator]
-    B --> C[Query Generator]
-    C --> D[Multi-Source Retriever]
-    D --> E[Deduper & Study Clustering]
-    E --> F[Screening Classifier (incl/excl)]
-    F --> G[PRISMA Logger]
-    G --> H[Study Type Classifier]
-    H --> I[Quality/Bias Appraisal Plugins]
-    I --> J[Evidence Table Builder]
-    J --> K[Synthesis Engine (narrative/meta-agg)]
-    K --> L[Report Generator (Markdown/PDF/JSON)]
+    B --> C["Query Generator"]
+    C --> D["Multi-Source Retriever"]
+    D --> E["Deduper & Study Clustering"]
+    E --> F["Screening Classifier (incl/excl)"]
+    F --> G["PRISMA Logger"]
+    G --> H["Study Type Classifier"]
+    H --> I["Quality/Bias Appraisal Plugins"]
+    I --> J["Evidence Table Builder"]
+    J --> K["Synthesis Engine (narrative/meta-agg)"]
+    K --> L["Report Generator (Markdown/PDF/JSON)"]
 
     subgraph Provenance_Store
-        P1[Prompts, model versions, params]
-        P2[Hashes, timestamps, source metadata]
+        P1["Prompts, model versions, params"]
+        P2["Hashes, timestamps, source metadata"]
     end
 
     B --> P1
@@ -67,7 +67,7 @@ flowchart LR
     L --> P2
 
     subgraph Orchestrator
-        O1[State Machine / Workflow Engine]
+        O1["State Machine / Workflow Engine"]
     end
 
     O1 --> A
