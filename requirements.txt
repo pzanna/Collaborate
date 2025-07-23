@@ -1,4 +1,7 @@
-# AI/ML APIs
+# Eunice Research Assistant - Core Requirements
+# ============================================
+
+# AI/ML APIs  
 xai-sdk>=0.1.0
 openai>=1.0.0
 
@@ -47,6 +50,25 @@ jinja2>=3.1.0
 
 # MCP Server and Agent Framework
 asyncio-mqtt>=0.16.0
+
+# Thesis Generation Features
+# ==========================
+jsonschema>=4.0.0
+python-dateutil>=2.8.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Development Dependencies
+# ========================
+pytest>=7.0.0
+black>=22.0.0
+flake8>=4.0.0
+mypy>=0.900
+
+# Optional System Dependencies (install separately)
+# =================================================  
+# pandoc>=3.0.0  # For PDF/DOCX conversion: brew install pandoc (macOS)
+# texlive-xetex  # For LaTeX: brew install --cask mactex (macOS)
 
 # Console Output and Formatting
 rich>=13.0.0

@@ -1,0 +1,64 @@
+# Thesis Literature Review Configuration
+# =====================================
+
+# AI Configuration
+ai:
+  provider: "openai"  # openai, xai
+  model: "gpt-4"
+  deterministic: true
+  temperature: 0.0
+  top_p: 1.0
+  max_tokens: 4000
+
+# Output Configuration  
+output:
+  formats: ["markdown", "latex", "html"]
+  directory: "thesis_output"
+  include_cache: true
+  version_control: true
+
+# Processing Configuration
+processing:
+  use_cache: true
+  cache_version: "v1.0"
+  human_checkpoints: true
+  theme_count: 5
+  max_gaps: 5
+  min_gap_score: 3.5
+
+# Template Configuration
+templates:
+  directory: "templates/thesis"
+  markdown_template: "chapter.md.j2"
+  latex_template: "chapter.tex.j2"
+  html_template: "chapter.html.j2"
+
+# Citation Configuration
+citations:
+  style: "apa"
+  bibliography_file: "references.bib"
+  include_dois: true
+
+# Quality Assurance
+quality:
+  min_theme_length: 150
+  max_theme_length: 300
+  min_gap_description: 100
+  require_justification: true
+  validate_json_output: true
+
+# Export Options
+export:
+  pandoc_enabled: true
+  pandoc_options:
+    - "--pdf-engine=xelatex"
+    - "--bibliography=references.bib"
+    - "--csl=apa.csl"
+  include_metadata: true
+  generate_toc: true
+
+# Logging
+logging:
+  level: "INFO"
+  file: "thesis_generation.log"
+  include_audit_trail: true

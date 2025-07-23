@@ -2,9 +2,9 @@
 
 ## Overview
 
-Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](<https://en.wikipedia.org/wiki/Agency_(novel)>). It's designed to facilitate sophisticated research workflows through an integrated microservices architecture that supports collaborative research, project management, and intelligent agent coordination.
+Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](<https://en.wikipedia.org/wiki/Agency_(novel)>). It's designed to facilitate sophisticated research workflows through an integrated microservices architecture that supports collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
 
-The platform specializes in hierarchical research organization, multi-agent collaboration, and provides comprehensive tools for managing complex research projects across multiple domains.
+The platform specializes in hierarchical research organization, multi-agent collaboration, systematic literature reviews, and provides comprehensive tools for managing complex research projects across multiple domains.
 
 ## 🚀 Key Features
 
@@ -21,11 +21,24 @@ The platform specializes in hierarchical research organization, multi-agent coll
 
 - **Enhanced Academic Search**: Semantic Scholar API integration for high-quality academic papers
 - **Multi-Source Research**: Web search across Google, Bing, Yahoo with academic source prioritization
+- **Systematic Literature Reviews**: PRISMA-compliant systematic review generation
+- **Thesis Generation**: Transform systematic reviews into PhD-quality literature review chapters
 - **Cost Estimation System**: Budget tracking and resource management
 - **Dependency Management**: Automatic task dependency resolution
 - **Parallelism Coordination**: Efficient multi-threaded research execution
 - **Memory Management**: Persistent storage for research artifacts and conversations
-- **Export Functionality**: Research data export in multiple formats (PDF, Markdown)
+- **Export Functionality**: Research data export in multiple formats (PDF, Markdown, LaTeX)
+
+### Thesis Generation System 🎓
+
+- **AI-Powered Analysis**: GPT-4 integration for intelligent theme extraction and gap analysis
+- **Multiple Output Formats**: Markdown, LaTeX, HTML, PDF, and DOCX support
+- **Deterministic Generation**: Reproducible outputs with SHA-256 caching (temp=0, top_p=1)
+- **Academic Quality**: PhD-level literature reviews with proper citations and formatting
+- **Research Questions**: Automatic generation of testable hypotheses and research questions
+- **Conceptual Frameworks**: Visual diagrams and theoretical models with Mermaid integration
+- **Human Checkpoints**: Interactive review points for quality control
+- **Template System**: Jinja2 templates for consistent academic formatting
 
 ### Technical Features
 
@@ -135,6 +148,33 @@ See [Persona Documentation](docs/Personas/README.md) for detailed role descripti
    # MCP Server: python mcp_server.py
    # Frontend: cd frontend && npm start
    ```
+
+### Thesis Generation Quick Start 🎓
+
+Generate PhD-quality literature review chapters from PRISMA systematic reviews:
+
+```bash
+# Setup thesis generation dependencies
+python thesis_cli.py --setup
+
+# Generate thesis chapter from systematic review
+python thesis_cli.py tests/literature/comprehensive_literature_review.json
+
+# Advanced usage with custom configuration
+python thesis_cli.py data/review.json -c src/thesis/config/thesis_config.yaml --formats latex pdf
+
+# Automated processing (skip human checkpoints)
+python thesis_cli.py data/review.json --no-checkpoints -o my_thesis_output
+```
+
+**What it generates:**
+
+- 5 academic themes with evidence synthesis
+- Research gaps with priority scoring (impact, feasibility, novelty)
+- Conceptual framework with theoretical relationships
+- Testable research questions and hypotheses
+- Publication-ready LaTeX documents
+- Interactive HTML and clean Markdown formats
 
 ### Alternative Setup Scripts
 
