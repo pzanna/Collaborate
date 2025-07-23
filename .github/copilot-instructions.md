@@ -1,10 +1,20 @@
-# Python Programming Best Practices
+# Programming Best Practices
 
-This file contains guidelines and best practices for Python development in this project.
+This file contains guidelines and best practices for development in this project.
 
 ## Things to NEVER Do!!!
 
-- Do not EVER use mock data or hardcoded values in tests. Always use real data or properly mocked objects.
+- Do not EVER use mock / simulated data, always use real data or properly mocked objects.
+- Do not EVER hardcode data into code, always use configuration files or environment variables.
+
+## Documentation Standards
+
+- Use Markdown format for all documentation files.
+- Write clear, concise, and informative docstrings for all public modules, classes, and functions.
+- Use Google or NumPy style for docstrings.
+- Keep documentation up-to-date with code changes.
+- Always fix lint errors.
+- Markdown fenced-code-language: Fenced code blocks must have a language specified.
 
 ## Code Style and Formatting
 

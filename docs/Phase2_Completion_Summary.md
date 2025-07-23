@@ -61,7 +61,7 @@ Phase 2 of the Eunice systematic review system has been successfully implemented
 
 All Phase 2 tests are passing successfully:
 
-```
+```plaintext
 tests/test_phase2_enhanced_features.py::test_enhanced_screening_workflow PASSED
 tests/test_phase2_enhanced_features.py::test_quality_appraisal_plugins PASSED
 tests/test_phase2_enhanced_features.py::test_conflict_resolution PASSED

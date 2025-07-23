@@ -19,7 +19,7 @@ Building on the comprehensive Phase 1 foundation and Phase 2 enhancements, Phase
 
 Phase 3 implements the final components from the Literature Review Requirements v2 architecture:
 
-```
+```mermaid
 G["PRISMA Logger"] --> H["Study Type Classifier"]
 H --> I["Quality/Bias Appraisal Plugins"] ✅ (Phase 2)
 I --> J["Evidence Table Builder"] 🔨 (Phase 3)

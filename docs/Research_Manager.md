@@ -1,7 +1,5 @@
 # Research Manager Documentation
 
-_Last Updated: July 22, 2025_
-
 ## Overview
 
 The **Research Manager** (`src/core/research_manager.py`) is the central orchestrator for multi-agent research tasks in the Eunice AI collaboration platform. It coordinates between different AI agents (Literature, Planning, Executor, Memory) to perform complex research tasks using a structured workflow with advanced cost control, real-time monitoring, and **hierarchical project-based organization**.

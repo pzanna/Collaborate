@@ -28,7 +28,7 @@ Phase 3 of the systematic review system has been successfully implemented, provi
 
 **Architecture**:
 
-```
+```plaintext
 EvidenceRow (dataclass) → Evidence table building
     ↓
 SynthesisResult (dataclass) → Synthesis outcomes
@@ -123,7 +123,7 @@ EvidenceSynthesisEngine → Core synthesis logic
 
 ## Integration Architecture
 
-```
+```plaintext
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Phase 3 Integration Layer                    │
 ├─────────────────────────────────────────────────────────────────┤
