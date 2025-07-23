@@ -14,17 +14,18 @@ Author: Eunice AI System
 Date: July 2025
 """
 
+# Database connectors
 from .database_connectors import (
     DatabaseConnector,
     PubMedConnector,
     CochraneConnector,
-    EmbaseConnector,
-    WebOfScienceConnector,
     ArxivConnector,
+    DatabaseManager,
     ExternalSearchResult,
     DatabaseSearchQuery
 )
 
+# Citation managers
 from .citation_managers import (
     CitationManager,
     ZoteroIntegration,
@@ -35,6 +36,7 @@ from .citation_managers import (
     ReferenceLibrary
 )
 
+# Research tools
 from .research_tools import (
     ResearchToolIntegration,
     RIntegration,
@@ -45,6 +47,7 @@ from .research_tools import (
     AnalysisResult
 )
 
+# Data exchange hub
 from .data_hub import (
     DataExchangeHub,
     ImportEngine,
@@ -52,7 +55,11 @@ from .data_hub import (
     DataFormat,
     ExchangeFormat,
     DataValidator,
-    FormatConverter
+    FormatConverter,
+    ValidationLevel,
+    ImportResult,
+    ExportResult,
+    DataValidationResult
 )
 
 __all__ = [
@@ -60,9 +67,8 @@ __all__ = [
     'DatabaseConnector',
     'PubMedConnector', 
     'CochraneConnector',
-    'EmbaseConnector',
-    'WebOfScienceConnector',
     'ArxivConnector',
+    'DatabaseManager',
     'ExternalSearchResult',
     'DatabaseSearchQuery',
     
@@ -91,5 +97,9 @@ __all__ = [
     'DataFormat',
     'ExchangeFormat',
     'DataValidator',
-    'FormatConverter'
+    'FormatConverter',
+    'ValidationLevel',
+    'ImportResult',
+    'ExportResult',
+    'DataValidationResult'
 ]
