@@ -36,7 +36,7 @@ The system automates end‑to‑end systematic (or scoping/rapid) literature rev
 
 ```mermaid
 flowchart LR
-    A[Research Plan Input] --> B[Input Parser & Validator]
+    A["Research Plan Input"] --> B["Input Parser & Validator"]
     B --> C["Query Generator"]
     C --> D["Multi-Source Retriever"]
     D --> E["Deduper & Study Clustering"]
@@ -67,7 +67,7 @@ flowchart LR
     L --> P2
 
     subgraph Orchestrator
-        O1["State Machine / Workflow Engine"]
+        O1["Research Manager"]
     end
 
     O1 --> A
