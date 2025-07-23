@@ -168,7 +168,9 @@ class LiteratureAgent(BaseAgent):
 
     async def _cleanup_agent_specific(self) -> None:
         """Clean up literature-specific resources."""
-    
+        # No additional cleanup required for literature-specific resources.
+        # This method is implemented to avoid confusion and maintain clarity.
+        pass
     async def _cleanup_agent(self) -> None:
         """Clean up literature-specific resources."""
         if self.session:
