@@ -209,3 +209,5 @@ __marimo__/
 /exports
 .DS_Store
 /frontend/node_modules
+/thesis_output
+/thesis_output
