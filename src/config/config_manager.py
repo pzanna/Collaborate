@@ -107,7 +107,7 @@ class ResearchManagerConfig(BaseModel):
     """Configuration for Research Manager."""
 
     provider: str = "openai"
-    model: str = "gpt - 4.1 - mini"
+    model: str = "gpt-4.1-mini"
     name: str = "Sky"
     max_tokens: int = 2000
     system_prompt: str = ""
@@ -338,63 +338,51 @@ class ConfigManager:
         try:
             # Get logging configuration
             logging_config = self.config.logging
+            log_level = getattr(logging, logging_config.level.upper())
+
+            # Get the root logger and remove all existing handlers
+            root_logger = logging.getLogger()
+            root_logger.handlers.clear()
+            root_logger.setLevel(log_level)
 
             # Ensure logs directory exists
             log_file_path = Path(logging_config.file)
             log_file_path.parent.mkdir(exist_ok=True)
 
-            # Configure logging
-            logging.basicConfig(
-                level=getattr(logging, logging_config.level.upper()),
-                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                handlers=[
-                    logging.FileHandler(logging_config.file),
-                    logging.StreamHandler(),
-                ],
-                force=True,  # Override any existing configuration
+            # Create a formatter
+            formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s-%(message)s"
             )
 
-            # Set up AI API logging if enabled - MUST be done after basicConfig
+            # Add a stream handler to the root logger (for console output)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            root_logger.addHandler(stream_handler)
+
+            # Add a file handler for the main log file to the root logger
+            file_handler = logging.FileHandler(logging_config.file)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
+
+            # Set up AI API logging if enabled
             if logging_config.enable_ai_api_logging:
                 ai_api_log_path = Path(logging_config.ai_api_log_file)
                 ai_api_log_path.parent.mkdir(exist_ok=True)
-
-                # Create file handler for AI API logs
                 ai_api_handler = logging.FileHandler(logging_config.ai_api_log_file)
-                ai_api_handler.setFormatter(
-                    logging.Formatter(
-                        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                    )
-                )
+                ai_api_handler.setFormatter(formatter)
 
-                # Set up individual AI client loggers with dedicated handler
-                # Handle various import path scenarios (direct import, src.*, personas.*, etc.)
                 ai_client_names = [
                     "src.ai_clients.openai_client",
                     "src.ai_clients.xai_client",
                     "src.core.ai_client_manager",
-                    "ai_clients.openai_client",
-                    "ai_clients.xai_client",
-                    "core.ai_client_manager",
-                    "personas.ai_clients.openai_client",
-                    "personas.ai_clients.xai_client",
-                    "__main__.src.ai_clients.openai_client",
-                    "__main__.ai_clients.openai_client",
                 ]
-
                 for client_name in ai_client_names:
                     client_logger = logging.getLogger(client_name)
-
-                    # Clear any existing handlers to avoid duplicates
                     client_logger.handlers.clear()
-
-                    # Add only our dedicated AI API handler
                     client_logger.addHandler(ai_api_handler)
                     client_logger.setLevel(
                         getattr(logging, logging_config.ai_api_log_level.upper())
                     )
-
-                    # CRITICAL: Prevent propagation to root logger to avoid logs going to mcp_server.log
                     client_logger.propagate = False
 
             # Set up MCP task logging if enabled
@@ -404,12 +392,11 @@ class ConfigManager:
             ):
                 task_log_path = Path(self.config.mcp_server.task_log_file)
                 task_log_path.parent.mkdir(exist_ok=True)
-
-                # Create a separate logger for MCP tasks
                 mcp_logger = logging.getLogger("mcp_tasks")
+                mcp_logger.handlers.clear()
                 mcp_handler = logging.FileHandler(self.config.mcp_server.task_log_file)
                 mcp_handler.setFormatter(
-                    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+                    logging.Formatter("%(asctime)s - %(levelname)s-%(message)s")
                 )
                 mcp_logger.addHandler(mcp_handler)
                 mcp_logger.setLevel(
@@ -422,10 +409,10 @@ class ConfigManager:
             )
 
         except Exception as e:
-            # If logging setup fails, at least ensure basic console logging
+            # Fallback basic config
             logging.basicConfig(
                 level=logging.INFO,
-                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                format="%(asctime)s - %(name)s - %(levelname)s-%(message)s",
                 force=True,
             )
             logging.getLogger(__name__).error(f"Failed to set up logging: {e}")

@@ -8,7 +8,7 @@ This module provides:
 - Automated consistency checking across review components
 - Data integrity validation for extracted information
 - Missing data detection and flagging
-- Outlier identification in meta - analyses
+- Outlier identification in meta-analyses
 
 Author: Eunice AI System
 Date: July 2025
@@ -445,8 +445,8 @@ class ConsistencyValidator:
             ),
             ValidationRule(
                 rule_id="CONSISTENCY_002",
-                name="Meta - analysis Consistency",
-                description="Check consistency between individual studies and meta - analysis",
+                name="meta-analysis Consistency",
+                description="Check consistency between individual studies and meta-analysis",
                 category=ValidationCategory.CONSISTENCY,
                 severity=ValidationSeverity.HIGH,
                 check_function="check_meta_analysis_consistency",
@@ -474,7 +474,7 @@ class ConsistencyValidator:
         Check consistency across review components
 
         Args:
-            data: Review data including studies, meta - analyses, etc.
+            data: Review data including studies, meta-analyses, etc.
 
         Returns:
             List of consistency issues found
@@ -568,7 +568,7 @@ class ConsistencyValidator:
     async def check_meta_analysis_consistency(
         self, rule: ValidationRule, data: Dict[str, Any]
     ) -> List[ValidationIssue]:
-        """Check consistency between individual studies and meta - analysis"""
+        """Check consistency between individual studies and meta-analysis"""
         issues = []
 
         studies = data.get("studies", [])
@@ -589,7 +589,7 @@ class ConsistencyValidator:
                             category=rule.category,
                             field="included_studies",
                             record_id=ma_id,
-                            message=f"Meta - analysis references non - existent study: {study_id}",
+                            message=f"meta-analysis references non-existent study: {study_id}",
                             suggested_fix="Remove reference or add missing study",
                         )
                     )
@@ -608,7 +608,7 @@ class ConsistencyValidator:
 
                     # Check if overall effect is reasonable given individual effects
                     if (
-                        abs(overall_effect - mean_individual)
+                        abs(overall_effect-mean_individual)
                         > 2 * statistics.stdev(individual_effects)
                         if len(individual_effects) > 1
                         else 0
@@ -621,7 +621,7 @@ class ConsistencyValidator:
                                 field="overall_effect",
                                 record_id=ma_id,
                                 message="Overall effect appears inconsistent with individual study effects",
-                                suggested_fix="Review meta - analysis calculation",
+                                suggested_fix="Review meta-analysis calculation",
                                 details={
                                     "overall_effect": overall_effect,
                                     "mean_individual": mean_individual,
@@ -709,7 +709,7 @@ class ConsistencyValidator:
             q3 = statistics.quantiles(values, n=4)[2]  # 75th percentile
             iqr = q3 - q1
 
-            lower_bound = q1 - 1.5 * iqr
+            lower_bound = q1-1.5 * iqr
             upper_bound = q3 + 1.5 * iqr
 
             # Identify outliers
@@ -812,7 +812,7 @@ class QualityValidationEngine:
             for issue in all_issues:
                 severity_counts[issue.severity] += 1
 
-            validation_time = (datetime.now() - start_time).total_seconds()
+            validation_time = (datetime.now()-start_time).total_seconds()
 
             result = ValidationResult(
                 total_records=total_records,
@@ -853,7 +853,7 @@ class QualityValidationEngine:
 
         except Exception as e:
             logger.error(f"Validation failed: {e}")
-            validation_time = (datetime.now() - start_time).total_seconds()
+            validation_time = (datetime.now()-start_time).total_seconds()
 
             error_result = ValidationResult(
                 total_records=total_records,
@@ -883,7 +883,7 @@ class QualityValidationEngine:
         self, issues: List[ValidationIssue], data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Automatically fix issues that can be auto - fixed
+        Automatically fix issues that can be auto-fixed
 
         Args:
             issues: List of validation issues
@@ -893,7 +893,7 @@ class QualityValidationEngine:
             Fixed data dictionary
         """
         if not self.config.get("auto_fix_enabled", False):
-            logger.info("Auto - fix disabled in configuration")
+            logger.info("Auto-fix disabled in configuration")
             return data
 
         fixed_data = data.copy()
@@ -930,9 +930,9 @@ class QualityValidationEngine:
                                     break
 
                 except Exception as e:
-                    logger.warning(f"Failed to auto - fix issue {issue.rule_id}: {e}")
+                    logger.warning(f"Failed to auto-fix issue {issue.rule_id}: {e}")
 
-        logger.info(f"Auto - fixed {fixed_count} issues")
+        logger.info(f"Auto-fixed {fixed_count} issues")
         return fixed_data
 
     def get_validation_summary(self, task_id: Optional[str] = None) -> Dict[str, Any]:
@@ -1064,17 +1064,17 @@ async def demo_validation_engine():
             },
             {
                 "id": "study_2",
-                "title": "",  # Missing title - CRITICAL
-                "authors": "Johnson, B.; Wilson, C.",  # Wrong format - LOW
-                "year": "2024",  # Wrong type - HIGH
-                "doi": "invalid - doi",  # Invalid format - MEDIUM
-                "effect_size": 15.5,  # Outlier - MEDIUM
+                "title": "",  # Missing title-CRITICAL
+                "authors": "Johnson, B.; Wilson, C.",  # Wrong format-LOW
+                "year": "2024",  # Wrong type-HIGH
+                "doi": "invalid-doi",  # Invalid format-MEDIUM
+                "effect_size": 15.5,  # Outlier-MEDIUM
             },
             {
                 "id": "study_3",
-                "title": "A Great Study on AI",  # Duplicate title - MEDIUM
+                "title": "A Great Study on AI",  # Duplicate title-MEDIUM
                 "authors": ["Brown, D.", "Taylor, E."],
-                "year": 1799,  # Out of range - MEDIUM
+                "year": 1799,  # Out of range-MEDIUM
                 "doi": "10.1000 / example.003",
                 "effect_size": 0.9,
             },
@@ -1086,8 +1086,8 @@ async def demo_validation_engine():
                     "study_1",
                     "study_2",
                     "nonexistent_study",
-                ],  # Missing study - HIGH
-                "overall_effect": 2.5,  # Inconsistent with individual effects - MEDIUM
+                ],  # Missing study-HIGH
+                "overall_effect": 2.5,  # Inconsistent with individual effects-MEDIUM
             }
         ],
     }

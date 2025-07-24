@@ -37,16 +37,16 @@ def check_python_dependencies():
     for package, install_cmd in dependencies.items():
         try:
             importlib.import_module(package)
-            print(f"✅ {display_names[package]} - installed")
+            print(f"✅ {display_names[package]}-installed")
         except ImportError:
-            print(f"❌ {display_names[package]} - missing")
+            print(f"❌ {display_names[package]}-missing")
             missing.append((display_names[package], install_cmd))
 
     return missing
 
 
 def check_system_dependencies():
-    """Check system - level dependencies."""
+    """Check system-level dependencies."""
     system_deps = {
         "pandoc": "Required for PDF / DOCX conversion",
         "xelatex": "Required for PDF generation (part of TeX Live)",
@@ -57,9 +57,9 @@ def check_system_dependencies():
     for cmd, description in system_deps.items():
         try:
             subprocess.run([cmd, "--version"], capture_output=True, check=True)
-            print(f"✅ {cmd} - installed")
+            print(f"✅ {cmd}-installed")
         except (subprocess.CalledProcessError, FileNotFoundError):
-            print(f"❌ {cmd} - missing ({description})")
+            print(f"❌ {cmd}-missing ({description})")
             missing.append((cmd, description))
 
     return missing
@@ -70,10 +70,10 @@ def check_eunice_integration():
     try:
         sys.path.append(str(Path(__file__).parent.parent))
 
-        print("✅ Eunice AI clients - available")
+        print("✅ Eunice AI clients-available")
         return True
     except ImportError:
-        print("❌ Eunice AI clients - not available (will use fallback)")
+        print("❌ Eunice AI clients-not available (will use fallback)")
         return False
 
 
@@ -85,7 +85,7 @@ def create_default_config():
 # AI Configuration
 ai:
   provider: openai
-  model: gpt - 4
+  model: gpt-4
   deterministic: true
   temperature: 0.0
   top_p: 1.0
@@ -96,7 +96,7 @@ output:
   formats:
     - markdown
     - latex
-    - html
+   -html
   directory: thesis_output
   include_cache: true
   save_intermediate: true
@@ -155,13 +155,13 @@ def create_requirements_file():
                 return req_file
 
     print(f"⚠️  Please ensure thesis dependencies are in: {req_file}")
-    print("   Required packages: jsonschema, python - dateutil, matplotlib, seaborn")
+    print("   Required packages: jsonschema, python-dateutil, matplotlib, seaborn")
     return req_file
 
 
 def main():
     """Main setup and dependency check."""
-    print("Enhanced Thesis Generator - Dependency Check")
+    print("Enhanced Thesis Generator-Dependency Check")
     print("=" * 50)
 
     # Check Python dependencies
@@ -201,7 +201,7 @@ def main():
             print(f"   {cmd}: {desc}")
         print("\nInstallation instructions:")
         print("   macOS: brew install pandoc")
-        print("   Ubuntu: sudo apt - get install pandoc texlive - xetex")
+        print("   Ubuntu: sudo apt - get install pandoc texlive-xetex")
         print("   Windows: Download from https://pandoc.org / installing.html")
     else:
         print("\n✅ All system dependencies satisfied")

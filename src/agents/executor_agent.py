@@ -28,7 +28,7 @@ class ExecutorAgent(BaseAgent):
     - Data processing and transformation
     - File operations and I / O
     - System command execution
-    - Database operations
+   -Database operations
     """
 
     def __init__(self, config_manager: ConfigManager):
@@ -83,7 +83,7 @@ class ExecutorAgent(BaseAgent):
         ]
 
     async def _initialize_agent(self) -> None:
-        """Initialize executor - specific resources."""
+        """Initialize executor-specific resources."""
         # Create HTTP session
         self.http_session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=30)
@@ -100,7 +100,7 @@ class ExecutorAgent(BaseAgent):
         )
 
     async def _cleanup_agent(self) -> None:
-        """Clean up executor - specific resources."""
+        """Clean up executor-specific resources."""
         # Close HTTP session
         if self.http_session:
             await self.http_session.close()
@@ -237,7 +237,7 @@ class ExecutorAgent(BaseAgent):
             ) as response:
 
                 # Get response content
-                content_type = response.headers.get("Content - Type", "")
+                content_type = response.headers.get("Content-Type", "")
 
                 if "application / json" in content_type:
                     response_data = await response.json()
@@ -320,7 +320,7 @@ class ExecutorAgent(BaseAgent):
             Dict[str, Any]: File contents
         """
         file_path = payload.get("file_path", "")
-        encoding = payload.get("encoding", "utf - 8")
+        encoding = payload.get("encoding", "utf-8")
         max_size = payload.get("max_size", 1024 * 1024)  # 1MB limit
 
         if not file_path:
@@ -369,7 +369,7 @@ class ExecutorAgent(BaseAgent):
         """
         file_path = payload.get("file_path", "")
         content = payload.get("content", "")
-        encoding = payload.get("encoding", "utf - 8")
+        encoding = payload.get("encoding", "utf-8")
         append = payload.get("append", False)
 
         if not file_path:
@@ -443,8 +443,8 @@ class ExecutorAgent(BaseAgent):
 
             return {
                 "success": True,
-                "stdout": stdout.decode("utf - 8"),
-                "stderr": stderr.decode("utf - 8"),
+                "stdout": stdout.decode("utf-8"),
+                "stderr": stderr.decode("utf-8"),
                 "return_code": process.returncode,
                 "command": command,
             }
@@ -537,11 +537,11 @@ class ExecutorAgent(BaseAgent):
 
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
-        execution_time = asyncio.get_event_loop().time() - start_time
+        execution_time = asyncio.get_event_loop().time()-start_time
 
         return {
-            "stdout": stdout.decode("utf - 8"),
-            "stderr": stderr.decode("utf - 8"),
+            "stdout": stdout.decode("utf-8"),
+            "stderr": stderr.decode("utf-8"),
             "return_code": process.returncode,
             "execution_time": execution_time,
         }
@@ -618,7 +618,7 @@ class ExecutorAgent(BaseAgent):
 
     def _aggregate_data(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate data by common fields."""
-        # Simple aggregation - count by first field
+        # Simple aggregation-count by first field
         if not data:
             return {}
 
@@ -723,7 +723,7 @@ class ExecutorAgent(BaseAgent):
 
     async def _execute_research(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute research - related tasks.
+        Execute research-related tasks.
 
         Args:
             payload: Research execution parameters
@@ -743,7 +743,7 @@ class ExecutorAgent(BaseAgent):
             # - Execute code to analyze data
             # - Make API calls to external services
             # - Process files and documents
-            # - Run computational tasks
+            #-Run computational tasks
 
             results = []
 

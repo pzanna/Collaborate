@@ -19,7 +19,7 @@ class CostTier(Enum):
     """Cost tier classifications for task complexity"""
 
     LOW = "low"  # Simple queries, single agent
-    MEDIUM = "medium"  # Multi - agent, moderate complexity
+    MEDIUM = "medium"  # multi-agent, moderate complexity
     HIGH = "high"  # Complex research, parallel execution
     CRITICAL = "critical"  # Emergency stop threshold
 
@@ -241,7 +241,7 @@ class CostEstimator:
         # Determine task complexity
         complexity = self._assess_task_complexity(query, agents, parallel_execution)
 
-        # Calculate agent - specific costs
+        # Calculate agent-specific costs
         agent_count = len(agents)
         parallel_factor = agent_count if parallel_execution else 1
 
@@ -266,8 +266,8 @@ class CostEstimator:
 
         cost_per_1k = self.token_costs.get(primary_provider, {}).get(primary_model, {})
         if not cost_per_1k:
-            # Fallback to OpenAI GPT - 4 pricing
-            cost_per_1k = self.token_costs["openai"]["gpt - 4"]
+            # Fallback to OpenAI gpt-4 pricing
+            cost_per_1k = self.token_costs["openai"]["gpt-4"]
 
         # Assume 70% input, 30% output tokens
         input_tokens = int(total_tokens * 0.7)
@@ -327,7 +327,7 @@ class CostEstimator:
         cost_per_1k = self.token_costs.get(provider, {}).get(model, {})
         if not cost_per_1k:
             self.logger.warning(f"No cost data for {provider}/{model}, using fallback")
-            cost_per_1k = self.token_costs["openai"]["gpt - 4"]
+            cost_per_1k = self.token_costs["openai"]["gpt-4"]
 
         input_cost = (input_tokens / 1000) * cost_per_1k["input"]
         output_cost = (output_tokens / 1000) * cost_per_1k["output"]
@@ -441,15 +441,15 @@ class CostEstimator:
             "alternatives": {},
         }
 
-        # Cost - based recommendations
+        # Cost-based recommendations
         if estimate.estimated_cost_usd > 1.0:
             recommendations["suggestions"].append(
-                "Consider breaking down into smaller sub - tasks"
+                "Consider breaking down into smaller sub-tasks"
             )
 
         if estimate.agent_count > 2:
             recommendations["suggestions"].append(
-                "Evaluate if all agents are necessary - consider single - agent approach"
+                "Evaluate if all agents are necessary-consider single-agent approach"
             )
             recommendations["alternatives"]["single_agent"] = {
                 "estimated_cost": estimate.estimated_cost_usd * 0.4,
@@ -493,7 +493,7 @@ class CostEstimator:
                         "task_id": usage.task_id,
                         "cost": usage.cost_usd,
                         "tokens": usage.tokens_used,
-                        "duration": (datetime.now() - usage.start_time).total_seconds(),
+                        "duration": (datetime.now()-usage.start_time).total_seconds(),
                         "providers": usage.provider_breakdown,
                         "agents": usage.agent_breakdown,
                     }

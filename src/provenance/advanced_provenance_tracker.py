@@ -1,5 +1,5 @@
 """
-Advanced Provenance Tracking System for Systematic Reviews - Phase 3 Implementation.
+Advanced Provenance Tracking System for Systematic Reviews-Phase 3 Implementation.
 
 This module provides comprehensive provenance tracking for systematic review workflows,
 enabling reproducibility, audit trails, and quality assurance.
@@ -147,7 +147,7 @@ class ProvenanceRecord:
             self.checksum = self._calculate_checksum()
 
     def _calculate_checksum(self) -> str:
-        """Calculate SHA - 256 checksum of the record."""
+        """Calculate SHA-256 checksum of the record."""
         record_data = {
             "record_id": self.record_id,
             "review_id": self.review_id,
@@ -244,7 +244,7 @@ class AdvancedProvenanceTracker:
         Args:
             review_id: Systematic review identifier
             activity_type: Type of activity being tracked
-            activity_name: Human - readable activity name
+            activity_name: Human-readable activity name
             agent: Agent performing the activity
             parameters: Activity parameters
 
@@ -317,7 +317,7 @@ class AdvancedProvenanceTracker:
             if activity.start_time and activity.end_time:
                 start = datetime.fromisoformat(activity.start_time)
                 end = datetime.fromisoformat(activity.end_time)
-                activity.duration_seconds = (end - start).total_seconds()
+                activity.duration_seconds = (end-start).total_seconds()
 
             # Remove from active activities
             del self.active_activities[activity_id]
@@ -341,7 +341,7 @@ class AdvancedProvenanceTracker:
             review_id: Systematic review identifier
             activity_id: Associated activity identifier
             entity_type: Type of entity (study, database, file, etc.)
-            entity_name: Human - readable entity name
+            entity_name: Human-readable entity name
             entity_id: Unique entity identifier
             entity_version: Entity version
             metadata: Additional entity metadata
@@ -621,7 +621,7 @@ class AdvancedProvenanceTracker:
 
         Args:
             review_id: Systematic review identifier
-            synthesis_type: Type of synthesis (meta - analysis, narrative, etc.)
+            synthesis_type: Type of synthesis (meta-analysis, narrative, etc.)
             included_studies: Studies included in synthesis
             synthesis_parameters: Parameters used for synthesis
             synthesis_results: Results of synthesis
@@ -905,8 +905,8 @@ class AdvancedProvenanceTracker:
             activity_type=ProvenanceType.SEARCH_EXECUTION,
             activity_name="PubMed search execution",
             status=EventStatus.COMPLETED,
-            start_time="2024 - 01 - 15T10:00:00",
-            end_time="2024 - 01 - 15T10:05:00",
+            start_time="2024 - 01-15T10:00:00",
+            end_time="2024 - 01-15T10:05:00",
             duration_seconds=300.0,
             parameters={"database": "PubMed", "search_terms": "AI diagnosis"},
             outputs={"results_count": 847},
@@ -923,13 +923,13 @@ class AdvancedProvenanceTracker:
             entity_id="entity_pubmed_001",
             entity_type="database",
             entity_name="PubMed",
-            metadata={"search_date": "2024 - 01 - 15"},
+            metadata={"search_date": "2024 - 01-15"},
         )
 
         search_record = ProvenanceRecord(
             record_id="record_001",
             review_id=query.review_id or "review_001",
-            timestamp="2024 - 01 - 15T10:00:00",
+            timestamp="2024 - 01-15T10:00:00",
             activity=search_activity,
             agent=search_agent,
             entities=[pubmed_entity],
@@ -943,8 +943,8 @@ class AdvancedProvenanceTracker:
             activity_type=ProvenanceType.SCREENING_DECISION,
             activity_name="Title / abstract screening",
             status=EventStatus.COMPLETED,
-            start_time="2024 - 01 - 16T09:00:00",
-            end_time="2024 - 01 - 16T09:30:00",
+            start_time="2024 - 01-16T09:00:00",
+            end_time="2024 - 01-16T09:30:00",
             duration_seconds=1800.0,
             parameters={
                 "screening_stage": "title_abstract",
@@ -957,13 +957,13 @@ class AdvancedProvenanceTracker:
             entity_id="entity_study_001",
             entity_type="study",
             entity_name="AI Diagnosis Study 001",
-            metadata={"title": "AI - Assisted Diagnosis in Emergency Medicine"},
+            metadata={"title": "AI-Assisted Diagnosis in Emergency Medicine"},
         )
 
         screening_record = ProvenanceRecord(
             record_id="record_002",
             review_id=query.review_id or "review_001",
-            timestamp="2024 - 01 - 16T09:00:00",
+            timestamp="2024-01-16T09:00:00",
             activity=screening_activity,
             entities=[study_entity],
         )
@@ -1029,7 +1029,7 @@ async def demonstrate_provenance_tracking():
         search_strategy={
             "boolean_operators": ["AND", "OR"],
             "field_restrictions": ["title", "abstract"],
-            "date_range": "2015 - 2024",
+            "date_range": "2015-2024",
         },
         results_count=847,
         agent=search_agent,
@@ -1110,7 +1110,7 @@ async def demonstrate_provenance_tracking():
 
     for record in provenance_records:
         print(
-            f"     - {record.activity.activity_name} ({record.activity.status.value})"
+            f"    -{record.activity.activity_name} ({record.activity.status.value})"
         )
         print(
             f"       Entities: {len(record.entities)}, Relations: {len(record.relations)}"

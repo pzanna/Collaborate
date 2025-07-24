@@ -1,4 +1,4 @@
-"""Enhanced data models for hierarchical research structure - V2 API."""
+"""Enhanced data models for hierarchical research structure-V2 API."""
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional

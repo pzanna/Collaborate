@@ -1,8 +1,8 @@
 """
-Advanced Classification Models for Systematic Reviews - Phase 4A Implementation.
+Advanced Classification Models for Systematic Reviews-Phase 4A Implementation.
 
-This module provides next - generation AI / ML models for enhanced study classification,
-multi - modal analysis, and continuous learning capabilities.
+This module provides next-generation AI / ML models for enhanced study classification,
+multi-modal analysis, and continuous learning capabilities.
 """
 
 import asyncio
@@ -30,9 +30,9 @@ class ConfidenceLevel(Enum):
     """Confidence levels for predictions."""
 
     VERY_HIGH = "very_high"  # >95%
-    HIGH = "high"  # 85 - 95%
-    MODERATE = "moderate"  # 70 - 85%
-    LOW = "low"  # 55 - 70%
+    HIGH = "high"  # 85-95%
+    MODERATE = "moderate"  # 70-85%
+    LOW = "low"  # 55-70%
     VERY_LOW = "very_low"  # <55%
 
 
@@ -165,7 +165,7 @@ class AdvancedClassificationModel:
 
 class TransformerClassificationModel(AdvancedClassificationModel):
     """
-    Transformer - based classification model using pre - trained language models.
+    transformer-based classification model using pre-trained language models.
 
     Leverages BERT, RoBERTa, or similar models for sophisticated text understanding
     and classification of study designs.
@@ -174,7 +174,7 @@ class TransformerClassificationModel(AdvancedClassificationModel):
     def __init__(self, model_id: str, config: Dict[str, Any]):
         """Initialize transformer model."""
         super().__init__(model_id, ModelType.TRANSFORMER, config)
-        self.base_model = config.get("base_model", "bert - base - uncased")
+        self.base_model = config.get("base_model", "bert-base-uncased")
         self.max_length = config.get("max_length", 512)
         self.num_classes = config.get("num_classes", 13)
         self.fine_tune_layers = config.get("fine_tune_layers", 2)
@@ -182,7 +182,7 @@ class TransformerClassificationModel(AdvancedClassificationModel):
     async def train(
         self, training_data: List[Dict[str, Any]], validation_data: List[Dict[str, Any]]
     ) -> ModelPerformance:
-        """Train transformer model with fine - tuning."""
+        """Train transformer model with fine-tuning."""
         self.logger.info(
             f"Training transformer model {self.model_id} on {len(training_data)} samples"
         )
@@ -198,20 +198,20 @@ class TransformerClassificationModel(AdvancedClassificationModel):
             precision={
                 "RCT": 0.952,
                 "Cohort": 0.934,
-                "Case - Control": 0.941,
-                "Cross - sectional": 0.953,
+                "case-control": 0.941,
+                "cross-sectional": 0.953,
             },
             recall={
                 "RCT": 0.948,
                 "Cohort": 0.942,
-                "Case - Control": 0.935,
-                "Cross - sectional": 0.951,
+                "case-control": 0.935,
+                "cross-sectional": 0.951,
             },
             f1_score={
                 "RCT": 0.950,
                 "Cohort": 0.938,
-                "Case - Control": 0.938,
-                "Cross - sectional": 0.952,
+                "case-control": 0.938,
+                "cross-sectional": 0.952,
             },
             auc_roc=0.987,
             confusion_matrix=[
@@ -245,10 +245,10 @@ class TransformerClassificationModel(AdvancedClassificationModel):
         class_names = [
             "RCT",
             "Cohort",
-            "Case - Control",
-            "Cross - sectional",
+            "case-control",
+            "cross-sectional",
             "Qualitative",
-            "Mixed - Methods",
+            "mixed-methods",
         ]
         probabilities = np.random.dirichlet(np.ones(len(class_names)))
         predicted_idx = np.argmax(probabilities)
@@ -300,7 +300,7 @@ class EnsembleClassificationModel(AdvancedClassificationModel):
     """
     Ensemble classification model combining multiple approaches.
 
-    Combines transformer models, gradient boosting, and rule - based classifiers
+    Combines transformer models, gradient boosting, and rule-based classifiers
     for robust and accurate study design classification.
     """
 
@@ -329,20 +329,20 @@ class EnsembleClassificationModel(AdvancedClassificationModel):
             precision={
                 "RCT": 0.968,
                 "Cohort": 0.954,
-                "Case - Control": 0.961,
-                "Cross - sectional": 0.969,
+                "case-control": 0.961,
+                "cross-sectional": 0.969,
             },
             recall={
                 "RCT": 0.965,
                 "Cohort": 0.958,
-                "Case - Control": 0.956,
-                "Cross - sectional": 0.967,
+                "case-control": 0.956,
+                "cross-sectional": 0.967,
             },
             f1_score={
                 "RCT": 0.966,
                 "Cohort": 0.956,
-                "Case - Control": 0.958,
-                "Cross - sectional": 0.968,
+                "case-control": 0.958,
+                "cross-sectional": 0.968,
             },
             auc_roc=0.994,
             confusion_matrix=[
@@ -374,10 +374,10 @@ class EnsembleClassificationModel(AdvancedClassificationModel):
         class_names = [
             "RCT",
             "Cohort",
-            "Case - Control",
-            "Cross - sectional",
+            "case-control",
+            "cross-sectional",
             "Qualitative",
-            "Mixed - Methods",
+            "mixed-methods",
         ]
 
         # Ensemble typically has higher confidence and better calibration
@@ -593,17 +593,17 @@ class ModelManager:
         model_a_score = (
             results["model_a"]["accuracy"] * 0.5
             + results["model_a"]["user_satisfaction"] / 5.0 * 0.3
-            + (2.0 - results["model_a"]["processing_time"]) / 2.0 * 0.2
+            + (2.0-results["model_a"]["processing_time"]) / 2.0 * 0.2
         )
 
         model_b_score = (
             results["model_b"]["accuracy"] * 0.5
             + results["model_b"]["user_satisfaction"] / 5.0 * 0.3
-            + (2.0 - results["model_b"]["processing_time"]) / 2.0 * 0.2
+            + (2.0-results["model_b"]["processing_time"]) / 2.0 * 0.2
         )
 
         results["winner"] = model_a_id if model_a_score > model_b_score else model_b_id
-        results["score_difference"] = abs(model_a_score - model_b_score)
+        results["score_difference"] = abs(model_a_score-model_b_score)
 
         return results
 
@@ -657,7 +657,7 @@ async def demonstrate_advanced_classification():
 
     # Create and register transformer model
     transformer_config = {
-        "base_model": "bert - base - uncased",
+        "base_model": "bert-base-uncased",
         "max_length": 512,
         "num_classes": 13,
         "fine_tune_layers": 2,
@@ -700,13 +700,13 @@ async def demonstrate_advanced_classification():
         "transformer_v1", training_data, validation_data
     )
     print(
-        f"   ✅ Transformer trained - Accuracy: {transformer_performance.accuracy:.3f}"
+        f"   ✅ Transformer trained-Accuracy: {transformer_performance.accuracy:.3f}"
     )
 
     ensemble_performance = await manager.train_model(
         "ensemble_v1", training_data, validation_data
     )
-    print(f"   ✅ Ensemble trained - Accuracy: {ensemble_performance.accuracy:.3f}")
+    print(f"   ✅ Ensemble trained-Accuracy: {ensemble_performance.accuracy:.3f}")
 
     # Compare models
     print("\n📊 Comparing model performance...")

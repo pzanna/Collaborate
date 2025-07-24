@@ -1,7 +1,7 @@
 """
-Quality AI for Systematic Reviews - Phase 4A Implementation.
+Quality AI for Systematic Reviews-Phase 4A Implementation.
 
-This module provides AI - powered quality assessment, bias detection,
+This module provides AI-powered quality assessment, bias detection,
 and automated GRADE evidence evaluation for systematic reviews.
 """
 
@@ -20,10 +20,10 @@ class QualityTool(Enum):
     """Quality assessment tools."""
 
     ROB_2 = "rob_2"  # Risk of Bias 2 for RCTs
-    ROBINS_I = "robins_i"  # Risk of Bias In Non - randomized Studies
+    ROBINS_I = "robins_i"  # Risk of Bias In non-randomized Studies
     CASP = "casp"  # Critical Appraisal Skills Programme
     JBI = "jbi"  # Joanna Briggs Institute
-    NEWCASTLE_OTTAWA = "newcastle_ottawa"  # Newcastle - Ottawa Scale
+    NEWCASTLE_OTTAWA = "newcastle_ottawa"  # Newcastle-Ottawa Scale
     AMSTAR = "amstar"  # Assessment of Multiple Systematic Reviews
     PRISMA_P = "prisma_p"  # PRISMA for Protocols
 
@@ -138,7 +138,7 @@ class GRADEAssessment:
             - self.inconsistency_downgrade
             - self.indirectness_downgrade
             - self.imprecision_downgrade
-            - self.publication_bias_downgrade
+           -self.publication_bias_downgrade
         )
 
         # Apply upgrades
@@ -235,7 +235,7 @@ class RoB2Assessor:
     ) -> QualityDomain:
         """Assess individual RoB 2 domain."""
 
-        # Simulate AI - based domain assessment
+        # Simulate AI-based domain assessment
         # In production, this would use NLP and ML models
 
         domain_patterns = {
@@ -263,7 +263,7 @@ class RoB2Assessor:
             },
             "missing_outcome_data": {
                 "low_risk_patterns": [
-                    "complete follow - up",
+                    "complete follow-up",
                     "minimal missing data",
                     "ITT analysis",
                 ],
@@ -286,19 +286,19 @@ class RoB2Assessor:
                 "high_risk_patterns": [
                     "subjective outcome",
                     "unblinded assessor",
-                    "non - validated",
+                    "non-validated",
                 ],
                 "some_concerns_patterns": ["partially blinded", "unclear measurement"],
             },
             "selection_reported_results": {
                 "low_risk_patterns": [
-                    "pre - registered",
+                    "pre-registered",
                     "protocol published",
                     "all outcomes reported",
                 ],
                 "high_risk_patterns": [
                     "selective reporting",
-                    "post - hoc analysis",
+                    "post-hoc analysis",
                     "missing outcomes",
                 ],
                 "some_concerns_patterns": ["unclear reporting", "protocol unavailable"],
@@ -387,7 +387,7 @@ class RoB2Assessor:
     def _calculate_numeric_score(
         self, domain_assessments: List[QualityDomain]
     ) -> float:
-        """Calculate numeric quality score (0 - 1)."""
+        """Calculate numeric quality score (0-1)."""
 
         risk_scores = {
             BiasRisk.LOW: 1.0,
@@ -443,7 +443,7 @@ class RoB2Assessor:
                 elif domain.domain_name == "measurement_outcome":
                     strengths.append("Objective outcome measurement")
                 elif domain.domain_name == "missing_outcome_data":
-                    strengths.append("Complete follow - up data")
+                    strengths.append("Complete follow-up data")
 
         return strengths
 
@@ -657,7 +657,7 @@ class GRADEAssessor:
         pooled_effect = synthesis_results.get("pooled_effect", {})
         ci = pooled_effect.get("confidence_interval", [-1, 1])
 
-        ci_width = ci[1] - ci[0] if len(ci) >= 2 else 2.0
+        ci_width = ci[1]-ci[0] if len(ci) >= 2 else 2.0
 
         if ci_width > 1.0:
             return 2  # Serious imprecision
@@ -702,13 +702,13 @@ class GRADEAssessor:
             return 0
 
     async def _assess_dose_response_upgrade(self, studies: List[Dict[str, Any]]) -> int:
-        """Assess upgrade for dose - response relationship."""
+        """Assess upgrade for dose-response relationship."""
 
-        # Check if studies report dose - response data
+        # Check if studies report dose-response data
         dose_response_studies = sum(1 for s in studies if s.get("dose_response", False))
 
         if dose_response_studies > len(studies) * 0.5:
-            return 1  # Evidence of dose - response
+            return 1  # Evidence of dose-response
         else:
             return 0
 
@@ -721,7 +721,7 @@ class GRADEAssessor:
         ]
 
         if len(observational_studies) > 0:
-            # Simplified check - would need domain expertise
+            # Simplified check-would need domain expertise
             return 0  # Conservative approach
         else:
             return 0
@@ -782,7 +782,7 @@ class QualityAI:
     Main Quality AI system for systematic reviews.
 
     Integrates multiple quality assessment tools and provides
-    AI - powered bias detection and GRADE evaluation.
+    AI-powered bias detection and GRADE evaluation.
     """
 
     def __init__(self, config: Dict[str, Any]):
@@ -1044,7 +1044,7 @@ async def demonstrate_quality_ai():
     assessments = await quality_ai.assess_quality_batch(studies)
 
     for assessment in assessments:
-        print(f"   - Study {assessment.study_id}:")
+        print(f"  -Study {assessment.study_id}:")
     print(f"     Overall Bias: {assessment.overall_risk.value}")
     print(f"     Confidence: {assessment.ai_confidence:.3f}")
     print(
@@ -1072,7 +1072,7 @@ async def demonstrate_quality_ai():
     print("     Factors Influencing Quality:")
     for factor in grade_profile["factors_influencing_quality"]:
         print(
-            f"       - {factor['factor']}: {factor['impact']} ({factor['explanation']})"
+            f"      -{factor['factor']}: {factor['impact']} ({factor['explanation']})"
         )
     print(f"     Summary: {grade_profile['summary_of_findings']}")
 

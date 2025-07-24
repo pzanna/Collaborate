@@ -273,7 +273,7 @@ class AgentRegistry:
                 async with self._lock:
                     for agent_id, agent_instance in self.agents.items():
                         time_since_heartbeat = (
-                            current_time - agent_instance.last_heartbeat
+                            current_time-agent_instance.last_heartbeat
                         )
                         if time_since_heartbeat > timedelta(
                             seconds=self.heartbeat_timeout

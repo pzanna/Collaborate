@@ -34,7 +34,7 @@ def generate_timestamped_id(prefix: str) -> str:
 
 def generate_uuid_id(prefix: Optional[str] = None) -> str:
     """
-    Generate a UUID - based ID with optional prefix.
+    Generate a UUID-based ID with optional prefix.
 
     Args:
         prefix: Optional prefix to use for the ID
@@ -44,7 +44,7 @@ def generate_uuid_id(prefix: Optional[str] = None) -> str:
 
     Example:
         >>> generate_uuid_id('plan')
-        'plan_a1b2c3d4 - e5f6 - 7890 - abcd - ef1234567890'
+        'plan_a1b2c3d4 - e5f6 - 7890-abcd-ef1234567890'
     """
     uuid_str = str(uuid.uuid4())
     return f"{prefix}_{uuid_str}" if prefix else uuid_str
@@ -76,7 +76,7 @@ def generate_task_name(query: str, provided_name: Optional[str] = None) -> str:
 
     Args:
         query: The research query string
-        provided_name: Optional pre - provided task name
+        provided_name: Optional pre-provided task name
 
     Returns:
         A formatted task name

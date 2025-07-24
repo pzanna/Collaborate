@@ -8,8 +8,7 @@ assessment system for systematic reviews.
 This module provides:
 - Automated GRADE scoring based on study characteristics
 - Evidence certainty determination
-- Explanation generation for GRADE decisions
-- Integration with evidence synthesis results
+- Explanation generation for GRADE decisions-Integration with evidence synthesis results
 
 Author: Eunice AI System
 Date: July 2025
@@ -296,7 +295,7 @@ class GRADEAutomation:
             ):
                 upgrades[GRADECriteria.LARGE_EFFECT] = 1
 
-        # Dose - response gradient
+        # dose-response gradient
         if evidence_profile.dose_response_gradient:
             upgrades[GRADECriteria.DOSE_RESPONSE] = 1
 
@@ -383,7 +382,7 @@ class GRADEAutomation:
                 )
             elif criteria == GRADECriteria.DOSE_RESPONSE:
                 rationale[criteria.value] = (
-                    f"Upgraded {level} level(s) due to dose - response gradient"
+                    f"Upgraded {level} level(s) due to dose-response gradient"
                 )
             elif criteria == GRADECriteria.CONFOUNDERS:
                 rationale[criteria.value] = (
@@ -415,7 +414,7 @@ class GRADEAutomation:
             base_score
             + study_factor * 0.2
             + sample_factor * 0.1
-            - downgrade_penalty
+           -downgrade_penalty
             + upgrade_bonus
         )
 
@@ -496,16 +495,16 @@ class GRADEAutomation:
         """Generate additional considerations"""
         considerations = []
 
-        # Add context - specific considerations
+        # Add context-specific considerations
         if context.get("population_specific"):
-            considerations.append("Consider population - specific factors")
+            considerations.append("Consider population-specific factors")
 
         if context.get("resource_implications"):
             considerations.append("Evaluate resource requirements and feasibility")
 
         if assessment.final_certainty in [GRADELevel.LOW, GRADELevel.VERY_LOW]:
             considerations.append(
-                "Additional high - quality research may change this recommendation"
+                "Additional high-quality research may change this recommendation"
             )
 
         # Add assessment - specific considerations

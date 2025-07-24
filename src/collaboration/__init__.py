@@ -2,16 +2,15 @@
 Collaboration Module for Eunice Systematic Review Platform
 
 This module provides comprehensive collaboration features for systematic reviews including:
-- Real - time collaboration engine with WebSocket support
+- real-time collaboration engine with WebSocket support
 - Advanced conflict detection and resolution
 - Role - based access control and security
 - Collaborative quality assurance workflows
 
 Components:
-- RealtimeCollaborationEngine: WebSocket - based real - time collaboration
+- RealtimeCollaborationEngine: WebSocket - based real-time collaboration
 - AdvancedConflictResolver: Intelligent conflict detection and resolution
-- AccessControlManager: Role - based access control and security
-- CollaborativeQAWorkflows: Quality assurance workflow management
+- AccessControlManager: Role - based access control and security-CollaborativeQAWorkflows: Quality assurance workflow management
 
 Author: Eunice AI System
 Date: 2024
@@ -37,7 +36,7 @@ from .realtime_engine import (create_collaboration_client,
                               send_screening_decision)
 
 __all__ = [
-    # Real - time Collaboration
+    # real-time Collaboration
     "RealtimeCollaborationEngine",
     "EventType",
     "CollabUserRole",

@@ -2,14 +2,13 @@
 Resource Monitoring & Performance Profiling
 ==========================================
 
-Real - time system resource monitoring and performance profiling
+real-time system resource monitoring and performance profiling
 for systematic review automation.
 
 This module provides:
 - CPU, memory, disk I / O monitoring
 - Performance profiling and bottleneck detection
-- Resource utilization alerts
-- Performance reporting and analytics
+- Resource utilization alerts-Performance reporting and analytics
 
 Author: Eunice AI System
 Date: July 2025
@@ -85,7 +84,7 @@ class PerformanceReport:
 
 
 class SystemResourceMonitor:
-    """Monitor system resources in real - time"""
+    """Monitor system resources in real-time"""
 
     def __init__(self, sample_interval: float = 1.0, history_size: int = 1000):
         """
@@ -233,7 +232,7 @@ class SystemResourceMonitor:
 
     def get_metrics_history(self, duration_minutes: int = 10) -> List[SystemMetrics]:
         """Get metrics history for specified duration"""
-        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=duration_minutes)
+        cutoff_time = datetime.now(timezone.utc)-timedelta(minutes=duration_minutes)
         return [m for m in self.history if m.timestamp >= cutoff_time]
 
     def get_metrics_summary(self, duration_minutes: int = 10) -> Dict[str, Any]:
@@ -273,7 +272,7 @@ class SystemResourceMonitor:
 
 
 class PerformanceProfiler:
-    """Function - level performance profiler"""
+    """Function-level performance profiler"""
 
     def __init__(self):
         """Initialize performance profiler"""
@@ -330,7 +329,7 @@ class PerformanceProfiler:
                     end_memory = self._get_memory_usage()
 
                     execution_time_ms = (end_time - start_time) * 1000
-                    memory_delta = max(0, end_memory - start_memory)
+                    memory_delta = max(0, end_memory-start_memory)
 
                     self._record_profile(profile_name, execution_time_ms, memory_delta)
 
@@ -468,8 +467,8 @@ class ResourceMonitor:
 
         # Log operation impact
         if start_metrics and end_metrics:
-            cpu_delta = end_metrics.cpu_percent - start_metrics.cpu_percent
-            memory_delta = end_metrics.memory_percent - start_metrics.memory_percent
+            cpu_delta = end_metrics.cpu_percent-start_metrics.cpu_percent
+            memory_delta = end_metrics.memory_percent-start_metrics.memory_percent
 
             if abs(cpu_delta) > 10 or abs(memory_delta) > 5:
                 logger.info(
@@ -517,11 +516,11 @@ class ResourceMonitor:
         """Generate optimization recommendations"""
         recommendations = []
 
-        # System - level recommendations
+        # System-level recommendations
         metrics_summary = self.system_monitor.get_metrics_summary(10)
         if metrics_summary:
             if metrics_summary["cpu"]["average"] > 70:
-                recommendations.append("Consider optimizing CPU - intensive operations")
+                recommendations.append("Consider optimizing CPU-intensive operations")
 
             if metrics_summary["memory"]["average"] > 80:
                 recommendations.append(
@@ -530,10 +529,10 @@ class ResourceMonitor:
 
             if metrics_summary.get("alerts_triggered", 0) > 5:
                 recommendations.append(
-                    "Frequent resource alerts - review system capacity"
+                    "Frequent resource alerts-review system capacity"
                 )
 
-        # Function - level recommendations
+        # Function-level recommendations
         slow_functions = self.performance_profiler.get_slowest_functions(3)
         for func in slow_functions:
             if func.average_time_ms > 500:
@@ -544,7 +543,7 @@ class ResourceMonitor:
             [
                 "Use asynchronous programming for I / O operations",
                 "Implement caching for frequently accessed data",
-                "Consider parallel processing for CPU - intensive tasks",
+                "Consider parallel processing for CPU-intensive tasks",
                 "Monitor and optimize database queries",
                 "Use connection pooling for external services",
             ]
@@ -557,7 +556,7 @@ class ResourceMonitor:
         if not self.start_time:
             raise ValueError("Monitoring must be started before generating report")
 
-        duration = (datetime.now(timezone.utc) - self.start_time).total_seconds()
+        duration = (datetime.now(timezone.utc)-self.start_time).total_seconds()
 
         # System metrics summary
         system_summary = self.system_monitor.get_metrics_summary(10)
@@ -617,7 +616,7 @@ class ResourceMonitor:
                 ),
             },
             "monitoring_duration_seconds": (
-                (datetime.now(timezone.utc) - self.start_time).total_seconds()
+                (datetime.now(timezone.utc)-self.start_time).total_seconds()
                 if self.start_time
                 else 0
             ),
@@ -641,7 +640,7 @@ async def demo_resource_monitor():
     # Example operations to monitor
     @monitor.profile_function("cpu_intensive_task")
     def cpu_intensive_task(n: int) -> int:
-        """Simulate CPU - intensive work"""
+        """Simulate CPU-intensive work"""
         result = 0
         for i in range(n):
             result += i * i

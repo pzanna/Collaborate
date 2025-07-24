@@ -1,7 +1,7 @@
 """
 Task Timeout Manager for MCP Server
 
-Handles task timeouts, tracking, and cancellation for long - running tasks.
+Handles task timeouts, tracking, and cancellation for long-running tasks.
 """
 
 import asyncio
@@ -103,7 +103,7 @@ class TaskTimeoutManager:
             return False
 
         task_info = self.running_tasks[task_id]
-        duration = time.time() - task_info["start_time"]
+        duration = time.time()-task_info["start_time"]
 
         # Cancel timeout task
         if task_id in self.timeout_tasks:
@@ -134,7 +134,7 @@ class TaskTimeoutManager:
             return None
 
         task_info = self.running_tasks[task_id].copy()
-        task_info["elapsed_time"] = time.time() - task_info["start_time"]
+        task_info["elapsed_time"] = time.time()-task_info["start_time"]
         return task_info
 
     def get_running_tasks(self) -> Dict[str, Dict]:
@@ -229,7 +229,7 @@ class TaskTimeoutManager:
                     # Clean up tasks older than 1 hour that are not running
                     if (
                         task_info["status"] != "running"
-                        and current_time - task_info["start_time"] > 3600
+                        and current_time-task_info["start_time"] > 3600
                     ):
                         stale_tasks.append(task_id)
 
@@ -296,7 +296,7 @@ class RetryManager:
             return self.base_delay
 
         attempts = self.retry_history[task_id]["attempts"]
-        delay = self.base_delay * (2 ** (attempts - 1))
+        delay = self.base_delay * (2 ** (attempts-1))
 
         # Cap at maximum delay of 60 seconds
         return min(delay, 60.0)

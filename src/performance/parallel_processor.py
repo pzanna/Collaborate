@@ -2,13 +2,12 @@
 Parallel Processing Optimization
 ===============================
 
-High - performance parallel processing for systematic review tasks.
+High-performance parallel processing for systematic review tasks.
 
 This module provides:
 - Multi - core task processing
 - Asynchronous batch processing
-- Load balancing and task distribution
-- Intelligent scheduling
+- Load balancing and task distribution-Intelligent scheduling
 
 Author: Eunice AI System
 Date: July 2025
@@ -228,7 +227,7 @@ class ResourceMonitor:
 
         return {
             "monitoring_duration": (
-                time.time() - self.start_time if self.start_time else 0
+                time.time()-self.start_time if self.start_time else 0
             ),
             "cpu_avg": sum(cpu_values) / len(cpu_values),
             "cpu_max": max(cpu_values),
@@ -249,7 +248,7 @@ class TaskScheduler:
 
     def add_task(self, task: Task):
         """Add task to scheduler"""
-        # Priority queue uses negative priority for max - heap behavior
+        # Priority queue uses negative priority for max-heap behavior
         priority_value = -task.priority.value
         self.task_queue.put((priority_value, task.created_at.timestamp(), task))
 
@@ -298,7 +297,7 @@ class TaskScheduler:
 
 class ParallelProcessor:
     """
-    High - performance parallel processor for systematic review tasks
+    High-performance parallel processor for systematic review tasks
     """
 
     def __init__(self, config: Optional[ParallelConfig] = None):
@@ -357,10 +356,10 @@ class ParallelProcessor:
 
             # Calculate metrics
             end_time = time.time()
-            total_duration = end_time - start_time
+            total_duration = end_time-start_time
 
             completed_count = sum(1 for r in results if r.get("status") == "completed")
-            failed_count = len(results) - completed_count
+            failed_count = len(results)-completed_count
 
             # Filter errors properly
             error_list = []
@@ -447,7 +446,7 @@ class ParallelProcessor:
                     "task_id": task.task_id,
                     "status": "completed",
                     "result": result,
-                    "duration": (task.completed_at - task.started_at).total_seconds(),
+                    "duration": (task.completed_at-task.started_at).total_seconds(),
                 }
 
             except Exception as e:
@@ -460,7 +459,7 @@ class ParallelProcessor:
                     "task_id": task.task_id,
                     "status": "failed",
                     "error": e,
-                    "duration": (task.completed_at - task.started_at).total_seconds(),
+                    "duration": (task.completed_at-task.started_at).total_seconds(),
                 }
 
         # Process tasks in controlled batches to avoid overwhelming system
@@ -501,7 +500,7 @@ class ParallelProcessor:
                     "task_id": task.task_id,
                     "status": "completed",
                     "result": result,
-                    "duration": (task.completed_at - task.started_at).total_seconds(),
+                    "duration": (task.completed_at-task.started_at).total_seconds(),
                 }
 
             except Exception as e:
@@ -513,7 +512,7 @@ class ParallelProcessor:
                     "task_id": task.task_id,
                     "status": "failed",
                     "error": e,
-                    "duration": (task.completed_at - task.started_at).total_seconds(),
+                    "duration": (task.completed_at-task.started_at).total_seconds(),
                 }
 
         results = []
@@ -546,7 +545,7 @@ class ParallelProcessor:
                 result = function(*args, **kwargs)
 
                 end_time = datetime.now(timezone.utc)
-                duration = (end_time - start_time).total_seconds()
+                duration = (end_time-start_time).total_seconds()
 
                 return {
                     "task_id": task_data["task_id"],
@@ -592,7 +591,7 @@ class ParallelProcessor:
         return results
 
     async def _process_hybrid(self, batch: TaskBatch) -> List[Dict[str, Any]]:
-        """Process batch using hybrid approach - mix of async and thread pool"""
+        """Process batch using hybrid approach-mix of async and thread pool"""
         # Categorize tasks by type (I / O vs CPU bound)
         io_tasks = []
         cpu_tasks = []
@@ -658,7 +657,7 @@ class ParallelProcessor:
                         "status": "completed",
                         "result": result,
                         "duration": (
-                            task.completed_at - task.started_at
+                            task.completed_at-task.started_at
                         ).total_seconds(),
                     }
                 )
@@ -674,7 +673,7 @@ class ParallelProcessor:
                         "status": "failed",
                         "error": e,
                         "duration": (
-                            task.completed_at - task.started_at
+                            task.completed_at-task.started_at
                         ).total_seconds(),
                     }
                 )

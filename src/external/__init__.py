@@ -7,8 +7,7 @@ citation management systems, and research tools for seamless workflow automation
 Components:
 - database_connectors.py: API connectors for major research databases
 - citation_managers.py: Integration with reference management systems
-- research_tools.py: Compatibility with external research tools
-- data_hub.py: Standardized data import / export functionality
+- research_tools.py: Compatibility with external research tools-data_hub.py: Standardized data import / export functionality
 
 Author: Eunice AI System
 Date: July 2025

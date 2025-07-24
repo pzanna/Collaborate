@@ -167,7 +167,7 @@ class PersonaRegistry:
             if expertise_area.lower() in [cap.lower() for cap in capabilities]:
                 return persona_type
 
-        # If no exact match, return a general - purpose persona
+        # If no exact match, return a general-purpose persona
         # For now, default to neurobiologist for biological queries
         if any(
             term in expertise_area.lower()

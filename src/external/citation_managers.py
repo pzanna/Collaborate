@@ -7,10 +7,9 @@ including Zotero, Mendeley, EndNote, and BibTeX for seamless citation handling.
 Features:
 - Direct API integration with major citation managers
 - Automated import / export of reference libraries
-- Real - time synchronization with external libraries
+- real-time synchronization with external libraries
 - Format conversion between citation styles
-- Collaborative library management
-- Backup and version control for references
+- Collaborative library management-Backup and version control for references
 
 Author: Eunice AI System
 Date: July 2025
@@ -175,7 +174,7 @@ class ZoteroIntegration(CitationManager):
         try:
             import aiohttp
 
-            headers = {"Zotero - API - Key": self.api_key}
+            headers = {"Zotero - API-Key": self.api_key}
 
             # Test with user library if user_id provided
             if self.user_id:
@@ -209,7 +208,7 @@ class ZoteroIntegration(CitationManager):
             if not self.is_authenticated:
                 await self.authenticate()
 
-            headers = {"Zotero - API - Key": self.api_key}
+            headers = {"Zotero - API-Key": self.api_key}
 
             # Determine API endpoint
             if self.user_id:
@@ -394,7 +393,7 @@ class ZoteroIntegration(CitationManager):
         if not date_str:
             return None
 
-        # Try to extract 4 - digit year
+        # Try to extract 4-digit year
         year_match = re.search(r"\b(19|20)\d{2}\b", date_str)
         if year_match:
             return int(year_match.group())
@@ -530,38 +529,38 @@ class ZoteroIntegration(CitationManager):
 
             # RIS type
             ris_type = self._get_ris_type(ref.reference_type)
-            entry_lines.append(f"TY  - {ris_type}")
+            entry_lines.append(f"TY -{ris_type}")
 
             # Add fields
             if ref.title:
-                entry_lines.append(f"TI  - {ref.title}")
+                entry_lines.append(f"TI -{ref.title}")
 
             for author in ref.authors:
-                entry_lines.append(f"AU  - {author}")
+                entry_lines.append(f"AU -{author}")
 
             if ref.journal:
-                entry_lines.append(f"JO  - {ref.journal}")
+                entry_lines.append(f"JO -{ref.journal}")
             if ref.publication_year:
-                entry_lines.append(f"PY  - {ref.publication_year}")
+                entry_lines.append(f"PY -{ref.publication_year}")
             if ref.volume:
-                entry_lines.append(f"VL  - {ref.volume}")
+                entry_lines.append(f"VL -{ref.volume}")
             if ref.issue:
-                entry_lines.append(f"IS  - {ref.issue}")
+                entry_lines.append(f"IS -{ref.issue}")
             if ref.pages:
-                entry_lines.append(f"SP  - {ref.pages}")
+                entry_lines.append(f"SP -{ref.pages}")
             if ref.doi:
-                entry_lines.append(f"DO  - {ref.doi}")
+                entry_lines.append(f"DO -{ref.doi}")
             if ref.url:
-                entry_lines.append(f"UR  - {ref.url}")
+                entry_lines.append(f"UR -{ref.url}")
             if ref.abstract:
-                entry_lines.append(f"AB  - {ref.abstract}")
+                entry_lines.append(f"AB -{ref.abstract}")
             if ref.publisher:
-                entry_lines.append(f"PB  - {ref.publisher}")
+                entry_lines.append(f"PB -{ref.publisher}")
 
             for keyword in ref.keywords:
-                entry_lines.append(f"KW  - {keyword}")
+                entry_lines.append(f"KW -{keyword}")
 
-            entry_lines.append("ER  - ")
+            entry_lines.append("ER -")
             entries.append("\n".join(entry_lines))
 
         return "\n\n".join(entries)
@@ -610,9 +609,9 @@ class ZoteroIntegration(CitationManager):
 
             # Other fields
             if ref.journal:
-                csl_item["container - title"] = ref.journal
+                csl_item["container-title"] = ref.journal
             if ref.publication_year:
-                csl_item["issued"] = {"date - parts": [[ref.publication_year]]}
+                csl_item["issued"] = {"date-parts": [[ref.publication_year]]}
             if ref.volume:
                 csl_item["volume"] = ref.volume
             if ref.issue:
@@ -635,10 +634,10 @@ class ZoteroIntegration(CitationManager):
     def _get_csl_type(self, ref_type: ReferenceType) -> str:
         """Get CSL type from ReferenceType"""
         mapping = {
-            ReferenceType.JOURNAL_ARTICLE: "article - journal",
+            ReferenceType.JOURNAL_ARTICLE: "article-journal",
             ReferenceType.BOOK: "book",
             ReferenceType.BOOK_SECTION: "chapter",
-            ReferenceType.CONFERENCE_PAPER: "paper - conference",
+            ReferenceType.CONFERENCE_PAPER: "paper-conference",
             ReferenceType.THESIS: "thesis",
             ReferenceType.REPORT: "report",
             ReferenceType.WEBPAGE: "webpage",
@@ -696,7 +695,7 @@ class BibTeXManager(CitationManager):
             raise ValueError("No BibTeX file path specified")
 
         try:
-            with open(self.file_path, "r", encoding="utf - 8") as f:
+            with open(self.file_path, "r", encoding="utf-8") as f:
                 bib_database = bibtexparser.load(f)
 
             references = []
@@ -918,7 +917,7 @@ if __name__ == "__main__":
   author={Johnson, Alice},
   publisher={Academic Press},
   year={2022},
-  isbn={978 - 0123456789}
+  isbn={978-0123456789}
 }
 """
 
@@ -962,7 +961,7 @@ if __name__ == "__main__":
             # Test Zotero integration (would require API key)
             print("\n" + "=" * 50)
             print("Zotero Integration Test:")
-            print("(Requires API key - showing structure only)")
+            print("(Requires API key-showing structure only)")
 
             # zotero = ZoteroIntegration("your_api_key", user_id="your_user_id")
             # is_auth = await zotero.authenticate()

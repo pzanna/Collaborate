@@ -8,8 +8,7 @@ from PRISMA systematic review data.
 Components:
 - generators/: Core thesis generation engines
 - converters/: Format conversion utilities
-- config/: Configuration management
-- templates/: Template system for consistent formatting
+- config/: Configuration management-templates/: Template system for consistent formatting
 
 Author: GitHub Copilot for Paul Zanna
 Date: July 23, 2025

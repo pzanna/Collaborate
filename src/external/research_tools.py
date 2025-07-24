@@ -10,8 +10,7 @@ Features:
 - RevMan compatibility for Cochrane systematic reviews
 - PROSPERO protocol registration and retrieval
 - GRADE Pro integration for evidence quality assessment
-- Automated data exchange between tools
-- Version control and reproducibility tracking
+- Automated data exchange between tools-Version control and reproducibility tracking
 
 Author: Eunice AI System
 Date: July 2025
@@ -193,8 +192,8 @@ class RIntegration(ResearchToolIntegration):
     async def _check_required_packages(self):
         """Check and install required R packages"""
         required_packages = [
-            "meta",  # Meta - analysis
-            "metafor",  # Meta - analysis framework
+            "meta",  # meta-analysis
+            "metafor",  # meta-analysis framework
             "forestplot",  # Forest plots
             "funnel",  # Funnel plots
             "ggplot2",  # Advanced plotting
@@ -210,7 +209,7 @@ missing_packages <- required_packages[!(required_packages %in% installed.package
 
 if(length(missing_packages) > 0) {{
     cat("Installing missing packages:", paste(missing_packages, collapse=", "), "\\n")
-    install.packages(missing_packages, repos="https://cran.r - project.org")
+    install.packages(missing_packages, repos="https://cran.r-project.org")
 }}
 
 cat("Package check complete\\n")
@@ -244,7 +243,7 @@ cat("Package check complete\\n")
             )
 
             # Calculate execution time
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (datetime.now()-start_time).total_seconds()
             analysis_result.execution_time = execution_time
 
             return analysis_result
@@ -275,14 +274,14 @@ cat("Package check complete\\n")
     def _generate_meta_analysis_script(
         self, data: Dict[str, Any], parameters: Dict[str, Any]
     ) -> str:
-        """Generate R script for meta - analysis"""
+        """Generate R script for meta-analysis"""
 
         parameters.get("effect_measure", "MD")  # MD, SMD, OR, RR
         model_type = parameters.get("model", "random")  # fixed, random
         method = parameters.get("method", "REML")  # REML, DL, etc.
 
         script = f"""
-# Meta - analysis using metafor package
+# meta-analysis using metafor package
 library(metafor)
 library(jsonlite)
 
@@ -303,7 +302,7 @@ if(is.null(vi) && !is.null(sei)) {{
 # Study labels
 study_labels <- studies_data$study_id
 
-# Perform meta - analysis
+# Perform meta-analysis
 ma_result <- rma(yi = yi, vi = vi, method = "{method}",
                  model = "{model_type}", slab = study_labels)
 
@@ -324,7 +323,7 @@ summary_stats <- list(
 
 # Forest plot
 png(file.path("{self.temp_dir}", "forest_plot.png"), width = 800, height = 600)
-forest(ma_result, main = "Meta - analysis Forest Plot")
+forest(ma_result, main = "meta-analysis Forest Plot")
 dev.off()
 
 # Funnel plot
@@ -346,7 +345,7 @@ results <- list(
 
 write_json(results, file.path("{self.temp_dir}", "results.json"))
 
-cat("Meta - analysis completed successfully\\n")
+cat("meta-analysis completed successfully\\n")
 print(summary_stats)
 """
         return script
@@ -465,7 +464,7 @@ print(bias_tests)
         subgroup_var = parameters.get("subgroup_variable", "study_design")
 
         script = f"""
-# Subgroup meta - analysis
+# Subgroup meta-analysis
 library(metafor)
 library(jsonlite)
 
@@ -666,7 +665,7 @@ class RevManCompatibility(ResearchToolIntegration):
         """Check RevMan availability (placeholder)"""
         # RevMan is typically a Windows application
         # This would require specific RevMan API or file format handling
-        logger.info("RevMan compatibility check - would verify RevMan installation")
+        logger.info("RevMan compatibility check-would verify RevMan installation")
         self.config.is_available = False  # Set to False for now
         return False
 
@@ -685,11 +684,11 @@ class RevManCompatibility(ResearchToolIntegration):
         data: Dict[str, Any],
         parameters: Dict[str, Any],
     ) -> str:
-        """Generate RevMan - compatible data (placeholder)"""
+        """Generate RevMan-compatible data (placeholder)"""
         raise NotImplementedError("RevMan script generation not yet implemented")
 
     def export_to_revman_format(self, review_data: Dict[str, Any]) -> str:
-        """Export systematic review data to RevMan - compatible XML"""
+        """Export systematic review data to RevMan-compatible XML"""
 
         # Create basic RevMan XML structure
         root = ET.Element("COCHRANE_REVIEW")
@@ -798,7 +797,7 @@ class GradeProIntegration(ResearchToolIntegration):
         config = ToolInterface(
             tool_id="grade_pro_default",
             tool_type=ToolType.GRADE_PRO,
-            tool_path="",  # GRADE Pro is typically web - based
+            tool_path="",  # GRADE Pro is typically web-based
             version="1.0",
             configuration={
                 "assessment_domains": [
@@ -935,7 +934,7 @@ class GradeProIntegration(ResearchToolIntegration):
             1 for score in domain_scores.values() if "serious" in score
         )
 
-        return max(0.5, 1.0 - (serious_issues / total_domains * 0.3))
+        return max(0.5, 1.0-(serious_issues / total_domains * 0.3))
 
     def _create_grade_table(self, assessments: Dict[str, Any]) -> Dict[str, Any]:
         """Create GRADE summary table"""
@@ -994,7 +993,7 @@ if __name__ == "__main__":
         )
 
         if is_available:
-            # Test meta - analysis
+            # Test meta-analysis
             sample_data = {
                 "studies": [
                     {"study_id": "Study1", "effect_size": 0.5, "variance": 0.1},
@@ -1011,14 +1010,14 @@ if __name__ == "__main__":
                     AnalysisType.META_ANALYSIS, sample_data, parameters
                 )
 
-                print("\n✅ Meta - analysis completed:")
+                print("\n✅ meta-analysis completed:")
                 print(f"   Overall effect: {result.effect_sizes.get('overall', 0):.3f}")
                 print(f"   I²: {result.heterogeneity.get('i_squared', 0):.1f}%")
-                print(f"   p - value: {result.p_values.get('overall_effect', 1):.3f}")
+                print(f"   p-value: {result.p_values.get('overall_effect', 1):.3f}")
                 print(f"   Plots generated: {len(result.plots)}")
 
             except Exception as e:
-                print(f"❌ Meta - analysis failed: {e}")
+                print(f"❌ meta-analysis failed: {e}")
 
         # Test other tools
         print("\n" + "=" * 50)
@@ -1042,7 +1041,7 @@ if __name__ == "__main__":
             # Test GRADE assessment
             grade_data = {
                 "outcomes": [
-                    {"id": "mortality", "name": "All - cause mortality"},
+                    {"id": "mortality", "name": "All-cause mortality"},
                     {"id": "quality_of_life", "name": "Quality of life"},
                 ]
             }

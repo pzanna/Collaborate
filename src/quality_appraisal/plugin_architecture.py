@@ -2,10 +2,10 @@
 Quality appraisal plugin architecture for systematic reviews.
 
 This module provides a flexible plugin system for quality assessment tools including:
-- ROBINS - I for non - randomized studies
+- ROBINS-I for non-randomized studies
 - RoB 2 for randomized controlled trials
 - Custom assessment tools
-- Inter - rater reliability metrics
+- Inter-rater reliability metrics
 """
 
 import json
@@ -39,7 +39,7 @@ class BiasLevel(Enum):
 class AssessmentDomain(Enum):
     """Quality assessment domains."""
 
-    # ROBINS - I domains
+    # ROBINS-I domains
     CONFOUNDING = "confounding"
     SELECTION = "selection"
     CLASSIFICATION_INTERVENTION = "classification_intervention"
@@ -99,7 +99,7 @@ class QualityAppraisalPlugin(ABC):
     @property
     @abstractmethod
     def tool_name(self) -> str:
-        """Human - readable name for the assessment tool."""
+        """Human-readable name for the assessment tool."""
 
     @property
     @abstractmethod
@@ -202,12 +202,12 @@ class QualityAppraisalManager:
             return "rob2"  # RoB 2 for randomized trials
         elif any(
             word in study_type
-            for word in ["cohort", "case - control", "cross - sectional"]
+            for word in ["cohort", "case-control", "cross-sectional"]
         ):
-            return "robins - i"  # ROBINS - I for non - randomized studies
+            return "ROBINS-I"  # ROBINS-I for non-randomized studies
 
-        # Default to ROBINS - I for most studies
-        return "robins - i"
+        # Default to ROBINS-I for most studies
+        return "ROBINS-I"
 
     @handle_errors(context="quality_assessment")
     async def assess_studies(
@@ -221,7 +221,7 @@ class QualityAppraisalManager:
 
         Args:
             studies: List of studies to assess
-            tool_id: Specific tool to use (if None, auto - recommend)
+            tool_id: Specific tool to use (if None, auto-recommend)
             criteria: Assessment criteria
 
         Returns:
@@ -335,7 +335,7 @@ class QualityAppraisalManager:
         self, study_ids: List[str], tool_id: str
     ) -> Dict[str, Any]:
         """
-        Calculate inter - rater reliability metrics.
+        Calculate inter-rater reliability metrics.
 
         Args:
             study_ids: List of study IDs to analyze
@@ -368,7 +368,7 @@ class QualityAppraisalManager:
             else:
                 overall_agreements.append(0.0)  # Disagreement
 
-            # Domain - level agreement
+            # Domain-level agreement
             for domain in AssessmentDomain:
                 if domain.value not in domain_agreements:
                     domain_agreements[domain.value] = []
@@ -415,7 +415,7 @@ class QualityAppraisalManager:
 
 
 class BaseAIQualityPlugin(QualityAppraisalPlugin):
-    """Base class for AI - assisted quality appraisal plugins."""
+    """Base class for AI-assisted quality appraisal plugins."""
 
     def __init__(self, ai_client: OpenAIClient, assessor: str = "ai"):
         """
@@ -431,7 +431,7 @@ class BaseAIQualityPlugin(QualityAppraisalPlugin):
     async def assess_study(
         self, study: Dict[str, Any], criteria: Dict[str, Any]
     ) -> QualityAssessment:
-        """Conduct AI - assisted quality assessment."""
+        """Conduct AI-assisted quality assessment."""
         start_time = datetime.now()
 
         # Build assessment prompt
@@ -462,7 +462,7 @@ class BaseAIQualityPlugin(QualityAppraisalPlugin):
                 )
 
             # Calculate assessment time
-            assessment_time = (datetime.now() - start_time).total_seconds()
+            assessment_time = (datetime.now()-start_time).total_seconds()
 
             return QualityAssessment(
                 study_id=study["id"],
@@ -535,7 +535,7 @@ class BaseAIQualityPlugin(QualityAppraisalPlugin):
         assessed_domains = {da.domain for da in assessment.domain_assessments}
         required_domains = set(self.assessment_domains)
 
-        missing_domains = required_domains - assessed_domains
+        missing_domains = required_domains-assessed_domains
         if missing_domains:
             errors.append(
                 f"Missing assessments for domains: {[d.value for d in missing_domains]}"

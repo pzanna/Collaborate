@@ -360,7 +360,7 @@ class MCPClient:
         start_time = asyncio.get_event_loop().time()
 
         while not self.is_connected:
-            if asyncio.get_event_loop().time() - start_time > timeout:
+            if asyncio.get_event_loop().time()-start_time > timeout:
                 return False
             await asyncio.sleep(0.1)
 

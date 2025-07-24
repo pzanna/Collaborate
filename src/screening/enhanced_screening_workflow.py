@@ -5,8 +5,7 @@ This module provides improved screening capabilities with:
 - Enhanced confidence scoring algorithms
 - Contextual decision explanations
 - Human - AI collaboration interfaces
-- Batch processing optimization
-- Conflict resolution workflows
+- Batch processing optimization-Conflict resolution workflows
 """
 
 import json
@@ -220,7 +219,7 @@ class EnhancedScreeningWorkflow:
             task_id: Task identifier
 
         Returns:
-            Full - text screening results with detailed assessments
+            Full-text screening results with detailed assessments
         """
         screening_results = []
 
@@ -319,7 +318,7 @@ class EnhancedScreeningWorkflow:
             decision_data = self._parse_screening_response(response)
 
             # Calculate processing time
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (datetime.now()-start_time).total_seconds()
 
             # Determine if human review is required
             human_review_required = (
@@ -359,7 +358,7 @@ class EnhancedScreeningWorkflow:
         self, study: Dict[str, Any], criteria: Dict[str, Any], task_id: str
     ) -> ScreeningResult:
         """
-        Screen individual study at full - text level.
+        Screen individual study at full-text level.
 
         Args:
             study: Study to screen
@@ -387,7 +386,7 @@ class EnhancedScreeningWorkflow:
             # Calculate processing time
             processing_time = (datetime.now() - start_time).total_seconds()
 
-            # Full - text screening generally requires higher confidence
+            # Full-text screening generally requires higher confidence
             human_review_required = decision_data["confidence"] < 0.9
 
             return ScreeningResult(
@@ -411,7 +410,7 @@ class EnhancedScreeningWorkflow:
                 study_id=study["id"],
                 decision=ScreeningDecision.HUMAN_REQUIRED,
                 confidence_score=0.0,
-                rationale=f"Full - text screening failed: {str(e)}",
+                rationale=f"Full-text screening failed: {str(e)}",
                 human_review_required=True,
             )
 
@@ -441,7 +440,7 @@ EXCLUSION CRITERIA:
 Please provide your screening decision in JSON format:
 {{
     "decision": "include|exclude|uncertain",
-    "confidence": 0.0 - 1.0,
+    "confidence": 0.0-1.0,
     "rationale": "Clear explanation of decision",
     "exclusion_reason": "reason_code_if_excluded"
 }}
@@ -450,9 +449,9 @@ Please provide your screening decision in JSON format:
     def _build_full_text_prompt(
         self, study: Dict[str, Any], criteria: Dict[str, Any]
     ) -> str:
-        """Build prompt for full - text screening."""
+        """Build prompt for full-text screening."""
         return f"""
-Please conduct detailed full - text screening for this study.
+Please conduct detailed full-text screening for this study.
 
 STUDY INFORMATION:
 Title: {study.get('title', 'No title available')}
@@ -460,7 +459,7 @@ Authors: {', '.join(study.get('authors', []))}
 Year: {study.get('year', 'Unknown')}
 Journal: {study.get('metadata', {}).get('journal', 'Unknown')}
 DOI: {study.get('doi', 'No DOI')}
-Full Text: {study.get('full_text', 'Full text not available - assess based on available information')}
+Full Text: {study.get('full_text', 'Full text not available-assess based on available information')}
 
 DETAILED INCLUSION CRITERIA:
 {self._format_detailed_criteria(criteria)}
@@ -471,7 +470,7 @@ EXCLUSION CRITERIA:
 Please provide your detailed screening decision in JSON format:
 {{
     "decision": "include|exclude",
-    "confidence": 0.0 - 1.0,
+    "confidence": 0.0-1.0,
     "rationale": "Detailed explanation with specific references to criteria",
     "exclusion_reason": "reason_code_if_excluded",
     "data_extraction_notes": "Notes for evidence synthesis if included"
@@ -487,7 +486,7 @@ Your task is to evaluate studies for inclusion based on specific criteria.
 Guidelines:
 1. Be conservative - when in doubt, include for full - text review
 2. Only exclude if clearly outside scope
-3. Provide clear, evidence - based rationales
+3. Provide clear, evidence-based rationales
 4. Use standardized exclusion reason codes
 5. Assign confidence scores based on clarity of decision
 
@@ -495,15 +494,15 @@ Response must be valid JSON format only.
 """
 
     def _get_full_text_screening_system_prompt(self) -> str:
-        """Get system prompt for full - text screening."""
+        """Get system prompt for full-text screening."""
         return """
-You are an expert research assistant conducting detailed full - text screening for systematic reviews.
+You are an expert research assistant conducting detailed full-text screening for systematic reviews.
 Your task is to make final inclusion / exclusion decisions based on complete study information.
 
 Guidelines:
 1. Thoroughly evaluate all inclusion / exclusion criteria
 2. Provide detailed rationales with specific evidence
-3. Be precise - this is the final inclusion decision
+3. Be precise-this is the final inclusion decision
 4. Note any data extraction points for included studies
 5. Higher confidence required for final decisions
 
@@ -523,7 +522,7 @@ Response must be valid JSON format only.
         )
 
     def _format_detailed_criteria(self, criteria: Dict[str, Any]) -> str:
-        """Format detailed criteria for full - text screening."""
+        """Format detailed criteria for full-text screening."""
         return f"""
 Population: {criteria.get('population', 'Not specified')}
 Intervention: {criteria.get('intervention', 'Not specified')}
@@ -532,7 +531,7 @@ Outcomes: {', '.join(criteria.get('outcomes', []))}
 Study Design: {', '.join(criteria.get('inclusion_criteria', {}).get('study_types', []))}
 Language: {', '.join(criteria.get('inclusion_criteria', {}).get('languages', []))}
 Publication Type: {
-    'Peer - reviewed only'
+    'Peer-reviewed only'
     if criteria.get('inclusion_criteria', {}).get('peer_reviewed')
     else 'All publication types'
 }

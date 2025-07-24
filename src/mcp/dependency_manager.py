@@ -107,7 +107,7 @@ class TaskDependencyManager:
                         task_node.dependencies.add(dep_id)
                         self.task_graph[dep_id].dependents.add(task_id)
                     else:
-                        # Dependency doesn't exist yet - this might be okay for future tasks
+                        # Dependency doesn't exist yet-this might be okay for future tasks
                         task_node.dependencies.add(dep_id)
 
             # Set up parent dependency
@@ -224,7 +224,7 @@ class TaskDependencyManager:
                     context_id=task_node.research_action.context_id,
                     agent_type=task_node.research_action.agent_type,
                     duration=(
-                        (task_node.completed_at - task_node.started_at).total_seconds()
+                        (task_node.completed_at-task_node.started_at).total_seconds()
                         if task_node.started_at
                         else 0
                     ),

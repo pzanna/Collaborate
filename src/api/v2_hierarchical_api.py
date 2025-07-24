@@ -1,4 +1,4 @@
-"""V2 API endpoints for hierarchical research structure - Clean Implementation."""
+"""V2 API endpoints for hierarchical research structure-Clean Implementation."""
 
 import json
 from typing import List, Optional
@@ -15,7 +15,7 @@ from src.models.hierarchical_data_models import (  # Request models; Update mode
 from src.storage.hierarchical_database import HierarchicalDatabaseManager
 
 # Create router for V2 hierarchical research endpoints
-v2_router = APIRouter(prefix="/api / v2", tags=["v2 - hierarchical"])
+v2_router = APIRouter(tags=["v2-hierarchical"])
 
 # Global instances
 _hierarchical_db: Optional[HierarchicalDatabaseManager] = None
@@ -135,7 +135,7 @@ async def update_project(
 ):
     """Update a project."""
     try:
-        # Build update data from non - None fields
+        # Build update data from non-None fields
         update_data = {}
         if project_update.name is not None:
             update_data["name"] = project_update.name
@@ -273,7 +273,7 @@ async def update_research_topic(
 ):
     """Update a research topic."""
     try:
-        # Build update data from non - None fields
+        # Build update data from non-None fields
         update_data = {}
         if topic_update.name is not None:
             update_data["name"] = topic_update.name
@@ -413,7 +413,7 @@ async def update_research_plan(
 ):
     """Update a research plan."""
     try:
-        # Build update data from non - None fields
+        # Build update data from non-None fields
         update_data = {}
         if plan_update.name is not None:
             update_data["name"] = plan_update.name
@@ -604,7 +604,7 @@ async def update_task(
 ):
     """Update a task."""
     try:
-        # Build update data from non - None fields
+        # Build update data from non-None fields
         update_data = {}
         if task_update.name is not None:
             update_data["name"] = task_update.name
@@ -939,7 +939,7 @@ async def start_research(
     db: HierarchicalDatabaseManager = Depends(get_database),
     research_manager: Optional[ResearchManager] = Depends(get_research_manager),
 ):
-    """Start research on a topic - the Research Manager handles everything."""
+    """Start research on a topic-the Research Manager handles everything."""
     try:
         # Verify topic exists
         topic = db.get_research_topic(topic_id)
@@ -952,14 +952,14 @@ async def start_research(
                 status_code=503, detail="Research Manager not available"
             )
 
-        # Start research - let the Research Manager handle plans and tasks
+        # Start research-let the Research Manager handle plans and tasks
         research_task_id, cost_info = await research_manager.start_research_task(
             query=query,
             user_id="system",
             project_id=topic.get("project_id"),
             options={
                 "topic_id": topic_id,
-                "cost_override": True,  # Auto - approve for this simple endpoint
+                "cost_override": True,  # Auto-approve for this simple endpoint
                 "create_full_structure": True,  # Signal to create complete structure
             },
         )

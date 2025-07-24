@@ -12,7 +12,7 @@ This version integrates with the existing Eunice AI system and provides:
 - PRISMA JSON parsing and thematic synthesis
 - Research gap analysis and conceptual modeling
 - Markdown / LaTeX output with Jinja2 templates
-- Human - in - the - loop checkpoints
+- Human - in - the-loop checkpoints
 
 Author: GitHub Copilot for Paul Zanna
 Date: July 23, 2025
@@ -104,7 +104,7 @@ class ConceptualFramework:
 
 
 class SimpleCache:
-    """Simple file - based cache for AI responses."""
+    """Simple file-based cache for AI responses."""
 
     def __init__(self, cache_dir: str):
         self.cache_dir = Path(cache_dir)
@@ -154,7 +154,7 @@ class ThesisGenerator:
         input_file: str,
         output_dir: str,
         ai_provider: str = "openai",
-        ai_model: str = "gpt - 4",
+        ai_model: str = "gpt-4",
         deterministic: bool = True,
         use_cache: bool = True,
         human_checkpoints: bool = True,
@@ -196,7 +196,7 @@ class ThesisGenerator:
         file_handler.setLevel(logging.DEBUG)
 
         # Formatter
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s-%(message)s")
         console_handler.setFormatter(formatter)
         file_handler.setFormatter(formatter)
 
@@ -291,7 +291,7 @@ class ThesisGenerator:
         start_time = time.time()
         try:
             response = self.ai_client.get_response(prompt, system_prompt)
-            duration = time.time() - start_time
+            duration = time.time()-start_time
 
             # Cache response
             if self.cache:
@@ -356,7 +356,7 @@ class ThesisGenerator:
         results = prisma_data.get("results", {})
 
         prompt = f"""
-Extract 4 - 6 major themes from this systematic review data for a PhD thesis literature review.
+Extract 4-6 major themes from this systematic review data for a PhD thesis literature review.
 
 STUDIES:
 {json.dumps(study_summaries[:10], indent=2)}
@@ -372,7 +372,7 @@ Respond with JSON in this format:
   "themes": [
     {{
       "name": "Theme Name (max 8 words)",
-      "summary": "Detailed summary (150 - 200 words, academic tone)",
+      "summary": "Detailed summary (150-200 words, academic tone)",
       "studies": ["study1", "study2"],
       "strength": "High|Moderate|Low",
       "contradictions": ["any contradictory findings"]
@@ -384,8 +384,7 @@ Focus on:
 - Clinical significance
 - Methodological patterns
 - Theoretical implications
-- Knowledge gaps
-- Contradictions in findings
+- Knowledge gaps-Contradictions in findings
 
 Ensure themes are mutually exclusive and collectively exhaustive.
 """
@@ -436,7 +435,7 @@ Ensure themes are mutually exclusive and collectively exhaustive.
         )
 
         prompt = f"""
-Identify 3 - 5 high - priority research gaps for PhD thesis research based on this thematic analysis.
+Identify 3 - 5 high-priority research gaps for PhD thesis research based on this thematic analysis.
 
 THEMES:
 {json.dumps(theme_summaries, indent=2)}
@@ -448,7 +447,7 @@ Respond with JSON in this format:
   "gaps": [
     {{
       "title": "Gap title (concise)",
-      "description": "Detailed description (100 - 150 words)",
+      "description": "Detailed description (100-150 words)",
       "justification": "Why this gap matters (evidence from themes)",
       "impact": 4.2,
       "feasibility": 3.8,
@@ -467,8 +466,7 @@ Prioritize gaps that are:
 - Feasible for individual PhD research (2 - 4 years)
 - High impact for the field
 - Supported by limitations / contradictions in literature
-- Methodologically addressable
-- Theoretically significant
+- Methodologically addressable-Theoretically significant
 """
 
         try:
@@ -520,7 +518,7 @@ TOP GAPS:
 
 Respond with JSON in this format:
 {{
-  "description": "2 - 3 sentence framework overview",
+  "description": "2-3 sentence framework overview",
   "constructs": [
     {{
       "name": "Construct Name",
@@ -540,8 +538,7 @@ Respond with JSON in this format:
 Create:
 - 3 - 5 key theoretical constructs
 - Clear relationships between constructs
-- Framework that addresses the research gaps
-- Mermaid diagram syntax for visualization
+- Framework that addresses the research gaps-Mermaid diagram syntax for visualization
 """
 
         try:
@@ -784,7 +781,7 @@ which offers both high impact potential and feasible implementation within a PhD
             self.logger.info(f"  DOCX: {docx_file}")
 
         except (subprocess.CalledProcessError, FileNotFoundError):
-            self.logger.info("  Pandoc not available - install for PDF / DOCX output")
+            self.logger.info("  Pandoc not available-install for PDF / DOCX output")
 
     def generate_thesis_chapter(self) -> Dict[str, Any]:
         """Main generation workflow."""
@@ -813,7 +810,7 @@ which offers both high impact potential and feasible implementation within a PhD
             # 6. Save outputs
             self.save_outputs(markdown, themes, gaps, framework)
 
-            duration = time.time() - start_time
+            duration = time.time()-start_time
             self.logger.info(f"Generation completed in {duration:.2f}s")
 
             return {
@@ -842,13 +839,13 @@ def main():
     parser.add_argument(
         "-p", "--provider", default="openai", choices=["openai"], help="AI provider"
     )
-    parser.add_argument("-m", "--model", default="gpt - 4", help="AI model")
+    parser.add_argument("-m", "--model", default="gpt-4", help="AI model")
     parser.add_argument(
-        "--no - deterministic", action="store_true", help="Disable deterministic mode"
+        "--no-deterministic", action="store_true", help="Disable deterministic mode"
     )
-    parser.add_argument("--no - cache", action="store_true", help="Disable caching")
+    parser.add_argument("--no-cache", action="store_true", help="Disable caching")
     parser.add_argument(
-        "--no - checkpoints", action="store_true", help="Skip human checkpoints"
+        "--no-checkpoints", action="store_true", help="Skip human checkpoints"
     )
 
     args = parser.parse_args()

@@ -2,13 +2,12 @@
 Quality Metrics Dashboard
 ========================
 
-Real - time quality metrics collection and reporting system for systematic reviews.
+real-time quality metrics collection and reporting system for systematic reviews.
 
 This module provides:
-- Real - time quality indicator monitoring
+- real-time quality indicator monitoring
 - Inter - rater reliability tracking
-- Completion status and milestone tracking
-- Quality assurance report generation
+- Completion status and milestone tracking-Quality assurance report generation
 
 Author: Eunice AI System
 Date: July 2025
@@ -154,14 +153,14 @@ class MetricCalculator:
         return (completed_tasks / total_tasks) * 100
 
     async def _calculate_inter_rater_reliability(self, data: Dict[str, Any]) -> float:
-        """Calculate inter - rater reliability (Kappa coefficient)"""
+        """Calculate inter-rater reliability (Kappa coefficient)"""
         agreements = data.get("agreements", [])
 
         if len(agreements) < 2:
             return 0.0
 
         # Calculate Cohen's Kappa for two raters
-        # Simplified calculation - assumes binary decisions
+        # Simplified calculation-assumes binary decisions
         total_decisions = len(agreements)
         observed_agreement = sum(
             1 for agreement in agreements if agreement.get("agree", False)
@@ -183,7 +182,7 @@ class MetricCalculator:
         p2_positive = rater2_positive / total_decisions
 
         expected_positive = p1_positive * p2_positive
-        expected_negative = (1 - p1_positive) * (1 - p2_positive)
+        expected_negative = (1 - p1_positive) * (1-p2_positive)
         expected_agreement = expected_positive + expected_negative
 
         observed_proportion = observed_agreement / total_decisions
@@ -192,7 +191,7 @@ class MetricCalculator:
         if expected_agreement == 1.0:
             return 1.0
 
-        kappa = (observed_proportion - expected_agreement) / (1 - expected_agreement)
+        kappa = (observed_proportion - expected_agreement) / (1-expected_agreement)
         return max(0.0, min(1.0, kappa * 100))  # Convert to percentage
 
     async def _calculate_data_quality(self, data: Dict[str, Any]) -> float:
@@ -227,7 +226,7 @@ class MetricCalculator:
 
         # Check consistency between different review stages
 
-        # Title / abstract vs full - text consistency
+        # Title / abstract vs full-text consistency
         title_decisions = {}
         fulltext_decisions = {}
 
@@ -356,8 +355,8 @@ class MetricCalculator:
         # Normalize by number of records
         penalty_per_record = issue_penalty / total_records
 
-        # Convert to 0 - 100 scale (assuming max 20 penalty points per record)
-        score = max(0.0, 100.0 - (penalty_per_record / 20.0) * 100.0)
+        # Convert to 0-100 scale (assuming max 20 penalty points per record)
+        score = max(0.0, 100.0-(penalty_per_record / 20.0) * 100.0)
 
         return score
 
@@ -383,7 +382,7 @@ class MetricAggregator:
         self.metric_history[key].append(metric)
 
         # Clean old metrics
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.retention_period)
+        cutoff_date = datetime.now(timezone.utc)-timedelta(days=self.retention_period)
         while (
             self.metric_history[key]
             and self.metric_history[key][0].timestamp < cutoff_date
@@ -411,7 +410,7 @@ class MetricAggregator:
             return "stable"
 
         # Filter to recent days
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc)-timedelta(days=days)
         recent_metrics = [m for m in metrics if m.timestamp >= cutoff_date]
 
         if len(recent_metrics) < 2:
@@ -429,7 +428,7 @@ class MetricAggregator:
         y_mean = statistics.mean(values)
 
         numerator = sum((i - x_mean) * (values[i] - y_mean) for i in range(n))
-        denominator = sum((i - x_mean) ** 2 for i in range(n))
+        denominator = sum((i-x_mean) ** 2 for i in range(n))
 
         if denominator == 0:
             return "stable"
@@ -473,7 +472,7 @@ class MetricAggregator:
             }
 
         # Filter to recent days
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc)-timedelta(days=days)
         recent_metrics = [m for m in metrics if m.timestamp >= cutoff_date]
 
         if not recent_metrics:
@@ -533,7 +532,7 @@ class QualityMetricsDashboard:
         )
 
     async def start_monitoring(self):
-        """Start real - time metrics monitoring"""
+        """Start real-time metrics monitoring"""
         if self.is_running:
             logger.warning("Dashboard monitoring already running")
             return
@@ -545,7 +544,7 @@ class QualityMetricsDashboard:
         # For demo purposes, we'll just mark it as started
 
     async def stop_monitoring(self):
-        """Stop real - time metrics monitoring"""
+        """Stop real-time metrics monitoring"""
         self.is_running = False
         logger.info("Stopped quality metrics monitoring")
 
@@ -622,10 +621,10 @@ class QualityMetricsDashboard:
             return MetricStatus.CRITICAL
 
     def _get_metric_name(self, metric_type: MetricType) -> str:
-        """Get human - readable metric name"""
+        """Get human-readable metric name"""
         name_map = {
             MetricType.COMPLETION_RATE: "Completion Rate",
-            MetricType.INTER_RATER_RELIABILITY: "Inter - rater Reliability",
+            MetricType.INTER_RATER_RELIABILITY: "Inter-rater Reliability",
             MetricType.DATA_QUALITY: "Data Quality",
             MetricType.CONSISTENCY: "Consistency Score",
             MetricType.TIMELINESS: "Timeliness",
@@ -756,7 +755,7 @@ class QualityMetricsDashboard:
         metrics = list(self.aggregator.metric_history[key])
 
         # Filter to requested time range
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc)-timedelta(days=days)
         recent_metrics = [m for m in metrics if m.timestamp >= cutoff_date]
 
         return [

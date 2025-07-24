@@ -261,7 +261,7 @@ class AIClientManager:
         )
 
         self.logger.info(
-            f"AI Manager: Coordination decision - Participants: {', '.join(participants)} "
+            f"AI Manager: Coordination decision-Participants: {', '.join(participants)} "
             f"(from available: {', '.join(available_providers)})"
         )
 

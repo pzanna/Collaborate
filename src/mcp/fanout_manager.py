@@ -1,5 +1,5 @@
 """
-Task Fan - out Manager for MCP Server
+Task Fan-out Manager for MCP Server
 
 Enables parallel dispatch of tasks to multiple agent instances for improved throughput.
 Handles task splitting, result aggregation, and parallel execution coordination.
@@ -70,7 +70,7 @@ class FanoutTask:
 
 
 class TaskFanoutManager:
-    """Manages task fan - out, parallel execution, and result aggregation"""
+    """Manages task fan-out, parallel execution, and result aggregation"""
 
     def __init__(self):
         self.fanout_tasks: Dict[str, FanoutTask] = {}
@@ -94,7 +94,7 @@ class TaskFanoutManager:
         custom_splitter: Optional[Callable] = None,
         custom_aggregator: Optional[Callable] = None,
     ) -> List[ResearchAction]:
-        """Create a fan - out task and generate subtasks"""
+        """Create a fan-out task and generate subtasks"""
         async with self._lock:
             parent_task_id = research_action.task_id
 
@@ -250,7 +250,7 @@ class TaskFanoutManager:
                 # All subtasks get the same payload
                 subtask_payload = base_payload.copy()
             elif strategy == FanoutStrategy.ROUND_ROBIN:
-                # Distribute work round - robin style
+                # Distribute work round-robin style
                 subtask_payload = base_payload.copy()
                 subtask_payload["subtask_index"] = i
                 subtask_payload["total_subtasks"] = parallelism
@@ -263,7 +263,7 @@ class TaskFanoutManager:
                     chunk_size = max(1, len(queries) // parallelism)
                     start_idx = i * chunk_size
                     end_idx = (
-                        start_idx + chunk_size if i < parallelism - 1 else len(queries)
+                        start_idx + chunk_size if i < parallelism-1 else len(queries)
                     )
                     subtask_payload["queries"] = queries[start_idx:end_idx]
                 elif "data_chunks" in base_payload and isinstance(
@@ -273,7 +273,7 @@ class TaskFanoutManager:
                     chunk_size = max(1, len(chunks) // parallelism)
                     start_idx = i * chunk_size
                     end_idx = (
-                        start_idx + chunk_size if i < parallelism - 1 else len(chunks)
+                        start_idx + chunk_size if i < parallelism-1 else len(chunks)
                     )
                     subtask_payload["data_chunks"] = chunks[start_idx:end_idx]
             else:
@@ -380,8 +380,8 @@ class TaskFanoutManager:
             fanout_task (FanoutTask): The task containing partial results to aggregate.
             action_name (str): The name of the action being aggregated (e.g., 'search', 'analyze').
             field_configs (Dict[str, Any]): A dictionary defining the aggregation rules for each field.
-                - Keys are field names to aggregate.
-                - Values specify the aggregation rule, which can be:
+               -Keys are field names to aggregate.
+               -Values specify the aggregation rule, which can be:
                   * `list`: Collects all values into a list.
                   * `set`: Collects all unique values into a set.
                   * `'avg'`: Computes the average of numeric values.
@@ -444,7 +444,7 @@ class TaskFanoutManager:
         aggregated["subtask_count"] = len(fanout_task.partial_results)
         aggregated["success_rate"] = fanout_task.success_rate
 
-        # Add action - specific metadata
+        # Add action-specific metadata
         if action_name == "search":
             aggregated["total_results"] = len(aggregated.get("results", []))
 

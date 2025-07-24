@@ -32,10 +32,10 @@ class Priority(Enum):
 class AgentType(Enum):
     """Available agent types"""
 
-    LITERATURE = "Literature"
-    PLANNING = "Planning"
-    EXECUTOR = "Executor"
-    MEMORY = "Memory"
+    LITERATURE = "literature"
+    PLANNING = "planning"
+    EXECUTOR = "executor"
+    MEMORY = "memory"
 
 
 @dataclass
@@ -292,7 +292,7 @@ class QueryMemoryRequest:
     limit: int = 10
     min_importance: float = 0.0
     time_range: Optional[Dict[str, str]] = (
-        None  # {"start": "2024 - 01 - 01", "end": "2024 - 01 - 02"}
+        None  # {"start": "2024 - 01-01", "end": "2024 - 01-02"}
     )
 
     def to_dict(self) -> Dict[str, Any]:

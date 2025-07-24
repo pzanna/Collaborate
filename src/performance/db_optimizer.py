@@ -7,8 +7,7 @@ Database performance optimization for systematic review automation.
 This module provides:
 - Query optimization and analysis
 - Connection pooling
-- Index management
-- Database performance monitoring
+- Index management-Database performance monitoring
 
 Author: Eunice AI System
 Date: July 2025
@@ -174,7 +173,7 @@ class QueryOptimizer:
                 results = [dict(row) for row in cursor.fetchall()]
 
                 # Calculate metrics
-                execution_time_ms = (time.time() - start_time) * 1000
+                execution_time_ms = (time.time()-start_time) * 1000
                 rows_affected = len(results)
 
                 # Record statistics
@@ -284,7 +283,7 @@ class QueryOptimizer:
                 [
                     q
                     for q in self.query_stats
-                    if (datetime.now(timezone.utc) - q.timestamp).seconds < 300
+                    if (datetime.now(timezone.utc)-q.timestamp).seconds < 300
                 ]
             ),
         }
@@ -331,11 +330,11 @@ class IndexManager:
                 # Add general recommendations
                 if len(indexes) == 0:
                     analysis["recommendations"].append(
-                        "No indexes found - consider adding indexes on frequently queried columns"
+                        "No indexes found-consider adding indexes on frequently queried columns"
                     )
                 elif len(indexes) > 20:
                     analysis["recommendations"].append(
-                        "Large number of indexes - review for unused indexes"
+                        "Large number of indexes-review for unused indexes"
                     )
 
                 return analysis
@@ -486,7 +485,7 @@ class DatabaseOptimizer:
             # Run VACUUM to reclaim space
             await self._vacuum_database()
             optimization_results["optimizations_applied"].append(
-                "VACUUM - database defragmentation"
+                "VACUUM-database defragmentation"
             )
 
             # Update statistics
@@ -535,7 +534,7 @@ class DatabaseOptimizer:
         """Generate optimization recommendations"""
         recommendations = []
 
-        # Query - based recommendations
+        # Query-based recommendations
         if query_stats.get("slow_queries", 0) > 0:
             recommendations.append(
                 f"Optimize {query_stats['slow_queries']} slow queries"
@@ -546,7 +545,7 @@ class DatabaseOptimizer:
                 "Consider adding indexes to improve average query time"
             )
 
-        # Index - based recommendations
+        # Index-based recommendations
         if index_analysis.get("total_indexes", 0) == 0:
             recommendations.append("Add indexes on frequently queried columns")
 
@@ -608,7 +607,7 @@ async def demo_database_optimizer():
     print("=" * 35)
 
     # Initialize optimizer
-    db_path = ":memory:"  # Use in - memory database for demo
+    db_path = ":memory:"  # Use in-memory database for demo
     optimizer = DatabaseOptimizer(db_path, max_connections=5)
 
     # Create sample table and data

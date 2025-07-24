@@ -98,7 +98,7 @@ class SystematicReviewDatabase:
                 CREATE TABLE IF NOT EXISTS bias_assessments (
                     id TEXT PRIMARY KEY,
                     record_id TEXT NOT NULL,
-                    tool_id TEXT NOT NULL,  -- e.g., 'robins - i', 'rob2'
+                    tool_id TEXT NOT NULL,  -- e.g., 'ROBINS-I', 'rob2'
                     scores TEXT NOT NULL,   -- JSON object with scores
                     justification TEXT,
                     assessor TEXT NOT NULL,

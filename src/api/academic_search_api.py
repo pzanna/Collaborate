@@ -18,7 +18,7 @@ from src.models.academic_search_models import (AcademicPaper,
 
 # Create router for academic search endpoints
 v2_academic_router = APIRouter(
-    prefix="/api / v2 / academic", tags=["v2 - academic - search"]
+    prefix="/api / v2 / academic", tags=["v2 - academic-search"]
 )
 
 # Global instances
@@ -108,7 +108,7 @@ async def comprehensive_academic_search(
     - Configurable result limits per source
     - Caching support for improved performance
     - Rich metadata extraction
-    - SSL - secured connections to all databases
+    - SSL-secured connections to all databases
 
     **Usage Examples:**
     ```python
@@ -260,7 +260,7 @@ async def get_available_sources():
         ),
         "arxiv": AcademicSourceInfo(
             name="arXiv",
-            description="Open - access repository of electronic preprints",
+            description="Open-access repository of electronic preprints",
             url="https://arxiv.org/",
             fields=[
                 "title",
@@ -283,7 +283,7 @@ async def get_available_sources():
         ),
         "semantic_scholar": AcademicSourceInfo(
             name="Semantic Scholar",
-            description="AI - powered research tool for scientific literature",
+            description="AI-powered research tool for scientific literature",
             url="https://www.semanticscholar.org/",
             fields=[
                 "title",
@@ -330,7 +330,7 @@ async def health_check(
     Returns the status of the service and its dependencies.
     """
     try:
-        # Basic health check - ensure agent is available
+        # Basic health check-ensure agent is available
         agent_status = "healthy" if literature_agent else "unavailable"
 
         return {

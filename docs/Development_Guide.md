@@ -30,7 +30,12 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 # Install dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install -r requirements-dev.txt  # Development dependencies
+
+# Install development dependencies (for testing, linting, formatting)
+pip install -r requirements-dev.txt
+
+# Set up pre-commit hooks for automated code quality checks
+pre-commit install
 ```
 
 #### 2. Development Tools Setup
@@ -79,7 +84,7 @@ pre-commit install
 
 ### Code Style (ENFORCED)
 
-The platform uses professional code formatting standards:
+The platform uses professional code formatting standards, enforced automatically by pre-commit hooks.
 
 #### 1. Python Code Style
 
@@ -88,14 +93,22 @@ The platform uses professional code formatting standards:
 - **Unused Import Removal**: autoflake
 - **Linting**: flake8 with 120 character line length
 
+To ensure compliance, run the pre-commit hooks on all files:
+
 ```bash
-# Apply formatting (required before commits)
-python -m black src/ --line-length 120
-python -m isort src/ --profile black
-python -m autoflake --remove-all-unused-imports --recursive src/
+pre-commit run --all-files
+```
+
+You can also run the tools manually:
+
+```bash
+# Apply formatting
+black . --line-length 120
+isort . --profile black
+autoflake --remove-all-unused-imports --recursive .
 
 # Check code quality
-python -m flake8 src/ --count --statistics --max-line-length=120
+flake8 . --count --statistics --max-line-length=120 --exclude=.venv,frontend
 ```
 
 #### 2. Code Quality Standards

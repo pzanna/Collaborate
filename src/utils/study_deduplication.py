@@ -469,11 +469,11 @@ class StudyClusterer:
 
         clusters = []
 
-        # Author - based clustering
+        # Author-based clustering
         author_clusters = self._cluster_by_authors(studies)
         clusters.extend(author_clusters)
 
-        # Topic - based clustering (simplified)
+        # Topic-based clustering (simplified)
         topic_clusters = self._cluster_by_topics(studies)
         clusters.extend(topic_clusters)
 
@@ -582,7 +582,7 @@ class StudyClusterer:
         normalized = []
         for author in authors:
             if author:
-                # Simple normalization - just lowercase and strip
+                # Simple normalization-just lowercase and strip
                 normalized.append(author.lower().strip())
         return normalized
 
@@ -593,7 +593,7 @@ class StudyClusterer:
         # Extract from title
         title = study.get("title", "")
         if title:
-            # Simple keyword extraction - split on common separators
+            # Simple keyword extraction-split on common separators
             title_words = re.findall(r"\b\w{4,}\b", title.lower())
             keywords.update(title_words)
 
@@ -618,7 +618,7 @@ class StudyClusterer:
             "setting",
             "participant",
         }
-        keywords = keywords - stop_words
+        keywords = keywords-stop_words
 
         return keywords
 

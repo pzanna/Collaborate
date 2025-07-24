@@ -15,8 +15,7 @@ Features:
 - Research question / hypothesis generation
 - Markdown / LaTeX template rendering via Jinja2
 - Pandoc integration for multiple output formats
-- Human - in - the - loop checkpoints
-- Comprehensive audit logging and versioning
+- Human - in - the - loop checkpoints-Comprehensive audit logging and versioning
 
 Author: GitHub Copilot for Paul Zanna
 Date: July 23, 2025
@@ -73,7 +72,7 @@ class ThesisConfig:
     template_dir: str = "templates"
     cache_dir: str = "cache"
     ai_provider: str = "openai"  # openai, xai, local
-    ai_model: str = "gpt - 4"
+    ai_model: str = "gpt-4"
     deterministic: bool = True
     temperature: float = 0.0
     top_p: float = 1.0
@@ -173,7 +172,7 @@ class DeterministicCache:
         """Load existing cache."""
         if self.cache_file.exists():
             try:
-                with open(self.cache_file, "r", encoding="utf - 8") as f:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except (json.JSONDecodeError, IOError) as e:
                 logging.warning(f"Failed to load cache: {e}")
@@ -182,7 +181,7 @@ class DeterministicCache:
     def _save_cache(self):
         """Save cache to disk."""
         try:
-            with open(self.cache_file, "w", encoding="utf - 8") as f:
+            with open(self.cache_file, "w", encoding="utf-8") as f:
                 json.dump(self.cache, f, indent=2, ensure_ascii=False)
         except IOError as e:
             logging.error(f"Failed to save cache: {e}")
@@ -192,7 +191,7 @@ class DeterministicCache:
     ) -> str:
         """Generate deterministic cache key."""
         content = f"{prompt}|{model}|{temperature}|{top_p}|{self.version}"
-        return hashlib.sha256(content.encode("utf - 8")).hexdigest()
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     def get(
         self, prompt: str, model: str, temperature: float, top_p: float
@@ -275,7 +274,7 @@ class PRISMAValidator:
 
 
 class ThesisLiteratureReviewGenerator:
-    """Main class for generating thesis - style literature reviews."""
+    """Main class for generating thesis-style literature reviews."""
 
     def __init__(self, config: ThesisConfig):
         self.config = config
@@ -304,7 +303,7 @@ class ThesisLiteratureReviewGenerator:
 
         # Create formatter
         formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "%(asctime)s - %(name)s - %(levelname)s-%(message)s"
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -359,7 +358,7 @@ class ThesisLiteratureReviewGenerator:
     def _setup_jinja(self) -> Optional[Any]:
         """Setup Jinja2 template environment."""
         if not JINJA_AVAILABLE:
-            self.logger.warning("Jinja2 not available - template rendering disabled")
+            self.logger.warning("Jinja2 not available-template rendering disabled")
             return None
 
         template_dir = Path(self.config.template_dir)
@@ -402,7 +401,7 @@ class ThesisLiteratureReviewGenerator:
         ### 2.2 Study Selection
         **Inclusion Criteria:**
         {% for criteria in methods.eligibility_criteria.inclusion %}
-        - {{ criteria }}
+       -{{ criteria }}
         {% endfor %}
 
         ## 3. Thematic Synthesis
@@ -445,7 +444,7 @@ class ThesisLiteratureReviewGenerator:
 
         ### 5.2 Theoretical Relationships
         {% for relationship in conceptual_model.relationships %}
-        - {{ relationship.source }} → {{ relationship.target }}: {{ relationship.description }}
+       -{{ relationship.source }} → {{ relationship.target }}: {{ relationship.description }}
         {% endfor %}
 
         ## 6. Research Questions and Hypotheses
@@ -481,7 +480,7 @@ class ThesisLiteratureReviewGenerator:
         latex_template = dedent(
             r"""
         \chapter{Literature Review}
-        \label{ch:literature - review}
+        \label{ch:literature-review}
 
         \section{Introduction}
         \subsection{Background and Context}
@@ -521,7 +520,7 @@ class ThesisLiteratureReviewGenerator:
         \centering
         {{ conceptual_model.tikz_diagram }}
         \caption{Conceptual Framework}
-        \label{fig:conceptual - framework}
+        \label{fig:conceptual-framework}
         \end{figure}
 
         \section{Research Questions and Hypotheses}
@@ -571,7 +570,7 @@ class ThesisLiteratureReviewGenerator:
         start_time = time.time()
         try:
             response = self.ai_client.get_response(prompt, system_prompt)
-            processing_time = time.time() - start_time
+            processing_time = time.time()-start_time
 
             # Validate JSON if schema provided
             if schema and JSONSCHEMA_AVAILABLE and validate:
@@ -620,7 +619,7 @@ class ThesisLiteratureReviewGenerator:
     def extract_themes(
         self, studies: List[StudyRecord], prisma_data: Dict
     ) -> List[Theme]:
-        """Extract themes using LLM - based synthesis."""
+        """Extract themes using LLM-based synthesis."""
         self.logger.info("Extracting themes from literature...")
 
         # Prepare study summaries
@@ -678,7 +677,7 @@ class ThesisLiteratureReviewGenerator:
         Ensure themes are:
         - Mutually exclusive but collectively exhaustive
         - Grounded in the actual study data
-        - Relevant for thesis - level analysis
+        - Relevant for thesis-level analysis
         """
         )
 
@@ -776,7 +775,7 @@ class ThesisLiteratureReviewGenerator:
 
         For each gap, provide:
         1. title (concise research gap statement)
-        2. description (detailed explanation, 100 - 150 words)
+        2. description (detailed explanation, 100-150 words)
         3. justification (why this gap matters, evidence from themes)
         4. impact_score (1 - 5: potential impact on field)
         5. feasibility_score (1 - 5: realistic for PhD research)
@@ -793,7 +792,7 @@ class ThesisLiteratureReviewGenerator:
         Avoid gaps that are:
         - Too broad for PhD scope
         - Already well - studied
-        - Purely technical / implementation issues
+       -Purely technical / implementation issues
         """
         )
 
@@ -873,7 +872,7 @@ class ThesisLiteratureReviewGenerator:
                 impact_score=gap_json["impact_score"],
                 feasibility_score=gap_json["feasibility_score"],
                 novelty_score=gap_json["novelty_score"],
-                priority_rank=i + 1,  # Will be re - ranked after sorting
+                priority_rank=i + 1,  # Will be re-ranked after sorting
                 related_themes=gap_json["related_themes"],
             )
             gaps.append(gap)
@@ -925,7 +924,7 @@ class ThesisLiteratureReviewGenerator:
         - Provide foundation for addressing research gaps
         - Be theoretically grounded and empirically testable
         - Use standard academic terminology
-        - Show clear construct relationships
+       -Show clear construct relationships
         """
         )
 
@@ -1010,7 +1009,7 @@ class ThesisLiteratureReviewGenerator:
             f"""
         You are a research methodology expert formulating research questions and hypotheses.
 
-        TASK: Generate 2 - 4 research questions / hypotheses based on the top research gaps and conceptual model.
+        TASK: Generate 2-4 research questions / hypotheses based on the top research gaps and conceptual model.
 
         RESEARCH GAPS:
         {json.dumps(gap_data, indent=2)}
@@ -1023,7 +1022,7 @@ class ThesisLiteratureReviewGenerator:
 
         For each research question / hypothesis:
         1. type ("question" or "hypothesis")
-        2. text (well - formed RQ or hypothesis statement)
+        2. text (well-formed RQ or hypothesis statement)
         3. constructs (list of constructs involved)
         4. predicted_direction (for hypotheses only: "positive", "negative", "moderated")
         5. justification (why this RQ / H is important and feasible)
@@ -1034,7 +1033,7 @@ class ThesisLiteratureReviewGenerator:
         - Use specific, measurable constructs
         - Ensure hypotheses are directional and testable
         - Align with PhD research scope
-        - Build on conceptual model relationships
+       -Build on conceptual model relationships
         """
         )
 
@@ -1099,7 +1098,7 @@ class ThesisLiteratureReviewGenerator:
         return research_questions
 
     def human_checkpoint(self, checkpoint_name: str, data: Any) -> Any:
-        """Human - in - the - loop checkpoint for review and editing."""
+        """Human - in - the-loop checkpoint for review and editing."""
         if not self.config.human_checkpoints:
             return data
 
@@ -1127,16 +1126,16 @@ class ThesisLiteratureReviewGenerator:
         print("Current data summary:")
 
         if isinstance(data, list):
-            print(f"  - {len(data)} items")
+            print(f" -{len(data)} items")
             for i, item in enumerate(data[:3]):  # Show first 3 items
                 if hasattr(item, "name"):
                     print(f"    {i + 1}. {item.name}")
                 elif hasattr(item, "title"):
                     print(f"    {i + 1}. {item.title}")
         elif hasattr(data, "__dict__"):
-            print(f"  - Object type: {type(data).__name__}")
+            print(f" -Object type: {type(data).__name__}")
             if hasattr(data, "description"):
-                print(f"  - Description: {data.description[:100]}...")
+                print(f" -Description: {data.description[:100]}...")
 
         response = input("\nProceed with current data? (y / n/edit): ").strip().lower()
 
@@ -1158,7 +1157,7 @@ class ThesisLiteratureReviewGenerator:
         self.logger.info("Rendering templates...")
 
         if not self.jinja_env:
-            self.logger.warning("Jinja2 not available - using fallback rendering")
+            self.logger.warning("Jinja2 not available-using fallback rendering")
             return self._fallback_render(template_data)
 
         outputs = {}
@@ -1243,7 +1242,7 @@ class ThesisLiteratureReviewGenerator:
 
     def _markdown_to_html(self, markdown_content: str) -> str:
         """Convert markdown to HTML (basic implementation)."""
-        # This is a simplified conversion - in practice, use a proper markdown library
+        # This is a simplified conversion-in practice, use a proper markdown library
         html_content = markdown_content.replace("\n## ", "\n<h2>").replace(
             "\n### ", "\n<h3>"
         )
@@ -1278,7 +1277,7 @@ class ThesisLiteratureReviewGenerator:
                     / f"thesis_chapter_{timestamp}.{format_name}"
                 )
 
-            with open(output_file, "w", encoding="utf - 8") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(content)
 
             self.logger.info(f"Exported {format_name}: {output_file}")
@@ -1314,7 +1313,7 @@ class ThesisLiteratureReviewGenerator:
                     str(markdown_file),
                     "-o",
                     str(pdf_file),
-                    "--pdf - engine=xelatex",
+                    "--pdf-engine=xelatex",
                     "--template=default",
                 ],
                 check=True,
@@ -1337,14 +1336,14 @@ class ThesisLiteratureReviewGenerator:
             self.logger.warning(f"Pandoc conversion failed: {e}")
 
     def generate_thesis_chapter(self) -> Dict[str, Any]:
-        """Main method to generate thesis - style literature review chapter."""
+        """Main method to generate thesis-style literature review chapter."""
         self.logger.info("Starting thesis literature review generation...")
         start_time = time.time()
 
         try:
             # 1. Load and validate PRISMA data
             self.logger.info("Loading PRISMA data...")
-            with open(self.config.input_file, "r", encoding="utf - 8") as f:
+            with open(self.config.input_file, "r", encoding="utf-8") as f:
                 prisma_data = json.load(f)
 
             PRISMAValidator.validate_prisma_structure(prisma_data)
@@ -1385,7 +1384,7 @@ class ThesisLiteratureReviewGenerator:
                 "research_questions": research_questions,
                 "generation_metadata": {
                     "timestamp": datetime.now().isoformat(),
-                    "processing_time": time.time() - start_time,
+                    "processing_time": time.time()-start_time,
                     "ai_model": self.config.ai_model,
                     "study_count": len(studies),
                     "theme_count": len(themes),
@@ -1399,7 +1398,7 @@ class ThesisLiteratureReviewGenerator:
             # 8. Export outputs
             self.export_outputs(outputs, template_data["generation_metadata"])
 
-            self.logger.info(f"Generation completed in {time.time() - start_time:.2f}s")
+            self.logger.info(f"Generation completed in {time.time()-start_time:.2f}s")
             return template_data
 
         except Exception as e:
@@ -1410,7 +1409,7 @@ class ThesisLiteratureReviewGenerator:
 def main():
     """CLI interface for thesis literature review generation."""
     parser = argparse.ArgumentParser(
-        description="Generate thesis - style literature review from PRISMA data"
+        description="Generate thesis-style literature review from PRISMA data"
     )
 
     parser.add_argument("--input", "-i", required=True, help="Input PRISMA JSON file")
@@ -1426,15 +1425,15 @@ def main():
         choices=["openai", "xai"],
         help="AI provider",
     )
-    parser.add_argument("--model", "-m", default="gpt - 4", help="AI model name")
+    parser.add_argument("--model", "-m", default="gpt-4", help="AI model name")
     parser.add_argument(
         "--deterministic",
         action="store_true",
         help="Use deterministic generation (temp=0)",
     )
-    parser.add_argument("--no - cache", action="store_true", help="Disable caching")
+    parser.add_argument("--no-cache", action="store_true", help="Disable caching")
     parser.add_argument(
-        "--no - checkpoints", action="store_true", help="Skip human checkpoints"
+        "--no-checkpoints", action="store_true", help="Skip human checkpoints"
     )
     parser.add_argument(
         "--themes", type=int, default=5, help="Number of themes to extract"

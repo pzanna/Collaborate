@@ -1,5 +1,5 @@
 """
-Simplified Multi - AI Chat System
+Simplified Multi-AI Chat System
 Replaces the complex ResponseCoordinator with a natural group conversation approach
 """
 

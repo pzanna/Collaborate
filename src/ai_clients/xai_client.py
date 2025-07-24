@@ -41,7 +41,7 @@ class XAIClient:
 
         # Log API request details
         self.logger.info(
-            f"xAI API Request - Model: {self.config.model}, "
+            f"xAI API Request-Model: {self.config.model}, "
             f"Message length: {len(user_message)}, Estimated tokens: {estimated_tokens}, "
             f"Temperature: {self.config.temperature}, Max tokens: {self.config.max_tokens}"
         )
@@ -62,7 +62,7 @@ class XAIClient:
             # Get response from the chat
             response = chat.sample()
 
-            response_time = time.time() - start_time
+            response_time = time.time()-start_time
 
             # Extract content from response
             if hasattr(response, "content"):
@@ -72,7 +72,7 @@ class XAIClient:
 
             # Log successful response details
             self.logger.info(
-                f"xAI API Response - Success: Content length: {len(response_content)}, "
+                f"xAI API Response-Success: Content length: {len(response_content)}, "
                 f"Response time: {response_time:.2f}s"
             )
 
@@ -82,7 +82,7 @@ class XAIClient:
                 if len(response_content) > 200
                 else response_content
             )
-            # Sanitize content for single - line log entry (replace newlines and multiple spaces)
+            # Sanitize content for single-line log entry (replace newlines and multiple spaces)
             sanitized_preview = content_preview.replace("\n", " ").replace("\r", " ")
             sanitized_preview = " ".join(
                 sanitized_preview.split()
@@ -92,12 +92,12 @@ class XAIClient:
             return response_content
 
         except Exception as e:
-            response_time = time.time() - start_time
+            response_time = time.time()-start_time
             error_msg = f"xAI API error: {str(e)}"
 
             # Log error details
             self.logger.error(
-                f"xAI API Error - Model: {self.config.model}, "
+                f"xAI API Error-Model: {self.config.model}, "
                 f"Response time: {response_time:.2f}s, Error: {error_msg}"
             )
 

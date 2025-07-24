@@ -51,7 +51,7 @@ class EuniceError(Exception):
 
 
 class NetworkError(EuniceError):
-    """Network - related errors."""
+    """Network-related errors."""
 
     def __init__(
         self,
@@ -63,7 +63,7 @@ class NetworkError(EuniceError):
 
 
 class APIError(EuniceError):
-    """API - related errors."""
+    """API-related errors."""
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class APIError(EuniceError):
 
 
 class DatabaseError(EuniceError):
-    """Database - related errors."""
+    """Database-related errors."""
 
     def __init__(
         self,
@@ -94,7 +94,7 @@ class DatabaseError(EuniceError):
 
 
 class ConfigurationError(EuniceError):
-    """Configuration - related errors."""
+    """Configuration-related errors."""
 
     def __init__(
         self,
@@ -176,21 +176,21 @@ class ErrorHandler:
         """Convert a generic exception to a EuniceError."""
         error_str = str(error)
 
-        # Network - related errors
+        # Network-related errors
         if any(
             keyword in error_str.lower()
             for keyword in ["connection", "timeout", "network", "dns"]
         ):
             return NetworkError(f"Network error: {error_str}", original_error=error)
 
-        # API - related errors
+        # API-related errors
         if any(
             keyword in error_str.lower()
             for keyword in ["api", "http", "request", "response"]
         ):
             return APIError(f"API error: {error_str}", "unknown", original_error=error)
 
-        # Database - related errors
+        # Database-related errors
         if any(
             keyword in error_str.lower() for keyword in ["database", "sql", "sqlite"]
         ):
@@ -200,7 +200,7 @@ class ErrorHandler:
                 original_error=error,
             )
 
-        # File - related errors
+        # File-related errors
         if any(
             keyword in error_str.lower()
             for keyword in ["file", "directory", "path", "permission"]
@@ -212,7 +212,7 @@ class ErrorHandler:
                 original_error=error,
             )
 
-        # Configuration - related errors
+        # Configuration-related errors
         if any(
             keyword in error_str.lower()
             for keyword in ["config", "setting", "environment"]

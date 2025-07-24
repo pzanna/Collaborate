@@ -1,5 +1,5 @@
 """
-Systematic Review Agent for PRISMA - compliant literature reviews.
+Systematic Review Agent for PRISMA-compliant literature reviews.
 
 This agent specializes in conducting systematic literature reviews following
 PRISMA 2020 guidelines, with support for screening, quality appraisal,
@@ -104,7 +104,7 @@ class SystematicReviewAgent(BaseAgent):
     2. Search strategy development
     3. Multi - source retrieval
     4. Deduplication and clustering
-    5. Two - stage screening
+    5. Two-stage screening
     6. Quality / bias appraisal
     7. Evidence synthesis
     8. PRISMA report generation
@@ -249,7 +249,7 @@ class SystematicReviewAgent(BaseAgent):
 
         try:
 
-            # Stage 1: Input validation (FR - 1)
+            # Stage 1: Input validation (FR-1)
             self.logger.info("Stage 1: Validating research plan")
             validation_result = await self._validate_research_plan(research_plan)
             workflow_results["results"]["validation"] = validation_result
@@ -260,7 +260,7 @@ class SystematicReviewAgent(BaseAgent):
                 workflow_results["error"] = "Research plan validation failed"
                 return workflow_results
 
-            # Stage 2: Search strategy execution (FR - 2)
+            # Stage 2: Search strategy execution (FR-2)
             self.logger.info("Stage 2: Executing search strategy")
             search_results = await self._execute_search_strategy(
                 validation_result["validated_plan"]
@@ -271,7 +271,7 @@ class SystematicReviewAgent(BaseAgent):
             )
             workflow_results["current_stage"] = PRISMAStage.DEDUPLICATION.value
 
-            # Stage 3: Deduplication and clustering (FR - 2.6, FR - 2.7)
+            # Stage 3: Deduplication and clustering (FR-2.6, FR-2.7)
             self.logger.info("Stage 3: Deduplication and clustering")
             dedup_results = await self._deduplicate_and_cluster(
                 search_results.get("all_results", [])
@@ -284,7 +284,7 @@ class SystematicReviewAgent(BaseAgent):
                 PRISMAStage.TITLE_ABSTRACT_SCREENING.value
             )
 
-            # Stage 4: Title / Abstract screening (FR - 3)
+            # Stage 4: Title / Abstract screening (FR-3)
             self.logger.info("Stage 4: Title / Abstract screening")
             screening_criteria = validation_result["validated_plan"].get(
                 "inclusion_criteria", {}
@@ -303,7 +303,7 @@ class SystematicReviewAgent(BaseAgent):
             )
             workflow_results["current_stage"] = PRISMAStage.FULL_TEXT_SCREENING.value
 
-            # Stage 5: Full text screening (FR - 3)
+            # Stage 5: Full text screening (FR-3)
             self.logger.info("Stage 5: Full text screening")
             included_studies = ta_screening_results.get("included_studies", [])
             ft_screening_results = await self._full_text_screening(
@@ -342,7 +342,7 @@ class SystematicReviewAgent(BaseAgent):
         self, research_plan: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Validate research plan according to PICO / PECO criteria (FR - 1).
+        Validate research plan according to PICO / PECO criteria (FR-1).
 
         Args:
             research_plan: Research plan to validate
@@ -388,7 +388,7 @@ class SystematicReviewAgent(BaseAgent):
         self, research_plan: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Execute multi - source search strategy (FR - 2).
+        Execute multi - source search strategy (FR-2).
 
         Args:
             research_plan: Validated research plan
@@ -466,7 +466,7 @@ class SystematicReviewAgent(BaseAgent):
         self, studies: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Remove duplicates and cluster related studies (FR - 2.6, FR - 2.7).
+        Remove duplicates and cluster related studies (FR-2.6, FR-2.7).
 
         Args:
             studies: List of study records
@@ -537,7 +537,7 @@ class SystematicReviewAgent(BaseAgent):
         self, studies: List[Dict[str, Any]], criteria: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Perform title / abstract screening using LLM assistance (FR - 3).
+        Perform title / abstract screening using LLM assistance (FR-3).
 
         Args:
             studies: List of studies to screen
@@ -566,7 +566,7 @@ class SystematicReviewAgent(BaseAgent):
                     study, criteria, "title_abstract"
                 )
 
-                # Get AI decision (simplified - would use actual AI client)
+                # Get AI decision (simplified-would use actual AI client)
                 ai_response = await self._get_ai_screening_decision(screening_prompt)
 
                 decision = ai_response.get("decision", ScreeningDecision.UNCERTAIN)
@@ -630,7 +630,7 @@ class SystematicReviewAgent(BaseAgent):
         self, studies: List[Dict[str, Any]], criteria: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Perform full text screening (FR - 3).
+        Perform full text screening (FR-3).
 
         Args:
             studies: List of studies that passed title / abstract screening
@@ -795,7 +795,7 @@ class SystematicReviewAgent(BaseAgent):
         return abstract
 
     def _calculate_content_hash(self, content: Dict[str, Any]) -> str:
-        """Calculate SHA - 256 hash of study content."""
+        """Calculate SHA-256 hash of study content."""
         # Create normalized content string for hashing
         normalized_content = {
             "title": content.get("title", "").lower().strip(),
@@ -809,7 +809,7 @@ class SystematicReviewAgent(BaseAgent):
         return hashlib.sha256(content_str.encode()).hexdigest()
 
     def _calculate_plan_hash(self, research_plan: Dict[str, Any]) -> str:
-        """Calculate SHA - 256 hash of research plan."""
+        """Calculate SHA-256 hash of research plan."""
         plan_str = json.dumps(research_plan, sort_keys=True)
         return hashlib.sha256(plan_str.encode()).hexdigest()
 
@@ -851,7 +851,7 @@ class SystematicReviewAgent(BaseAgent):
     def _create_screening_prompt(
         self, study: Dict[str, Any], criteria: Dict[str, Any], stage: str
     ) -> str:
-        """Create prompt for LLM - assisted screening."""
+        """Create prompt for LLM-assisted screening."""
         title = study.get("title", "No title")
         abstract = study.get("abstract", "No abstract available")
         authors = ", ".join(study.get("authors", []))
@@ -872,14 +872,14 @@ Exclusion Criteria:
 
 Please evaluate this study and provide:
 1. Decision: include, exclude, or uncertain
-2. Confidence: 0.0 - 1.0 confidence score
+2. Confidence: 0.0-1.0 confidence score
 3. Reason code: if excluding, use one of {list(self.exclusion_reasons.keys())}
 4. Rationale: brief explanation for the decision
 
 Respond in JSON format:
 {{
     "decision": "include|exclude|uncertain",
-    "confidence": 0.0 - 1.0,
+    "confidence": 0.0-1.0,
     "reason_code": "CODE" (if excluding),
     "rationale": "explanation"
 }}
@@ -888,7 +888,7 @@ Respond in JSON format:
 
     async def _get_ai_screening_decision(self, prompt: str) -> Dict[str, Any]:
         """Get AI screening decision (simplified implementation)."""
-        # Placeholder implementation - would use actual AI client
+        # Placeholder implementation-would use actual AI client
         # For now, return mock decision
         import random
 
@@ -931,14 +931,14 @@ if __name__ == "__main__":
             research_plan = {
                 "objective": "Effectiveness of AI in medical diagnosis",
                 "population": "Healthcare providers and patients",
-                "intervention": "AI - assisted diagnostic tools",
+                "intervention": "AI-assisted diagnostic tools",
                 "comparison": "Traditional diagnostic methods",
                 "outcomes": [
                     "diagnostic accuracy",
                     "time to diagnosis",
                     "cost effectiveness",
                 ],
-                "timeframe": "2020 - 2025",
+                "timeframe": "2020-2025",
             }
 
             # Run systematic review workflow

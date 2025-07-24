@@ -41,41 +41,51 @@ class LogEvent(Enum):
     QUEUE_OVERFLOW = "queue_overflow"
 
 
-class StructuredJSONFormatter(logging.Formatter):
-    """Custom JSON formatter for structured logging"""
+class StructuredTextFormatter(logging.Formatter):
+    """Custom text formatter for structured logging"""
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format log record as JSON"""
-        log_entry = {
-            "timestamp": datetime.fromtimestamp(record.created).isoformat(),
-            "level": record.levelname,
-            "component": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-        }
-
-        # Add extra fields if they exist
+        """Format log record as plain text"""
+        # Base format similar to other logs: timestamp-module-level-message
+        timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
+        base_message = f"{timestamp} - {record.name} - {record.levelname}-{record.getMessage()}"
+        
+        # Add extra context if available
+        extra_parts = []
+        
+        # Add important fields as key=value pairs
         for attr in [
             "event",
-            "task_id",
+            "task_id", 
             "context_id",
             "agent_type",
             "agent_id",
             "client_id",
-            "duration",
-            "details",
-            "error_code",
         ]:
             if hasattr(record, attr):
-                log_entry[attr] = getattr(record, attr)
-
+                extra_parts.append(f"{attr}={getattr(record, attr)}")
+        
+        # Add duration if present
+        if hasattr(record, "duration"):
+            extra_parts.append(f"duration={getattr(record, 'duration'):.3f}s")
+            
+        # Add details if present (but keep it concise)
+        if hasattr(record, "details"):
+            details = getattr(record, "details")
+            if isinstance(details, dict) and "success" in details:
+                extra_parts.append(f"success={details['success']}")
+                if "capabilities" in details and isinstance(details["capabilities"], list):
+                    extra_parts.append(f"capabilities_count={len(details['capabilities'])}")
+        
         # Add exception information if present
         if record.exc_info:
-            log_entry["exception"] = self.formatException(record.exc_info)
-
-        return json.dumps(log_entry, default=str)
+            extra_parts.append(f"exception={self.formatException(record.exc_info)}")
+        
+        # Combine base message with extra context
+        if extra_parts:
+            return f"{base_message} [{', '.join(extra_parts)}]"
+        else:
+            return base_message
 
 
 class MCPLogger:
@@ -91,9 +101,22 @@ class MCPLogger:
         # Clear existing handlers
         self.logger.handlers.clear()
 
-        # Add JSON formatter
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(StructuredJSONFormatter())
+        # Determine log file path
+        if config_manager and hasattr(config_manager, 'config'):
+            try:
+                log_path = config_manager.config.logging.file.replace('eunice.log', 'mcp_server.log')
+            except AttributeError:
+                log_path = "logs/mcp_server.log"
+        else:
+            log_path = "logs/mcp_server.log"
+
+        # Create logs directory if it doesn't exist
+        import os
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
+        # Add file handler with JSON formatter
+        handler = logging.FileHandler(log_path)
+        handler.setFormatter(StructuredTextFormatter())
         self.logger.addHandler(handler)
 
         # Prevent propagation to root logger
@@ -267,9 +290,9 @@ class MCPLogger:
         self.log_event(LogLevel.INFO, event_type, message, details=details or {})
 
 
-def get_mcp_logger(component_name: str, log_level: str = "INFO") -> MCPLogger:
+def get_mcp_logger(component_name: str, log_level: str = "INFO", config_manager=None) -> MCPLogger:
     """Factory function to create MCP logger instances"""
-    return MCPLogger(f"mcp.{component_name}", log_level)
+    return MCPLogger(f"mcp.{component_name}", log_level, config_manager)
 
 
 # Default logger instance for the MCP server

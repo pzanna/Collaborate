@@ -2,15 +2,14 @@
 Performance & Scalability Package
 =================================
 
-Enterprise - grade performance optimization and scalability enhancements
+Enterprise-grade performance optimization and scalability enhancements
 for systematic review automation.
 
 This package provides:
 - Parallel processing optimization
 - Memory management and caching
 - Database query optimization
-- Resource monitoring and profiling
-- Scalable architecture patterns
+- Resource monitoring and profiling-Scalable architecture patterns
 
 Author: Eunice AI System
 Date: July 2025

@@ -73,7 +73,7 @@ class MCPServer:
             self.config = FallbackConfig()
 
         # Initialize structured logger
-        self.logger = get_mcp_logger("server", self.config.log_level)
+        self.logger = get_mcp_logger("server", self.config.log_level, self.config_manager)
 
         # Core components
         self.agent_registry = AgentRegistry(heartbeat_timeout=30)
@@ -117,21 +117,6 @@ class MCPServer:
             # Set running flag first
             self.is_running = True
 
-            # Initialize persona system
-            logger.info("Initializing persona system...")
-            if PersonaMCPIntegration:
-                self.persona_integration = PersonaMCPIntegration(self.config_manager)
-                persona_init_success = await self.persona_integration.initialize()
-
-                if persona_init_success:
-                    logger.info("✅ Persona system initialized successfully")
-                else:
-                    logger.warning(
-                        "⚠️ Persona system initialization failed - consultations will be unavailable"
-                    )
-            else:
-                logger.warning("⚠️ Persona system not available - import failed")
-
             # Start background tasks
             await self._start_background_tasks()
 
@@ -145,6 +130,10 @@ class MCPServer:
             )
 
             logger.info(f"MCP Server started on {self.config.host}:{self.config.port}")
+
+            # Initialize persona system after server is running
+            # This prevents circular dependency where personas try to connect during server init
+            asyncio.create_task(self._initialize_persona_system())
 
             # Set up signal handlers
             self._setup_signal_handlers()
@@ -190,6 +179,29 @@ class MCPServer:
         await self.agent_registry.stop_cleanup_task()
 
         logger.info("MCP server stopped")
+
+    async def _initialize_persona_system(self):
+        """Initialize persona system after server is running"""
+        try:
+            # Wait a moment for server to fully start
+            await asyncio.sleep(1)
+            
+            logger.info("Initializing persona system...")
+            if PersonaMCPIntegration:
+                self.persona_integration = PersonaMCPIntegration(self.config_manager)
+                persona_init_success = await self.persona_integration.initialize()
+
+                if persona_init_success:
+                    logger.info("✅ Persona system initialized successfully")
+                else:
+                    logger.warning(
+                        "⚠️ Persona system initialization failed-consultations will be unavailable"
+                    )
+            else:
+                logger.warning("⚠️ Persona system not available-import failed")
+        except Exception as e:
+            logger.error(f"Error initializing persona system: {e}")
+            # Don't fail the server if persona initialization fails
 
     async def _start_background_tasks(self):
         """Start background tasks"""
@@ -389,7 +401,7 @@ class MCPServer:
             success = await self.agent_registry.register_agent(registration)
 
             if success:
-                # Track agent - to - client mapping
+                # Track agent-to-client mapping
                 self.agent_to_client[registration.agent_id] = client_id
                 self.client_to_agent[client_id] = registration.agent_id
 
@@ -479,7 +491,7 @@ class MCPServer:
                 "queue": queue_stats,
                 "agents": registry_stats,
                 "uptime_seconds": (
-                    datetime.now() - self.stats["started_at"]
+                    datetime.now()-self.stats["started_at"]
                 ).total_seconds(),
             }
 
@@ -531,7 +543,7 @@ class MCPServer:
                             "action": task.action.action,
                         },
                         "dependencies": task.action.dependencies,
-                        "children": [],  # Will be populated by client - side processing
+                        "children": [],  # Will be populated by client-side processing
                     }
                     tasks_data.append(task_info)
 
@@ -897,7 +909,7 @@ class MCPServer:
                     action.task_id, "Agent client disconnected"
                 )
         else:
-            logger.error(f"Agent {agent_id} not found in agent - to - client mapping")
+            logger.error(f"Agent {agent_id} not found in agent-to-client mapping")
             await self.task_queue.fail_task(action.task_id, "Agent not registered")
 
     async def _send_to_client(self, client_id: str, message: Dict[str, Any]):
@@ -967,7 +979,7 @@ async def main():
 
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        format="%(asctime)s - %(name)s - %(levelname)s-%(message)s",
         handlers=[
             logging.FileHandler(os.path.join(log_path, "mcp_server.log")),
             logging.StreamHandler(),

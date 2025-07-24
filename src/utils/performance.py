@@ -24,7 +24,7 @@ class PerformanceMonitor:
         """End timing an operation and record the duration."""
         with self._lock:
             if operation in self.start_times:
-                duration = time.time() - self.start_times[operation]
+                duration = time.time()-self.start_times[operation]
                 self.metrics[operation].append(duration)
                 del self.start_times[operation]
                 return duration
@@ -84,7 +84,7 @@ class PerformanceMonitor:
 
 
 class CacheManager:
-    """Simple in - memory cache manager with TTL support."""
+    """Simple in-memory cache manager with TTL support."""
 
     def __init__(self, max_size: int = 1000, ttl_seconds: Optional[float] = None):
         self.cache: Dict[str, Any] = {}

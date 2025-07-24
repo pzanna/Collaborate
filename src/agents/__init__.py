@@ -6,7 +6,7 @@ This package contains AI agents for different specialized tasks:
 - PlanningAgent: Task planning and coordination
 - ExecutorAgent: Task execution and automation
 - MemoryAgent: Data storage and retrieval
-- SystematicReviewAgent: PRISMA - compliant systematic literature reviews
+- SystematicReviewAgent: PRISMA-compliant systematic literature reviews
 """
 
 from .base_agent import BaseAgent

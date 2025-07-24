@@ -12,7 +12,7 @@ Key Features:
 - Resource - level access control
 - Session management and security
 - Comprehensive audit logging
-- Multi - factor authentication support
+- Multi-factor authentication support
 
 Author: Eunice AI System
 Date: 2024
@@ -40,12 +40,12 @@ logger = logging.getLogger(__name__)
 class UserRole(Enum):
     """Hierarchical user roles with increasing privileges"""
 
-    OBSERVER = "observer"  # Read - only access
+    OBSERVER = "observer"  # Read-only access
     REVIEWER = "reviewer"  # Can screen and assess studies
     SENIOR_REVIEWER = "senior_reviewer"  # Can resolve conflicts, mentor others
     LEAD_REVIEWER = "lead_reviewer"  # Can manage project settings
     PROJECT_ADMIN = "project_admin"  # Full project control
-    SYSTEM_ADMIN = "system_admin"  # System - wide administration
+    SYSTEM_ADMIN = "system_admin"  # System-wide administration
 
 
 class Permission(Enum):
@@ -86,7 +86,7 @@ class Permission(Enum):
 
 
 class ResourceType(Enum):
-    """Types of resources that can be access - controlled"""
+    """Types of resources that can be access-controlled"""
 
     PROJECT = "project"
     STUDY = "study"
@@ -150,7 +150,7 @@ class Session:
 
 @dataclass
 class ProjectAccess:
-    """Project - specific access control"""
+    """Project-specific access control"""
 
     access_id: str
     user_id: str
@@ -192,7 +192,7 @@ class AccessControlManager:
     - Session management
     - Audit logging
     - Multi - factor authentication
-    - Security monitoring
+   -Security monitoring
     """
 
     def __init__(self, db_path: str = "data / eunice.db"):
@@ -201,7 +201,7 @@ class AccessControlManager:
         self.max_failed_attempts = 5
         self.lockout_duration = timedelta(minutes=30)
 
-        # Role - permission mappings
+        # Role-permission mappings
         self.role_permissions = self._initialize_role_permissions()
 
         # Initialize database
@@ -210,7 +210,7 @@ class AccessControlManager:
         logger.info("Access Control Manager initialized")
 
     def _initialize_role_permissions(self) -> Dict[UserRole, Set[Permission]]:
-        """Initialize role - based permission mappings"""
+        """Initialize role-based permission mappings"""
         return {
             UserRole.OBSERVER: {
                 Permission.VIEW_STUDIES,
@@ -637,10 +637,10 @@ class AccessControlManager:
             if user.role == UserRole.SYSTEM_ADMIN:
                 return True
 
-            # Check role - based permissions
+            # Check role-based permissions
             role_permissions = self.role_permissions.get(user.role, set())
             if permission in role_permissions:
-                # For project - specific permissions, check project access
+                # For project-specific permissions, check project access
                 if project_id:
                     project_access = await self._get_project_access(user_id, project_id)
                     if project_access and project_access.is_active:
@@ -1296,7 +1296,7 @@ if __name__ == "__main__":
             username="test_reviewer",
             password="secure_password123",
             ip_address="127.0.0.1",
-            user_agent="test - client",
+            user_agent="test-client",
         )
 
         if user_result and session:

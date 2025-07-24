@@ -2,13 +2,12 @@
 Cache Management System
 ======================
 
-High - performance caching for systematic review automation.
+High-performance caching for systematic review automation.
 
 This module provides:
-- Memory - based caching with LRU eviction
-- Redis - based distributed caching
-- Intelligent cache strategies
-- Cache performance monitoring
+- Memory-based caching with LRU eviction
+- Redis-based distributed caching
+- Intelligent cache strategies-Cache performance monitoring
 
 Author: Eunice AI System
 Date: July 2025
@@ -36,7 +35,7 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    logger.warning("Redis not available, using memory - only caching")
+    logger.warning("Redis not available, using memory-only caching")
 
 
 class CacheStrategy(Enum):
@@ -82,13 +81,13 @@ class CacheEntry:
         if self.ttl is None:
             return False
 
-        age = (datetime.now(timezone.utc) - self.created_at).total_seconds()
+        age = (datetime.now(timezone.utc)-self.created_at).total_seconds()
         return age > self.ttl
 
     @property
     def age_seconds(self) -> float:
         """Get age in seconds"""
-        return (datetime.now(timezone.utc) - self.created_at).total_seconds()
+        return (datetime.now(timezone.utc)-self.created_at).total_seconds()
 
 
 @dataclass
@@ -190,7 +189,7 @@ class BaseCache(ABC):
 
 
 class MemoryCache(BaseCache):
-    """In - memory cache implementation with LRU eviction"""
+    """in-memory cache implementation with LRU eviction"""
 
     def __init__(self, config: CacheConfig):
         super().__init__(config)
@@ -228,7 +227,7 @@ class MemoryCache(BaseCache):
             self._access_count[key] = self._access_count.get(key, 0) + 1
 
             self.metrics.hits += 1
-            access_time = (time.time() - start_time) * 1000
+            access_time = (time.time()-start_time) * 1000
             self.metrics.average_access_time_ms = (
                 self.metrics.average_access_time_ms + access_time
             ) / 2
@@ -380,7 +379,7 @@ class MemoryCache(BaseCache):
 
 
 class RedisCache(BaseCache):
-    """Redis - based distributed cache implementation"""
+    """Redis-based distributed cache implementation"""
 
     def __init__(self, config: CacheConfig):
         super().__init__(config)
@@ -398,7 +397,7 @@ class RedisCache(BaseCache):
         """Ensure Redis connection is established"""
         if self._client is None:
             self._client = aioredis.from_url(
-                self.config.redis_url, encoding="utf - 8", decode_responses=False
+                self.config.redis_url, encoding="utf-8", decode_responses=False
             )
 
     async def get(self, key: str) -> Optional[Any]:
@@ -474,7 +473,7 @@ class RedisCache(BaseCache):
 
 class CacheManager:
     """
-    High - level cache manager with multiple backends and intelligent routing
+    High-level cache manager with multiple backends and intelligent routing
     """
 
     def __init__(self, config: Optional[CacheConfig] = None):
@@ -533,7 +532,7 @@ class CacheManager:
 
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """
-        Set value in cache with write - through strategy
+        Set value in cache with write-through strategy
 
         Args:
             key: Cache key
@@ -739,7 +738,7 @@ async def demo_cache_manager():
     # Second call (cache hit)
     start_time = time.time()
     result2 = await expensive_calculation(10)
-    time2 = time.time() - start_time
+    time2 = time.time()-start_time
 
     print(f"   First call (miss): {result1} in {time1:.3f}s")
     print(f"   Second call (hit): {result2} in {time2:.3f}s")

@@ -27,7 +27,7 @@ class PlanningAgent(BaseAgent):
     - Research plan generation
     - Result synthesis
     - Chain of thought reasoning
-    - Content summarization
+   -Content summarization
     """
 
     def __init__(self, config_manager: ConfigManager):
@@ -43,7 +43,7 @@ class PlanningAgent(BaseAgent):
         self.ai_clients = {}
 
         # Planning and reasoning configuration
-        self.default_model = "gpt - 4"
+        self.default_model = "gpt-4"
         self.max_context_length = 8000
         self.temperature = 0.7
 
@@ -63,7 +63,7 @@ class PlanningAgent(BaseAgent):
         ]
 
     async def _initialize_agent(self) -> None:
-        """Initialize planning - specific resources."""
+        """Initialize planning-specific resources."""
         # Initialize AI clients
         ai_providers = self.config.config.ai_providers
 
@@ -94,7 +94,7 @@ class PlanningAgent(BaseAgent):
         )
 
     async def _cleanup_agent(self) -> None:
-        """Clean up planning - specific resources."""
+        """Clean up planning-specific resources."""
         # Clean up AI clients if needed
         for client in self.ai_clients.values():
             if hasattr(client, "close"):
@@ -115,25 +115,31 @@ class PlanningAgent(BaseAgent):
         """
         action = task.action
         payload = task.payload
+        self.logger.info(f"Processing planning action: {action} for task {task.task_id}")
+        self.logger.debug(f"Payload: {payload}")
 
-        if action == "plan_research":
-            return await self._plan_research(payload)
-        elif action == "analyze_information":
-            return await self._analyze_information(payload)
-        elif action == "synthesize_results":
-            return await self._synthesize_results(payload)
-        elif action == "chain_of_thought":
-            return await self._chain_of_thought(payload)
-        elif action == "summarize_content":
-            return await self._summarize_content(payload)
-        elif action == "extract_insights":
-            return await self._extract_insights(payload)
-        elif action == "compare_sources":
-            return await self._compare_sources(payload)
-        elif action == "evaluate_credibility":
-            return await self._evaluate_credibility(payload)
-        else:
-            raise ValueError(f"Unknown action: {action}")
+        try:
+            if action == "plan_research":
+                return await self._plan_research(payload)
+            elif action == "analyze_information":
+                return await self._analyze_information(payload)
+            elif action == "synthesize_results":
+                return await self._synthesize_results(payload)
+            elif action == "chain_of_thought":
+                return await self._chain_of_thought(payload)
+            elif action == "summarize_content":
+                return await self._summarize_content(payload)
+            elif action == "extract_insights":
+                return await self._extract_insights(payload)
+            elif action == "compare_sources":
+                return await self._compare_sources(payload)
+            elif action == "evaluate_credibility":
+                return await self._evaluate_credibility(payload)
+            else:
+                raise ValueError(f"Unknown action: {action}")
+        except Exception as e:
+            self.logger.error(f"Error processing action {action}: {e}", exc_info=True)
+            raise
 
     async def _plan_research(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -145,12 +151,17 @@ class PlanningAgent(BaseAgent):
         Returns:
             Dict[str, Any]: Research plan
         """
+        self.logger.info("Starting _plan_research method")
         query = payload.get("query", "")
         context = payload.get("context", {})
+
+        self.logger.debug(f"Query: {query}")
+        self.logger.debug(f"Context: {context}")
 
         if not query:
             raise ValueError("Query is required for research planning")
 
+        self.logger.info("Creating research planning prompt")
         # Create research planning prompt
         prompt = f"""
         Please create a comprehensive research plan for the following query:
@@ -179,11 +190,15 @@ class PlanningAgent(BaseAgent):
         """
 
         # Get AI response
+        self.logger.info("About to call AI client for research planning")
         response = await self._get_ai_response(prompt)
+        self.logger.info(f"Received AI response: {len(response)} characters")
 
         # Parse the response into structured format
+        self.logger.info("Parsing research plan from AI response")
         plan = self._parse_research_plan(response)
 
+        self.logger.info("Research planning completed successfully")
         return {
             "query": query,
             "plan": plan,
@@ -314,7 +329,7 @@ class PlanningAgent(BaseAgent):
         5. Recommendations for further research
         6. Source citations
 
-        Format your response as a well - structured synthesis.
+        Format your response as a well-structured synthesis.
         """
 
         # Get AI response
@@ -354,7 +369,7 @@ class PlanningAgent(BaseAgent):
         1. Break down the problem into components
         2. Analyze each component systematically
         3. Draw logical connections
-        4. Reach well - reasoned conclusions
+        4. Reach well-reasoned conclusions
         5. Identify assumptions and limitations
 
         Show your reasoning process clearly.
@@ -461,7 +476,7 @@ class PlanningAgent(BaseAgent):
         2. Objectivity and bias
         3. Currency and timeliness
         4. Accuracy and reliability
-        5. Overall credibility score (1 - 10)
+        5. Overall credibility score (1-10)
         """
 
         response = await self._get_ai_response(prompt)
@@ -488,16 +503,23 @@ class PlanningAgent(BaseAgent):
         try:
             # Get response using the correct method name
             # The AI client expects string parameters, not Message objects
-            # Use run_in_executor to handle the synchronous AI client call
-            import asyncio
-
+            # Use run_in_executor to handle the synchronous AI client call with timeout
+            
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None, lambda: self.default_client.get_response(user_message=prompt)
+            
+            # Add timeout to prevent hanging
+            response = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None, lambda: self.default_client.get_response(user_message=prompt)
+                ),
+                timeout=30.0  # 30 second timeout
             )
 
             return str(response)
 
+        except asyncio.TimeoutError:
+            self.logger.error("AI response generation timed out after 30 seconds")
+            return "Error: AI response generation timed out"
         except Exception as e:
             self.logger.error(f"AI response generation failed: {e}")
             return f"Error generating response: {str(e)}"
@@ -626,7 +648,7 @@ class PlanningAgent(BaseAgent):
             # Colon format: Research Objectives:
             rf"{re.escape(section_name)}[:\s]*\n(.*?)(?=\n\d+\.|#{1,4}|$)",
             # Generic pattern
-            rf"{re.escape(section_name)}[:\s]*\n(.*?)(?=\n[A - Z][^a - z]*[:|\n]|$)",
+            rf"{re.escape(section_name)}[:\s]*\n(.*?)(?=\n[A - Z][^a-z]*[:|\n]|$)",
         ]
 
         # Map different variations of section names

@@ -15,7 +15,7 @@ Features:
 - Human - in - the - loop checkpoints
 - Comprehensive audit logging
 - Research question generation
-- Publication - ready formatting
+- Publication-ready formatting
 
 Author: GitHub Copilot for Paul Zanna
 Date: July 23, 2025
@@ -137,7 +137,7 @@ class EnhancedThesisGenerator:
         return {
             "ai": {
                 "provider": "openai",
-                "model": "gpt - 4",
+                "model": "gpt-4",
                 "deterministic": True,
                 "temperature": 0.0,
                 "max_tokens": 4000,
@@ -166,14 +166,14 @@ class EnhancedThesisGenerator:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
 
-        # File handler - use logs directory
+        # File handler-use logs directory
         log_dir = Path("logs")
         log_dir.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_dir / "thesis_generation.log")
         file_handler.setLevel(logging.DEBUG)
 
         # Formatter
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        formatter = logging.Formatter("%(asctime)s-%(levelname)s-%(message)s")
         console_handler.setFormatter(formatter)
         file_handler.setFormatter(formatter)
 
@@ -223,7 +223,7 @@ class EnhancedThesisGenerator:
     def _setup_templates(self):
         """Setup Jinja2 template environment."""
         if not JINJA_AVAILABLE:
-            self.logger.warning("Jinja2 not available - using fallback rendering")
+            self.logger.warning("Jinja2 not available-using fallback rendering")
             return None
 
         template_dir = Path(self.config["templates"]["directory"])
@@ -325,7 +325,7 @@ class EnhancedThesisGenerator:
         start_time = time.time()
         try:
             response = self.ai_client.get_response(prompt, system_prompt)
-            duration = time.time() - start_time
+            duration = time.time()-start_time
 
             # Cache response
             if self.cache:
@@ -371,11 +371,11 @@ class EnhancedThesisGenerator:
                 }
             )
 
-        # Enhanced prompt for thesis - level analysis
+        # Enhanced prompt for thesis-level analysis
         prompt = f"""
 You are a PhD researcher conducting thematic synthesis for a literature review chapter.
 
-TASK: Extract {self.config['processing']['theme_count']} distinct, high -  level themes suitable for a PhD
+TASK: Extract {self.config['processing']['theme_count']} distinct, high-level themes suitable for a PhD
 thesis literature review.
 
 STUDY DATA:
@@ -388,8 +388,8 @@ Respond with JSON in this exact format:
 {{
   "themes": [
     {{
-      "name": "Theme Name (academic, 4 - 8 words)",
-      "summary": "Comprehensive academic summary (200 - 300 words, PhD - level analysis)",
+      "name": "Theme Name (academic, 4-8 words)",
+      "summary": "Comprehensive academic summary (200 - 300 words, PhD-level analysis)",
       "studies": ["study1", "study2", "study3"],
       "strength": "High|Moderate|Low",
       "contradictions": ["any contradictory findings"]
@@ -414,14 +414,12 @@ Focus on:
 
 Ensure themes are:
 - Mutually exclusive yet collectively exhaustive
-- Grounded in empirical evidence
-- Theoretically sophisticated
-- Practically relevant
+- Grounded in empirical evidence-Theoretically sophisticated-Practically relevant
 """
 
         system_prompt = """You are an expert in systematic reviews and academic writing.
 Provide only valid JSON that strictly follows the requested schema.
-Focus on creating themes suitable for PhD - level literature review."""
+Focus on creating themes suitable for PhD-level literature review."""
 
         try:
             response = self.call_ai(prompt, system_prompt)
@@ -465,7 +463,7 @@ Focus on creating themes suitable for PhD - level literature review."""
         prompt = f"""
 You are a PhD supervisor identifying research gaps for doctoral research.
 
-TASK: Identify {self.config['processing']['max_gaps']} high - priority research gaps suitable for PhD thesis research.
+TASK: Identify {self.config['processing']['max_gaps']} high-priority research gaps suitable for PhD thesis research.
 
 THEMES:
 {json.dumps(theme_data, indent=2)}
@@ -475,8 +473,8 @@ Respond with JSON in this exact format:
   "gaps": [
     {{
       "title": "Research Gap Title (specific, actionable)",
-      "description": "Detailed description (150 - 200 words, PhD scope)",
-      "justification": "Evidence - based justification (100 - 150 words)",
+      "description": "Detailed description (150-200 words, PhD scope)",
+      "justification": "Evidence-based justification (100-150 words)",
       "impact": 4.2,
       "feasibility": 3.8,
       "novelty": 4.5,
@@ -502,8 +500,7 @@ Each gap should:
 - Build directly on identified themes and contradictions
 - Specify the knowledge contribution
 - Consider methodological approaches
-- Address practical implementation
-- Connect to broader theoretical frameworks
+- Address practical implementation-Connect to broader theoretical frameworks
 """
 
         system_prompt = """You are an expert in research methodology and PhD supervision.
@@ -562,7 +559,7 @@ PRIORITY GAPS:
 
 Respond with JSON in this exact format:
 {{
-  "description": "Framework overview (2 - 3 sentences, academic tone)",
+  "description": "Framework overview (2-3 sentences, academic tone)",
   "constructs": [
     {{
       "name": "Construct Name",
@@ -591,8 +588,7 @@ The framework should:
 - Synthesize insights from thematic analysis
 - Provide conceptual foundation for empirical research
 - Enable hypothesis generation and testing
-- Consider both theoretical and practical dimensions
-- Account for implementation and outcome variables
+- Consider both theoretical and practical dimensions-Account for implementation and outcome variables
 """
 
         try:
@@ -636,7 +632,7 @@ The framework should:
         prompt = f"""
 You are a research methodology expert formulating research questions and hypotheses for PhD research.
 
-TASK: Generate 2 - 4 research questions and hypotheses based on the highest priority research gaps.
+TASK: Generate 2-4 research questions and hypotheses based on the highest priority research gaps.
 
 TOP RESEARCH GAPS:
 {json.dumps(gap_data, indent=2)}
@@ -650,7 +646,7 @@ Respond with JSON in this exact format:
   "research_questions": [
     {{
       "type": "question",
-      "text": "Well - formed research question",
+      "text": "Well-formed research question",
       "constructs": ["construct1", "construct2"],
       "related_gap": "gap title",
       "justification": "Why this question is important and feasible",
@@ -678,9 +674,7 @@ Requirements:
 Each question / hypothesis should:
 - Address a specific research gap
 - Use precise constructs from the framework
-- Be answerable within PhD constraints
-- Contribute to theory and practice
-- Build toward coherent research program
+- Be answerable within PhD constraints-Contribute to theory and practice-Build toward coherent research program
 """
 
         try:
@@ -964,7 +958,7 @@ foundation for future PhD research in machine learning applications for healthca
                     output_dir / f"enhanced_thesis_chapter_{timestamp}.{format_name}"
                 )
 
-            with open(output_file, "w", encoding="utf - 8") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(content)
 
             saved_files.append(output_file)
@@ -1001,7 +995,7 @@ foundation for future PhD research in machine learning applications for healthca
             # PDF
             pdf_file = output_dir / f"enhanced_thesis_chapter_{timestamp}.pdf"
             subprocess.run(
-                ["pandoc", str(md_file), "-o", str(pdf_file), "--pdf - engine=xelatex"],
+                ["pandoc", str(md_file), "-o", str(pdf_file), "--pdf-engine=xelatex"],
                 check=True,
                 capture_output=True,
             )
@@ -1018,7 +1012,7 @@ foundation for future PhD research in machine learning applications for healthca
 
         except (subprocess.CalledProcessError, FileNotFoundError):
             self.logger.info(
-                "Pandoc not available - install for additional format conversions"
+                "Pandoc not available-install for additional format conversions"
             )
 
     def generate_enhanced_thesis_chapter(self, input_file: str) -> Dict[str, Any]:
@@ -1068,7 +1062,7 @@ foundation for future PhD research in machine learning applications for healthca
                 "research_questions": [asdict(rq) for rq in research_questions],
                 "generation_metadata": {
                     "timestamp": datetime.now().isoformat(),
-                    "processing_time": time.time() - start_time,
+                    "processing_time": time.time()-start_time,
                     "ai_model": self.config["ai"]["model"],
                     "study_count": len(
                         prisma_data.get("data_extraction_tables", {})
@@ -1088,7 +1082,7 @@ foundation for future PhD research in machine learning applications for healthca
                 outputs, template_data["generation_metadata"]
             )
 
-            duration = time.time() - start_time
+            duration = time.time()-start_time
             self.logger.info(
                 f"Enhanced thesis chapter generation completed in {duration:.2f}s"
             )
@@ -1118,7 +1112,7 @@ def main():
     parser.add_argument("-c", "--config", help="Configuration YAML file")
     parser.add_argument("-o", "--output", help="Output directory")
     parser.add_argument(
-        "--no - checkpoints", action="store_true", help="Skip human checkpoints"
+        "--no-checkpoints", action="store_true", help="Skip human checkpoints"
     )
     parser.add_argument(
         "--formats",

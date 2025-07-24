@@ -1,5 +1,5 @@
 """
-Evidence Synthesis Engine for Systematic Reviews - Phase 3 Implementation.
+Evidence Synthesis Engine for Systematic Reviews-Phase 3 Implementation.
 
 This module provides automated evidence synthesis capabilities for systematic reviews,
 including evidence table generation, thematic synthesis, and confidence assessment.
@@ -21,7 +21,7 @@ class SynthesisMethod(Enum):
 
 
 class ConfidenceLevel(Enum):
-    """GRADE - inspired confidence levels."""
+    """GRADE-inspired confidence levels."""
 
     VERY_LOW = "very_low"
     LOW = "low"
@@ -120,7 +120,7 @@ class EvidenceSynthesisEngine:
     Evidence synthesis engine for systematic reviews.
 
     Provides automated evidence extraction, synthesis, and assessment
-    capabilities for PRISMA - compliant systematic reviews.
+    capabilities for PRISMA-compliant systematic reviews.
     """
 
     def __init__(self, database: Any, ai_client: Any):
@@ -129,7 +129,7 @@ class EvidenceSynthesisEngine:
 
         Args:
             database: Database connection for systematic review data
-            ai_client: AI client for LLM - assisted synthesis
+            ai_client: AI client for LLM-assisted synthesis
         """
         self.database = database
         self.ai_client = ai_client
@@ -202,7 +202,7 @@ class EvidenceSynthesisEngine:
 
         synthesis_id = f"synthesis_{datetime.now().strftime('%Y % m%d_ % H%M % S')}_{hash(str(evidence_rows))%10000}"
 
-        # Perform method - specific synthesis
+        # Perform method-specific synthesis
         if synthesis_method == SynthesisMethod.NARRATIVE:
             themes, narrative_summary = await self._narrative_synthesis(
                 evidence_rows, research_question
@@ -309,7 +309,7 @@ class EvidenceSynthesisEngine:
         self, evidence_rows: List[EvidenceRow], themes: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Assess confidence in evidence using GRADE - inspired approach.
+        Assess confidence in evidence using GRADE-inspired approach.
 
         Args:
             evidence_rows: Evidence extracted from studies
@@ -354,7 +354,7 @@ class EvidenceSynthesisEngine:
                 "confidence_level": confidence_level,
                 "rationale": f"Based on {total_studies} studies ({rct_count} RCTs)",
                 "factors": {
-                    "study_design": f"{rct_count} RCTs, {total_studies - rct_count} observational",
+                    "study_design": f"{rct_count} RCTs, {total_studies-rct_count} observational",
                     "risk_of_bias": "Not assessed",
                     "consistency": "Requires detailed analysis",
                     "directness": "Direct evidence",
@@ -493,9 +493,9 @@ class EvidenceSynthesisEngine:
     async def _meta_aggregation_synthesis(
         self, evidence_rows: List[EvidenceRow], research_question: str
     ) -> Tuple[List[Dict[str, Any]], str]:
-        """Perform meta - aggregation synthesis following JBI approach."""
+        """Perform meta-aggregation synthesis following JBI approach."""
 
-        # Simplified meta - aggregation
+        # Simplified meta-aggregation
         themes = [
             {
                 "theme": "Aggregated finding 1",
@@ -507,7 +507,7 @@ class EvidenceSynthesisEngine:
         ]
 
         narrative_summary = (
-            f"Meta - aggregation synthesis of {len(evidence_rows)} studies."
+            f"Meta-aggregation synthesis of {len(evidence_rows)} studies."
         )
 
         return themes, narrative_summary
@@ -515,10 +515,10 @@ class EvidenceSynthesisEngine:
     async def _generate_recommendations(
         self, themes: List[Dict[str, Any]], confidence_assessment: Dict[str, Any]
     ) -> List[str]:
-        """Generate evidence - based recommendations."""
+        """Generate evidence-based recommendations."""
 
         recommendations = [
-            "Further high - quality studies are needed to strengthen the evidence base.",
+            "Further high-quality studies are needed to strengthen the evidence base.",
             "Consider implementing interventions with appropriate monitoring and evaluation.",
             "Address identified limitations in future research designs.",
         ]
@@ -535,11 +535,11 @@ class EvidenceSynthesisEngine:
         # Study design limitations
         study_designs = [row.study_design for row in evidence_rows]
         if all(
-            design.lower() in ["cross - sectional", "case study", "case series"]
+            design.lower() in ["cross-sectional", "case study", "case series"]
             for design in study_designs
         ):
             limitations.append(
-                "Limited to cross - sectional and case studies; causal inferences cannot be made."
+                "Limited to cross-sectional and case studies; causal inferences cannot be made."
             )
 
         # Sample size considerations
@@ -616,11 +616,11 @@ async def demonstrate_evidence_synthesis():
             "year": 2023,
             "study_design": "Randomized Controlled Trial",
             "population": "Emergency department patients",
-            "intervention": "AI - assisted diagnosis",
+            "intervention": "AI-assisted diagnosis",
             "comparison": "Standard diagnosis",
             "effect_measure": "Diagnostic accuracy",
             "effect_size": "0.85",
-            "confidence_interval": "0.78 - 0.92",
+            "confidence_interval": "0.78-0.92",
             "significance": "p < 0.001",
             "quality_score": "High",
             "bias_assessment": "Low risk",
@@ -646,13 +646,13 @@ async def demonstrate_evidence_synthesis():
             "title": "Machine Learning in Radiology Diagnosis",
             "authors": "Chen et al.",
             "year": 2024,
-            "study_design": "Cross - sectional Study",
+            "study_design": "cross-sectional Study",
             "population": "Radiology patients",
-            "intervention": "ML - based image analysis",
+            "intervention": "ML-based image analysis",
             "comparison": "Radiologist interpretation",
             "effect_measure": "Diagnostic accuracy",
             "effect_size": "0.92",
-            "confidence_interval": "0.87 - 0.97",
+            "confidence_interval": "0.87-0.97",
             "significance": "p < 0.001",
             "quality_score": "High",
             "bias_assessment": "Low risk",
@@ -664,7 +664,7 @@ async def demonstrate_evidence_synthesis():
     # Build evidence table
     evidence_rows = await synthesis_engine.build_evidence_table(
         included_studies=included_studies,
-        research_question="What is the effectiveness of AI - assisted diagnostic tools in healthcare?",
+        research_question="What is the effectiveness of AI-assisted diagnostic tools in healthcare?",
         outcomes=["diagnostic_accuracy", "time_to_diagnosis", "patient_satisfaction"],
     )
 
@@ -675,7 +675,7 @@ async def demonstrate_evidence_synthesis():
         evidence_rows=evidence_rows,
         synthesis_method=SynthesisMethod.NARRATIVE,
         task_id="demo_task_001",
-        research_question="What is the effectiveness of AI - assisted diagnostic tools in healthcare?",
+        research_question="What is the effectiveness of AI-assisted diagnostic tools in healthcare?",
     )
 
     print("\n🎯 Synthesis Results Summary")

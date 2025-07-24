@@ -1,7 +1,7 @@
 """
 PRISMA Report Generator for Systematic Reviews - Phase 3 Implementation.
 
-This module provides PRISMA 2020 - compliant report generation capabilities for systematic reviews,
+This module provides PRISMA 2020-compliant report generation capabilities for systematic reviews,
 including flow diagrams, evidence tables, and multiple export formats.
 """
 
@@ -161,7 +161,7 @@ class PRISMAReport:
 
 class PRISMAReportGenerator:
     """
-    PRISMA 2020 - compliant systematic review report generator.
+    PRISMA 2020-compliant systematic review report generator.
 
     Generates comprehensive systematic review reports with flow diagrams,
     evidence tables, and multiple export formats.
@@ -225,7 +225,7 @@ class PRISMAReportGenerator:
             report = PRISMAReport(
                 report_id=f"PRISMA_{review_id}_{datetime.now().strftime('%Y % m%d_ % H%M % S')}",
                 title=report_sections.get(
-                    "title", f"Systematic Review Report - {review_id}"
+                    "title", f"Systematic Review Report-{review_id}"
                 ),
                 authors=review_data.get("authors", ["Unknown Author"]),
                 affiliations=review_data.get("affiliations", ["Unknown Affiliation"]),
@@ -372,21 +372,21 @@ class PRISMAReportGenerator:
             return {
                 "authors": ["AI Research System", "Eunice Literature Agent"],
                 "affiliations": ["AI Research Platform"],
-                "corresponding_author": "AI Research System (eunice@ai - research.com)",
+                "corresponding_author": "AI Research System (eunice@ai-research.com)",
                 "keywords": keywords,
                 "research_question": research_question,
-                "protocol_registration": f"AI - PROTOCOL-{review_id}",
+                "protocol_registration": f"AI-PROTOCOL-{review_id}",
                 "eligibility_criteria": {
                     "inclusion": [
                         "Studies relevant to the research question",
-                        "Peer - reviewed publications",
+                        "Peer-reviewed publications",
                         "English language",
                         "Published within last 10 years",
                     ],
                     "exclusion": [
                         "Conference abstracts only",
                         "Case reports without controls",
-                        "Non - relevant study designs",
+                        "non-relevant study designs",
                         "Duplicate publications",
                     ],
                 },
@@ -396,7 +396,7 @@ class PRISMAReportGenerator:
                     "Academic databases",
                     "Research repositories",
                 ],
-                "search_strategy": f"AI - guided systematic search based on: {research_question}",
+                "search_strategy": f"AI-guided systematic search based on: {research_question}",
                 "data_items": [
                     "Study characteristics from AI analysis",
                     "Research methodology details",
@@ -409,8 +409,8 @@ class PRISMAReportGenerator:
                     "Quality metrics",
                     "Implementation factors",
                 ],
-                "funding": "AI Research Platform - Automated Literature Review",
-                "conflicts_of_interest": "None declared - AI generated review",
+                "funding": "AI Research Platform-Automated Literature Review",
+                "conflicts_of_interest": "None declared-AI generated review",
                 "data_availability": "Search results and analysis available in output files",
             }
         else:
@@ -421,13 +421,13 @@ class PRISMAReportGenerator:
                 "corresponding_author": "AI Research System",
                 "keywords": ["systematic review", "literature analysis"],
                 "research_question": "Automated systematic literature review",
-                "protocol_registration": f"AI - PROTOCOL-{review_id}",
+                "protocol_registration": f"AI-PROTOCOL-{review_id}",
                 "eligibility_criteria": {
-                    "inclusion": ["Relevant studies", "Peer - reviewed publications"],
-                    "exclusion": ["Non - relevant studies", "Duplicate publications"],
+                    "inclusion": ["Relevant studies", "Peer-reviewed publications"],
+                    "exclusion": ["non-relevant studies", "Duplicate publications"],
                 },
                 "information_sources": ["Academic databases", "Research repositories"],
-                "search_strategy": "AI - guided literature search",
+                "search_strategy": "AI-guided literature search",
                 "data_items": ["Study characteristics", "Key findings"],
                 "effect_measures": ["Primary outcomes", "Quality metrics"],
                 "funding": "AI Research Platform",
@@ -458,14 +458,14 @@ class PRISMAReportGenerator:
         )  # ~70% excluded at title / abstract
         reports_sought = records_screened - excluded_title_abstract
         reports_not_retrieved = max(0, int(reports_sought * 0.1))  # ~10% not retrieved
-        reports_assessed = reports_sought - reports_not_retrieved
+        reports_assessed = reports_sought-reports_not_retrieved
         excluded_full_text = max(
             0, int(reports_assessed * 0.6)
         )  # ~60% excluded at full text
-        studies_included = reports_assessed - excluded_full_text
+        studies_included = reports_assessed-excluded_full_text
         studies_meta_analysis = max(
             1, int(studies_included * 0.7)
-        )  # ~70% suitable for meta - analysis
+        )  # ~70% suitable for meta-analysis
 
         numbers = PRISMANumbers(
             identification_database=identified_total,
@@ -489,7 +489,7 @@ class PRISMAReportGenerator:
                 "Language barriers": max(0, int(excluded_full_text * 0.2)),
                 "Duplicate publication": max(0, int(excluded_full_text * 0.2)),
                 "Other reasons": max(
-                    0, excluded_full_text - int(excluded_full_text * 0.7)
+                    0, excluded_full_text-int(excluded_full_text * 0.7)
                 ),
             },
         )
@@ -552,7 +552,7 @@ class PRISMAReportGenerator:
                     year=2024,
                     title=f"Literature identified for: {query[:60]}",
                     study_design="Literature Search",
-                    intervention_type="Search - based identification",
+                    intervention_type="Search-based identification",
                     sample_size=1,
                     primary_outcome="Literature identification",
                     quality_score=6.0,
@@ -598,7 +598,7 @@ class PRISMAReportGenerator:
             f"Key themes emerged from the literature analysis: {'; '.join(themes)}."
         )
 
-        # Generate realistic meta - analysis results based on actual data
+        # Generate realistic meta-analysis results based on actual data
         total_papers = template_config.get("total_papers", 0)
         content_extracted = template_config.get("total_content", 0)
 
@@ -625,12 +625,12 @@ class PRISMAReportGenerator:
             subgroup_analyses=[],  # No subgroup analysis in this automated pipeline
             sensitivity_analyses=[],  # No sensitivity analysis in this automated pipeline
             certainty_assessments={
-                "overall_certainty": "Moderate - based on systematic AI - guided search"
+                "overall_certainty": "Moderate-based on systematic AI-guided search"
             },
             recommendations=[
                 "Further research recommended in identified research areas",
                 "Validation of findings through additional systematic approaches",
-                "Integration of AI - guided methods with human expert review",
+                "Integration of AI-guided methods with human expert review",
             ],
         )
 
@@ -642,7 +642,7 @@ class PRISMAReportGenerator:
         synthesis_results: SynthesisResults,
         template_config: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """Generate report sections using REAL research question and data - NO MOCK CONTENT."""
+        """Generate report sections using REAL research question and data-NO MOCK CONTENT."""
 
         # Get REAL research question and data from template config
         research_question = review_data.get(
@@ -662,10 +662,10 @@ class PRISMAReportGenerator:
         abstract = (
             f'Background: This systematic review addresses the research question: "{research_question}". '
             "Understanding this topic is crucial for advancing knowledge in the field and informing "
-            "evidence - based practice.\n\n"
+            "evidence-based practice.\n\n"
             f"Objective: To systematically review and analyze the available literature addressing: "
             f"{research_question}\n\n"
-            "Methods: We conducted a comprehensive literature search using AI - guided methodology across multiple "
+            "Methods: We conducted a comprehensive literature search using AI-guided methodology across multiple "
             "academic databases. Studies were screened for relevance to the research question, and data extraction "
             "was performed using systematic review protocols.\n\n"
             f"Results: From {prisma_numbers.identification_total} records identified through {len(search_results)} "
@@ -673,9 +673,9 @@ class PRISMAReportGenerator:
             f"{prisma_numbers.studies_included_meta_analysis} in the analysis. The systematic review identified "
             "key themes and research areas relevant to the research question.\n\n"
             f"Conclusions: The literature provides insights into {research_question.lower()} and highlights areas "
-            "requiring further investigation. This systematic approach demonstrates the value of AI - guided "
+            "requiring further investigation. This systematic approach demonstrates the value of AI-guided "
             "literature analysis for comprehensive research synthesis.\n\n"
-            f"Registration: {review_data.get('protocol_registration', 'AI - generated systematic review')}"
+            f"Registration: {review_data.get('protocol_registration', 'AI-generated systematic review')}"
         ).strip()
 
         # Generate background based on research question context
@@ -690,8 +690,8 @@ class PRISMAReportGenerator:
                 f"and therapeutic applications. The specific focus on {research_question.lower()} "
                 f"addresses important practical considerations for researchers working in diverse "
                 f"laboratory settings.\n\n"
-                f"Accessible and cost - effective approaches to cell culture are particularly important "
-                f"for educational institutions, resource - limited laboratories, and emerging research programs. "
+                f"Accessible and cost-effective approaches to cell culture are particularly important "
+                f"for educational institutions, resource-limited laboratories, and emerging research programs. "
                 f"Traditional cell culture methods often require expensive specialized equipment and reagents "
                 f"that may not be available in all research environments.\n\n"
                 f"This systematic review examines the current state of knowledge regarding "
@@ -710,7 +710,7 @@ class PRISMAReportGenerator:
                 f"essential for advancing knowledge in this field. Systematic literature analysis provides a "
                 f"comprehensive approach to synthesizing existing research and identifying areas requiring "
                 f"further investigation.\n\n"
-                f"The integration of AI - guided search methodology with traditional systematic review "
+                f"The integration of AI-guided search methodology with traditional systematic review "
                 f"approaches offers new opportunities for comprehensive literature analysis and evidence synthesis."
             ).strip()
 
@@ -726,7 +726,7 @@ class PRISMAReportGenerator:
             "2. Analyzing methodological approaches used in relevant studies\n"
             "3. Synthesizing evidence to inform research and practice\n"
             "4. Identifying research gaps and future research directions\n"
-            "5. Demonstrating AI - guided systematic review methodology"
+            "5. Demonstrating AI-guided systematic review methodology"
         ).strip()
 
         return {
@@ -735,14 +735,14 @@ class PRISMAReportGenerator:
             "background": background,
             "objectives": objectives,
             "selection_process": (
-                f"Studies were systematically identified and screened using AI - guided methodology. "
+                f"Studies were systematically identified and screened using AI-guided methodology. "
                 f"All {prisma_numbers.records_screened} records were screened against eligibility criteria "
                 f'related to the research question: "{research_question}". '
                 f"{prisma_numbers.reports_sought} studies were assessed for full eligibility, with "
                 f"{prisma_numbers.studies_included_review} meeting inclusion criteria for the final review."
             ).strip(),
             "data_collection_process": (
-                f"Data extraction was performed using AI - guided systematic review methodology. "
+                f"Data extraction was performed using AI-guided systematic review methodology. "
                 f"Extracted data included study characteristics, methodological approaches, key findings, "
                 f'and relevance to the research question: "{research_question}". The systematic approach '
                 f"ensured comprehensive coverage of relevant literature and standardized data collection "
@@ -751,18 +751,18 @@ class PRISMAReportGenerator:
             "risk_of_bias_assessment": (
                 f"Quality assessment was performed using appropriate criteria based on study design and methodology. "
                 f"All {prisma_numbers.studies_included_review} included studies were evaluated for methodological "
-                f"quality and relevance to the research question. The AI - guided approach ensured consistent "
+                f"quality and relevance to the research question. The AI-guided approach ensured consistent "
                 f"application of quality assessment criteria."
             ).strip(),
             "synthesis_methods": (
-                f"Data synthesis was performed using systematic review methodology adapted for AI - guided "
+                f"Data synthesis was performed using systematic review methodology adapted for AI-guided "
                 f"literature analysis. Findings were organized thematically based on relevance to the research "
                 f'question: "{research_question}". The synthesis approach emphasized identifying key patterns, '
                 f"research gaps, and practical implications from the included studies."
             ).strip(),
             "discussion": (
                 f'This systematic review provides evidence addressing the research question: "{research_question}". '
-                f"The AI - guided literature search identified {prisma_numbers.identification_total} relevant "
+                f"The AI-guided literature search identified {prisma_numbers.identification_total} relevant "
                 f"records through {len(search_results)} targeted searches, demonstrating the effectiveness of "
                 f"computational approaches to literature discovery.\n\n"
                 f"From the {prisma_numbers.studies_included_review} studies included in the final review,\n"
@@ -770,7 +770,7 @@ class PRISMAReportGenerator:
                 f"important insights into current research approaches,\n"
                 f"    methodological considerations,\n"
                 f"    and practical applications related to {research_question.lower()}.\n\n"
-                f"The systematic approach utilized in this review demonstrates the value of AI - guided "
+                f"The systematic approach utilized in this review demonstrates the value of AI-guided "
                 f"literature analysis for comprehensive evidence synthesis. The integration of computational "
                 f"search strategies with systematic review methodology enables efficient identification and "
                 f"analysis of relevant research.\n\n"
@@ -779,32 +779,32 @@ class PRISMAReportGenerator:
                 f"both established approaches and emerging innovations in this research area."
             ).strip(),
             "limitations": [
-                "Limited to literature identified through AI - guided search methodology",
+                "Limited to literature identified through AI-guided search methodology",
                 f"Search scope focused on addressing: {research_question}",
                 "Synthesis based on available abstracts and study summaries",
-                "Quality assessment adapted for AI - guided systematic review",
-                "Potential bias toward English - language publications",
-                "Time constraints limiting comprehensive full - text analysis",
+                "Quality assessment adapted for AI-guided systematic review",
+                "Potential bias toward English-language publications",
+                "Time constraints limiting comprehensive full-text analysis",
             ],
             "conclusions": (
                 f"This systematic review provides valuable insights addressing the research question: "
                 f'"{research_question}". '
-                f"The AI - guided methodology successfully identified relevant literature and synthesized key "
+                f"The AI-guided methodology successfully identified relevant literature and synthesized key "
                 f"findings from {prisma_numbers.studies_included_review} included studies.\n\n"
                 f"The evidence synthesis demonstrates the utility of computational approaches to literature "
                 f"analysis and highlights important research directions related to {research_question.lower()}. "
-                f"The systematic approach provides a foundation for evidence - based practice and future research "
+                f"The systematic approach provides a foundation for evidence-based practice and future research "
                 f"in this area.\n\n"
                 f"Future investigations should build upon these findings to advance understanding and practical "
                 f"applications related to the research question."
             ).strip(),
             "implications": (
-                f"For Practice: The findings provide evidence - based insights relevant to {research_question.lower()} "
-                f"that can inform practical decision - making and methodological approaches.\n\n"
+                f"For Practice: The findings provide evidence-based insights relevant to {research_question.lower()} "
+                f"that can inform practical decision-making and methodological approaches.\n\n"
                 f"For Policy: Research addressing {research_question.lower()} should be supported through "
                 f"appropriate funding mechanisms and institutional resources.\n\n"
                 f"For Research: Future studies should build upon the identified themes and address research gaps "
-                f"highlighted in this systematic review. The AI - guided methodology demonstrates promising "
+                f"highlighted in this systematic review. The AI-guided methodology demonstrates promising "
                 f"approaches for literature analysis and evidence synthesis."
             ).strip(),
         }
@@ -839,10 +839,10 @@ class PRISMAReportGenerator:
 <svg width="800" height="1000" xmlns="http://www.w3.org / 2000 / svg">
   <defs>
     <style>
-      .box {{ fill: white; stroke: black; stroke - width: 2; }}
-      .text {{ font - family: Arial, sans - serif; font - size: 14px; text - anchor: middle; }}
-      .title {{ font - weight: bold; font - size: 16px; }}
-      .number {{ font - weight: bold; font - size: 18px; fill: blue; }}
+      .box {{ fill: white; stroke: black; stroke-width: 2; }}
+      .text {{ font-family: Arial, sans-serif; font-size: 14px; text-anchor: middle; }}
+      .title {{ font-weight: bold; font-size: 16px; }}
+      .number {{ font-weight: bold; font-size: 18px; fill: blue; }}
     </style>
   </defs>
 
@@ -867,7 +867,7 @@ class PRISMAReportGenerator:
   <!-- Duplicates removed -->
   <rect x="200" y="240" width="400" height="60" class="box"/>
   <text x="400" y="265" class="text">Records after duplicates removed</text>
-  <text x="400" y="285" class="text number">(n = {numbers.identification_total - numbers.duplicates_removed})</text>
+  <text x="400" y="285" class="text number">(n = {numbers.identification_total-numbers.duplicates_removed})</text>
 
   <!-- Excluded box -->
   <rect x="500" y="320" width="250" height="60" class="box"/>
@@ -911,7 +911,7 @@ class PRISMAReportGenerator:
   <rect x="50" y="560" width="300" height="120" class="box"/>
   <text x="200" y="585" class="text">Studies included in review</text>
   <text x="200" y="605" class="text number">(n = {numbers.studies_included_review})</text>
-  <text x="200" y="635" class="text">Studies in meta - analysis</text>
+  <text x="200" y="635" class="text">Studies in meta-analysis</text>
   <text x="200" y="655" class="text number">(n = {numbers.studies_included_meta_analysis})</text>
 
   <!-- Flow arrows -->
@@ -922,18 +922,18 @@ class PRISMAReportGenerator:
   </defs>
 
   <!-- Vertical arrows -->
-  <line x1="400" y1="140" x2="400" y2="160" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="400" y1="220" x2="400" y2="240" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="400" y1="300" x2="400" y2="320" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="400" y1="380" x2="400" y2="400" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="400" y1="460" x2="400" y2="480" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="350" y1="540" x2="200" y2="560" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
+  <line x1="400" y1="140" x2="400" y2="160" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="220" x2="400" y2="240" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="300" x2="400" y2="320" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="380" x2="400" y2="400" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="460" x2="400" y2="480" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="350" y1="540" x2="200" y2="560" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
 
   <!-- Exclusion arrows -->
-  <line x1="450" y1="350" x2="500" y2="350" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="450" y1="440" x2="500" y2="440" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="450" y1="510" x2="500" y2="510" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
-  <line x1="450" y1="620" x2="500" y2="620" stroke="black" stroke - width="2" marker - end="url(#arrowhead)"/>
+  <line x1="450" y1="350" x2="500" y2="350" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="450" y1="440" x2="500" y2="440" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="450" y1="510" x2="500" y2="510" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="450" y1="620" x2="500" y2="620" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
 </svg>
         """.strip()
 
@@ -952,7 +952,7 @@ class PRISMAReportGenerator:
 
         for reason, count in list(exclusion_reasons.items())[:5]:  # Show top 5 reasons
             svg_elements.append(
-                f'<text x="625" y="{y_position}" class="text" font - size="12">{reason}: {count}</text>'
+                f'<text x="625" y="{y_position}" class="text" font-size="12">{reason}: {count}</text>'
             )
             y_position += 15
 
@@ -965,22 +965,22 @@ class PRISMAReportGenerator:
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF - 8">
-    <meta name="viewport" content="width=device - width, initial - scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{report.title}</title>
     <style>
-        body {{ font - family: Arial, sans - serif; line - height: 1.6; margin: 40px; }}
-        h1 {{ color: #2c3e50; border - bottom: 3px solid #3498db; padding - bottom: 10px; }}
-        h2 {{ color: #34495e; border - bottom: 1px solid #bdc3c7; padding - bottom: 5px; }}
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }}
+        h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+        h2 {{ color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }}
         h3 {{ color: #5d6d7e; }}
-        .abstract {{ background - color: #f8f9fa; padding: 20px; border - left: 4px solid #3498db; margin: 20px 0; }}
-        .prisma - numbers {{ background - color: #e8f5e8; padding: 15px; border - radius: 8px; }}
-        .study - table {{ width: 100%; border - collapse: collapse; margin: 20px 0; }}
-        .study - table th, .study - table td {{ padding: 12px; text - align: left; border - bottom: 1px solid #ddd; }}
-        .study - table th {{ background - color: #f2f2f2; font - weight: bold; }}
-        .meta - analysis {{ background - color: #fff3cd; padding: 15px; border - radius: 8px; }}
-        .limitation {{ background - color: #f8d7da; padding: 10px; margin: 5px 0; border - radius: 4px; }}
-        .footer {{ margin - top: 40px; padding - top: 20px; border - top: 1px solid #ccc; font - size: 0.9em;
+        .abstract {{ background-color: #f8f9fa; padding: 20px; border-left: 4px solid #3498db; margin: 20px 0; }}
+        .prisma-numbers {{ background-color: #e8f5e8; padding: 15px; border-radius: 8px; }}
+        .study-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        .study-table th, .study-table td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+        .study-table th {{ background-color: #f2f2f2; font-weight: bold; }}
+        .meta-analysis {{ background-color: #fff3cd; padding: 15px; border-radius: 8px; }}
+        .limitation {{ background-color: #f8d7da; padding: 10px; margin: 5px 0; border-radius: 4px; }}
+        .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 0.9em;
         color: #666; }}
     </style>
 </head>
@@ -1027,22 +1027,22 @@ class PRISMAReportGenerator:
 
     <h2>Results</h2>
     <h3>Study Selection</h3>
-    <div class="prisma - numbers">
+    <div class="prisma-numbers">
         <p><strong>Records identified:</strong> {report.study_selection.identification_total}</p>
         <p>
             <strong>Records after duplicates removed:</strong>
-            {report.study_selection.identification_total - report.study_selection.duplicates_removed}
+            {report.study_selection.identification_total-report.study_selection.duplicates_removed}
         </p>
         <p><strong>Records screened:</strong> {report.study_selection.records_screened}</p>
         <p><strong>Studies included in review:</strong> {report.study_selection.studies_included_review}</p>
         <p>
-            <strong>Studies included in meta - analysis:</strong>
+            <strong>Studies included in meta-analysis:</strong>
             {report.study_selection.studies_included_meta_analysis}
         </p>
     </div>
 
     <h3>Study Characteristics</h3>
-    <table class="study - table">
+    <table class="study-table">
         <tr>
             <th>Study</th>
             <th>Design</th>
@@ -1054,7 +1054,7 @@ class PRISMAReportGenerator:
     </table>
 
     <h3>Synthesis Results</h3>
-    <div class="meta - analysis">
+    <div class="meta-analysis">
         <p><strong>Narrative Synthesis:</strong> {report.synthesis_results.narrative_synthesis}</p>
         {self._generate_meta_analysis_html(report.synthesis_results.meta_analysis_results)}
     </div>
@@ -1078,7 +1078,7 @@ class PRISMAReportGenerator:
 </html>
         """.strip()
 
-        with open(output_path, "w", encoding="utf - 8") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_template)
 
         return output_path
@@ -1104,10 +1104,10 @@ class PRISMAReportGenerator:
     def _generate_meta_analysis_html(
         self, meta_results: Optional[Dict[str, Any]]
     ) -> str:
-        """Generate HTML for meta - analysis results."""
+        """Generate HTML for meta-analysis results."""
 
         if not meta_results:
-            return "<p>No meta - analysis results available.</p>"
+            return "<p>No meta-analysis results available.</p>"
 
         html_parts = []
         for outcome, results in meta_results.items():
@@ -1118,7 +1118,7 @@ class PRISMAReportGenerator:
             'NR')} (95% CI: {results.get('ci_lower',
             'NR')} to {results.get('ci_upper',
             'NR')})</p>
-        <p>P - value: {results.get('p_value', 'NR')}</p>
+        <p>P-value: {results.get('p_value', 'NR')}</p>
         <p>Heterogeneity (I²): {results.get('i2', 'NR')}%</p>
             """.strip()
             )
@@ -1170,15 +1170,11 @@ class PRISMAReportGenerator:
 
 ## Results
 
-### Study Selection
-
-- **Records identified:** {report.study_selection.identification_total}
+### Study Selection - **Records identified:** {report.study_selection.identification_total}
 - **Records after duplicates removed:** {
     report.study_selection.identification_total - report.study_selection.duplicates_removed
 }
-- **Records screened:** {report.study_selection.records_screened}
-- **Studies included in review:** {report.study_selection.studies_included_review}
-- **Studies included in meta - analysis:** {report.study_selection.studies_included_meta_analysis}
+- **Records screened:** {report.study_selection.records_screened}-**Studies included in review:** {report.study_selection.studies_included_review}-**Studies included in meta-analysis:** {report.study_selection.studies_included_meta_analysis}
 
 ### Study Characteristics
 
@@ -1210,7 +1206,7 @@ class PRISMAReportGenerator:
 **Report Generated:** {report.date_generated} (Version {report.version})
         """.strip()
 
-        with open(output_path, "w", encoding="utf - 8") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown_content)
 
         return output_path
@@ -1243,23 +1239,20 @@ class PRISMAReportGenerator:
     def _generate_meta_analysis_markdown(
         self, meta_results: Optional[Dict[str, Any]]
     ) -> str:
-        """Generate markdown for meta - analysis results."""
+        """Generate markdown for meta-analysis results."""
 
         if not meta_results:
-            return "No meta - analysis results available."
+            return "No meta-analysis results available."
 
         markdown_parts = []
         for outcome, results in meta_results.items():
             markdown_parts.append(
                 f"""
-#### {outcome.replace('_', ' ').title()}
-
-- **Pooled Effect:** {results.get('pooled_or',
+#### {outcome.replace('_', ' ').title()}-**Pooled Effect:** {results.get('pooled_or',
     'NR')} (95% CI: {results.get('ci_lower',
     'NR')} to {results.get('ci_upper',
     'NR')})
-- **P - value:** {results.get('p_value', 'NR')}
-- **Heterogeneity (I²):** {results.get('i2', 'NR')}%
+- **P-value:** {results.get('p_value', 'NR')}-**Heterogeneity (I²):** {results.get('i2', 'NR')}%
             """.strip()
             )
 
@@ -1268,7 +1261,7 @@ class PRISMAReportGenerator:
     async def _export_json(self, report: PRISMAReport, output_path: str) -> str:
         """Export report as JSON."""
 
-        with open(output_path, "w", encoding="utf - 8") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(report.to_dict(), f, indent=2, ensure_ascii=False, default=str)
 
         return output_path
@@ -1282,7 +1275,7 @@ class PRISMAReportGenerator:
 
         # In production, would use a library like weasyprint or reportlab
         self.logger.info(
-            f"PDF export placeholder - HTML version created at {html_path}"
+            f"PDF export placeholder-HTML version created at {html_path}"
         )
         return html_path
 
@@ -1293,9 +1286,9 @@ class PRISMAReportGenerator:
         md_path = output_path.replace(".docx", ".md")
         await self._export_markdown(report, md_path)
 
-        # In production, would use python - docx library
+        # In production, would use python-docx library
         self.logger.info(
-            f"Word export placeholder - Markdown version created at {md_path}"
+            f"Word export placeholder-Markdown version created at {md_path}"
         )
         return md_path
 
@@ -1351,7 +1344,7 @@ async def demonstrate_prisma_report_generation():
     print(f"   Authors: {', '.join(report.authors)}")
     print(f"   Studies included: {report.study_selection.studies_included_review}")
     print(
-        f"   Meta - analysis studies: {report.study_selection.studies_included_meta_analysis}"
+        f"   meta-analysis studies: {report.study_selection.studies_included_meta_analysis}"
     )
 
     # Export in multiple formats
@@ -1393,12 +1386,12 @@ async def demonstrate_prisma_report_generation():
     print(f"     Records screened: {report.study_selection.records_screened}")
     print(f"     Studies included: {report.study_selection.studies_included_review}")
     print(
-        f"     Meta - analysis: {report.study_selection.studies_included_meta_analysis}"
+        f"     meta-analysis: {report.study_selection.studies_included_meta_analysis}"
     )
 
     print("\n   Study Characteristics:")
     for i, study in enumerate(report.study_characteristics[:3], 1):
-        print(f"     {i}. {study.authors} ({study.year}) - {study.study_design}")
+        print(f"     {i}. {study.authors} ({study.year})-{study.study_design}")
         print(
             f"        Sample: {study.sample_size}, Quality: {study.quality_score}"
         )

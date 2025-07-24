@@ -1,5 +1,5 @@
 """
-Study Type Classifier for Systematic Reviews - Phase 3 Implementation.
+Study Type Classifier for Systematic Reviews-Phase 3 Implementation.
 
 This module provides automated study design classification capabilities for systematic reviews,
 enabling proper routing to appropriate quality assessment tools and synthesis methods.
@@ -128,7 +128,7 @@ class ClassificationResult:
 
 class StudyTypeClassifier:
     """
-    AI - powered study design classifier for systematic reviews.
+    AI-powered study design classifier for systematic reviews.
 
     Automatically classifies study designs and extracts key characteristics
     to route studies to appropriate quality assessment tools and synthesis methods.
@@ -142,13 +142,13 @@ class StudyTypeClassifier:
 
         Args:
             database: Database connection for systematic review data
-            ai_client: AI client for LLM - assisted classification
+            ai_client: AI client for LLM-assisted classification
         """
         self.database = database
         self.ai_client = ai_client
         self.logger = logging.getLogger(__name__)
 
-        # Classification patterns for rule - based fallback
+        # Classification patterns for rule-based fallback
         self.design_patterns = {
             StudyDesign.RANDOMIZED_CONTROLLED_TRIAL: [
                 r"\brandomized\b",
@@ -200,7 +200,7 @@ class StudyTypeClassifier:
         )
 
         try:
-            # Extract study characteristics using AI and rule - based methods
+            # Extract study characteristics using AI and rule-based methods
             characteristics = await self._extract_study_characteristics(study_record)
 
             # Determine quality assessment tool based on study design
@@ -277,7 +277,7 @@ class StudyTypeClassifier:
     async def _extract_study_characteristics(
         self, study_record: Dict[str, Any]
     ) -> StudyCharacteristics:
-        """Extract detailed study characteristics using AI and rule - based methods."""
+        """Extract detailed study characteristics using AI and rule-based methods."""
 
         # Combine title and abstract for analysis
         title = study_record.get("title", "")
@@ -289,7 +289,7 @@ class StudyTypeClassifier:
         if full_text:
             analysis_text += f"\nFull text excerpt: {full_text[:1000]}..."
 
-        # Rule - based classification as baseline
+        # rule-based classification as baseline
         rule_based_design = self._rule_based_classification(analysis_text)
 
         # For demonstration, create comprehensive characteristics
@@ -317,7 +317,7 @@ class StudyTypeClassifier:
         return characteristics
 
     def _rule_based_classification(self, text: str) -> StudyDesign:
-        """Perform rule - based study design classification."""
+        """Perform rule-based study design classification."""
 
         text_lower = text.lower()
         design_scores = {}
@@ -567,11 +567,11 @@ class StudyTypeClassifier:
 
         text_lower = text.lower()
 
-        if "double blind" in text_lower or "double - blind" in text_lower:
+        if "double blind" in text_lower or "double-blind" in text_lower:
             return "double_blind"
-        elif "single blind" in text_lower or "single - blind" in text_lower:
+        elif "single blind" in text_lower or "single-blind" in text_lower:
             return "single_blind"
-        elif "triple blind" in text_lower or "triple - blind" in text_lower:
+        elif "triple blind" in text_lower or "triple-blind" in text_lower:
             return "triple_blind"
         elif "open label" in text_lower or "unblinded" in text_lower:
             return "open_label"
@@ -595,7 +595,7 @@ class StudyTypeClassifier:
         return None
 
     def _extract_follow_up_duration(self, text: str) -> Optional[str]:
-        """Extract follow - up duration from text."""
+        """Extract follow-up duration from text."""
 
         followup_patterns = [
             r"follow\s * up\s+(?:of\s+)?(\d+\s+\w+)",
@@ -616,16 +616,16 @@ class StudyTypeClassifier:
         methods = []
 
         statistical_terms = [
-            "t - test",
-            "chi - square",
+            "t-test",
+            "chi-square",
             "anova",
             "regression",
             "correlation",
-            "mann - whitney",
+            "mann-whitney",
             "wilcoxon",
             "fisher",
             "mcnemar",
-            "kruskal - wallis",
+            "kruskal-wallis",
         ]
 
         for term in statistical_terms:
@@ -784,8 +784,8 @@ async def demonstrate_study_classification():
         },
         {
             "id": "study_003",
-            "title": "Case - Control Study of AI Diagnostic Errors in Radiology",
-            "abstract": "Background: This retrospective case - control study examined factors associated with AI "
+            "title": "case-control Study of AI Diagnostic Errors in Radiology",
+            "abstract": "Background: This retrospective case-control study examined factors associated with AI "
             "diagnostic errors. Methods: 200 cases with AI errors were matched with 400 controls. "
             "Inclusion criteria included complete imaging data. Results: Image quality was "
             "significantly associated with errors.",
@@ -795,8 +795,8 @@ async def demonstrate_study_classification():
         {
             "id": "study_004",
             "title": "Qualitative Exploration of Physician Experiences with AI Tools",
-            "abstract": "Background: We conducted in - depth interviews with 25 physicians about their experiences "
-            "with AI diagnostic tools. Methods: Semi - structured interviews were conducted and analyzed "
+            "abstract": "Background: We conducted in-depth interviews with 25 physicians about their experiences "
+            "with AI diagnostic tools. Methods: Semi-structured interviews were conducted and analyzed "
             "using thematic analysis. Results: Three main themes emerged: trust, workflow integration, "
             "and training needs.",
             "authors": "Davis et al.",

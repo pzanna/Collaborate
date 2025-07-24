@@ -40,7 +40,7 @@ class BaseAgent(ABC):
     - Task processing
     - Error handling
     - Performance monitoring
-    - Status management
+   -Status management
     """
 
     def __init__(self, agent_type: str, config_manager: ConfigManager):
@@ -107,7 +107,7 @@ class BaseAgent(ABC):
             # Register with MCP server
             await self._register_with_mcp()
 
-            # Perform agent - specific initialization
+            # Perform agent-specific initialization
             await self._initialize_agent()
 
             self.status = AgentStatus.READY
@@ -153,7 +153,7 @@ class BaseAgent(ABC):
         if self.mcp_client:
             await self.mcp_client.disconnect()
 
-        # Perform agent - specific cleanup
+        # Perform agent-specific cleanup
         await self._cleanup_agent()
 
         self.logger.info(f"Agent {self.agent_id} stopped")
@@ -302,16 +302,16 @@ class BaseAgent(ABC):
 
     @abstractmethod
     async def _initialize_agent(self) -> None:
-        """Initialize agent - specific resources (implemented by subclasses)."""
+        """Initialize agent-specific resources (implemented by subclasses)."""
 
     @abstractmethod
     async def _cleanup_agent(self) -> None:
-        """Clean up agent - specific resources (implemented by subclasses)."""
+        """Clean up agent-specific resources (implemented by subclasses)."""
 
     # Helper methods
 
     def _get_agent_config(self) -> Dict[str, Any]:
-        """Get agent - specific configuration."""
+        """Get agent-specific configuration."""
         agent_config = self.config.get_agent_config()
         return agent_config.get(self.agent_id, {})
 
@@ -374,7 +374,7 @@ class BaseAgent(ABC):
                 # Send heartbeat periodically
                 current_time = datetime.now()
                 if (
-                    current_time - last_heartbeat
+                    current_time-last_heartbeat
                 ).total_seconds() >= heartbeat_interval:
                     await self._send_heartbeat()
                     last_heartbeat = current_time
@@ -399,11 +399,15 @@ class BaseAgent(ABC):
 
     async def _handle_incoming_task(self, task_data: Dict[str, Any]) -> None:
         """Handle incoming task from MCP server."""
+        self.logger.info(f"Agent {self.agent_id} received incoming task: {task_data.get('task_id', 'unknown')}")
         try:
             # Check if this task is for this agent type
             target_agent_type = task_data.get("agent_type")
             if target_agent_type and target_agent_type != self.agent_type:
+                self.logger.debug(f"Task not for this agent type: {target_agent_type} != {self.agent_type}")
                 return  # Task not for this agent
+
+            self.logger.info(f"Processing task {task_data.get('task_id')} for agent type {self.agent_type}")
 
             # Create ResearchAction from task data
             from ..mcp.protocols import ResearchAction
@@ -419,6 +423,7 @@ class BaseAgent(ABC):
             )
 
             if task:
+                self.logger.info(f"About to process task {task.task_id} with action {task.action}")
                 # Process the task
                 response = await self.process_task(task)
 

@@ -55,7 +55,7 @@ class ScreeningConfig:
 class QualityAppraisalConfig:
     """Configuration for quality / bias appraisal."""
 
-    enabled_plugins: List[str] = field(default_factory=lambda: ["robins - i", "rob2"])
+    enabled_plugins: List[str] = field(default_factory=lambda: ["ROBINS-I", "rob2"])
     require_human_validation: bool = True
     confidence_threshold: float = 0.8
     ai_assistance: bool = True
@@ -423,7 +423,7 @@ sources:
   - name: pubmed
     enabled: true
     max_results: 5000
-  - name: semantic_scholar
+ -name: semantic_scholar
     enabled: true
     max_results: 2000
 screening:
@@ -448,7 +448,7 @@ output:
         print(f"Sources: {len(config_manager.config.sources)}")
         for source in config_manager.config.sources:
             print(
-                f"  - {source.name}: enabled={source.enabled}, max_results={source.max_results}"
+                f" -{source.name}: enabled={source.enabled}, max_results={source.max_results}"
             )
 
         print(
@@ -461,7 +461,7 @@ output:
         errors = config_manager.validate_config()
         print(f"\nValidation errors: {len(errors)}")
         for error in errors:
-            print(f"  - {error}")
+            print(f" -{error}")
 
         # Test source queries
         print(f"\nPubMed enabled: {config_manager.is_source_enabled('pubmed')}")

@@ -72,7 +72,7 @@ STUDY ABSTRACT:
 {study.get('abstract', 'No abstract available')}
 
 FULL TEXT (if available):
-{study.get('full_text', 'Full text not available - base assessment on available information')}
+{study.get('full_text', 'Full text not available-base assessment on available information')}
 
 INTERVENTION AND COMPARISON:
 Intervention: {
@@ -112,9 +112,9 @@ overall judgment.
    - Were there deviations from intended intervention that arose because of the experimental context?
    - Were these deviations likely to have affected the outcome?
    - Were these deviations from intended intervention balanced between groups?
-   - Was the analysis appropriate for the study's intended effect?
+  -Was the analysis appropriate for the study's intended effect?
 
-   Consider: blinding, protocol deviations, intention - to - treat analysis
+   Consider: blinding, protocol deviations, intention-to-treat analysis
 
 3. BIAS DUE TO MISSING OUTCOME DATA
    Signaling questions:
@@ -136,7 +136,7 @@ overall judgment.
 
 5. BIAS IN SELECTION OF THE REPORTED RESULT
    Signaling questions:
-   - Were outcome measurements / analyses clearly pre - specified?
+   - Were outcome measurements / analyses clearly pre-specified?
    - Is the numerical result being assessed likely to have been selected based on the results?
    - Is the reported effect estimate likely to be selected based on the results?
 
@@ -144,8 +144,7 @@ overall judgment.
 
 RISK OF BIAS LEVELS:
 - Low: Low risk of bias
-- Some concerns: Some concerns about risk of bias
-- High: High risk of bias
+- Some concerns: Some concerns about risk of bias-High: High risk of bias
 
 OVERALL RISK OF BIAS:
 The overall risk of bias is the highest level assigned to any domain.
@@ -160,35 +159,35 @@ Please provide your assessment in JSON format:
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0 - 1.0
+            "confidence": 0.0-1.0
         }},
         {{
             "domain": "deviation_intended",
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0 - 1.0
+            "confidence": 0.0-1.0
         }},
         {{
             "domain": "missing_outcome_data",
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0 - 1.0
+            "confidence": 0.0-1.0
         }},
         {{
             "domain": "measurement_outcome_rob2",
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0 - 1.0
+            "confidence": 0.0-1.0
         }},
         {{
             "domain": "selection_reported_rob2",
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0 - 1.0
+            "confidence": 0.0-1.0
         }}
     ]
 }}
@@ -205,7 +204,7 @@ RoB 2 is used to assess risk of bias in randomized controlled trials.
 Guidelines for assessment:
 1. Address each signaling question systematically
 2. Overall risk of bias is determined by the highest risk domain
-3. Use the three - level scale: Low risk, Some concerns (moderate), High risk (serious)
+3. Use the three-level scale: Low risk, Some concerns (moderate), High risk (serious)
 4. Base assessments on reported information in the study
 
 Key principles:
@@ -217,8 +216,7 @@ Focus on:
 - Quality of randomization process and allocation concealment
 - Blinding and adherence to intended interventions
 - Completeness of outcome data and appropriate analysis
-- Appropriate outcome measurement and assessment
-- Evidence of selective outcome reporting
+- Appropriate outcome measurement and assessment-Evidence of selective outcome reporting
 
 Always provide detailed rationales with specific evidence from the study.
 Map RoB 2 categories to response format: Low→low, Some concerns→moderate, High→serious.

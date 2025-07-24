@@ -132,7 +132,7 @@ class LiteratureAgent(BaseAgent):
         logs_dir = os.path.join(os.getcwd(), "logs")
         os.makedirs(logs_dir, exist_ok=True)
 
-        # Create literature - specific logger
+        # Create literature-specific logger
         self.literature_logger = logging.getLogger("literature_agent")
         self.literature_logger.setLevel(logging.INFO)
 
@@ -145,7 +145,7 @@ class LiteratureAgent(BaseAgent):
 
             # Create formatter
             formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                "%(asctime)s - %(name)s-%(levelname)s-%(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
             file_handler.setFormatter(formatter)
@@ -505,13 +505,21 @@ class LiteratureAgent(BaseAgent):
                 search_terms = json.loads(response)
                 for topic, terms in search_terms.items():
                     for term in terms:
-                        results = await self.comprehensive_academic_search(term)
+                        # The comprehensive_academic_search returns a dict of lists.
+                        results_by_source = await self.comprehensive_academic_search(
+                            term, max_results_per_source=max_results_per_source
+                        )
+                        # We need to flatten the results from the sources.
+                        all_results_for_term = []
+                        for source, source_results in results_by_source.items():
+                            all_results_for_term.extend(source_results)
+
                         # Add the results to the final output
                         final_results.append(
                             {
                                 "topic": topic,
                                 "search_string": term,
-                                "results": results,
+                                "results": all_results_for_term,
                             }
                         )
 
@@ -573,16 +581,21 @@ class LiteratureAgent(BaseAgent):
                 )
             )
 
-        # Execute searches concurrently with semaphore to limit concurrent requests
+        # Execute searches concurrently with semaphore and staggered delays
         semaphore = asyncio.Semaphore(self.max_concurrent_searches)
 
-        async def limited_search(search_coro):
+        async def limited_search(search_coro, delay=0):
             async with semaphore:
+                if delay > 0:
+                    await asyncio.sleep(delay)
                 return await search_coro
 
-        # Execute searches
+        # Execute searches with staggered delays to reduce rate limiting
+        delays = [0, 0.5, 1.0]  # Stagger searches by 0.5 second intervals
         results = await asyncio.gather(
-            *[limited_search(task) for task in search_tasks], return_exceptions=True
+            *[limited_search(task, delays[i] if i < len(delays) else 0) 
+              for i, task in enumerate(search_tasks)], 
+            return_exceptions=True
         )
 
         # Organize results by source
@@ -684,7 +697,7 @@ class LiteratureAgent(BaseAgent):
                 "source": result.database_source.value,
                 "type": "academic_paper",
                 "link_type": link_type,
-                "relevance_score": len(external_results) - i,  # Simple scoring
+                "relevance_score": len(external_results)-i,  # Simple scoring
                 "metadata": {
                     "external_id": result.external_id,
                     "authors": result.authors,
@@ -802,89 +815,71 @@ class LiteratureAgent(BaseAgent):
 
     async def _search_academic_papers(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Search for academic papers using the integrated academic search capabilities.
+        Search for academic papers using an AI-generated search plan.
 
         Args:
-            payload: Search parameters including query, filters, etc.
+            payload: Search parameters including the research plan.
 
         Returns:
-            Dict[str, Any]: Search results and metadata
+            Dict[str, Any]: Search results and metadata.
         """
         try:
             # Extract search parameters from payload
-            query = payload.get("query", "")
-            max_results = payload.get("max_results", self.max_results_per_search)
-            include_pubmed = payload.get("include_pubmed", True)
-            include_arxiv = payload.get("include_arxiv", True)
-            include_semantic_scholar = payload.get("include_semantic_scholar", True)
-            use_cache = payload.get("use_cache", True)
+            research_plan = payload.get("research_plan")
+            max_results_per_source = payload.get(
+                "max_results", self.max_results_per_search
+            )
             deduplicate = payload.get("deduplicate", True)
 
-            if not query:
+            if not research_plan:
                 return {
                     "success": False,
-                    "error": "No search query provided",
+                    "error": "No research plan provided",
                     "results": [],
-                    "total_results": 0,
-                    "sources_used": [],
                 }
 
             self.literature_logger.info(
-                f"Starting academic paper search for query: {query}"
+                "Starting academic paper search based on research plan."
             )
 
-            # Perform comprehensive search across databases
-            results_by_source = await self.comprehensive_academic_search(
-                query=query,
-                max_results_per_source=max_results,
-                include_pubmed=include_pubmed,
-                include_arxiv=include_arxiv,
-                include_semantic_scholar=include_semantic_scholar,
-                use_cache=use_cache,
+            # Generate search terms and perform searches for each
+            generated_results = await self.search_term_generator(
+                plan=research_plan, max_results_per_source=max_results_per_source
             )
+
+            # The result is a list of dicts, each with a 'results' key containing papers.
+            # We need to collect all papers for deduplication.
+            all_papers = []
+            for item in generated_results:
+                all_papers.extend(item.get("results", []))
 
             # Deduplicate results if requested
             if deduplicate:
+                # The deduplicator expects a dict of lists, so we'll wrap our list.
                 final_results = await self.deduplicate_academic_results(
-                    results_by_source
+                    {"generated": all_papers}
                 )
             else:
-                # Flatten results without deduplication
-                final_results = []
-                for source_results in results_by_source.values():
-                    final_results.extend(source_results)
+                final_results = all_papers
 
             # Sort by relevance score
             final_results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
 
-            # Limit total results
-            if max_results and len(final_results) > max_results:
-                final_results = final_results[:max_results]
-
-            # Compile search metadata
-            sources_used = [
-                source for source, results in results_by_source.items() if results
-            ]
             total_results = len(final_results)
-
             self.literature_logger.info(
-                f"Academic paper search completed: {total_results} results from {len(sources_used)} sources"
+                f"Academic paper search completed: {total_results} unique results found."
             )
 
             return {
                 "success": True,
                 "results": final_results,
                 "total_results": total_results,
-                "sources_used": sources_used,
-                "query": query,
+                "sources_used": ["pubmed", "arxiv", "semantic_scholar"],
+                "query": payload.get("query", "from_research_plan"),
                 "search_metadata": {
-                    "max_results_requested": max_results,
+                    "max_results_per_source_requested": max_results_per_source,
                     "deduplicated": deduplicate,
-                    "cached": use_cache,
-                    "results_by_source": {
-                        source: len(results)
-                        for source, results in results_by_source.items()
-                    },
+                    "generated_searches": generated_results,
                 },
             }
 
@@ -905,11 +900,11 @@ class LiteratureAgent(BaseAgent):
         ]
 
     async def _initialize_agent_specific(self) -> None:
-        """Initialize literature - specific resources."""
+        """Initialize literature-specific resources."""
         # Literature Agent now only uses academic connector for external access
         # No direct HTTP session needed
         self.logger.info(
-            "LiteratureAgent initialized - using academic connector for external access"
+            "LiteratureAgent initialized-using academic connector for external access"
         )
 
     async def _initialize_agent(self) -> None:
@@ -917,18 +912,18 @@ class LiteratureAgent(BaseAgent):
         await self._initialize_agent_specific()
 
     async def _cleanup_agent_specific(self) -> None:
-        """Clean up literature - specific resources."""
+        """Clean up literature-specific resources."""
         try:
             # Clean up expired cache entries as part of cleanup
             if hasattr(self.cache_manager, "cleanup_expired_cache"):
                 await self.cache_manager.cleanup_expired_cache()
 
-            self.logger.info("Literature - specific resources cleaned up")
+            self.logger.info("literature-specific resources cleaned up")
         except Exception as e:
-            self.logger.error(f"Error during literature - specific cleanup: {e}")
+            self.logger.error(f"Error during literature-specific cleanup: {e}")
 
     async def _cleanup_agent(self) -> None:
-        """Clean up literature - specific resources."""
+        """Clean up literature-specific resources."""
         self.logger.info("LiteratureAgent cleanup completed")
 
     async def _process_task_impl(self, task: ResearchAction) -> Dict[str, Any]:

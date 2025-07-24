@@ -31,7 +31,7 @@ except ImportError:
         from models.hierarchical_data_models import (ResearchPlan,
                                                      ResearchTopic, Task)
     except ImportError:
-        # Fallback for development - these will be implemented
+        # Fallback for development-these will be implemented
         ResearchTopic = None
         ResearchPlan = None
         Task = None
@@ -50,7 +50,7 @@ class HierarchicalDatabaseManager:
         self._persistent_conn = None
         self.max_retries = 3
 
-        # For in - memory databases, we need to keep a persistent connection
+        # For in-memory databases, we need to keep a persistent connection
         if db_path == ":memory:":
             self._persistent_conn = sqlite3.connect(db_path)
             self._persistent_conn.row_factory = sqlite3.Row
@@ -82,7 +82,7 @@ class HierarchicalDatabaseManager:
     def init_database(self) -> None:
         """Initialize the database with all required tables."""
         try:
-            # Ensure the directory exists (unless it's in - memory)
+            # Ensure the directory exists (unless it's in-memory)
             if self.db_path != ":memory:":
                 db_dir = Path(self.db_path).parent
                 db_dir.mkdir(parents=True, exist_ok=True)
@@ -102,7 +102,7 @@ class HierarchicalDatabaseManager:
             )
 
     def _create_all_tables(self, conn: sqlite3.Connection) -> None:
-        """Create all database tables with final schema - no migrations needed."""
+        """Create all database tables with final schema-no migrations needed."""
         conn.executescript(
             """
             -- Projects table with all final columns
@@ -256,11 +256,11 @@ class HierarchicalDatabaseManager:
                 row = cursor.fetchone()
                 if row:
                     topic = dict(row)
-                    # Handle metadata parsing with double - encoded JSON
+                    # Handle metadata parsing with double-encoded JSON
                     metadata_raw = topic.get("metadata", "{}")
                     try:
                         metadata = json.loads(metadata_raw)
-                        # If metadata is a string (double - encoded JSON), parse it again
+                        # If metadata is a string (double-encoded JSON), parse it again
                         if isinstance(metadata, str):
                             metadata = json.loads(metadata)
                         topic["metadata"] = metadata
@@ -302,11 +302,11 @@ class HierarchicalDatabaseManager:
                 topics = []
                 for row in cursor.fetchall():
                     topic = dict(row)
-                    # Handle metadata parsing with double - encoded JSON
+                    # Handle metadata parsing with double-encoded JSON
                     metadata_raw = topic.get("metadata", "{}")
                     try:
                         metadata = json.loads(metadata_raw)
-                        # If metadata is a string (double - encoded JSON), parse it again
+                        # If metadata is a string (double-encoded JSON), parse it again
                         if isinstance(metadata, str):
                             metadata = json.loads(metadata)
                         topic["metadata"] = metadata
@@ -396,11 +396,11 @@ class HierarchicalDatabaseManager:
                     except (json.JSONDecodeError, TypeError):
                         plan["plan_structure"] = {}
 
-                    # Handle metadata parsing with double - encoded JSON
+                    # Handle metadata parsing with double-encoded JSON
                     metadata_raw = plan.get("metadata", "{}")
                     try:
                         metadata = json.loads(metadata_raw)
-                        # If metadata is a string (double - encoded JSON), parse it again
+                        # If metadata is a string (double-encoded JSON), parse it again
                         if isinstance(metadata, str):
                             metadata = json.loads(metadata)
                         plan["metadata"] = metadata
@@ -445,11 +445,11 @@ class HierarchicalDatabaseManager:
                     plan["plan_structure"] = json.loads(
                         plan.get("plan_structure", "{}")
                     )
-                    # Handle metadata parsing with double - encoded JSON
+                    # Handle metadata parsing with double-encoded JSON
                     metadata_raw = plan.get("metadata", "{}")
                     try:
                         metadata = json.loads(metadata_raw)
-                        # If metadata is a string (double - encoded JSON), parse it again
+                        # If metadata is a string (double-encoded JSON), parse it again
                         if isinstance(metadata, str):
                             metadata = json.loads(metadata)
                         plan["metadata"] = metadata
@@ -471,7 +471,7 @@ class HierarchicalDatabaseManager:
         try:
             task_id = task_data.get("id", generate_timestamped_id("task"))
 
-            # Plan ID is optional - tasks can be created without plans initially
+            # Plan ID is optional-tasks can be created without plans initially
             plan_id = task_data.get("plan_id")
             project_id = task_data.get("project_id")
 
@@ -1041,7 +1041,7 @@ class HierarchicalDatabaseManager:
                     ),
                 }
             else:
-                # Handle dict input - generate missing fields
+                # Handle dict input-generate missing fields
                 data = project_data.copy()
                 if "id" not in data:
                     data["id"] = generate_timestamped_id("proj")

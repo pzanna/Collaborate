@@ -5,8 +5,7 @@ This module implements automated evidence synthesis capabilities including:
 - Evidence table generation from included studies
 - Multiple synthesis methodologies (narrative, thematic, meta - aggregation)
 - Contradiction detection across studies
-- Confidence grading for evidence claims
-- GRADE assessment integration
+- Confidence grading for evidence claims-GRADE assessment integration
 
 Follows PRISMA 2020 guidelines and integrates with the systematic review workflow.
 """
@@ -36,7 +35,7 @@ class SynthesisMethod(Enum):
 
 
 class ConfidenceLevel(Enum):
-    """GRADE - inspired confidence levels."""
+    """GRADE-inspired confidence levels."""
 
     VERY_LOW = "very_low"
     LOW = "low"
@@ -137,7 +136,7 @@ class EvidenceSynthesisEngine:
     Evidence synthesis engine for systematic reviews.
 
     Provides automated evidence extraction, synthesis, and assessment
-    capabilities for PRISMA - compliant systematic reviews.
+    capabilities for PRISMA-compliant systematic reviews.
     """
 
     def __init__(
@@ -150,7 +149,7 @@ class EvidenceSynthesisEngine:
 
         Args:
             database: Database connection for systematic review data
-            ai_client: AI client for LLM - assisted synthesis
+            ai_client: AI client for LLM-assisted synthesis
         """
         self.database = database
         self.ai_client = ai_client
@@ -223,7 +222,7 @@ class EvidenceSynthesisEngine:
 
         synthesis_id = generate_timestamped_id("synthesis")
 
-        # Perform method - specific synthesis
+        # Perform method-specific synthesis
         if synthesis_method == SynthesisMethod.NARRATIVE:
             themes, narrative_summary = await self._narrative_synthesis(
                 evidence_rows, research_question
@@ -329,7 +328,7 @@ class EvidenceSynthesisEngine:
         self, evidence_rows: List[EvidenceRow], themes: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Assess confidence in evidence using GRADE - inspired approach.
+        Assess confidence in evidence using GRADE-inspired approach.
 
         Args:
             evidence_rows: Evidence extracted from studies
@@ -511,7 +510,7 @@ class EvidenceSynthesisEngine:
         {self._format_evidence_for_synthesis(evidence_rows)}
 
         Follow these steps:
-        1. Line - by - line coding of findings
+        1. Line-by-line coding of findings
         2. Development of descriptive themes
         3. Generation of analytical themes
         4. Development of conceptual model
@@ -523,7 +522,7 @@ class EvidenceSynthesisEngine:
                     "theme": "theme name",
                     "type": "descriptive|analytical",
                     "description": "detailed description",
-                    "sub_themes": ["sub - theme1", "sub - theme2"],
+                    "sub_themes": ["sub-theme1", "sub-theme2"],
                     "supporting_studies": ["study_id1", "study_id2"],
                     "conceptual_contribution": "how this theme contributes to understanding"
                 }}
@@ -552,10 +551,10 @@ class EvidenceSynthesisEngine:
     async def _meta_aggregation_synthesis(
         self, evidence_rows: List[EvidenceRow], research_question: str
     ) -> Tuple[List[Dict[str, Any]], str]:
-        """Perform meta - aggregation synthesis following JBI approach."""
+        """Perform meta-aggregation synthesis following JBI approach."""
 
         synthesis_prompt = f"""
-        Perform meta - aggregation synthesis following the JBI approach for: {research_question}
+        Perform meta-aggregation synthesis following the JBI approach for: {research_question}
 
         Evidence Summary:
         {self._format_evidence_for_synthesis(evidence_rows)}
@@ -577,7 +576,7 @@ class EvidenceSynthesisEngine:
                     "credibility": "unequivocal|credible|unsupported"
                 }}
             ],
-            "narrative_summary": "meta - aggregation summary"
+            "narrative_summary": "meta-aggregation summary"
         }}
         """
 
@@ -603,8 +602,8 @@ class EvidenceSynthesisEngine:
             return themes, synthesis_data.get("narrative_summary", "")
 
         except Exception as e:
-            self.logger.error(f"Failed to perform meta - aggregation synthesis: {e}")
-            return [], "Meta - aggregation synthesis failed due to processing error."
+            self.logger.error(f"Failed to perform meta-aggregation synthesis: {e}")
+            return [], "Meta-aggregation synthesis failed due to processing error."
 
     async def _analyze_contradictions(
         self, outcome: str, evidence_rows: List[EvidenceRow]
@@ -627,7 +626,7 @@ class EvidenceSynthesisEngine:
 
         Look for:
         1. Conflicting effect directions
-        2. Significant vs non - significant results
+        2. Significant vs non-significant results
         3. Different effect magnitudes
         4. Methodological differences that might explain conflicts
 
@@ -757,10 +756,10 @@ class EvidenceSynthesisEngine:
     async def _generate_recommendations(
         self, themes: List[Dict[str, Any]], confidence_assessment: Dict[str, Any]
     ) -> List[str]:
-        """Generate evidence - based recommendations."""
+        """Generate evidence-based recommendations."""
 
         recommendations_prompt = f"""
-        Generate evidence - based recommendations from the synthesis.
+        Generate evidence-based recommendations from the synthesis.
 
         Themes:
         {json.dumps(themes, indent=2)}
@@ -768,7 +767,7 @@ class EvidenceSynthesisEngine:
         Confidence Assessment:
         {json.dumps(confidence_assessment, indent=2)}
 
-        Provide practical, evidence - based recommendations that:
+        Provide practical, evidence-based recommendations that:
         1. Are supported by the evidence
         2. Consider confidence levels
         3. Are actionable
@@ -800,11 +799,11 @@ class EvidenceSynthesisEngine:
         # Study design limitations
         study_designs = [row.study_design for row in evidence_rows]
         if all(
-            design.lower() in ["cross - sectional", "case study", "case series"]
+            design.lower() in ["cross-sectional", "case study", "case series"]
             for design in study_designs
         ):
             limitations.append(
-                "Limited to cross - sectional and case studies; causal inferences cannot be made."
+                "Limited to cross-sectional and case studies; causal inferences cannot be made."
             )
 
         # Sample size considerations
@@ -932,7 +931,7 @@ async def example_evidence_synthesis(
             "What are the current approaches and methodologies in the research domain?"
         )
 
-    # Example included studies - GENERIC template, no hardcoded content
+    # Example included studies-GENERIC template, no hardcoded content
     included_studies = [
         {
             "id": "study_001",

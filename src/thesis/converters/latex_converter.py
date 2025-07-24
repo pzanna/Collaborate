@@ -107,7 +107,7 @@ increasing patient volumes and time constraints, has created a pressing need for
 \textbf{Clinical Importance:} """
         + escape_latex(
             "Understanding the overall performance and implementation challenges of ML diagnostic tools is crucial "
-            "for healthcare systems considering adoption. Clinicians need evidence - based guidance on when and how "
+            "for healthcare systems considering adoption. Clinicians need evidence-based guidance on when and how "
             "to integrate these technologies into clinical workflows."
         )
         + r"""
@@ -239,7 +239,7 @@ def main():
 
     # Save output
     output_file = args.output or args.input.replace(".json", ".tex")
-    with open(output_file, "w", encoding="utf - 8") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(latex_content)
 
     print(f"✅ LaTeX document generated: {output_file}")

@@ -1,5 +1,5 @@
 """
-Research Manager - Orchestrates multi - agent research tasks using MCP protocol.
+Research Manager-Orchestrates multi-agent research tasks using MCP protocol.
 
 This module provides the core Research Manager that coordinates between different
 AI agents (Literature, Planning, Executor, Memory) to perform complex research tasks.
@@ -99,7 +99,7 @@ class ResearchContext:
 
 class ResearchManager:
     """
-    Main orchestrator for multi - agent research tasks.
+    Main orchestrator for multi-agent research tasks.
 
     The Research Manager coordinates between different AI agents to perform
     complex research tasks, managing the flow of information and ensuring
@@ -141,7 +141,7 @@ class ResearchManager:
 
         # Response tracking for agent communications
         self.pending_responses: Dict[str, asyncio.Future] = {}
-        self.response_timeout = 60  # seconds
+        self.response_timeout = 300  # seconds (5 minutes) - allow time for comprehensive literature searches
 
         # Callbacks for UI updates
         self.progress_callbacks: List[Callable] = []
@@ -295,10 +295,10 @@ class ResearchManager:
         )
 
         if single_agent_mode:
-            agents_to_use = ["Literature"]  # Use only literature in single agent mode
+            agents_to_use = ["literature"]  # Use only literature in single agent mode
             parallel_execution = False
         else:
-            agents_to_use = ["Literature", "Planning", "Executor", "Memory"]
+            agents_to_use = ["literature", "planning", "executor", "memory"]
             parallel_execution = True
 
         # Get cost estimate
@@ -446,7 +446,7 @@ class ResearchManager:
 
             # Execute research stages sequentially (or single agent if specified)
             if context.single_agent_mode:
-                # Single agent mode - only use literature
+                # Single agent mode-only use literature
                 stages = [
                     (ResearchStage.PLANNING, self._execute_planning_stage),
                     (
@@ -455,10 +455,10 @@ class ResearchManager:
                     ),
                 ]
                 self.logger.info(
-                    f"Running task {context.task_id} in single - agent mode (cost - optimized)"
+                    f"Running task {context.task_id} in single-agent mode (cost-optimized)"
                 )
             else:
-                # Full multi - agent mode
+                # Full multi-agent mode
                 stages = [
                     (ResearchStage.PLANNING, self._execute_planning_stage),
                     (
@@ -475,6 +475,57 @@ class ResearchManager:
                     continue
 
                 try:
+                    # If this is not the planning stage, check if we need approval first
+                    if stage != ResearchStage.PLANNING:
+                        # Check if planning was completed and needs approval
+                        if ResearchStage.PLANNING in context.completed_stages:
+                            # First check if plan is already approved to avoid unnecessary waiting
+                            plan_id = context.metadata.get("plan_id")
+                            plan_already_approved = False
+                            
+                            if plan_id:
+                                plan = self.db_manager.get_research_plan(plan_id)
+                                plan_already_approved = plan and plan.get("plan_approved", False)
+                            
+                            if not plan_already_approved:
+                                # Wait for plan approval before starting any subsequent stage
+                                self.logger.info(
+                                    f"Plan not yet approved. Waiting for approval before starting {stage.value} stage for task {context.task_id}"
+                                )
+                                
+                                # Update main task status to indicate waiting for approval
+                                try:
+                                    task = self.db_manager.get_research_task(
+                                        context.task_id
+                                    )
+                                    if task:
+                                        task["stage"] = "planning_complete"
+                                        task["status"] = "waiting_approval"
+                                        self.db_manager.update_research_task(task)
+                                except Exception as e:
+                                    self.logger.error(
+                                        f"Failed to update task status before approval check: {e}"
+                                    )
+
+                                approved = await self._wait_for_plan_approval(
+                                    context.task_id
+                                )
+                                if not approved:
+                                    self.logger.info(
+                                        f"Research plan for task {context.task_id} was not approved. Stopping workflow before {stage.value} stage."
+                                    )
+                                    context.stage = ResearchStage.FAILED
+                                    await self._notify_completion(context, success=False)
+                                    return
+                                else:
+                                    self.logger.info(
+                                        f"Research plan for task {context.task_id} approved. Proceeding with {stage.value} stage."
+                                    )
+                            else:
+                                self.logger.info(
+                                    f"Research plan already approved for task {context.task_id}. Proceeding with {stage.value} stage."
+                                )
+
                     context.stage = stage
                     context.updated_at = datetime.now()
 
@@ -498,42 +549,6 @@ class ResearchManager:
                             f"Completed stage {stage.value} for task {context.task_id}"
                         )
 
-                        # If this was the planning stage, wait for approval before proceeding
-                        if stage == ResearchStage.PLANNING:
-                            self.logger.info(
-                                f"Planning stage completed for task {context.task_id}. Waiting for plan approval."
-                            )
-
-                            # Update task status to indicate planning is complete and waiting for approval
-                            try:
-                                task = self.db_manager.get_research_task(
-                                    context.task_id
-                                )
-                                if task:
-                                    task["stage"] = "planning_complete"
-                                    task["status"] = "waiting_approval"
-                                    self.db_manager.update_research_task(task)
-                            except Exception as e:
-                                self.logger.error(
-                                    f"Failed to update task status after planning: {e}"
-                                )
-
-                            # Wait for plan approval (this will pause the workflow)
-                            approved = await self._wait_for_plan_approval(
-                                context.task_id
-                            )
-                            if not approved:
-                                self.logger.info(
-                                    f"Research plan for task {context.task_id} was not approved. Stopping workflow."
-                                )
-                                context.stage = ResearchStage.FAILED
-                                await self._notify_completion(context, success=False)
-                                return
-                            else:
-                                self.logger.info(
-                                    f"Research plan for task {context.task_id} approved. Continuing workflow."
-                                )
-
                     else:
                         context.failed_stages.append(stage)
                         context.updated_at = datetime.now()
@@ -550,7 +565,7 @@ class ResearchManager:
                                 f"Retrying stage {stage.value} for task {context.task_id} "
                                 f"(attempt {context.retry_count})"
                             )
-                            # Re - execute the stage
+                            # Re-execute the stage
                             success = await executor(context)
                             if success:
                                 context.completed_stages.append(stage)
@@ -620,7 +635,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="Planning",
+                agent_type="planning",
                 action="plan_research",
                 payload={
                     "query": context.query,
@@ -631,7 +646,7 @@ class ResearchManager:
             )
 
             # Send to planning agent
-            response = await self._send_to_agent("Planning", action)
+            response = await self._send_to_agent("planning", action)
 
             if response and response.status == "completed":
                 # Update context with planning results
@@ -655,7 +670,7 @@ class ResearchManager:
                             # Get the correct plan ID from context metadata
                             plan_id = context.metadata.get("plan_id")
                             if plan_id:
-                                # Update the plan structure with the AI - generated plan
+                                # Update the plan structure with the AI-generated plan
                                 result = self.db_manager.update_research_plan(
                                     plan_id,
                                     {
@@ -704,22 +719,25 @@ class ResearchManager:
             bool: True if successful
         """
         try:
+            # Get the research plan from the context
+            research_plan = context.context_data.get("research_plan")
+
             # Create literature review action
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="Literature",
-                action="search_information",
+                agent_type="literature",
+                action="search_academic_papers",
                 payload={
                     "query": context.query,
-                    "context": context.context_data,
+                    "research_plan": research_plan,
                     "search_depth": "comprehensive",
                     "max_results": 10,
                 },
             )
 
             # Send to literature agent
-            response = await self._send_to_agent("Literature", action)
+            response = await self._send_to_agent("literature", action)
 
             if response and response.status == "completed":
                 # Store search results
@@ -749,7 +767,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="Planning",
+                agent_type="planning",
                 action="analyze_information",
                 payload={
                     "query": context.query,
@@ -760,7 +778,7 @@ class ResearchManager:
             )
 
             # Send to planning agent
-            response = await self._send_to_agent("Planning", action)
+            response = await self._send_to_agent("planning", action)
 
             if response and response.status == "completed":
                 # Store reasoning output
@@ -790,7 +808,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="Executor",
+                agent_type="executor",
                 action="execute_research",
                 payload={
                     "query": context.query,
@@ -800,7 +818,7 @@ class ResearchManager:
             )
 
             # Send to execution agent
-            response = await self._send_to_agent("Executor", action)
+            response = await self._send_to_agent("executor", action)
 
             if response and response.status == "completed":
                 # Store execution results
@@ -832,7 +850,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="Planning",
+                agent_type="planning",
                 action="synthesize_results",
                 payload={
                     "query": context.query,
@@ -843,7 +861,7 @@ class ResearchManager:
             )
 
             # Send to planning agent for synthesis
-            response = await self._send_to_agent("Planning", action)
+            response = await self._send_to_agent("planning", action)
 
             if response and response.status == "completed":
                 # Store synthesis
@@ -1005,7 +1023,7 @@ class ResearchManager:
                 except Exception as e:
                     self.logger.error(f"Progress callback error: {e}")
 
-            # Call task - specific progress callbacks
+            # Call task-specific progress callbacks
             task_callbacks = context.metadata.get("progress_callbacks", [])
             for callback in task_callbacks:
                 try:
@@ -1037,7 +1055,7 @@ class ResearchManager:
                 },
                 "completed_stages": [stage.value for stage in context.completed_stages],
                 "failed_stages": [stage.value for stage in context.failed_stages],
-                "duration": (context.updated_at - context.created_at).total_seconds(),
+                "duration": (context.updated_at-context.created_at).total_seconds(),
                 "retry_count": context.retry_count,
             }
 
@@ -1394,7 +1412,7 @@ class ResearchManager:
             if context.task_id:
                 topic_id = f"topic_{context.task_id}"
             else:
-                # For web API requests without task_id, generate timestamp - based ID
+                # For web API requests without task_id, generate timestamp-based ID
                 from src.utils.id_utils import generate_timestamped_id
 
                 topic_id = (
@@ -1579,7 +1597,7 @@ class ResearchManager:
             else:
                 task_status = "running"
 
-            # Prepare stage - specific task data for update
+            # Prepare stage-specific task data for update
             stage_task_data = {
                 "id": stage_task_id,
                 "status": task_status,
@@ -1606,7 +1624,7 @@ class ResearchManager:
                 ),
             }
 
-            # Add stage - specific results
+            # Add stage-specific results
             if context.stage == ResearchStage.LITERATURE_REVIEW:
                 stage_task_data["search_results"] = json.dumps(context.search_results)
             elif context.stage == ResearchStage.REASONING:
@@ -1755,7 +1773,7 @@ class ResearchManager:
             options=options,  # Dummy task ID for estimation
         )
 
-        # Remove task - specific fields for estimation - only response
+        # Remove task-specific fields for estimation-only response
         cost_info.pop("should_proceed", None)
         cost_info.pop("cost_reason", None)
         cost_info["single_agent_mode"] = single_agent_mode
@@ -1846,7 +1864,7 @@ class ResearchManager:
                 "cost_usd": usage.cost_usd,
                 "provider_breakdown": usage.provider_breakdown,
                 "agent_breakdown": usage.agent_breakdown,
-                "duration_seconds": (datetime.now() - usage.start_time).total_seconds(),
+                "duration_seconds": (datetime.now()-usage.start_time).total_seconds(),
             }
 
         return {

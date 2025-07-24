@@ -8,8 +8,7 @@ publication bias, selection bias, and reporting bias detection.
 This module provides:
 - Publication bias detection algorithms
 - Selective reporting bias identification
-- Language and database bias assessment
-- Automated bias adjustment recommendations
+- Language and database bias assessment-Automated bias adjustment recommendations
 
 Author: Eunice AI System
 Date: July 2025
@@ -158,12 +157,12 @@ class PublicationBiasDetector:
         except Exception as e:
             logger.error(f"Funnel plot test failed: {e}")
 
-        # Fail - safe N
+        # fail-safe N
         try:
             failsafe_result = await self._fail_safe_n(effect_data)
             tests.append(failsafe_result)
         except Exception as e:
-            logger.error(f"Fail - safe N test failed: {e}")
+            logger.error(f"fail-safe N test failed: {e}")
 
         logger.info(
             f"Publication bias detection completed: {len(tests)} tests performed"
@@ -239,7 +238,7 @@ class PublicationBiasDetector:
                     [
                         "Consider searching for additional unpublished studies",
                         "Examine funnel plot visually for asymmetry patterns",
-                        "Apply trim - and - fill method for bias adjustment",
+                        "Apply trim-and-fill method for bias adjustment",
                     ]
                 )
 
@@ -358,7 +357,7 @@ class PublicationBiasDetector:
                 high_precision_mean = statistics.mean(high_precision)
                 low_precision_mean = statistics.mean(low_precision)
 
-                asymmetry_score = abs(high_precision_mean - low_precision_mean)
+                asymmetry_score = abs(high_precision_mean-low_precision_mean)
 
                 # Determine risk level based on asymmetry
                 if asymmetry_score > 0.5:
@@ -372,8 +371,8 @@ class PublicationBiasDetector:
 
                 interpretation = (
                     f"Funnel plot asymmetry score: {asymmetry_score:.3f}. "
-                    f"High - precision studies mean: {high_precision_mean:.3f}, "
-                    f"Low - precision studies mean: {low_precision_mean:.3f}"
+                    f"High-precision studies mean: {high_precision_mean:.3f}, "
+                    f"Low-precision studies mean: {low_precision_mean:.3f}"
                 )
 
                 recommendations = []
@@ -384,7 +383,7 @@ class PublicationBiasDetector:
                     recommendations.extend(
                         [
                             "Visual inspection of funnel plot recommended",
-                            "Consider contour - enhanced funnel plot",
+                            "Consider contour-enhanced funnel plot",
                             "Investigate reasons for asymmetry",
                         ]
                     )
@@ -430,7 +429,7 @@ class PublicationBiasDetector:
 
     async def _fail_safe_n(self, effect_data: List[Tuple[float, float]]) -> BiasTest:
         """
-        Calculate fail - safe N (number of unpublished null studies needed)
+        Calculate fail-safe N (number of unpublished null studies needed)
         """
         effects = [es for es, se in effect_data]
 
@@ -440,23 +439,23 @@ class PublicationBiasDetector:
 
             if mean_effect <= 0:
                 return BiasTest(
-                    test_name="Fail - safe N",
+                    test_name="fail-safe N",
                     bias_type=BiasType.PUBLICATION_BIAS,
                     test_statistic=0.0,
                     p_value=None,
                     confidence_interval=None,
                     risk_level=BiasAssessmentLevel.NO_BIAS,
-                    interpretation="Non - positive effect size: fail - safe N not applicable",
+                    interpretation="non-positive effect size: fail-safe N not applicable",
                 )
 
-            # Simplified fail - safe N calculation
-            # N_fs = (N * mean_effect) / target_effect - N
+            # Simplified fail-safe N calculation
+            # N_fs = (N * mean_effect) / target_effect-N
             # where target_effect is the minimum meaningful effect (e.g., 0.1)
 
             target_effect = 0.1  # Minimum meaningful effect
             n_studies = len(effect_data)
 
-            fail_safe_n = max(0, (n_studies * mean_effect) / target_effect - n_studies)
+            fail_safe_n = max(0, (n_studies * mean_effect) / target_effect-n_studies)
 
             # Rosenthal's criterion: 5k + 10 (where k = number of studies)
             rosenthal_criterion = 5 * n_studies + 10
@@ -471,7 +470,7 @@ class PublicationBiasDetector:
                 risk_level = BiasAssessmentLevel.HIGH_RISK
 
             interpretation = (
-                f"Fail - safe N = {fail_safe_n:.0f}. "
+                f"fail-safe N = {fail_safe_n:.0f}. "
                 f"Rosenthal's criterion = {rosenthal_criterion}. "
                 f"{'Robust' if fail_safe_n >= rosenthal_criterion else 'Potentially vulnerable'} "
                 "to publication bias."
@@ -491,7 +490,7 @@ class PublicationBiasDetector:
                 )
 
             return BiasTest(
-                test_name="Fail - safe N",
+                test_name="fail-safe N",
                 bias_type=BiasType.PUBLICATION_BIAS,
                 test_statistic=fail_safe_n,
                 p_value=None,
@@ -508,9 +507,9 @@ class PublicationBiasDetector:
             )
 
         except Exception as e:
-            logger.error(f"Fail - safe N calculation failed: {e}")
+            logger.error(f"fail-safe N calculation failed: {e}")
             return BiasTest(
-                test_name="Fail - safe N",
+                test_name="fail-safe N",
                 bias_type=BiasType.PUBLICATION_BIAS,
                 test_statistic=0.0,
                 p_value=None,
@@ -656,7 +655,7 @@ class SelectionBiasDetector:
 
         interpretation = (
             f"Language distribution: {english_ratio:.1%} English studies. "
-            f"Non - English languages: {len(language_counts) - (1 if 'english' in language_counts else 0)}"
+            f"non-English languages: {len(language_counts)-(1 if 'english' in language_counts else 0)}"
         )
 
         recommendations = []
@@ -666,8 +665,8 @@ class SelectionBiasDetector:
         ]:
             recommendations.extend(
                 [
-                    "Consider searching non - English databases",
-                    "Include non - English publications in search strategy",
+                    "Consider searching non-English databases",
+                    "Include non-English publications in search strategy",
                     "Consider translation resources for key studies",
                 ]
             )
@@ -709,7 +708,7 @@ class SelectionBiasDetector:
             type_counts.get("journal_article", 0) / len(studies) if studies else 0
         )
 
-        # Risk assessment - high journal article ratio may indicate bias against grey literature
+        # Risk assessment-high journal article ratio may indicate bias against grey literature
         if journal_ratio >= 0.98:
             risk_level = BiasAssessmentLevel.HIGH_RISK
         elif journal_ratio >= 0.95:
@@ -785,12 +784,12 @@ class SelectionBiasDetector:
         # Assess time span
         min_year = min(study_years)
         max_year = max(study_years)
-        time_span = max_year - min_year
+        time_span = max_year-min_year
 
         current_year = datetime.now().year
 
         # Risk assessment based on time restrictions
-        if start_year and current_year - start_year < 10:
+        if start_year and current_year-start_year < 10:
             risk_level = BiasAssessmentLevel.MODERATE_RISK
         elif time_span < 5:
             risk_level = BiasAssessmentLevel.MODERATE_RISK
@@ -862,7 +861,7 @@ class ReportingBiasDetector:
         outcome_test = await self._assess_outcome_reporting(studies)
         tests.append(outcome_test)
 
-        # P - hacking detection
+        # P-hacking detection
         p_hack_test = await self._detect_p_hacking(studies)
         tests.append(p_hack_test)
 
@@ -952,7 +951,7 @@ class ReportingBiasDetector:
         )
 
     async def _detect_p_hacking(self, studies: List[Dict[str, Any]]) -> BiasTest:
-        """Detect potential p - hacking in reported p - values"""
+        """Detect potential p - hacking in reported p-values"""
         p_values = []
 
         for study in studies:
@@ -962,7 +961,7 @@ class ReportingBiasDetector:
                 if p_val is not None:
                     try:
                         p = float(p_val)
-                        if 0 < p < 1:  # Valid p - value range
+                        if 0 < p < 1:  # Valid p-value range
                             p_values.append(p)
                     except (ValueError, TypeError):
                         continue
@@ -975,7 +974,7 @@ class ReportingBiasDetector:
                 p_value=None,
                 confidence_interval=None,
                 risk_level=BiasAssessmentLevel.NO_BIAS,
-                interpretation="Insufficient p - values for p - hacking assessment",
+                interpretation="Insufficient p - values for p-hacking assessment",
             )
 
         # Check for excess of p - values just below 0.05
@@ -988,7 +987,7 @@ class ReportingBiasDetector:
         else:
             significance_ratio = float("inf") if just_significant > 0 else 1.0
 
-        # Check for p - value clustering around 0.05
+        # Check for p-value clustering around 0.05
         near_05 = sum(1 for p in p_values if 0.04 <= p <= 0.06)
         clustering_rate = near_05 / len(p_values)
 
@@ -1004,7 +1003,7 @@ class ReportingBiasDetector:
 
         interpretation = (
             f"P - value distribution analysis: {just_significant} p - values 0.04 - 0.05, "
-            f"{barely_ns} p - values 0.05 - 0.06 (ratio: {significance_ratio:.2f}). "
+            f"{barely_ns} p-values 0.05-0.06 (ratio: {significance_ratio:.2f}). "
             f"Clustering near 0.05: {clustering_rate:.1%}"
         )
 
@@ -1015,14 +1014,14 @@ class ReportingBiasDetector:
         ]:
             recommendations.extend(
                 [
-                    "Examine p - value distribution for signs of selective reporting",
-                    "Consider pre - registered analysis plans",
+                    "Examine p-value distribution for signs of selective reporting",
+                    "Consider pre-registered analysis plans",
                     "Be cautious of results just reaching significance",
                 ]
             )
 
         return BiasTest(
-            test_name="P - hacking Detection",
+            test_name="P-hacking Detection",
             bias_type=BiasType.REPORTING_BIAS,
             test_statistic=significance_ratio,
             p_value=None,
@@ -1261,7 +1260,7 @@ class BiasDetectionSystem:
         # Adjust based on number of tests
         test_factor = min(1.0, len(tests) / 10)
 
-        # Adjust based on test quality (presence of p - values, statistical tests)
+        # Adjust based on test quality (presence of p-values, statistical tests)
         statistical_tests = sum(1 for test in tests if test.p_value is not None)
         statistical_factor = statistical_tests / len(tests) if len(tests) > 0 else 0
 

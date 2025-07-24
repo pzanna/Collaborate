@@ -4,7 +4,7 @@ Advanced Conflict Resolution System for Collaborative Systematic Reviews
 This module provides intelligent conflict detection and resolution algorithms for
 systematic review collaboration, including:
 - Automated conflict identification between reviewers
-- AI - powered mediation suggestions
+- AI-powered mediation suggestions
 - Expert reviewer assignment systems
 - Conflict history tracking and analytics
 
@@ -12,8 +12,7 @@ Key Features:
 - Multi - dimensional conflict analysis
 - Intelligent resolution suggestions
 - Expert assignment algorithms
-- Conflict pattern recognition
-- Resolution effectiveness tracking
+- Conflict pattern recognition-Resolution effectiveness tracking
 
 Author: Eunice AI System
 Date: 2024
@@ -100,7 +99,7 @@ class ConflictDetection:
 
 @dataclass
 class ResolutionSuggestion:
-    """AI - generated resolution suggestion"""
+    """AI-generated resolution suggestion"""
 
     suggestion_id: str
     conflict_id: str
@@ -151,10 +150,10 @@ class AdvancedConflictResolver:
 
     Features:
     - Intelligent conflict detection algorithms
-    - AI - powered resolution suggestions
+    - AI-powered resolution suggestions
     - Expert assignment optimization
-    - Conflict pattern analysis
-    - Resolution effectiveness tracking
+   -Conflict pattern analysis
+   -Resolution effectiveness tracking
     """
 
     def __init__(self, db_path: str = "data / eunice.db"):
@@ -303,8 +302,8 @@ class AdvancedConflictResolver:
         # Placeholder for ML model loading
         # In production, load pre - trained models for:
         # - Conflict severity prediction
-        # - Resolution method selection
-        # - Expert assignment optimization
+        #-Resolution method selection
+        #-Expert assignment optimization
         self.severity_model = None
         self.resolution_model = None
         self.expert_matching_model = None
@@ -439,7 +438,7 @@ class AdvancedConflictResolver:
                     )
                     total_reviewers = len(criteria_decisions)
                     agreement_ratio = reviewer_count / total_reviewers
-                    disagreement_score += abs(0.5 - agreement_ratio)
+                    disagreement_score += abs(0.5-agreement_ratio)
 
                 disagreement_score /= len(all_criteria) if all_criteria else 1
 
@@ -533,7 +532,7 @@ class AdvancedConflictResolver:
                                 "score_variance": score_variance,
                                 "mean_score": mean_score,
                                 "relative_variance": relative_variance,
-                                "score_range": max(scores) - min(scores),
+                                "score_range": max(scores)-min(scores),
                             },
                         )
                         conflicts.append(conflict)
@@ -597,7 +596,7 @@ class AdvancedConflictResolver:
         self, conflict: ConflictDetection
     ) -> List[ResolutionSuggestion]:
         """
-        Generate AI - powered resolution suggestions for conflicts
+        Generate AI-powered resolution suggestions for conflicts
 
         Args:
             conflict: Detected conflict to resolve
@@ -661,7 +660,7 @@ class AdvancedConflictResolver:
                 )
             )
 
-            # Discussion - based resolution
+            # Discussion-based resolution
             suggestions.append(
                 ResolutionSuggestion(
                     suggestion_id=str(uuid.uuid4()),
@@ -732,7 +731,7 @@ class AdvancedConflictResolver:
                 )
             )
 
-            # Automatic resolution for low - severity conflicts
+            # Automatic resolution for low-severity conflicts
             if conflict.severity == ConflictSeverity.LOW:
                 suggestions.append(
                     ResolutionSuggestion(
@@ -740,7 +739,7 @@ class AdvancedConflictResolver:
                         conflict_id=conflict.conflict_id,
                         method=ResolutionMethod.AUTOMATIC,
                         suggestion_text="Apply majority vote rule for criteria selection",
-                        rationale="Low - severity criteria conflicts can be resolved automatically using majority rule",
+                        rationale="Low-severity criteria conflicts can be resolved automatically using majority rule",
                         confidence_score=0.70,
                         evidence_support={
                             "success_rate": 0.78,
@@ -837,7 +836,7 @@ class AdvancedConflictResolver:
         suggestions = []
 
         try:
-            # Voting for multi - reviewer conflicts
+            # Voting for multi-reviewer conflicts
             if len(conflict.reviewers) >= 3:
                 suggestions.append(
                     ResolutionSuggestion(
@@ -1043,7 +1042,7 @@ class AdvancedConflictResolver:
                         "expertise_areas": json.loads(row[2]) if row[2] else [],
                         "experience_years": row[3],
                         "availability_score": row[5],
-                        "workload_score": 1.0 - (row[4] / 10.0),  # Invert workload
+                        "workload_score": 1.0-(row[4] / 10.0),  # Invert workload
                         "success_rate": row[6],
                     }
                     experts.append(expert)
@@ -1185,8 +1184,8 @@ class AdvancedConflictResolver:
             # In production, implement tracking of:
             # - Resolution outcomes (success/failure)
             # - Time to resolution
-            # - Reviewer satisfaction
-            # - Recurrence of conflicts
+            #-Reviewer satisfaction
+            #-Recurrence of conflicts
             logger.info(
                 f"Tracking effectiveness for resolution {resolution.resolution_id} "
                 f"using method {resolution.method.value}"
@@ -1225,7 +1224,7 @@ class AdvancedConflictResolver:
                         COUNT(*) as total_resolutions,
                         AVG(r.effectiveness_score) as avg_effectiveness,
                         AVG(
-                            (julianday(r.end_timestamp) - julianday(r.start_timestamp)) * 24 * 60
+                            (julianday(r.end_timestamp)-julianday(r.start_timestamp)) * 24 * 60
                         ) as avg_resolution_time_minutes
                     FROM conflict_resolutions r
                     JOIN conflicts c ON r.conflict_id = c.conflict_id
@@ -1312,7 +1311,7 @@ async def demonstrate_conflict_resolution():
         )
         for suggestion in suggestions[:2]:  # Show top 2
             logger.info(
-                f"     - {suggestion.suggestion_text} (Confidence: {suggestion.confidence_score:.2f})"
+                f"    -{suggestion.suggestion_text} (Confidence: {suggestion.confidence_score:.2f})"
             )
 
     # Assign expert reviewer for a high severity conflict
@@ -1370,13 +1369,13 @@ async def demonstrate_conflict_resolution():
     logger.info("   Conflict Statistics:")
     for stat_row in analytics.get("conflict_statistics", []):
         logger.info(
-            f"     - Type: {stat_row[0]}, Severity: {stat_row[1]}, Count: {stat_row[2]}"
+            f"    -Type: {stat_row[0]}, Severity: {stat_row[1]}, Count: {stat_row[2]}"
         )
 
     logger.info("   Resolution Effectiveness:")
     for res_row in analytics.get("resolution_effectiveness", []):
         logger.info(
-            f"     - Method: {res_row[0]}, Count: {res_row[1]}, Avg Time (min): {res_row[3]:.2f}"
+            f"    -Method: {res_row[0]}, Count: {res_row[1]}, Avg Time (min): {res_row[3]:.2f}"
         )
 
     logger.info("\n🎉 Conflict Resolution System demonstration completed!")

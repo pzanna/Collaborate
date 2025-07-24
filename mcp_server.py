@@ -17,10 +17,9 @@ if __name__ == "__main__":
     # Set up logging
     log_path = os.getenv("EUNICE_LOG_PATH", "logs")
     log_level = os.getenv("EUNICE_LOG_LEVEL", "INFO")
-    
+
     # Ensure log directory exists
     Path(log_path).mkdir(parents=True, exist_ok=True)
-    
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,7 +28,6 @@ if __name__ == "__main__":
             logging.FileHandler(os.path.join(log_path, 'mcp_server.log')),
         ]
     )
-    
     # Import and run the MCP server
     try:
         from src.mcp.server import main

@@ -70,7 +70,7 @@ class MemoryAgent(BaseAgent):
     - Previous conversation recall
     - Learning from interactions
     - Memory consolidation and pruning
-    - Semantic search in memory
+   -Semantic search in memory
     """
 
     def __init__(self, config_manager: ConfigManager):
@@ -83,9 +83,9 @@ class MemoryAgent(BaseAgent):
         super().__init__("memory", config_manager)
 
         # Memory configuration
-        self.memory_db_path = Path("data / memory.db")
+        self.memory_db_path = Path("data/memory.db")
         self.max_memory_size = 10000  # Maximum number of memory records
-        self.importance_threshold = 0.3  # Minimum importance for long - term storage
+        self.importance_threshold = 0.3  # Minimum importance for long-term storage
         self.consolidation_interval = 3600  # 1 hour in seconds
 
         # Knowledge graph configuration
@@ -96,7 +96,7 @@ class MemoryAgent(BaseAgent):
         # Database connection
         self.db_connection: Optional[aiosqlite.Connection] = None
 
-        # In - memory caches
+        # in-memory caches
         self.memory_cache: Dict[str, MemoryRecord] = {}
         self.knowledge_cache: Dict[str, KnowledgeNode] = {}
         self.edge_cache: Dict[str, KnowledgeEdge] = {}
@@ -123,7 +123,7 @@ class MemoryAgent(BaseAgent):
         ]
 
     async def _initialize_agent(self) -> None:
-        """Initialize memory - specific resources."""
+        """Initialize memory-specific resources."""
         # Ensure data directory exists
         self.memory_db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -141,7 +141,7 @@ class MemoryAgent(BaseAgent):
         )
 
     async def _cleanup_agent(self) -> None:
-        """Clean up memory - specific resources."""
+        """Clean up memory-specific resources."""
         # Close database connection
         if self.db_connection:
             await self.db_connection.close()
@@ -517,7 +517,7 @@ class MemoryAgent(BaseAgent):
             }
 
         try:
-            # Prune low - importance memories
+            # Prune low-importance memories
             pruned_count = await self._prune_memories()
 
             # Decay edge strengths
@@ -552,7 +552,7 @@ class MemoryAgent(BaseAgent):
             Dict[str, Any]: Storage results
         """
         try:
-            # Parse payload - support both direct dict and StoreMemoryRequest
+            # Parse payload-support both direct dict and StoreMemoryRequest
             if isinstance(payload, dict):
                 context_id = payload.get("context_id", "")
                 memory_type = payload.get("memory_type", "general")
@@ -600,7 +600,7 @@ class MemoryAgent(BaseAgent):
             if importance >= self.importance_threshold:
                 self.memory_cache[memory_id] = record
 
-            self.logger.info(f"Stored structured memory: {memory_type} - {memory_id}")
+            self.logger.info(f"Stored structured memory: {memory_type}-{memory_id}")
 
             return {
                 "success": True,
@@ -820,7 +820,7 @@ class MemoryAgent(BaseAgent):
         await self.db_connection.commit()
 
     async def _load_memory_cache(self) -> None:
-        """Load recent high - importance memories into cache."""
+        """Load recent high-importance memories into cache."""
         if not self.db_connection:
             return
 
@@ -1023,11 +1023,11 @@ class MemoryAgent(BaseAgent):
 
     def _consolidation_needed(self) -> bool:
         """Check if consolidation is needed."""
-        time_since_last = (datetime.now() - self.last_consolidation).total_seconds()
+        time_since_last = (datetime.now()-self.last_consolidation).total_seconds()
         return time_since_last > self.consolidation_interval
 
     async def _prune_memories(self) -> int:
-        """Prune low - importance memories."""
+        """Prune low-importance memories."""
         # TODO: Implement memory pruning based on importance and access patterns
         return 0
 

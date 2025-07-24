@@ -8,8 +8,7 @@ Features:
 - Direct API integration with rate limiting and error handling
 - Standardized search interface across different databases
 - Automatic result deduplication and quality assessment
-- Advanced search query optimization and translation
-- Bulk data retrieval with progress tracking
+- Advanced search query optimization and translation-Bulk data retrieval with progress tracking
 
 Author: Eunice AI System
 Date: July 2025
@@ -226,7 +225,7 @@ class DatabaseConnector(ABC):
 
     @abstractmethod
     def translate_query(self, search_terms: str, search_fields: List[str]) -> str:
-        """Translate search query to database - specific format"""
+        """Translate search query to database-specific format"""
 
     async def test_connection(self) -> bool:
         """Test database connection and authentication"""
@@ -273,7 +272,7 @@ class RateLimiter:
 
         # Check if we've hit the rate limit
         if len(self.requests) >= self.requests_per_minute:
-            wait_time = 60 - (now - self.requests[0])
+            wait_time = 60-(now-self.requests[0])
             if wait_time > 0:
                 logger.info(f"Rate limit reached, waiting {wait_time:.2f} seconds")
                 await asyncio.sleep(wait_time)
@@ -282,9 +281,9 @@ class RateLimiter:
 
 
 class PubMedConnector(DatabaseConnector):
-    """PubMed / MEDLINE database connector using E - utilities API"""
+    """PubMed / MEDLINE database connector using E-utilities API"""
 
-    EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov / entrez / eutils/"
+    EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
     def __init__(self, api_key: Optional[str] = None):
         config = DatabaseConnection(
@@ -330,7 +329,7 @@ class PubMedConnector(DatabaseConnector):
             return f"{search_terms}{tag}"
 
     async def search(self, query: DatabaseSearchQuery) -> List[ExternalSearchResult]:
-        """Execute PubMed search using E - utilities"""
+        """Execute PubMed search using E-utilities"""
         try:
             await self.rate_limiter.acquire()
 
@@ -354,8 +353,8 @@ class PubMedConnector(DatabaseConnector):
                     start_date = query.date_range["start_date"]
                     end_date = query.date_range["end_date"]
                     date_filter = (
-                        f'("{start_date}"[Date - Publication] : '
-                        f'"{end_date}"[Date - Publication])'
+                        f'("{start_date}"[Date-Publication] : '
+                        f'"{end_date}"[Date-Publication])'
                     )
                     search_params["term"] += f" AND {date_filter}"
 
@@ -571,7 +570,7 @@ class CochraneConnector(DatabaseConnector):
         config = DatabaseConnection(
             connection_id="cochrane_default",
             database_type=DatabaseType.COCHRANE,
-            api_endpoint="https://www.cochranelibrary.com / api/",
+            api_endpoint="https://www.cochranelibrary.com/api/",
             api_key=api_key,
             rate_limit=60,  # Conservative rate limit
             timeout=30,
@@ -623,7 +622,7 @@ class CochraneConnector(DatabaseConnector):
                 "from": query.offset,
             }
 
-            # Placeholder implementation - would need actual Cochrane API
+            # Placeholder implementation-would need actual Cochrane API
             logger.info(f"Cochrane search would be executed with: {search_params}")
 
             # Return empty results for now (would implement actual API call)
@@ -646,7 +645,7 @@ class ArxivConnector(DatabaseConnector):
         config = DatabaseConnection(
             connection_id="arxiv_default",
             database_type=DatabaseType.ARXIV,
-            api_endpoint="http://export.arxiv.org / api / query",
+            api_endpoint="http://export.arxiv.org/api/query",
             api_key=None,
             rate_limit=120,  # arXiv allows higher rate limits
             timeout=30,
@@ -715,7 +714,7 @@ class ArxivConnector(DatabaseConnector):
         try:
             # Parse Atom feed
             root = ET.fromstring(xml_data)
-            ns = {"atom": "http://www.w3.org / 2005 / Atom"}
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
 
             for entry in root.findall("atom:entry", ns):
                 result = self._extract_arxiv_entry(entry, ns)
@@ -795,7 +794,7 @@ class ArxivConnector(DatabaseConnector):
                 keywords=keywords,
                 doi=doi,
                 pmid=None,
-                url=f"https://arxiv.org / abs/{arxiv_id}",
+                url=f"https://arxiv.org/abs/{arxiv_id}",
                 study_type="preprint",
                 language="en",  # arXiv is primarily English
                 full_text_available=True,  # arXiv provides full text
@@ -840,7 +839,7 @@ class SemanticScholarConnector(DatabaseConnector):
         config = DatabaseConnection(
             connection_id="semantic_scholar_default",
             database_type=DatabaseType.SEMANTIC_SCHOLAR,
-            api_endpoint="https://api.semanticscholar.org / graph / v1 / paper / search",
+            api_endpoint="https://api.semanticscholar.org/graph/v1/paper/search",
             api_key=api_key,
             rate_limit=100,  # Semantic Scholar API rate limit
             timeout=30,
@@ -854,59 +853,76 @@ class SemanticScholarConnector(DatabaseConnector):
     def translate_query(self, search_terms: str, search_fields: List[str]) -> str:
         """Translate to Semantic Scholar search format"""
         # Semantic Scholar supports simple text queries
-        # Field - specific searching is handled via API parameters rather than query string
+        # Field-specific searching is handled via API parameters rather than query string
         return search_terms
 
     async def search(self, query: DatabaseSearchQuery) -> List[ExternalSearchResult]:
-        """Execute Semantic Scholar search"""
-        try:
-            await self.rate_limiter.acquire()
+        """Execute Semantic Scholar search with retry logic"""
+        max_retries = 3
+        retry_delay = 1.0
+        
+        for attempt in range(max_retries + 1):
+            try:
+                await self.rate_limiter.acquire()
 
-            search_params = {
-                "query": self.translate_query(query.search_terms, query.search_fields),
-                "limit": min(query.max_results, 100),  # API limit is 100
-                "offset": query.offset,
-                "fields": (
-                    "paperId,title,authors,year,journal,abstract,"
-                    "citationCount,url,venue,publicationDate,externalIds"
-                ),
-            }
+                search_params = {
+                    "query": self.translate_query(query.search_terms, query.search_fields),
+                    "limit": min(query.max_results, 100),  # API limit is 100
+                    "offset": query.offset,
+                    "fields": (
+                        "paperId,title,authors,year,journal,abstract,"
+                        "citationCount,url,venue,publicationDate,externalIds"
+                    ),
+                }
 
-            # Add field - specific search if specified
-            if (
-                query.search_fields
-                and "title" in query.search_fields
-                and len(query.search_fields) == 1
-            ):
-                # If only searching titles, we can be more specific
-                search_params["fieldsOfStudy"] = "Computer Science,Medicine,Biology"
+                # Add field-specific search if specified
+                if (
+                    query.search_fields
+                    and "title" in query.search_fields
+                    and len(query.search_fields) == 1
+                ):
+                    # If only searching titles, we can be more specific
+                    search_params["fieldsOfStudy"] = "Computer Science,Medicine,Biology"
 
-            headers = {}
-            if self.config.api_key:
-                headers["x - api - key"] = self.config.api_key
+                headers = {}
+                if self.config.api_key:
+                    headers["x-api-key"] = self.config.api_key
 
-            async with self.session.get(
-                self.config.api_endpoint, params=search_params, headers=headers
-            ) as response:
-                if response.status == 429:
-                    # Rate limited
-                    await asyncio.sleep(1)
+                async with self.session.get(
+                    self.config.api_endpoint, params=search_params, headers=headers
+                ) as response:
+                    if response.status == 429:
+                        # Rate limited - retry with exponential backoff
+                        if attempt < max_retries:
+                            wait_time = retry_delay * (2 ** attempt)
+                            logger.warning(f"Semantic Scholar rate limited, retrying in {wait_time}s (attempt {attempt + 1})")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            logger.error("Semantic Scholar rate limit exceeded after all retries")
+                            return []
+                    elif response.status != 200:
+                        raise Exception(
+                            f"Semantic Scholar search failed: {response.status}"
+                        )
+
+                    data = await response.json()
+
+                    if "data" not in data:
+                        return []
+
+                    return self._parse_semantic_scholar_response(data["data"])
+
+            except Exception as e:
+                if attempt < max_retries:
+                    logger.warning(f"Semantic Scholar search error (attempt {attempt + 1}): {e}")
+                    await asyncio.sleep(retry_delay * (2 ** attempt))
+                    continue
+                else:
+                    logger.error(f"Semantic Scholar search error after all retries: {e}")
                     return []
-                elif response.status != 200:
-                    raise Exception(
-                        f"Semantic Scholar search failed: {response.status}"
-                    )
-
-                data = await response.json()
-
-                if "data" not in data:
-                    return []
-
-                return self._parse_semantic_scholar_response(data["data"])
-
-        except Exception as e:
-            logger.error(f"Semantic Scholar search error: {e}")
-            return []
+        
+        return []
 
     def _parse_semantic_scholar_response(
         self, papers: List[Dict[str, Any]]
@@ -972,7 +988,7 @@ class SemanticScholarConnector(DatabaseConnector):
             # Abstract
             abstract = paper.get("abstract")
 
-            # Keywords - Semantic Scholar doesn't provide explicit keywords
+            # Keywords-Semantic Scholar doesn't provide explicit keywords
             keywords = []
             if paper.get("fieldsOfStudy"):
                 keywords = paper["fieldsOfStudy"]
@@ -991,7 +1007,7 @@ class SemanticScholarConnector(DatabaseConnector):
             # URL
             url = (
                 paper.get("url")
-                or f"https://www.semanticscholar.org / paper/{paper_id}"
+                or f"https://www.semanticscholar.org/paper/{paper_id}"
             )
 
             # Citation count
@@ -1045,7 +1061,7 @@ class SemanticScholarConnector(DatabaseConnector):
 
             headers = {}
             if self.config.api_key:
-                headers["x - api - key"] = self.config.api_key
+                headers["x-api-key"] = self.config.api_key
 
             async with self.session.get(
                 url, params=params, headers=headers
@@ -1243,9 +1259,9 @@ if __name__ == "__main__":
                 print(f"   PMID: {result.pmid}")
                 print(f"   URL: {result.url}")
 
-        # Test multi - database search
+        # Test multi-database search
         print("\n" + "=" * 60)
-        print("Testing multi - database search...")
+        print("Testing multi-database search...")
 
         multi_results = await db_manager.search_multiple_databases(
             search_query,

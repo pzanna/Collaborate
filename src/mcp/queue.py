@@ -64,7 +64,7 @@ class TaskQueue:
 
             # Add time factor for aging (older tasks get slightly higher priority)
             time_factor = (
-                0.1 * (datetime.now() - action.created_at).total_seconds() / 3600
+                0.1 * (datetime.now()-action.created_at).total_seconds() / 3600
             )
             priority_score -= time_factor
 
@@ -301,7 +301,7 @@ class TaskQueue:
     async def cleanup_old_tasks(self, max_age_hours: int = 24):
         """Clean up old completed and failed tasks"""
         async with self._lock:
-            cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
+            cutoff_time = datetime.now()-timedelta(hours=max_age_hours)
 
             # Clean completed tasks
             to_remove = []

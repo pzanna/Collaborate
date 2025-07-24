@@ -10,8 +10,7 @@ Features:
 - Data validation and quality checks
 - Format conversion and standardization
 - Bulk import / export operations
-- Progress tracking for large datasets
-- Error handling and recovery mechanisms
+- Progress tracking for large datasets-Error handling and recovery mechanisms
 
 Author: Eunice AI System
 Date: July 2025
@@ -329,7 +328,7 @@ class DataValidator:
                     float(value)
                 except (ValueError, TypeError):
                     warnings.append(
-                        f"{extraction_id}: Non - numeric value for numeric variable: {value}"
+                        f"{extraction_id}: non-numeric value for numeric variable: {value}"
                     )
 
         return errors, warnings, corrected_data
@@ -399,19 +398,19 @@ class FormatConverter:
             if not line:
                 continue
 
-            if line.startswith("TY  - "):
+            if line.startswith("TY -"):
                 # Start new reference
                 if current_ref:
                     references.append(current_ref)
                 current_ref = {"type": line[6:]}
-            elif line.startswith("ER  - "):
+            elif line.startswith("ER -"):
                 # End reference
                 if current_ref:
                     references.append(current_ref)
                     current_ref = {}
-            elif " - " in line:
+            elif "-" in line:
                 # Field data
-                tag, value = line.split(" - ", 1)
+                tag, value = line.split("-", 1)
                 tag = tag.strip()
                 value = value.strip()
 
@@ -439,7 +438,7 @@ class FormatConverter:
         for ref in references:
             # Reference type
             ref_type = ref.get("type", "JOUR")
-            ris_lines.append(f"TY  - {ref_type}")
+            ris_lines.append(f"TY -{ref_type}")
 
             # Map common fields
             field_mapping = {
@@ -461,12 +460,12 @@ class FormatConverter:
                     value = ref[json_field]
                     if isinstance(value, list):
                         for v in value:
-                            ris_lines.append(f"{ris_tag}  - {v}")
+                            ris_lines.append(f"{ris_tag} -{v}")
                     else:
-                        ris_lines.append(f"{ris_tag}  - {value}")
+                        ris_lines.append(f"{ris_tag} -{value}")
 
             # End reference
-            ris_lines.append("ER  - ")
+            ris_lines.append("ER -")
             ris_lines.append("")  # Empty line between references
 
         return "\n".join(ris_lines)
@@ -521,7 +520,7 @@ class ImportEngine:
             records_failed = validation_result.error_count
             total_records = records_imported + records_failed
 
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (datetime.now()-start_time).total_seconds()
 
             return ImportResult(
                 success=validation_result.is_valid,
@@ -540,7 +539,7 @@ class ImportEngine:
             )
 
         except Exception as e:
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (datetime.now()-start_time).total_seconds()
             logger.error(f"Import failed: {e}")
 
             return ImportResult(
@@ -617,7 +616,7 @@ class ImportEngine:
         elif exchange_format == ExchangeFormat.REFERENCE_LIBRARY:
             return await self._transform_to_reference_library(data)
         else:
-            # Return as - is for unknown formats
+            # Return as-is for unknown formats
             return data
 
     async def _transform_to_study_metadata(
@@ -627,7 +626,7 @@ class ImportEngine:
 
         # Handle different input structures
         if "data" in data and isinstance(data["data"], list):
-            # CSV - like data
+            # CSV-like data
             studies = []
             for row in data["data"]:
                 study = {
@@ -653,7 +652,7 @@ class ImportEngine:
             return {"studies": studies}
 
         elif "references" in data:
-            # RIS - like data
+            # RIS-like data
             studies = []
             for ref in data["references"]:
                 study = {
@@ -673,7 +672,7 @@ class ImportEngine:
             return {"studies": studies}
 
         else:
-            # Return as - is
+            # Return as-is
             return data
 
     async def _transform_to_screening_decisions(
@@ -792,7 +791,7 @@ class ImportEngine:
             if isinstance(year_str, int):
                 return year_str
 
-            # Extract 4 - digit year from string
+            # Extract 4-digit year from string
             year_match = re.search(r"\b(19|20)\d{2}\b", str(year_str))
             if year_match:
                 return int(year_match.group())
@@ -874,7 +873,7 @@ class ExportEngine:
 
             # Write to file if specified
             if output_file:
-                with open(output_file, "w", encoding="utf - 8") as f:
+                with open(output_file, "w", encoding="utf-8") as f:
                     f.write(output_data)
 
             # Count exported records
@@ -892,7 +891,7 @@ class ExportEngine:
                 processing_time=processing_time,
                 metadata={
                     "data_type": data_type,
-                    "file_size": len(output_data.encode("utf - 8")),
+                    "file_size": len(output_data.encode("utf-8")),
                 },
             )
 
@@ -963,7 +962,7 @@ class ExportEngine:
         lines = csv_data.split("\n")
         tsv_lines = []
         for line in lines:
-            # This is a simplified conversion - proper CSV parsing would be better
+            # This is a simplified conversion-proper CSV parsing would be better
             tsv_line = line.replace(",", "\t")
             tsv_lines.append(tsv_line)
 
@@ -1086,7 +1085,7 @@ class DataExchangeHub:
         """Import data from file"""
 
         try:
-            with open(file_path, "r", encoding="utf - 8") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 data_content = f.read()
 
             return await self.import_engine.import_data(

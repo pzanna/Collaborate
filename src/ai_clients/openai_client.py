@@ -40,7 +40,7 @@ class OpenAIClient:
 
         # Log API request details
         self.logger.info(
-            f"OpenAI API Request - Model: {self.config.model}, "
+            f"OpenAI API Request-Model: {self.config.model}, "
             f"Message length: {len(user_message)}, Estimated tokens: {estimated_tokens}, "
             f"Temperature: {self.config.temperature}, Max tokens: {self.config.max_tokens}"
         )
@@ -68,12 +68,12 @@ class OpenAIClient:
                 max_tokens=self.config.max_tokens,
             )
 
-            response_time = time.time() - start_time
+            response_time = time.time()-start_time
             response_content = response.choices[0].message.content or ""
 
             # Log successful response details
             self.logger.info(
-                f"OpenAI API Response - Success: Content length: {len(response_content)}, "
+                f"OpenAI API Response-Success: Content length: {len(response_content)}, "
                 f"Response time: {response_time:.2f}s, "
                 f"Usage: {getattr(response, 'usage', 'N / A')}"
             )
@@ -84,7 +84,7 @@ class OpenAIClient:
                 if len(response_content) > 200
                 else response_content
             )
-            # Sanitize content for single - line log entry (replace newlines and multiple spaces)
+            # Sanitize content for single-line log entry (replace newlines and multiple spaces)
             sanitized_preview = content_preview.replace("\n", " ").replace("\r", " ")
             sanitized_preview = " ".join(
                 sanitized_preview.split()
@@ -94,12 +94,12 @@ class OpenAIClient:
             return response_content
 
         except Exception as e:
-            response_time = time.time() - start_time
+            response_time = time.time()-start_time
             error_msg = f"OpenAI API error: {str(e)}"
 
             # Log error details
             self.logger.error(
-                f"OpenAI API Error - Model: {self.config.model}, "
+                f"OpenAI API Error-Model: {self.config.model}, "
                 f"Response time: {response_time:.2f}s, Error: {error_msg}"
             )
 

@@ -1,7 +1,7 @@
 """
-Intelligent Synthesis AI for Systematic Reviews - Phase 4A Implementation.
+Intelligent Synthesis AI for Systematic Reviews-Phase 4A Implementation.
 
-This module provides AI - powered evidence synthesis, meta - analysis automation,
+This module provides AI-powered evidence synthesis, meta-analysis automation,
 and intelligent summarization capabilities for systematic reviews.
 """
 
@@ -117,7 +117,7 @@ class SynthesisResult:
 
 @dataclass
 class MetaAnalysisConfig:
-    """Configuration for meta - analysis."""
+    """Configuration for meta-analysis."""
 
     method: SynthesisMethod
     effect_measure: str  # 'OR', 'RR', 'RD', 'MD', 'SMD'
@@ -133,9 +133,9 @@ class MetaAnalysisConfig:
 
 class IntelligentSynthesisEngine:
     """
-    Core engine for AI - powered evidence synthesis.
+    Core engine for AI-powered evidence synthesis.
 
-    Provides intelligent analysis, automated meta - analysis,
+    Provides intelligent analysis, automated meta-analysis,
     and sophisticated narrative synthesis capabilities.
     """
 
@@ -217,7 +217,7 @@ class IntelligentSynthesisEngine:
     async def _perform_meta_analysis(
         self, studies: List[StudyData], outcome: str, config: MetaAnalysisConfig
     ) -> SynthesisResult:
-        """Perform quantitative meta - analysis."""
+        """Perform quantitative meta-analysis."""
 
         # Extract effect sizes and standard errors
         effect_data = []
@@ -234,7 +234,7 @@ class IntelligentSynthesisEngine:
                     }
                 )
 
-        # Simulate meta - analysis calculations
+        # Simulate meta-analysis calculations
         # In production, this would use actual statistical libraries
         await asyncio.sleep(1)  # Simulate computation time
 
@@ -247,16 +247,16 @@ class IntelligentSynthesisEngine:
 
         # Calculate confidence interval
         z_score = 1.96 if config.confidence_level == 0.95 else 2.58
-        ci_lower = pooled_effect_size - z_score * pooled_se
+        ci_lower = pooled_effect_size-z_score * pooled_se
         ci_upper = pooled_effect_size + z_score * pooled_se
 
         # Calculate heterogeneity (I²)
         q_statistic = sum(
-            (d["effect_size"] - pooled_effect_size) ** 2 * d["weight"]
+            (d["effect_size"]-pooled_effect_size) ** 2 * d["weight"]
             for d in effect_data
         )
-        df = len(effect_data) - 1
-        i_squared = max(0, (q_statistic - df) / q_statistic) if q_statistic > 0 else 0
+        df = len(effect_data)-1
+        i_squared = max(0, (q_statistic-df) / q_statistic) if q_statistic > 0 else 0
 
         # Assess publication bias
         publication_bias = await self._assess_publication_bias(effect_data, config)
@@ -304,14 +304,14 @@ class IntelligentSynthesisEngine:
                 "standard_error": pooled_se,
                 "confidence_interval": [ci_lower, ci_upper],
                 "p_value": 2
-                * (1 - self._norm_cdf(abs(pooled_effect_size / pooled_se))),
+                * (1-self._norm_cdf(abs(pooled_effect_size / pooled_se))),
                 "effect_measure": config.effect_measure,
             },
             heterogeneity={
                 "i_squared": i_squared,
                 "q_statistic": q_statistic,
                 "tau_squared": (
-                    max(0, (q_statistic - df) / total_weight) if df > 0 else 0
+                    max(0, (q_statistic-df) / total_weight) if df > 0 else 0
                 ),
                 "interpretation": self._interpret_heterogeneity(i_squared),
             },
@@ -406,7 +406,7 @@ class IntelligentSynthesisEngine:
         # Extract qualitative findings
         qualitative_findings = []
         for study in studies:
-            if study.study_design.lower() in ["qualitative", "mixed - methods"]:
+            if study.study_design.lower() in ["qualitative", "mixed-methods"]:
                 findings = study.extracted_data.get("qualitative_findings", [])
                 qualitative_findings.extend(findings)
 
@@ -454,18 +454,18 @@ class IntelligentSynthesisEngine:
     async def _perform_mixed_methods_synthesis(
         self, studies: List[StudyData], outcome: str, config: MetaAnalysisConfig
     ) -> SynthesisResult:
-        """Perform mixed - methods evidence synthesis."""
+        """Perform mixed-methods evidence synthesis."""
 
         # Separate quantitative and qualitative studies
         quant_studies = [
             s
             for s in studies
-            if s.study_design.lower() in ["rct", "cohort", "case - control"]
+            if s.study_design.lower() in ["rct", "cohort", "case-control"]
         ]
         qual_studies = [
             s
             for s in studies
-            if s.study_design.lower() in ["qualitative", "mixed - methods"]
+            if s.study_design.lower() in ["qualitative", "mixed-methods"]
         ]
 
         # Perform quantitative synthesis if sufficient studies
@@ -591,7 +591,7 @@ class IntelligentSynthesisEngine:
 
             for subgroup_name, subgroup_studies in subgroups.items():
                 if len(subgroup_studies) >= 2:  # Minimum for analysis
-                    # Simulate subgroup meta - analysis
+                    # Simulate subgroup meta-analysis
                     effect_size = np.random.uniform(-0.5, 0.5)
                     se = np.random.uniform(0.1, 0.3)
 
@@ -599,10 +599,10 @@ class IntelligentSynthesisEngine:
                         "studies": len(subgroup_studies),
                         "effect_size": effect_size,
                         "confidence_interval": [
-                            effect_size - 1.96 * se,
+                            effect_size-1.96 * se,
                             effect_size + 1.96 * se,
                         ],
-                        "p_value": 2 * (1 - self._norm_cdf(abs(effect_size / se))),
+                        "p_value": 2 * (1-self._norm_cdf(abs(effect_size / se))),
                     }
 
             # Test for subgroup differences
@@ -622,7 +622,7 @@ class IntelligentSynthesisEngine:
         """Perform sensitivity analyses."""
         sensitivity_results = []
 
-        # Leave - one - out analysis
+        # Leave-one-out analysis
         sensitivity_results.append(
             {
                 "type": "leave_one_out",
@@ -636,7 +636,7 @@ class IntelligentSynthesisEngine:
             }
         )
 
-        # Quality - based sensitivity
+        # Quality-based sensitivity
         high_quality_studies = [
             s for s in studies if s.quality_assessment.get("overall_score", 0) > 0.7
         ]
@@ -644,7 +644,7 @@ class IntelligentSynthesisEngine:
             sensitivity_results.append(
                 {
                     "type": "high_quality_only",
-                    "description": "Analysis restricted to high - quality studies",
+                    "description": "Analysis restricted to high-quality studies",
                     "results": {
                         "studies_included": len(high_quality_studies),
                         "effect_size": np.random.uniform(-0.4, 0.4),
@@ -860,9 +860,9 @@ class IntelligentSynthesisEngine:
         qual_results: Optional[SynthesisResult],
         integrated_findings: Dict,
     ) -> str:
-        """Generate mixed - methods synthesis narrative."""
+        """Generate mixed-methods synthesis narrative."""
         return (
-            "Mixed - methods synthesis combining quantitative and qualitative evidence."
+            "mixed-methods synthesis combining quantitative and qualitative evidence."
         )
 
     async def _assess_mixed_methods_certainty(
@@ -870,19 +870,19 @@ class IntelligentSynthesisEngine:
         quant_results: Optional[SynthesisResult],
         qual_results: Optional[SynthesisResult],
     ) -> EvidenceQuality:
-        """Assess overall certainty for mixed - methods synthesis."""
+        """Assess overall certainty for mixed-methods synthesis."""
         return EvidenceQuality.MODERATE
 
     async def _assess_mixed_methods_quality(
         self, studies: List[StudyData]
     ) -> Dict[str, Any]:
-        """Assess quality across mixed - methods studies."""
+        """Assess quality across mixed-methods studies."""
         return {"overall_quality": "moderate", "integration_quality": "good"}
 
     async def _generate_mixed_methods_recommendations(
         self, integrated_findings: Dict
     ) -> List[str]:
-        """Generate recommendations from mixed - methods synthesis."""
+        """Generate recommendations from mixed-methods synthesis."""
         return [
             "Implement intervention with attention to both effectiveness and acceptability"
         ]
@@ -892,7 +892,7 @@ class IntelligentSynthesisEngine:
         quant_results: Optional[SynthesisResult],
         qual_results: Optional[SynthesisResult],
     ) -> List[str]:
-        """Identify limitations of mixed - methods synthesis."""
+        """Identify limitations of mixed-methods synthesis."""
         return ["Challenges in integrating different types of evidence"]
 
     def _group_studies_for_narrative(self, studies: List[StudyData]) -> Dict[str, Any]:
@@ -952,7 +952,7 @@ class IntelligentSynthesisEngine:
         n_studies: int,
         certainty: EvidenceQuality,
     ) -> str:
-        """Generate narrative summary for meta - analysis."""
+        """Generate narrative summary for meta-analysis."""
 
         direction = (
             "beneficial" if effect_size > 0 else "harmful" if effect_size < 0 else "no"
@@ -964,7 +964,7 @@ class IntelligentSynthesisEngine:
         )
 
         narrative = f"""
-        This meta - analysis of {n_studies} studies found a {magnitude} {direction} effect
+        This meta-analysis of {n_studies} studies found a {magnitude} {direction} effect
         (effect size: {effect_size:.3f}, 95% CI: {ci_lower:.3f} to {ci_upper:.3f}).
 
         Statistical heterogeneity was {self._interpret_heterogeneity(i_squared).lower()}
@@ -978,7 +978,7 @@ class IntelligentSynthesisEngine:
     async def _generate_recommendations(
         self, effect_size: float, certainty: EvidenceQuality, effect_measure: str
     ) -> List[str]:
-        """Generate evidence - based recommendations."""
+        """Generate evidence-based recommendations."""
         recommendations = []
 
         if certainty in [EvidenceQuality.HIGH, EvidenceQuality.MODERATE]:
@@ -996,7 +996,7 @@ class IntelligentSynthesisEngine:
                 )
         else:
             recommendations.append(
-                "More high - quality research is needed before making recommendations"
+                "More high-quality research is needed before making recommendations"
             )
 
         return recommendations
@@ -1004,7 +1004,7 @@ class IntelligentSynthesisEngine:
     async def _identify_limitations(
         self, studies: List[StudyData], i_squared: float, publication_bias: Dict
     ) -> List[str]:
-        """Identify limitations of the meta - analysis."""
+        """Identify limitations of the meta-analysis."""
         limitations = []
 
         if len(studies) < 10:
@@ -1079,14 +1079,14 @@ async def demonstrate_intelligent_synthesis():
             title=f"Sample Study {i + 1}: Effect of Intervention on Primary Outcome",
             authors=[f"Author{j}" for j in range(3, 6)],
             year=2020 + i % 4,
-            study_design=["RCT", "Cohort", "Case - Control"][i % 3],
+            study_design=["RCT", "Cohort", "case-control"][i % 3],
             population={"type": "Adults", "size": 100 + i * 50, "age_range": [18, 65]},
             intervention={"type": "Intervention A", "duration": "12 weeks"},
             comparator={"type": "Placebo", "description": "Standard care"},
             outcomes={
                 "primary_outcome": {
                     "name": "Efficacy Score",
-                    "measurement": "Continuous scale 0 - 100",
+                    "measurement": "Continuous scale 0-100",
                 }
             },
             results={
@@ -1113,8 +1113,8 @@ async def demonstrate_intelligent_synthesis():
     print(f"   Created {len(studies)} sample studies")
     print(f"   Study designs: {Counter(s.study_design for s in studies)}")
 
-    # Configure meta - analysis
-    print("\n⚙️ Configuring meta - analysis parameters...")
+    # Configure meta-analysis
+    print("\n⚙️ Configuring meta-analysis parameters...")
 
     meta_config = MetaAnalysisConfig(
         method=SynthesisMethod.RANDOM_EFFECTS,
@@ -1131,7 +1131,7 @@ async def demonstrate_intelligent_synthesis():
     print(f"   Effect measure: {meta_config.effect_measure}")
     print(f"   Minimum studies: {meta_config.min_studies}")
 
-    # Perform meta - analysis
+    # Perform meta-analysis
     print("\n📊 Performing quantitative meta-analysis...")
 
     meta_result = await engine.synthesize_evidence(

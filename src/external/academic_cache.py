@@ -138,7 +138,7 @@ class AcademicCacheManager:
             **kwargs: Additional parameters affecting search results
 
         Returns:
-            str: SHA - 256 hash as cache key
+            str: SHA-256 hash as cache key
         """
         # Create consistent cache key from all parameters
         cache_data = {
@@ -263,7 +263,7 @@ class AcademicCacheManager:
                     ),
                 )
 
-                # Also cache individual papers for cross - referencing
+                # Also cache individual papers for cross-referencing
                 await self._cache_individual_papers(cursor, results, database_source)
 
                 conn.commit()
@@ -281,7 +281,7 @@ class AcademicCacheManager:
         results: List[Dict[str, Any]],
         database_source: Optional[str],
     ) -> None:
-        """Cache individual papers for cross - referencing."""
+        """Cache individual papers for cross-referencing."""
         for result in results:
             try:
                 # Generate paper ID
@@ -419,7 +419,7 @@ class AcademicCacheManager:
 
         Args:
             title: Paper title to find similar papers for
-            threshold: Similarity threshold (not implemented - placeholder)
+            threshold: Similarity threshold (not implemented-placeholder)
 
         Returns:
             List[Dict[str, Any]]: Similar papers found in cache
@@ -429,7 +429,7 @@ class AcademicCacheManager:
             with sqlite3.connect(self.cache_db_path) as conn:
                 cursor = conn.cursor()
 
-                # Simple keyword - based matching (could be enhanced with proper similarity algorithms)
+                # Simple keyword-based matching (could be enhanced with proper similarity algorithms)
                 set(title.lower().split())
 
                 cursor.execute(

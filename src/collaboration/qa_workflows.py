@@ -12,8 +12,7 @@ Key Features:
 - Multi - stage QA workflows
 - Inter - rater reliability calculations
 - Consensus measurement and improvement
-- Expert reviewer validation
-- Quality metrics dashboard
+- Expert reviewer validation-Quality metrics dashboard
 
 Author: Eunice AI System
 Date: 2024
@@ -53,9 +52,9 @@ class ConsensusLevel(Enum):
     """Levels of consensus between reviewers"""
 
     PERFECT = "perfect"  # 100% agreement
-    HIGH = "high"  # 90 - 99% agreement
-    MODERATE = "moderate"  # 70 - 89% agreement
-    LOW = "low"  # 50 - 69% agreement
+    HIGH = "high"  # 90-99% agreement
+    MODERATE = "moderate"  # 70-89% agreement
+    LOW = "low"  # 50-69% agreement
     POOR = "poor"  # <50% agreement
 
 
@@ -187,8 +186,8 @@ class CollaborativeQAWorkflows:
     - Multi - stage QA workflow orchestration
     - Automated reviewer assignments
     - Consensus measurement and improvement
-    - Expert validation processes
-    - Quality metrics tracking and reporting
+   -Expert validation processes
+   -Quality metrics tracking and reporting
     """
 
     def __init__(self, db_path: str = "data / eunice.db"):
@@ -514,7 +513,7 @@ class CollaborativeQAWorkflows:
             # Update assignment status
             await self._update_assignment_status(assignment_id, "completed")
 
-            # Check for consensus and auto - advance
+            # Check for consensus and auto-advance
             await self._check_stage_consensus(
                 assignment.workflow_id, assignment.stage, assignment.study_id
             )
@@ -584,7 +583,7 @@ class CollaborativeQAWorkflows:
                         mean_value = statistics.mean(values)
                         tolerance = abs(mean_value * 0.1) if mean_value != 0 else 0.1
                         agreement_count = sum(
-                            1 for v in values if abs(v - mean_value) <= tolerance
+                            1 for v in values if abs(v-mean_value) <= tolerance
                         )
                         agreement_ratio = agreement_count / len(values)
 
@@ -756,7 +755,7 @@ class CollaborativeQAWorkflows:
         try:
             metrics = {}
 
-            # Calculate inter - rater reliability
+            # Calculate inter-rater reliability
             irr_metric = await self._calculate_inter_rater_reliability(project_id)
             metrics["inter_rater_reliability"] = irr_metric
 
@@ -829,7 +828,7 @@ class CollaborativeQAWorkflows:
     async def _calculate_kappa_score(
         self, submissions: List[QASubmission]
     ) -> Optional[float]:
-        """Calculate inter - rater agreement using Cohen's Kappa"""
+        """Calculate inter-rater agreement using Cohen's Kappa"""
         try:
             # Simplified kappa calculation for demonstration
             # In production, would use more sophisticated statistical methods
@@ -875,7 +874,7 @@ class CollaborativeQAWorkflows:
     async def _check_stage_consensus(
         self, workflow_id: str, stage: QAStage, study_id: str
     ):
-        """Check if consensus is reached for auto - advancing stage"""
+        """Check if consensus is reached for auto-advancing stage"""
         try:
             # Get workflow configuration
             workflow = await self._get_workflow(workflow_id)
@@ -894,12 +893,12 @@ class CollaborativeQAWorkflows:
                 consensus_score = await self._calculate_simple_consensus(submissions)
 
                 if consensus_score >= threshold:
-                    # Auto - advance to next stage if configured
+                    # Auto-advance to next stage if configured
                     auto_advance = workflow.auto_advance_conditions.get(stage, {})
                     if auto_advance.get("auto_advance", False):
                         await self._advance_workflow_stage(study_id, stage)
                         logger.info(
-                            f"Auto - advanced study {study_id} from stage {stage.value}"
+                            f"Auto-advanced study {study_id} from stage {stage.value}"
                         )
 
         except Exception as e:
@@ -1323,7 +1322,7 @@ class CollaborativeQAWorkflows:
 
     # Metrics calculation methods
     async def _calculate_inter_rater_reliability(self, project_id: str) -> float:
-        """Calculate inter - rater reliability for project"""
+        """Calculate inter-rater reliability for project"""
         # Placeholder for IRR calculation
         return 0.82
 

@@ -97,14 +97,14 @@ class AcademicSearchResponse(BaseModel):
                             "metadata": {
                                 "authors": ["Smith, J.", "Doe, A."],
                                 "journal": "Nature Medicine",
-                                "publication_date": "2023 - 01 - 15T00:00:00Z",
+                                "publication_date": "2023 - 01-15T00:00:00Z",
                                 "pmid": "12345678",
                                 "citation_count": 150,
                             },
                         }
                     ]
                 },
-                "search_timestamp": "2025 - 01 - 20T10:30:00Z",
+                "search_timestamp": "2025 - 01-20T10:30:00Z",
                 "cache_used": False,
             }
         }
@@ -177,6 +177,6 @@ class AcademicSourcesResponse(BaseModel):
                 },
                 "total_sources": 3,
                 "ssl_verification": "enabled",
-                "last_updated": "2025 - 07 - 24T12:00:00.000000Z",
+                "last_updated": "2025 - 07-24T12:00:00.000000Z",
             }
         }

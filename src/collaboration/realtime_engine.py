@@ -1,18 +1,17 @@
 """
-Real - time Collaboration Engine for Eunice Systematic Review Platform
+real-time Collaboration Engine for Eunice Systematic Review Platform
 
-This module provides WebSocket - based real - time collaboration features including:
+This module provides WebSocket - based real-time collaboration features including:
 - Live multi - user screening workflows
-- Real - time evidence table editing
+- real-time evidence table editing
 - Live progress tracking across teams
 - Collaborative annotation and chat systems
 
 Key Features:
 - WebSocket connection management for multiple users
-- Real - time synchronization of screening decisions
+- real-time synchronization of screening decisions
 - Live progress updates and notifications
-- Collaborative editing with conflict resolution
-- Real - time chat and annotation system
+- Collaborative editing with conflict resolution-real-time chat and annotation system
 
 Author: Eunice AI System
 Date: 2024
@@ -37,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 class EventType(Enum):
-    """Types of real - time collaboration events"""
+    """Types of real-time collaboration events"""
 
     SCREENING_UPDATE = "screening_update"
     EVIDENCE_EDIT = "evidence_edit"
@@ -63,7 +62,7 @@ class UserRole(Enum):
 
 @dataclass
 class CollaborationEvent:
-    """Real - time collaboration event structure"""
+    """real-time collaboration event structure"""
 
     event_id: str
     event_type: EventType
@@ -103,7 +102,7 @@ class ScreeningDecision:
 
 @dataclass
 class ProgressMetrics:
-    """Real - time progress tracking metrics"""
+    """real-time progress tracking metrics"""
 
     project_id: str
     total_studies: int
@@ -119,14 +118,14 @@ class ProgressMetrics:
 
 class RealtimeCollaborationEngine:
     """
-    Core engine for real - time collaboration in systematic reviews
+    Core engine for real-time collaboration in systematic reviews
 
     Features:
     - WebSocket connection management
-    - Real - time event broadcasting
+    - real-time event broadcasting
     - User session management
-    - Live progress tracking
-    - Collaborative screening workflows
+   -Live progress tracking
+   -Collaborative screening workflows
     """
 
     def __init__(self, db_path: str = "data / eunice.db", port: int = 8765):
@@ -145,7 +144,7 @@ class RealtimeCollaborationEngine:
         # Register default event handlers
         self._register_default_handlers()
 
-        logger.info("Real - time Collaboration Engine initialized")
+        logger.info("real-time Collaboration Engine initialized")
 
     def _init_database(self):
         """Initialize collaboration database tables"""
@@ -235,13 +234,13 @@ class RealtimeCollaborationEngine:
         self.register_event_handler(EventType.USER_LEAVE, self._handle_user_leave)
 
     async def start_server(self):
-        """Start the WebSocket server for real - time collaboration"""
+        """Start the WebSocket server for real-time collaboration"""
         try:
             self.server = await websockets.serve(
                 self._handle_websocket_connection, "localhost", self.port
             )
             self.running = True
-            logger.info(f"Real - time collaboration server started on port {self.port}")
+            logger.info(f"real-time collaboration server started on port {self.port}")
 
             # Keep server running
             await self.server.wait_closed()
@@ -256,7 +255,7 @@ class RealtimeCollaborationEngine:
             self.server.close()
             await self.server.wait_closed()
             self.running = False
-            logger.info("Real - time collaboration server stopped")
+            logger.info("real-time collaboration server stopped")
 
     async def _handle_websocket_connection(self, websocket):
         """Handle new WebSocket connections"""
@@ -697,7 +696,7 @@ class RealtimeCollaborationEngine:
         return users
 
     async def get_progress_metrics(self, project_id: str) -> Optional[ProgressMetrics]:
-        """Get real - time progress metrics for project"""
+        """Get real-time progress metrics for project"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -733,7 +732,7 @@ class RealtimeCollaborationEngine:
                     screening_rate = recent_decisions  # decisions per hour
 
                     # Estimate completion
-                    remaining = total - screened
+                    remaining = total-screened
                     hours_remaining = (
                         remaining / max(screening_rate, 1) if screening_rate > 0 else 0
                     )

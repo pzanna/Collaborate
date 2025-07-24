@@ -313,7 +313,7 @@ class ParallelismCoordinator:
             if fanout_info and fanout_info["is_complete"]:
                 # Execution completed successfully
                 end_time = asyncio.get_event_loop().time()
-                end_time - start_time
+                end_time-start_time
 
                 self.logger.info(f"Parallel execution completed for {task_id}")
 
@@ -357,7 +357,7 @@ class ParallelismCoordinator:
                 return True
 
             # Check timeout
-            elapsed = asyncio.get_event_loop().time() - start_time
+            elapsed = asyncio.get_event_loop().time()-start_time
             if elapsed > timeout:
                 self.logger.warning(f"Parallel execution timeout for {task_id}")
                 return False
@@ -382,7 +382,7 @@ class ParallelismCoordinator:
         fanout_info = await self.fanout_manager.get_fanout_task_info(task_id)
 
         current_time = asyncio.get_event_loop().time()
-        elapsed_time = current_time - execution.created_at
+        elapsed_time = current_time-execution.created_at
 
         return {
             "task_id": task_id,
