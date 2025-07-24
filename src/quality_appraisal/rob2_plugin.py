@@ -1,35 +1,39 @@
 """
 RoB 2 (Risk of Bias tool for randomized trials) plugin.
 
-This plugin implements the RoB 2 tool for assessing risk of bias 
+This plugin implements the RoB 2 tool for assessing risk of bias
 in randomized controlled trials.
 
-Reference: Sterne et al. (2019). RoB 2: a revised tool for assessing risk of bias 
+Reference: Sterne et al. (2019). RoB 2: a revised tool for assessing risk of bias
 in randomised trials. BMJ, 366, l4898.
 """
 
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
 from ..quality_appraisal.plugin_architecture import (
-    BaseAIQualityPlugin, 
-    AssessmentDomain, 
+    AssessmentDomain,
+    BaseAIQualityPlugin,
     BiasLevel,
-    QualityAssessment
+    QualityAssessment,
 )
 
 
 class Rob2Plugin(BaseAIQualityPlugin):
     """RoB 2 assessment plugin for randomized controlled trials."""
-    
+
     @property
     def tool_id(self) -> str:
+        """TODO: Add docstring for tool_id."""
         return "rob2"
-    
+
     @property
     def tool_name(self) -> str:
+        """TODO: Add docstring for tool_name."""
         return "RoB 2 (Risk of Bias tool for randomized trials)"
-    
+
     @property
     def applicable_study_types(self) -> List[str]:
+        """TODO: Add docstring for applicable_study_types."""
         return [
             "randomized controlled trial",
             "rct",
@@ -39,19 +43,20 @@ class Rob2Plugin(BaseAIQualityPlugin):
             "clinical trial",
             "parallel group trial",
             "crossover trial",
-            "cluster randomized trial"
+            "cluster randomized trial",
         ]
-    
-    @property 
+
+    @property
     def assessment_domains(self) -> List[AssessmentDomain]:
+        """TODO: Add docstring for assessment_domains."""
         return [
             AssessmentDomain.RANDOMIZATION,
             AssessmentDomain.DEVIATION_INTENDED,
             AssessmentDomain.MISSING_OUTCOME_DATA,
             AssessmentDomain.MEASUREMENT_OUTCOME_ROB2,
-            AssessmentDomain.SELECTION_REPORTED_ROB2
+            AssessmentDomain.SELECTION_REPORTED_ROB2,
         ]
-    
+
     def _build_assessment_prompt(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> str:
         """Build RoB 2 assessment prompt."""
         return f"""
@@ -73,7 +78,7 @@ FULL TEXT (if available):
 
 INTERVENTION AND COMPARISON:
 Intervention: {criteria.get('intervention', 'Not specified')}
-Control/Comparison: {criteria.get('comparison', 'Not specified')}
+Control / Comparison: {criteria.get('comparison', 'Not specified')}
 Population: {criteria.get('population', 'Not specified')}
 Primary Outcome: {criteria.get('outcomes', ['Not specified'])[0] if criteria.get('outcomes') else 'Not specified'}
 All Outcomes: {', '.join(criteria.get('outcomes', []))}
@@ -86,7 +91,7 @@ Please assess each domain for risk of bias. For each domain, consider the signal
    - Was the allocation sequence random?
    - Was the allocation sequence concealed until participants were enrolled and assigned?
    - Were baseline differences between groups suggestive of problems with randomization?
-   
+
    Consider: sequence generation, allocation concealment, baseline balance
 
 2. BIAS DUE TO DEVIATIONS FROM INTENDED INTERVENTIONS (effect of assignment to intervention)
@@ -97,8 +102,8 @@ Please assess each domain for risk of bias. For each domain, consider the signal
    - Were these deviations likely to have affected the outcome?
    - Were these deviations from intended intervention balanced between groups?
    - Was the analysis appropriate for the study's intended effect?
-   
-   Consider: blinding, protocol deviations, intention-to-treat analysis
+
+   Consider: blinding, protocol deviations, intention - to - treat analysis
 
 3. BIAS DUE TO MISSING OUTCOME DATA
    Signaling questions:
@@ -106,7 +111,7 @@ Please assess each domain for risk of bias. For each domain, consider the signal
    - Is there evidence that result was not biased by missing outcome data?
    - Could missingness in the outcome depend on its true value?
    - Is it likely that missingness in the outcome depended on its true value?
-   
+
    Consider: completeness of data, reasons for missing data, methods for handling missing data
 
 4. BIAS IN MEASUREMENT OF THE OUTCOME
@@ -115,20 +120,20 @@ Please assess each domain for risk of bias. For each domain, consider the signal
    - Could measurement or ascertainment of outcome have differed between groups?
    - Were outcome assessors aware of the intervention received by study participants?
    - Could assessment of the outcome have been influenced by knowledge of intervention received?
-   
+
    Consider: outcome measurement methods, blinding of outcome assessors
 
 5. BIAS IN SELECTION OF THE REPORTED RESULT
    Signaling questions:
-   - Were outcome measurements/analyses clearly pre-specified?
+   - Were outcome measurements / analyses clearly pre - specified?
    - Is the numerical result being assessed likely to have been selected based on the results?
    - Is the reported effect estimate likely to be selected based on the results?
-   
+
    Consider: protocol registration, selective reporting, multiple analyses
 
 RISK OF BIAS LEVELS:
 - Low: Low risk of bias
-- Some concerns: Some concerns about risk of bias  
+- Some concerns: Some concerns about risk of bias
 - High: High risk of bias
 
 OVERALL RISK OF BIAS:
@@ -136,7 +141,7 @@ The overall risk of bias is the highest level assigned to any domain.
 
 Please provide your assessment in JSON format:
 {{
-    "overall_bias": "low|moderate|serious", 
+    "overall_bias": "low|moderate|serious",
     "overall_rationale": "Detailed explanation of overall assessment with reference to domain judgments",
     "domains": [
         {{
@@ -144,42 +149,42 @@ Please provide your assessment in JSON format:
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0-1.0
+            "confidence": 0.0 - 1.0
         }},
         {{
-            "domain": "deviation_intended", 
+            "domain": "deviation_intended",
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0-1.0
+            "confidence": 0.0 - 1.0
         }},
         {{
             "domain": "missing_outcome_data",
-            "bias_level": "low|moderate|serious", 
+            "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0-1.0
+            "confidence": 0.0 - 1.0
         }},
         {{
             "domain": "measurement_outcome_rob2",
             "bias_level": "low|moderate|serious",
-            "rationale": "Detailed reasoning addressing signaling questions", 
+            "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0-1.0
+            "confidence": 0.0 - 1.0
         }},
         {{
             "domain": "selection_reported_rob2",
             "bias_level": "low|moderate|serious",
             "rationale": "Detailed reasoning addressing signaling questions",
             "supporting_evidence": ["specific quotes or findings from study"],
-            "confidence": 0.0-1.0
+            "confidence": 0.0 - 1.0
         }}
     ]
 }}
 
 Note: Use "moderate" for RoB 2's "some concerns" category, and "serious" for "high risk".
 """
-    
+
     def _get_system_prompt(self) -> str:
         """Get system prompt for RoB 2 assessment."""
         return """
@@ -189,7 +194,7 @@ RoB 2 is used to assess risk of bias in randomized controlled trials.
 Guidelines for assessment:
 1. Address each signaling question systematically
 2. Overall risk of bias is determined by the highest risk domain
-3. Use the three-level scale: Low risk, Some concerns (moderate), High risk (serious)
+3. Use the three - level scale: Low risk, Some concerns (moderate), High risk (serious)
 4. Base assessments on reported information in the study
 5. Consider the specific outcome being assessed
 6. Provide specific evidence from the study text to support judgments
@@ -201,7 +206,7 @@ Key principles:
 
 Focus on:
 - Quality of randomization process and allocation concealment
-- Blinding and adherence to intended interventions  
+- Blinding and adherence to intended interventions
 - Completeness of outcome data and appropriate analysis
 - Appropriate outcome measurement and assessment
 - Evidence of selective outcome reporting

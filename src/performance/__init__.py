@@ -2,7 +2,7 @@
 Performance & Scalability Package
 =================================
 
-Enterprise-grade performance optimization and scalability enhancements
+Enterprise - grade performance optimization and scalability enhancements
 for systematic review automation.
 
 This package provides:
@@ -16,60 +16,54 @@ Author: Eunice AI System
 Date: July 2025
 """
 
-from .parallel_processor import (
-    ParallelProcessor,
-    TaskBatch,
-    ProcessingStrategy,
-    ParallelConfig
-)
-
 from .cache_manager import (
+    CacheConfig,
     CacheManager,
     CacheStrategy,
-    CacheConfig,
     MemoryCache,
-    RedisCache
+    RedisCache,
 )
-
 from .db_optimizer import (
+    ConnectionPool,
     DatabaseOptimizer,
-    QueryOptimizer,
     IndexManager,
-    ConnectionPool
+    QueryOptimizer,
 )
-
+from .parallel_processor import (
+    ParallelConfig,
+    ParallelProcessor,
+    ProcessingStrategy,
+    TaskBatch,
+)
 from .resource_monitor import (
-    ResourceMonitor,
     PerformanceProfiler,
+    PerformanceReport,
+    ResourceMonitor,
     SystemMetrics,
-    PerformanceReport
 )
 
 __all__ = [
     # Parallel processing
-    'ParallelProcessor',
-    'TaskBatch',
-    'ProcessingStrategy',
-    'ParallelConfig',
-    
+    "ParallelProcessor",
+    "TaskBatch",
+    "ProcessingStrategy",
+    "ParallelConfig",
     # Cache management
-    'CacheManager',
-    'CacheStrategy',
-    'CacheConfig',
-    'MemoryCache',
-    'RedisCache',
-    
+    "CacheManager",
+    "CacheStrategy",
+    "CacheConfig",
+    "MemoryCache",
+    "RedisCache",
     # Database optimization
-    'DatabaseOptimizer',
-    'QueryOptimizer',
-    'IndexManager',
-    'ConnectionPool',
-    
+    "DatabaseOptimizer",
+    "QueryOptimizer",
+    "IndexManager",
+    "ConnectionPool",
     # Resource monitoring
-    'ResourceMonitor',
-    'PerformanceProfiler',
-    'SystemMetrics',
-    'PerformanceReport'
+    "ResourceMonitor",
+    "PerformanceProfiler",
+    "SystemMetrics",
+    "PerformanceReport",
 ]
 
 # Package metadata

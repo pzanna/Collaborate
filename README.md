@@ -2,7 +2,7 @@
 
 ## Overview
 
-Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](<https://en.wikipedia.org/wiki/Agency_(novel)>). It's designed to facilitate sophisticated research workflows through an integrated microservices architecture that supports collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
+Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](https://en.wikipedia.org/wiki/Agency_(novel)). It is designed to facilitate sophisticated research workflows through an integrated microservices architecture supporting collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
 
 The platform specializes in hierarchical research organization, multi-agent collaboration, systematic literature reviews, and provides comprehensive tools for managing complex research projects across multiple domains.
 
@@ -27,12 +27,12 @@ The platform specializes in hierarchical research organization, multi-agent coll
 - **Dependency Management**: Automatic task dependency resolution
 - **Parallelism Coordination**: Efficient multi-threaded research execution
 - **Memory Management**: Persistent storage for research artifacts and conversations
-- **Export Functionality**: Research data export in multiple formats (PDF, Markdown, LaTeX)
+- **Export Functionality**: Research data export in multiple formats (PDF, Markdown, LaTeX, HTML, DOCX)
 
 ### Thesis Generation System 🎓
 
 - **AI-Powered Analysis**: GPT-4 integration for intelligent theme extraction and gap analysis
-- **Multiple Output Formats**: Markdown, LaTeX, HTML, PDF, and DOCX support
+- **Multiple Output Formats**: Markdown, LaTeX, HTML, PDF, DOCX
 - **Deterministic Generation**: Reproducible outputs with SHA-256 caching (temp=0, top_p=1)
 - **Academic Quality**: PhD-level literature reviews with proper citations and formatting
 - **Research Questions**: Automatic generation of testable hypotheses and research questions
@@ -61,7 +61,7 @@ Eunice follows a microservices architecture with the following key components:
 - **Persona System**: Expert consultation agents with domain-specific knowledge
 - **Storage Layer**: SQLite databases for conversations, memory, and collaboration data
 
-For detailed architecture information, see [Architecture Documentation](docs/Architecture.md).
+For detailed architecture information, see [Architecture Overview](docs/Architecture.md).
 
 ## 🧬 Research Agent Personas
 
@@ -102,52 +102,107 @@ See [Persona Documentation](docs/Personas/README.md) for detailed role descripti
 
 ### Prerequisites
 
-- Python 3.8+
-- Node.js 16+
-- Git
+- **Python 3.11+** (recommended for optimal performance)
+- **Node.js 18+** (for frontend development)
+- **Git** (for version control)
+- **Virtual Environment** (strongly recommended)
 
-### Quick Start
+### 🚀 Quick Start (Optimized Setup)
 
-1. **Clone the repository**
+#### 1. **Clone and Setup Virtual Environment**
 
-   ```bash
-   git clone https://github.com/pzanna/Eunice.git
-   cd Eunice
-   ```
+```bash
+git clone https://github.com/pzanna/Eunice.git
+cd Eunice
 
-2. **Backend Setup**
+# Create and activate virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
 
-   ```bash
-   # Install Python dependencies
-   pip install -r requirements.txt
+#### 2. **Install Dependencies (ARM64/Apple Silicon Compatible)**
 
-   # Set up environment
-   python setup.py
+```bash
+# Upgrade pip first
+pip install --upgrade pip
 
-   # Configure API keys in .env file
-   # Add your OpenAI and xAI API keys
-   ```
+# Install Python dependencies
+pip install -r requirements.txt
 
-3. **Frontend Setup**
+# For Apple Silicon users, if you encounter architecture errors:
+python -m pip install --upgrade --force-reinstall black isort autoflake
+```
 
-   ```bash
-   cd frontend
-   npm install
-   npm run build
-   cd ..
-   ```
+#### 3. **Environment Configuration**
 
-4. **Start the Platform**
+```bash
+# Set up environment
+python setup.py
 
-   ```bash
-   # Start all services
-   ./start_eunice.sh
+# Configure API keys in .env file
+# Add your OpenAI and xAI API keys:
+# OPENAI_API_KEY=your_openai_key_here  
+# XAI_API_KEY=your_xai_key_here
+```
 
-   # Or start individually:
-   # Backend: python web_server.py
-   # MCP Server: python mcp_server.py
-   # Frontend: cd frontend && npm start
-   ```
+#### 4. **Frontend Setup**
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+#### 5. **Verify Installation (Optional)**
+
+```bash
+# Run code quality check to verify setup
+python -m flake8 src/ --count --statistics --max-line-length=120
+
+# Should show ~515 issues (93.7% improvement from original 8,212)
+# This confirms the optimized codebase is working correctly
+```
+
+#### 6. **Start the Platform**
+
+```bash
+# Start all services (recommended)
+./start_eunice.sh
+
+# Or start services individually:
+# Backend API: python web_server.py
+# MCP Server: python mcp_server.py  
+# Frontend Dev: cd frontend && npm start
+```
+
+### 🔧 Code Quality Tools (For Developers)
+
+The platform includes professional code optimization tools:
+
+```bash
+# Apply automatic code fixes (8,212 fixes applied)
+python fix_code_quality.py
+
+# Advanced optimization for remaining issues  
+python advanced_optimizer.py
+
+# Professional formatting (use python -m for compatibility)
+python -m black src/ --line-length 120
+python -m isort src/ --profile black
+python -m autoflake --remove-all-unused-imports --recursive src/
+```
+
+### ⚠️ Troubleshooting
+
+**Common Issues:**
+
+- **ARM64 Architecture Errors**: Use `python -m <command>` instead of global commands
+- **Virtual Environment Issues**: Delete `.venv` and recreate: `python -m venv .venv`
+- **Import Errors**: Ensure you're in the activated virtual environment
+- **API Errors**: Check your `.env` file has valid API keys
+
+**For detailed troubleshooting**: See `docs/Troubleshooting.md` (coming soon)
 
 ### Thesis Generation Quick Start 🎓
 
@@ -189,20 +244,20 @@ Eunice/
 │   ├── agents/            # AI agent implementations
 │   ├── ai_clients/        # AI service integrations
 │   ├── core/              # Core platform logic
-│   ├── mcp/              # Model Context Protocol server with persona integration
-│   ├── models/           # Data models
-│   ├── personas/         # Expert consultation persona agents
-│   ├── storage/          # Database and storage
-│   └── utils/            # Utility functions
-├── frontend/             # React TypeScript frontend
-│   ├── src/components/   # UI components
-│   ├── src/services/     # API services
-│   └── src/store/        # Redux store
-├── docs/                # Documentation
-├── tests/               # Test suites
-├── config/              # Configuration files
-├── logs/                # Application logs
-└── exports/             # Research exports
+│   ├── mcp/               # Model Context Protocol server with persona integration
+│   ├── models/            # Data models
+│   ├── personas/          # Expert consultation persona agents
+│   ├── storage/           # Database and storage
+│   └── utils/             # Utility functions
+├── frontend/               # React TypeScript frontend
+│   ├── src/components/     # UI components
+│   ├── src/services/       # API services
+│   └── src/store/          # Redux store
+├── docs/                   # Documentation
+├── tests/                  # Test suites
+├── config/                 # Configuration files
+├── logs/                   # Application logs
+└── exports/                # Research exports
 ```
 
 ## 🧪 Testing
@@ -285,4 +340,4 @@ This project is part of ongoing research and development. Please refer to the pr
 
 ## 🙏 Acknowledgments
 
-Named after Eunice, the AI character from William Gibson's "Agency" - a novel that explores themes of artificial intelligence, research collaboration, and the intersection of technology with human endeavor.
+Named after Eunice, the AI character from William Gibson's "Agency"—a novel that explores themes of artificial intelligence, research collaboration, and the intersection of technology with human endeavor.

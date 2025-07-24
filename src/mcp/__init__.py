@@ -8,14 +8,8 @@ research agents in the Eunice AI system.
 __version__ = "1.0.0"
 __author__ = "Paul"
 
-from .protocols import ResearchAction, AgentResponse, TaskStatus
 from .client import MCPClient
+from .protocols import AgentResponse, ResearchAction, TaskStatus
 from .server import MCPServer
 
-__all__ = [
-    'ResearchAction',
-    'AgentResponse', 
-    'TaskStatus',
-    'MCPClient',
-    'MCPServer'
-]
+__all__ = ["ResearchAction", "AgentResponse", "TaskStatus", "MCPClient", "MCPServer"]

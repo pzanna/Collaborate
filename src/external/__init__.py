@@ -8,98 +8,95 @@ Components:
 - database_connectors.py: API connectors for major research databases
 - citation_managers.py: Integration with reference management systems
 - research_tools.py: Compatibility with external research tools
-- data_hub.py: Standardized data import/export functionality
+- data_hub.py: Standardized data import / export functionality
 
 Author: Eunice AI System
 Date: July 2025
 """
 
-# Database connectors
-from .database_connectors import (
-    DatabaseConnector,
-    PubMedConnector,
-    CochraneConnector,
-    ArxivConnector,
-    DatabaseManager,
-    ExternalSearchResult,
-    DatabaseSearchQuery
-)
-
 # Citation managers
 from .citation_managers import (
-    CitationManager,
-    ZoteroIntegration,
-    MendeleyConnector,
-    EndNoteCompatibility,
     BibTeXManager,
     CitationFormat,
-    ReferenceLibrary
-)
-
-# Research tools
-from .research_tools import (
-    ResearchToolIntegration,
-    RIntegration,
-    RevManCompatibility,
-    ProsperoRegistration,
-    GradeProIntegration,
-    ToolInterface,
-    AnalysisResult
+    CitationManager,
+    EndNoteCompatibility,
+    MendeleyConnector,
+    ReferenceLibrary,
+    ZoteroIntegration,
 )
 
 # Data exchange hub
 from .data_hub import (
     DataExchangeHub,
-    ImportEngine,
-    ExportEngine,
     DataFormat,
-    ExchangeFormat,
+    DataValidationResult,
     DataValidator,
-    FormatConverter,
-    ValidationLevel,
-    ImportResult,
+    ExchangeFormat,
+    ExportEngine,
     ExportResult,
-    DataValidationResult
+    FormatConverter,
+    ImportEngine,
+    ImportResult,
+    ValidationLevel,
+)
+
+# Database connectors
+from .database_connectors import (
+    ArxivConnector,
+    CochraneConnector,
+    DatabaseConnector,
+    DatabaseManager,
+    DatabaseSearchQuery,
+    ExternalSearchResult,
+    PubMedConnector,
+)
+
+# Research tools
+from .research_tools import (
+    AnalysisResult,
+    GradeProIntegration,
+    ProsperoRegistration,
+    ResearchToolIntegration,
+    RevManCompatibility,
+    RIntegration,
+    ToolInterface,
 )
 
 __all__ = [
     # Database connectors
-    'DatabaseConnector',
-    'PubMedConnector', 
-    'CochraneConnector',
-    'ArxivConnector',
-    'DatabaseManager',
-    'ExternalSearchResult',
-    'DatabaseSearchQuery',
-    
+    "DatabaseConnector",
+    "PubMedConnector",
+    "CochraneConnector",
+    "ArxivConnector",
+    "DatabaseManager",
+    "ExternalSearchResult",
+    "DatabaseSearchQuery",
     # Citation management
-    'CitationManager',
-    'ZoteroIntegration',
-    'MendeleyConnector', 
-    'EndNoteCompatibility',
-    'BibTeXManager',
-    'CitationFormat',
-    'ReferenceLibrary',
-    
+    "CitationManager",
+    "ZoteroIntegration",
+    "MendeleyConnector",
+    "EndNoteCompatibility",
+    "BibTeXManager",
+    "CitationFormat",
+    "ReferenceLibrary",
     # Research tools
-    'ResearchToolIntegration',
-    'RIntegration',
-    'RevManCompatibility',
-    'ProsperoRegistration',
-    'GradeProIntegration',
-    'ToolInterface',
-    'AnalysisResult',
-    
+    "ResearchToolIntegration",
+    "RIntegration",
+    "RevManCompatibility",
+    "ProsperoRegistration",
+    "GradeProIntegration",
+    "ToolInterface",
+    "AnalysisResult",
     # Data exchange
-    'DataExchangeHub',
-    'ImportEngine',
-    'ExportEngine',
-    'DataFormat',
-    'ExchangeFormat',
-    'DataValidator',
-    'FormatConverter',
-    'ValidationLevel',
-    'ImportResult',
-    'ExportResult',
-    'DataValidationResult'
+    "DataExchangeHub",
+    "ImportEngine",
+    "ExportEngine",
+    "DataFormat",
+    "ExchangeFormat",
+    "DataValidator",
+    "FormatConverter",
+    "ValidationLevel",
+    "ImportResult",
+    "ExportResult",
+    "DataValidationResult",
 ]

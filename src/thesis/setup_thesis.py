@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr / bin / env python3
 """
 Configuration and Dependencies Management for Enhanced Thesis Generator
 =====================================================================
@@ -10,60 +10,68 @@ Author: GitHub Copilot for Paul Zanna
 Date: July 23, 2025
 """
 
-import sys
-import subprocess
 import importlib
+import subprocess
+import sys
 from pathlib import Path
+
 
 def check_python_dependencies():
     """Check Python package dependencies."""
     dependencies = {
-        'jinja2': 'pip install jinja2',
-        'pyyaml': 'pip install pyyaml',
-        'jsonschema': 'pip install jsonschema',
-        'openai': 'pip install openai'
+        "jinja2": "pip install jinja2",
+        "yaml": "pip install pyyaml",  # pyyaml installs as 'yaml'
+        "jsonschema": "pip install jsonschema",
+        "openai": "pip install openai",
     }
-    
+
+    # Map display names for better user feedback
+    display_names = {"jinja2": "jinja2", "yaml": "pyyaml", "jsonschema": "jsonschema", "openai": "openai"}
+
     missing = []
     for package, install_cmd in dependencies.items():
         try:
             importlib.import_module(package)
-            print(f"✅ {package} - installed")
+            print(f"✅ {display_names[package]} - installed")
         except ImportError:
-            print(f"❌ {package} - missing")
-            missing.append((package, install_cmd))
-    
+            print(f"❌ {display_names[package]} - missing")
+            missing.append((display_names[package], install_cmd))
+
     return missing
 
+
 def check_system_dependencies():
-    """Check system-level dependencies."""
+    """Check system - level dependencies."""
     system_deps = {
-        'pandoc': 'Required for PDF/DOCX conversion',
-        'xelatex': 'Required for PDF generation (part of TeX Live)',
-        'git': 'Required for version control'
+        "pandoc": "Required for PDF / DOCX conversion",
+        "xelatex": "Required for PDF generation (part of TeX Live)",
+        "git": "Required for version control",
     }
-    
+
     missing = []
     for cmd, description in system_deps.items():
         try:
-            subprocess.run([cmd, '--version'], capture_output=True, check=True)
+            subprocess.run([cmd, "--version"], capture_output=True, check=True)
             print(f"✅ {cmd} - installed")
         except (subprocess.CalledProcessError, FileNotFoundError):
             print(f"❌ {cmd} - missing ({description})")
             missing.append((cmd, description))
-    
+
     return missing
+
 
 def check_eunice_integration():
     """Check Eunice AI client availability."""
     try:
         sys.path.append(str(Path(__file__).parent.parent))
-        from src.ai_clients.openai_client import OpenAIClient, AIProviderConfig
+        from src.ai_clients.openai_client import AIProviderConfig, OpenAIClient
+
         print("✅ Eunice AI clients - available")
         return True
     except ImportError:
         print("❌ Eunice AI clients - not available (will use fallback)")
         return False
+
 
 def create_default_config():
     """Create default configuration file."""
@@ -73,7 +81,7 @@ def create_default_config():
 # AI Configuration
 ai:
   provider: openai
-  model: gpt-4
+  model: gpt - 4
   deterministic: true
   temperature: 0.0
   top_p: 1.0
@@ -100,9 +108,9 @@ processing:
 
 # Template Configuration
 templates:
-  directory: templates/thesis
+  directory: templates / thesis
   custom_filters: true
-  
+
 # Quality Settings
 quality:
   min_theme_length: 200
@@ -116,62 +124,64 @@ performance:
   max_retries: 3
   timeout_seconds: 120
 """
-    
-    config_file = Path('src/thesis/config/thesis_config.yaml')
-    
+
+    config_file = Path("src / thesis / config / thesis_config.yaml")
+
     # Check if config already exists
     if config_file.exists():
         print(f"✅ Configuration already exists: {config_file}")
         return config_file
-    
-    with open(config_file, 'w') as f:
+
+    with open(config_file, "w") as f:
         f.write(config_content)
-    
+
     print(f"✅ Created default configuration: {config_file}")
     return config_file
 
+
 def create_requirements_file():
     """Check if requirements are in main requirements.txt."""
-    req_file = Path('requirements.txt')
-    
+    req_file = Path("requirements.txt")
+
     if req_file.exists():
-        with open(req_file, 'r') as f:
+        with open(req_file, "r") as f:
             content = f.read()
-            if 'jsonschema' in content and 'Thesis Generation Features' in content:
+            if "jsonschema" in content and "Thesis Generation Features" in content:
                 print(f"✅ Thesis dependencies already in: {req_file}")
                 return req_file
-    
+
     print(f"⚠️  Please ensure thesis dependencies are in: {req_file}")
-    print("   Required packages: jsonschema, python-dateutil, matplotlib, seaborn")
+    print("   Required packages: jsonschema, python - dateutil, matplotlib, seaborn")
     return req_file
+
 
 def main():
     """Main setup and dependency check."""
     print("Enhanced Thesis Generator - Dependency Check")
     print("=" * 50)
-    
+
     # Check Python dependencies
     print("\n📦 Python Dependencies:")
     missing_python = check_python_dependencies()
-    
+
     # Check system dependencies
     print("\n🔧 System Dependencies:")
     missing_system = check_system_dependencies()
-    
+
     # Check Eunice integration
     print("\n🤖 AI Integration:")
     eunice_available = check_eunice_integration()
-    
+
     # Create configuration files
     print("\n📄 Configuration Files:")
     config_file = create_default_config()
     req_file = create_requirements_file()
-    
+
     # Summary and recommendations
     print("\n" + "=" * 50)
     print("SETUP SUMMARY")
     print("=" * 50)
-    
+
     if missing_python:
         print("\n❌ Missing Python packages:")
         for package, cmd in missing_python:
@@ -180,32 +190,33 @@ def main():
         print(f"   pip install -r requirements.txt")
     else:
         print("\n✅ All Python dependencies satisfied")
-    
+
     if missing_system:
         print("\n❌ Missing system dependencies:")
         for cmd, desc in missing_system:
             print(f"   {cmd}: {desc}")
         print("\nInstallation instructions:")
         print("   macOS: brew install pandoc")
-        print("   Ubuntu: sudo apt-get install pandoc texlive-xetex")
-        print("   Windows: Download from https://pandoc.org/installing.html")
+        print("   Ubuntu: sudo apt - get install pandoc texlive - xetex")
+        print("   Windows: Download from https://pandoc.org / installing.html")
     else:
         print("\n✅ All system dependencies satisfied")
-    
+
     if not eunice_available:
         print("\n⚠️  Eunice AI clients not available")
         print("   The system will use direct OpenAI integration")
         print("   Ensure OPENAI_API_KEY environment variable is set")
     else:
         print("\n✅ Eunice AI integration available")
-    
+
     print("\n🚀 READY TO USE:")
     print(f"   python thesis_cli.py input.json")
     print(f"   python thesis_cli.py input.json -c {config_file}")
-    
+
     print("\n📚 DOCUMENTATION:")
     print("   python thesis_cli.py --help")
-    print("   See docs/Thesis_Generation_Documentation.md for detailed documentation")
+    print("   See docs / Thesis_Generation_Documentation.md for detailed documentation")
+
 
 if __name__ == "__main__":
     main()

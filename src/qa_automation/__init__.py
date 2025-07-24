@@ -15,74 +15,68 @@ Author: Eunice AI System
 Date: July 2025
 """
 
+from .bias_detection import (
+    BiasAssessment,
+    BiasDetectionSystem,
+    BiasType,
+    PublicationBiasDetector,
+    ReportingBiasDetector,
+    SelectionBiasDetector,
+)
 from .grade_automation import (
+    EvidenceProfile,
+    GRADEAssessment,
     GRADEAutomation,
     GRADECriteria,
     GRADELevel,
-    EvidenceProfile,
-    GRADEAssessment,
-    GRADERecommendation
+    GRADERecommendation,
 )
-
-from .validation_engine import (
-    QualityValidationEngine,
-    ValidationRule,
-    ValidationResult,
-    ValidationSeverity,
-    DataIntegrityChecker,
-    ConsistencyValidator
-)
-
-from .bias_detection import (
-    BiasDetectionSystem,
-    BiasType,
-    BiasAssessment,
-    PublicationBiasDetector,
-    SelectionBiasDetector,
-    ReportingBiasDetector
-)
-
 from .metrics_dashboard import (
-    QualityMetricsDashboard,
-    QualityMetric,
-    MetricType,
-    MetricCalculator,
     DashboardConfig,
-    MetricAggregator
+    MetricAggregator,
+    MetricCalculator,
+    MetricType,
+    QualityMetric,
+    QualityMetricsDashboard,
+)
+from .validation_engine import (
+    ConsistencyValidator,
+    DataIntegrityChecker,
+    QualityValidationEngine,
+    ValidationResult,
+    ValidationRule,
+    ValidationSeverity,
 )
 
 __all__ = [
     # GRADE Automation
-    'GRADEAutomation',
-    'GRADECriteria',
-    'GRADELevel',
-    'EvidenceProfile',
-    'GRADEAssessment',
-    'GRADERecommendation',
-    
+    "GRADEAutomation",
+    "GRADECriteria",
+    "GRADELevel",
+    "EvidenceProfile",
+    "GRADEAssessment",
+    "GRADERecommendation",
     # Validation Engine
-    'QualityValidationEngine',
-    'ValidationRule',
-    'ValidationResult',
-    'ValidationSeverity',
-    'DataIntegrityChecker',
-    'ConsistencyValidator',
-    
+    "QualityValidationEngine",
+    "ValidationRule",
+    "ValidationResult",
+    "ValidationSeverity",
+    "DataIntegrityChecker",
+    "ConsistencyValidator",
     # Bias Detection
-    'BiasDetectionSystem',
-    'BiasType',
-    'BiasAssessment',
-    'PublicationBiasDetector',
-    'SelectionBiasDetector',
-    'ReportingBiasDetector',
-    
+    "BiasDetectionSystem",
+    "BiasType",
+    "BiasAssessment",
+    "PublicationBiasDetector",
+    "SelectionBiasDetector",
+    "ReportingBiasDetector",
     # Metrics Dashboard
-    'QualityMetricsDashboard',
-    'QualityMetric',
-    'MetricType',
-    'MetricCalculator',
-    'DashboardConfig',
-    'MetricAggregator'
+    "QualityMetricsDashboard",
+    "QualityMetric",
+    "MetricType",
+    "MetricCalculator",
+    "DashboardConfig",
+    "MetricAggregator",
 ]
 
 # Package metadata
