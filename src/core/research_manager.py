@@ -24,6 +24,7 @@ try:
     from ..utils.error_handler import ErrorHandler
     from ..utils.id_utils import generate_timestamped_id
     from ..utils.performance import PerformanceMonitor
+    from ..agents.systematic_review_agent import SystematicReviewAgent
 except ImportError:
     # Fall back to absolute imports (when imported from outside src package)
     from config.config_manager import ConfigManager
@@ -34,6 +35,7 @@ except ImportError:
     from utils.error_handler import ErrorHandler
     from utils.id_utils import generate_timestamped_id
     from utils.performance import PerformanceMonitor
+    from agents.systematic_review_agent import SystematicReviewAgent
 
 # Type for database manager
 DatabaseManagerType = HierarchicalDatabaseManager

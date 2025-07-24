@@ -492,7 +492,7 @@ class LiteratureAgent(BaseAgent):
             "    ...\n"
             "}\n"
             "Ensure the search strings are specific, relevant, and suitable for "
-            "academic databases.\n"
+            "academic databases. Provide 5 topics, each with 3 search strings.\n"
         )
 
         # Get AI response
