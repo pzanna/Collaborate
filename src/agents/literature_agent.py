@@ -201,11 +201,12 @@ class LiteratureAgent(BaseAgent):
                     **cache_key_params
                 )
             
-            self.logger.info(f"Semantic Scholar search found {len(results)} results")
+            self.literature_logger.info(f"📚 Semantic Scholar Search: '{query}' | Results: {len(results)} | Max requested: {max_results}")
             return results
             
         except Exception as e:
             self.logger.error(f"Semantic Scholar search failed: {e}")
+            self.literature_logger.error(f"❌ Semantic Scholar Search Failed: '{query}' | Error: {str(e)}")
             return []
 
     async def search_pubmed_structured(
@@ -277,11 +278,12 @@ class LiteratureAgent(BaseAgent):
                     **cache_key_params
                 )
             
-            self.logger.info(f"PubMed structured search found {len(results)} results")
+            self.literature_logger.info(f"🏥 PubMed Search: '{query}' | Results: {len(results)} | Max requested: {max_results}")
             return results
             
         except Exception as e:
             self.logger.error(f"PubMed structured search failed: {e}")
+            self.literature_logger.error(f"❌ PubMed Search Failed: '{query}' | Error: {str(e)}")
             return []
 
     async def search_arxiv_structured(
@@ -350,11 +352,12 @@ class LiteratureAgent(BaseAgent):
                     **cache_key_params
                 )
             
-            self.logger.info(f"arXiv structured search found {len(results)} results")
+            self.literature_logger.info(f"📄 arXiv Search: '{query}' | Results: {len(results)} | Max requested: {max_results}")
             return results
             
         except Exception as e:
             self.logger.error(f"arXiv structured search failed: {e}")
+            self.literature_logger.error(f"❌ arXiv Search Failed: '{query}' | Error: {str(e)}")
             return []
 
     async def comprehensive_academic_search(
@@ -380,7 +383,7 @@ class LiteratureAgent(BaseAgent):
         Returns:
             Dict[str, List[Dict[str, Any]]]: Results from each source
         """
-        self.logger.info(f"Starting comprehensive academic search for: {query}")
+        self.literature_logger.info(f"🔍 Comprehensive Academic Search: '{query}' | PubMed: {include_pubmed} | arXiv: {include_arxiv} | Semantic Scholar: {include_semantic_scholar} | Max per source: {max_results_per_source}")
         
         # Prepare search tasks
         search_tasks = []
@@ -429,6 +432,7 @@ class LiteratureAgent(BaseAgent):
             
             if isinstance(result, Exception):
                 self.logger.error(f"Search failed for {source_name}: {result}")
+                self.literature_logger.error(f"❌ {source_name.title()} Search Failed: {str(result)}")
                 academic_results[source_name] = []
             else:
                 academic_results[source_name] = result or []
@@ -437,8 +441,8 @@ class LiteratureAgent(BaseAgent):
         total_results = sum(len(results) for results in academic_results.values())
         sources_used = [source for source, results in academic_results.items() if results]
         
-        self.logger.info(
-            f"Comprehensive academic search completed: {total_results} results from {len(sources_used)} sources"
+        self.literature_logger.info(
+            f"📊 Comprehensive Search Complete: {total_results} total results from {len(sources_used)} sources | Sources: {', '.join(sources_used) if sources_used else 'None'}"
         )
         
         return academic_results

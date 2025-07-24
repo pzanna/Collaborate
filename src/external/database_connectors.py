@@ -124,8 +124,15 @@ class DatabaseConnector(ABC):
     def _create_ssl_context(self) -> Optional[ssl.SSLContext]:
         """Create SSL context with appropriate settings."""
         try:
-            # Create SSL context with default settings
-            ssl_context = ssl.create_default_context()
+            # Import certifi if available for better certificate handling
+            try:
+                import certifi
+                ssl_context = ssl.create_default_context(cafile=certifi.where())
+                logger.debug("Using certifi for SSL certificate verification")
+            except ImportError:
+                # Fallback to default SSL context
+                ssl_context = ssl.create_default_context()
+                logger.debug("Using default SSL context (certifi not available)")
             
             # Check if we should disable SSL verification for environments with certificate issues
             # This can be controlled via environment variable or configuration
@@ -136,6 +143,16 @@ class DatabaseConnector(ABC):
                 logger.warning("SSL verification disabled via DISABLE_SSL_VERIFICATION environment variable")
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
+            else:
+                # Ensure we have proper SSL settings for production use
+                ssl_context.check_hostname = True
+                ssl_context.verify_mode = ssl.CERT_REQUIRED
+                
+                # Add some common SSL configuration for better compatibility
+                ssl_context.set_ciphers('ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS')
+                
+                # Enable hostname checking
+                ssl_context.check_hostname = True
             
             return ssl_context
         except Exception as e:
@@ -147,16 +164,33 @@ class DatabaseConnector(ABC):
         
         # Create connector with SSL context (if available)
         if ssl_context:
-            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            try:
+                connector = aiohttp.TCPConnector(ssl=ssl_context, limit=100, limit_per_host=10)
+                logger.debug("Created aiohttp connector with SSL context")
+            except Exception as e:
+                logger.warning(f"Failed to create connector with SSL context: {e}")
+                # Fallback to no SSL verification
+                connector = aiohttp.TCPConnector(ssl=False, limit=100, limit_per_host=10)
+                logger.warning("SSL verification disabled due to connector creation failure")
         else:
             # Fallback: create connector without SSL verification (for environments with cert issues)
-            connector = aiohttp.TCPConnector(ssl=False)
+            connector = aiohttp.TCPConnector(ssl=False, limit=100, limit_per_host=10)
             logger.warning("SSL verification disabled due to certificate issues")
         
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-            connector=connector
-        )
+        try:
+            self.session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                connector=connector
+            )
+            logger.debug(f"Created aiohttp session for {self.config.database_type.value}")
+        except Exception as e:
+            logger.error(f"Failed to create aiohttp session: {e}")
+            # Create a basic session as fallback
+            self.session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=30),
+                connector=aiohttp.TCPConnector(ssl=False)
+            )
+        
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):

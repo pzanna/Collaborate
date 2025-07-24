@@ -15,6 +15,7 @@ import sys
 
 def main():
     """Main function to run the academic search test."""
+    SEARCH_RESULTS = 3
     
     print("Academic Search Test")
     print("=" * 50)
@@ -30,8 +31,8 @@ def main():
     
     # Create and run the async test
     async def run_test():
-        # Set up environment
-        os.environ['DISABLE_SSL_VERIFICATION'] = 'true'
+        # Set up environment - SSL verification is now handled automatically
+        # No need to disable SSL verification thanks to improved certificate handling
         
         # Add project root to sys.path
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -57,7 +58,7 @@ def main():
             # Call the comprehensive search function
             results_by_source = await literature_agent.comprehensive_academic_search(
                 query=search_query,
-                max_results_per_source=10,
+                max_results_per_source=SEARCH_RESULTS,
                 include_pubmed=True,
                 include_arxiv=True,
                 include_semantic_scholar=True,
@@ -75,11 +76,11 @@ def main():
             for source, results in results_by_source.items():
                 if results:
                     sources_with_results.append(source)
-                    print(f"\n{source.upper()}: {len(results)} results")
+                    print(f"\n{source.upper()}: {len(results)} results\n")
                     total_results += len(results)
                     
                     # Show first few results from each source
-                    for i, result in enumerate(results[:3], 1):
+                    for i, result in enumerate(results, 1):
                         title = result.get('title', 'No title')
                         print(f"  {i}. {title}")
                         
