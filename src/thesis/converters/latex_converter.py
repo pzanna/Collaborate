@@ -8,9 +8,7 @@ Converts thesis literature review to LaTeX with proper academic formatting.
 
 import argparse
 import json
-import os
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 def escape_latex(text: str) -> str:
@@ -44,7 +42,7 @@ def generate_latex_document(thesis_data: Dict[str, Any]) -> str:
     themes = thesis_data.get("themes", [])
     gaps = thesis_data.get("gaps", [])
     framework = thesis_data.get("framework", {})
-    metadata = thesis_data.get("metadata", {})
+    thesis_data.get("metadata", {})
 
     latex_content = (
         r"""

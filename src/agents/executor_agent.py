@@ -6,21 +6,16 @@ API calls, data processing, and file operations for the research system.
 """
 
 import asyncio
-import json
-import logging
-import os
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
 import aiohttp
-import requests
 
 from ..config.config_manager import ConfigManager
 from ..mcp.protocols import ResearchAction
-from .base_agent import AgentStatus, BaseAgent
+from .base_agent import BaseAgent
 
 
 class ExecutorAgent(BaseAgent):
@@ -90,7 +85,9 @@ class ExecutorAgent(BaseAgent):
     async def _initialize_agent(self) -> None:
         """Initialize executor - specific resources."""
         # Create HTTP session
-        self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+        self.http_session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30)
+        )
 
         # Ensure work directory exists
         self.work_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +95,9 @@ class ExecutorAgent(BaseAgent):
         # Set up security restrictions
         self._setup_security_restrictions()
 
-        self.logger.info(f"ExecutorAgent initialized with work directory: {self.work_dir}")
+        self.logger.info(
+            f"ExecutorAgent initialized with work directory: {self.work_dir}"
+        )
 
     async def _cleanup_agent(self) -> None:
         """Clean up executor - specific resources."""
@@ -190,7 +189,13 @@ class ExecutorAgent(BaseAgent):
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "output": "", "return_code": -1, "execution_time": 0}
+            return {
+                "success": False,
+                "error": str(e),
+                "output": "",
+                "return_code": -1,
+                "execution_time": 0,
+            }
         finally:
             # Clean up temporary file
             try:
@@ -223,7 +228,12 @@ class ExecutorAgent(BaseAgent):
 
         try:
             async with self.http_session.request(
-                method=method, url=url, headers=headers, params=params, data=data, json=json_data
+                method=method,
+                url=url,
+                headers=headers,
+                params=params,
+                data=data,
+                json=json_data,
             ) as response:
 
                 # Get response content
@@ -243,7 +253,14 @@ class ExecutorAgent(BaseAgent):
                 }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "status_code": 0, "headers": {}, "data": None, "url": url}
+            return {
+                "success": False,
+                "error": str(e),
+                "status_code": 0,
+                "headers": {},
+                "data": None,
+                "url": url,
+            }
 
     async def _process_data(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -277,10 +294,20 @@ class ExecutorAgent(BaseAgent):
             else:
                 raise ValueError(f"Unknown operation: {operation}")
 
-            return {"success": True, "result": result, "operation": operation, "input_size": len(data)}
+            return {
+                "success": True,
+                "result": result,
+                "operation": operation,
+                "input_size": len(data),
+            }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "operation": operation, "input_size": len(data) if data else 0}
+            return {
+                "success": False,
+                "error": str(e),
+                "operation": operation,
+                "input_size": len(data) if data else 0,
+            }
 
     async def _read_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -322,7 +349,13 @@ class ExecutorAgent(BaseAgent):
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "file_path": file_path, "size": 0, "encoding": encoding}
+            return {
+                "success": False,
+                "error": str(e),
+                "file_path": file_path,
+                "size": 0,
+                "encoding": encoding,
+            }
 
     async def _write_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -398,10 +431,15 @@ class ExecutorAgent(BaseAgent):
         try:
             # Run command with timeout
             process = await asyncio.create_subprocess_shell(
-                command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=working_dir
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=working_dir,
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=timeout
+            )
 
             return {
                 "success": True,
@@ -442,12 +480,24 @@ class ExecutorAgent(BaseAgent):
             elif from_format == "csv" and to_format == "json":
                 result = self._csv_to_json(data)
             else:
-                raise ValueError(f"Unsupported transformation: {from_format} to {to_format}")
+                raise ValueError(
+                    f"Unsupported transformation: {from_format} to {to_format}"
+                )
 
-            return {"success": True, "result": result, "from_format": from_format, "to_format": to_format}
+            return {
+                "success": True,
+                "result": result,
+                "from_format": from_format,
+                "to_format": to_format,
+            }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "from_format": from_format, "to_format": to_format}
+            return {
+                "success": False,
+                "error": str(e),
+                "from_format": from_format,
+                "to_format": to_format,
+            }
 
     async def _validate_data(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Validate data against schema."""
@@ -513,7 +563,20 @@ class ExecutorAgent(BaseAgent):
     def _is_safe_command(self, command: str) -> bool:
         """Check if command is safe to execute."""
         # Only allow basic file operations and data processing commands
-        safe_commands = {"ls", "cat", "head", "tail", "wc", "grep", "sort", "uniq", "python", "pip", "node", "npm"}
+        safe_commands = {
+            "ls",
+            "cat",
+            "head",
+            "tail",
+            "wc",
+            "grep",
+            "sort",
+            "uniq",
+            "python",
+            "pip",
+            "node",
+            "npm",
+        }
 
         command_parts = command.split()
         if not command_parts:
@@ -576,7 +639,9 @@ class ExecutorAgent(BaseAgent):
         # Return counts
         return {field: len(items) for field, items in groups.items()}
 
-    def _filter_data(self, data: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _filter_data(
+        self, data: List[Dict[str, Any]], filters: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Filter data based on criteria."""
         filtered = []
 
@@ -592,7 +657,9 @@ class ExecutorAgent(BaseAgent):
 
         return filtered
 
-    def _sort_data(self, data: List[Dict[str, Any]], sort_key: str) -> List[Dict[str, Any]]:
+    def _sort_data(
+        self, data: List[Dict[str, Any]], sort_key: str
+    ) -> List[Dict[str, Any]]:
         """Sort data by specified key."""
         if not sort_key:
             return data
@@ -622,7 +689,9 @@ class ExecutorAgent(BaseAgent):
         reader = csv.DictReader(io.StringIO(csv_data))
         return list(reader)
 
-    def _validate_against_schema(self, data: List[Dict[str, Any]], schema: Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_against_schema(
+        self, data: List[Dict[str, Any]], schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Validate data against a simple schema."""
         errors = []
 
@@ -640,9 +709,15 @@ class ExecutorAgent(BaseAgent):
                 if field in item:
                     value = item[field]
                     if expected_type == "string" and not isinstance(value, str):
-                        errors.append(f"Row {i}: Field '{field}' should be string, got {type(value).__name__}")
-                    elif expected_type == "number" and not isinstance(value, (int, float)):
-                        errors.append(f"Row {i}: Field '{field}' should be number, got {type(value).__name__}")
+                        errors.append(
+                            f"Row {i}: Field '{field}' should be string, got {type(value).__name__}"
+                        )
+                    elif expected_type == "number" and not isinstance(
+                        value, (int, float)
+                    ):
+                        errors.append(
+                            f"Row {i}: Field '{field}' should be number, got {type(value).__name__}"
+                        )
 
         return {"valid": len(errors) == 0, "errors": errors}
 
@@ -681,7 +756,10 @@ class ExecutorAgent(BaseAgent):
                         "description": f"Analyzed {len(search_results)} search results",
                         "data": {
                             "result_count": len(search_results),
-                            "sources": [result.get("url", "Unknown") for result in search_results[:5]],
+                            "sources": [
+                                result.get("url", "Unknown")
+                                for result in search_results[:5]
+                            ],
                         },
                     }
                 )
@@ -706,8 +784,13 @@ class ExecutorAgent(BaseAgent):
                         "description": "Processed reasoning analysis",
                         "data": {
                             "analysis_length": analysis_length,
-                            "has_insights": "insight" in analysis_text.lower() or "finding" in analysis_text.lower(),
-                            "preview": analysis_text[:200] + "..." if len(analysis_text) > 200 else analysis_text,
+                            "has_insights": "insight" in analysis_text.lower()
+                            or "finding" in analysis_text.lower(),
+                            "preview": (
+                                analysis_text[:200] + "..."
+                                if len(analysis_text) > 200
+                                else analysis_text
+                            ),
                         },
                     }
                 )
@@ -721,7 +804,9 @@ class ExecutorAgent(BaseAgent):
                         "description": "Integrated memory data",
                         "data": {
                             "memory_entries": len(memory_data.get("entries", [])),
-                            "has_historical_context": bool(memory_data.get("relevant_history", [])),
+                            "has_historical_context": bool(
+                                memory_data.get("relevant_history", [])
+                            ),
                         },
                     }
                 )
@@ -735,7 +820,9 @@ class ExecutorAgent(BaseAgent):
                         "description": f"Processed {len(file_data)} files",
                         "data": {
                             "file_count": len(file_data),
-                            "file_types": list(set(f.get("type", "unknown") for f in file_data)),
+                            "file_types": list(
+                                set(f.get("type", "unknown") for f in file_data)
+                            ),
                         },
                     }
                 )
@@ -743,7 +830,9 @@ class ExecutorAgent(BaseAgent):
             # Generate execution insights
             insights = []
             if search_results and reasoning_output:
-                insights.append("Successfully combined search results with reasoning analysis")
+                insights.append(
+                    "Successfully combined search results with reasoning analysis"
+                )
             if len(results) > 1:
                 insights.append(f"Integrated {len(results)} different data sources")
 
@@ -765,15 +854,25 @@ class ExecutorAgent(BaseAgent):
                 "timestamp": asyncio.get_event_loop().time(),
             }
 
-            self.logger.info(f"Research execution completed with {len(results)} results")
+            self.logger.info(
+                f"Research execution completed with {len(results)} results"
+            )
 
-            return {"results": results, "summary": execution_summary, "status": "completed"}
+            return {
+                "results": results,
+                "summary": execution_summary,
+                "status": "completed",
+            }
 
         except Exception as e:
             self.logger.error(f"Research execution failed: {e}")
             return {
                 "results": [],
-                "summary": {"query": payload.get("query", ""), "status": "failed", "error": str(e)},
+                "summary": {
+                    "query": payload.get("query", ""),
+                    "status": "failed",
+                    "error": str(e),
+                },
                 "status": "failed",
                 "error": str(e),
             }

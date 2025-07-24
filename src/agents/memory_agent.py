@@ -7,18 +7,16 @@ knowledge graph maintenance, and learning from interactions.
 
 import asyncio
 import json
-import logging
-import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
 from ..config.config_manager import ConfigManager
-from ..mcp.protocols import QueryMemoryRequest, ResearchAction, StoreMemoryRequest
-from .base_agent import AgentStatus, BaseAgent
+from ..mcp.protocols import ResearchAction
+from .base_agent import BaseAgent
 
 
 @dataclass
@@ -138,7 +136,9 @@ class MemoryAgent(BaseAgent):
         # Load knowledge graph into cache
         await self._load_knowledge_cache()
 
-        self.logger.info(f"MemoryAgent initialized with {len(self.memory_cache)} cached memories")
+        self.logger.info(
+            f"MemoryAgent initialized with {len(self.memory_cache)} cached memories"
+        )
 
     async def _cleanup_agent(self) -> None:
         """Clean up memory - specific resources."""
@@ -280,7 +280,11 @@ class MemoryAgent(BaseAgent):
                 # Retrieve recent memories
                 memories = await self._get_recent_memories(limit)
 
-            return {"success": True, "memories": [self._memory_to_dict(m) for m in memories], "count": len(memories)}
+            return {
+                "success": True,
+                "memories": [self._memory_to_dict(m) for m in memories],
+                "count": len(memories),
+            }
 
         except Exception as e:
             return {"success": False, "error": str(e), "memories": [], "count": 0}
@@ -315,9 +319,11 @@ class MemoryAgent(BaseAgent):
                 all_results[memory.id] = memory
 
             # Sort by relevance and importance
-            sorted_results = sorted(all_results.values(), key=lambda m: (m.importance, m.access_count), reverse=True)[
-                :limit
-            ]
+            sorted_results = sorted(
+                all_results.values(),
+                key=lambda m: (m.importance, m.access_count),
+                reverse=True,
+            )[:limit]
 
             return {
                 "success": True,
@@ -327,7 +333,13 @@ class MemoryAgent(BaseAgent):
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "results": [], "count": 0, "query": query}
+            return {
+                "success": False,
+                "error": str(e),
+                "results": [],
+                "count": 0,
+                "query": query,
+            }
 
     async def _update_memory(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Update memory record."""
@@ -388,7 +400,9 @@ class MemoryAgent(BaseAgent):
             node_id = f"node_{asyncio.get_event_loop().time()}_{hash(content) % 10000}"
 
             # Create knowledge node
-            node = KnowledgeNode(id=node_id, content=content, node_type=node_type, properties=properties)
+            node = KnowledgeNode(
+                id=node_id, content=content, node_type=node_type, properties=properties
+            )
 
             # Store node
             await self._insert_knowledge_node(node)
@@ -438,7 +452,13 @@ class MemoryAgent(BaseAgent):
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "results": [], "count": 0, "query_type": query_type}
+            return {
+                "success": False,
+                "error": str(e),
+                "results": [],
+                "count": 0,
+                "query_type": query_type,
+            }
 
     async def _find_connections(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Find connections between concepts."""
@@ -463,11 +483,23 @@ class MemoryAgent(BaseAgent):
                     # Find paths between nodes
                     for node1 in nodes1:
                         for node2 in nodes2:
-                            path = await self._find_knowledge_path(node1.get("id", ""), node2.get("id", ""), max_depth)
+                            path = await self._find_knowledge_path(
+                                node1.get("id", ""), node2.get("id", ""), max_depth
+                            )
                             if path:
-                                connections.append({"from_concept": concept1, "to_concept": concept2, "path": path})
+                                connections.append(
+                                    {
+                                        "from_concept": concept1,
+                                        "to_concept": concept2,
+                                        "path": path,
+                                    }
+                                )
 
-            return {"success": True, "connections": connections, "count": len(connections)}
+            return {
+                "success": True,
+                "connections": connections,
+                "count": len(connections),
+            }
 
         except Exception as e:
             return {"success": False, "error": str(e), "connections": [], "count": 0}
@@ -477,7 +509,12 @@ class MemoryAgent(BaseAgent):
         force = payload.get("force", False)
 
         if not force and not self._consolidation_needed():
-            return {"success": True, "message": "Consolidation not needed", "memories_pruned": 0, "edges_decayed": 0}
+            return {
+                "success": True,
+                "message": "Consolidation not needed",
+                "memories_pruned": 0,
+                "edges_decayed": 0,
+            }
 
         try:
             # Prune low - importance memories
@@ -497,7 +534,12 @@ class MemoryAgent(BaseAgent):
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "memories_pruned": 0, "edges_decayed": 0}
+            return {
+                "success": False,
+                "error": str(e),
+                "memories_pruned": 0,
+                "edges_decayed": 0,
+            }
 
     async def _store_structured_memory(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -534,7 +576,9 @@ class MemoryAgent(BaseAgent):
 
             # Generate memory ID with type prefix
             timestamp = datetime.now()
-            memory_id = f"{memory_type}_{int(timestamp.timestamp())}_{hash(content) % 10000}"
+            memory_id = (
+                f"{memory_type}_{int(timestamp.timestamp())}_{hash(content) % 10000}"
+            )
 
             # Create enhanced memory record
             record = MemoryRecord(
@@ -638,7 +682,12 @@ class MemoryAgent(BaseAgent):
             # Execute query
             results = []
             if not self.db_connection:
-                return {"success": False, "error": "Database not connected", "results": [], "count": 0}
+                return {
+                    "success": False,
+                    "error": "Database not connected",
+                    "results": [],
+                    "count": 0,
+                }
 
             async with self.db_connection.execute(base_query, params) as cursor:
                 async for row in cursor:
@@ -829,7 +878,9 @@ class MemoryAgent(BaseAgent):
             "importance": memory.importance,
             "access_count": memory.access_count,
             "timestamp": memory.timestamp.isoformat(),
-            "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
+            "last_accessed": (
+                memory.last_accessed.isoformat() if memory.last_accessed else None
+            ),
             "tags": memory.tags,
             "source_task_id": memory.source_task_id,
         }
@@ -926,18 +977,25 @@ class MemoryAgent(BaseAgent):
 
         await self.db_connection.commit()
 
-    def _search_memory_cache(self, query: str, min_importance: float) -> List[MemoryRecord]:
+    def _search_memory_cache(
+        self, query: str, min_importance: float
+    ) -> List[MemoryRecord]:
         """Search memory cache."""
         results = []
         query_lower = query.lower()
 
         for memory in self.memory_cache.values():
-            if memory.importance >= min_importance and query_lower in memory.content.lower():
+            if (
+                memory.importance >= min_importance
+                and query_lower in memory.content.lower()
+            ):
                 results.append(memory)
 
         return results
 
-    async def _search_memory_db(self, query: str, limit: int, min_importance: float) -> List[MemoryRecord]:
+    async def _search_memory_db(
+        self, query: str, limit: int, min_importance: float
+    ) -> List[MemoryRecord]:
         """Search memory database."""
         if not self.db_connection:
             return []
@@ -984,7 +1042,9 @@ class MemoryAgent(BaseAgent):
             return None
 
         try:
-            async with self.db_connection.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)) as cursor:
+            async with self.db_connection.execute(
+                "SELECT * FROM memories WHERE id = ?", (memory_id,)
+            ) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return self._row_to_memory(row)
@@ -993,7 +1053,9 @@ class MemoryAgent(BaseAgent):
 
         return None
 
-    async def _get_memories_by_context(self, context_id: str, limit: int) -> List[MemoryRecord]:
+    async def _get_memories_by_context(
+        self, context_id: str, limit: int
+    ) -> List[MemoryRecord]:
         """Get memories by context."""
         if not self.db_connection:
             return []
@@ -1095,7 +1157,9 @@ class MemoryAgent(BaseAgent):
             return
 
         try:
-            await self.db_connection.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            await self.db_connection.execute(
+                "DELETE FROM memories WHERE id = ?", (memory_id,)
+            )
             await self.db_connection.commit()
         except Exception as e:
             self.logger.error(f"Failed to delete memory {memory_id}: {e}")
@@ -1103,7 +1167,6 @@ class MemoryAgent(BaseAgent):
     async def _insert_knowledge_node(self, node: KnowledgeNode) -> None:
         """Insert knowledge node into database."""
         # Implementation would insert knowledge node
-        pass
 
     async def _create_knowledge_edge(
         self, from_node: str, to_node: str, relationship: str, strength: float
@@ -1112,12 +1175,16 @@ class MemoryAgent(BaseAgent):
         # Implementation would create knowledge edge
         return None
 
-    async def _search_knowledge_nodes(self, query: str, limit: int) -> List[Dict[str, Any]]:
+    async def _search_knowledge_nodes(
+        self, query: str, limit: int
+    ) -> List[Dict[str, Any]]:
         """Search knowledge nodes."""
         # Implementation would search knowledge nodes
         return []
 
-    async def _get_knowledge_neighbors(self, node_id: str, limit: int) -> List[Dict[str, Any]]:
+    async def _get_knowledge_neighbors(
+        self, node_id: str, limit: int
+    ) -> List[Dict[str, Any]]:
         """Get knowledge neighbors."""
         # Implementation would get knowledge neighbors
         return []

@@ -9,17 +9,16 @@ and evidence synthesis.
 import asyncio
 import hashlib
 import json
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from ..config.config_manager import ConfigManager
 from ..mcp.protocols import ResearchAction
 from ..utils.error_handler import handle_errors
 from ..utils.id_utils import generate_timestamped_id
-from .base_agent import AgentStatus, BaseAgent
+from .base_agent import BaseAgent
 from .literature_agent import LiteratureAgent
 
 
@@ -126,11 +125,19 @@ class SystematicReviewAgent(BaseAgent):
         # Systematic review configuration
         self.review_config = {}
         if hasattr(self.config, "config"):
-            config_dict = self.config.config.__dict__ if hasattr(self.config.config, "__dict__") else {}
+            config_dict = (
+                self.config.config.__dict__
+                if hasattr(self.config.config, "__dict__")
+                else {}
+            )
             self.review_config = config_dict.get("systematic_review", {})
         self.screening_config = self.review_config.get("screening", {})
-        self.confidence_threshold = self.screening_config.get("confidence_threshold", 0.7)
-        self.require_human_review = self.screening_config.get("require_human_review", True)
+        self.confidence_threshold = self.screening_config.get(
+            "confidence_threshold", 0.7
+        )
+        self.require_human_review = self.screening_config.get(
+            "require_human_review", True
+        )
 
         # Exclusion reason vocabulary
         self.exclusion_reasons = {
@@ -201,11 +208,17 @@ class SystematicReviewAgent(BaseAgent):
         elif action == "execute_search_strategy":
             return await self._execute_search_strategy(payload.get("research_plan", {}))
         elif action == "deduplicate_and_cluster":
-            return await self._deduplicate_and_cluster(payload.get("search_results", []))
+            return await self._deduplicate_and_cluster(
+                payload.get("search_results", [])
+            )
         elif action == "title_abstract_screening":
-            return await self._title_abstract_screening(payload.get("studies", []), payload.get("criteria", {}))
+            return await self._title_abstract_screening(
+                payload.get("studies", []), payload.get("criteria", {})
+            )
         elif action == "full_text_screening":
-            return await self._full_text_screening(payload.get("studies", []), payload.get("criteria", {}))
+            return await self._full_text_screening(
+                payload.get("studies", []), payload.get("criteria", {})
+            )
         else:
             raise ValueError(f"Unknown action: {action}")
 
@@ -249,37 +262,61 @@ class SystematicReviewAgent(BaseAgent):
 
             # Stage 2: Search strategy execution (FR - 2)
             self.logger.info("Stage 2: Executing search strategy")
-            search_results = await self._execute_search_strategy(validation_result["validated_plan"])
+            search_results = await self._execute_search_strategy(
+                validation_result["validated_plan"]
+            )
             workflow_results["results"]["search"] = search_results
-            workflow_results["prisma_log"].identified = len(search_results.get("all_results", []))
+            workflow_results["prisma_log"].identified = len(
+                search_results.get("all_results", [])
+            )
             workflow_results["current_stage"] = PRISMAStage.DEDUPLICATION.value
 
             # Stage 3: Deduplication and clustering (FR - 2.6, FR - 2.7)
             self.logger.info("Stage 3: Deduplication and clustering")
-            dedup_results = await self._deduplicate_and_cluster(search_results.get("all_results", []))
+            dedup_results = await self._deduplicate_and_cluster(
+                search_results.get("all_results", [])
+            )
             workflow_results["results"]["deduplication"] = dedup_results
-            workflow_results["prisma_log"].duplicates_removed = dedup_results.get("duplicates_removed", 0)
-            workflow_results["current_stage"] = PRISMAStage.TITLE_ABSTRACT_SCREENING.value
+            workflow_results["prisma_log"].duplicates_removed = dedup_results.get(
+                "duplicates_removed", 0
+            )
+            workflow_results["current_stage"] = (
+                PRISMAStage.TITLE_ABSTRACT_SCREENING.value
+            )
 
             # Stage 4: Title / Abstract screening (FR - 3)
             self.logger.info("Stage 4: Title / Abstract screening")
-            screening_criteria = validation_result["validated_plan"].get("inclusion_criteria", {})
+            screening_criteria = validation_result["validated_plan"].get(
+                "inclusion_criteria", {}
+            )
             ta_screening_results = await self._title_abstract_screening(
                 dedup_results.get("unique_studies", []), screening_criteria
             )
-            workflow_results["results"]["title_abstract_screening"] = ta_screening_results
-            workflow_results["prisma_log"].screened_title_abstract = len(dedup_results.get("unique_studies", []))
-            workflow_results["prisma_log"].excluded_title_abstract = ta_screening_results.get("excluded_count", 0)
+            workflow_results["results"][
+                "title_abstract_screening"
+            ] = ta_screening_results
+            workflow_results["prisma_log"].screened_title_abstract = len(
+                dedup_results.get("unique_studies", [])
+            )
+            workflow_results["prisma_log"].excluded_title_abstract = (
+                ta_screening_results.get("excluded_count", 0)
+            )
             workflow_results["current_stage"] = PRISMAStage.FULL_TEXT_SCREENING.value
 
             # Stage 5: Full text screening (FR - 3)
             self.logger.info("Stage 5: Full text screening")
             included_studies = ta_screening_results.get("included_studies", [])
-            ft_screening_results = await self._full_text_screening(included_studies, screening_criteria)
+            ft_screening_results = await self._full_text_screening(
+                included_studies, screening_criteria
+            )
             workflow_results["results"]["full_text_screening"] = ft_screening_results
             workflow_results["prisma_log"].screened_full_text = len(included_studies)
-            workflow_results["prisma_log"].excluded_full_text = ft_screening_results.get("excluded_count", 0)
-            workflow_results["prisma_log"].included = ft_screening_results.get("included_count", 0)
+            workflow_results["prisma_log"].excluded_full_text = (
+                ft_screening_results.get("excluded_count", 0)
+            )
+            workflow_results["prisma_log"].included = ft_screening_results.get(
+                "included_count", 0
+            )
             workflow_results["current_stage"] = PRISMAStage.COMPLETE.value
 
             # Collect exclusion reasons
@@ -301,7 +338,9 @@ class SystematicReviewAgent(BaseAgent):
             return workflow_results
 
     @handle_errors(context="research_plan_validation")
-    async def _validate_research_plan(self, research_plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def _validate_research_plan(
+        self, research_plan: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Validate research plan according to PICO / PECO criteria (FR - 1).
 
@@ -339,9 +378,15 @@ class SystematicReviewAgent(BaseAgent):
             "plan_hash": self._calculate_plan_hash(research_plan),
         }
 
-        return {"valid": True, "validated_plan": validated_plan, "message": "Research plan validated successfully"}
+        return {
+            "valid": True,
+            "validated_plan": validated_plan,
+            "message": "Research plan validated successfully",
+        }
 
-    async def _execute_search_strategy(self, research_plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_search_strategy(
+        self, research_plan: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Execute multi - source search strategy (FR - 2).
 
@@ -376,9 +421,13 @@ class SystematicReviewAgent(BaseAgent):
                 self.logger.info(f"Searching {source_name} with query: {search_query}")
 
                 if source_name == "pubmed":
-                    results = await self.literature_agent._search_pubmed(search_query, max_results)
+                    results = await self.literature_agent._search_pubmed(
+                        search_query, max_results
+                    )
                 elif source_name == "semantic_scholar":
-                    results = await self.literature_agent._search_semantic_scholar(search_query, max_results)
+                    results = await self.literature_agent._search_semantic_scholar(
+                        search_query, max_results
+                    )
                 else:
                     # Fallback to general academic search
                     search_result = await self.literature_agent._search_academic_papers(
@@ -388,14 +437,23 @@ class SystematicReviewAgent(BaseAgent):
 
                 # Convert results to StudyRecord format
                 study_records = self._convert_to_study_records(results, source_name)
-                source_results[source_name] = {"count": len(study_records), "studies": study_records}
+                source_results[source_name] = {
+                    "count": len(study_records),
+                    "studies": study_records,
+                }
                 all_results.extend(study_records)
 
-                self.logger.info(f"Retrieved {len(study_records)} studies from {source_name}")
+                self.logger.info(
+                    f"Retrieved {len(study_records)} studies from {source_name}"
+                )
 
             except Exception as e:
                 self.logger.error(f"Search failed for {source_name}: {e}")
-                source_results[source_name] = {"count": 0, "studies": [], "error": str(e)}
+                source_results[source_name] = {
+                    "count": 0,
+                    "studies": [],
+                    "error": str(e),
+                }
 
         return {
             "search_query": search_query,
@@ -404,7 +462,9 @@ class SystematicReviewAgent(BaseAgent):
             "all_results": all_results,
         }
 
-    async def _deduplicate_and_cluster(self, studies: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _deduplicate_and_cluster(
+        self, studies: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Remove duplicates and cluster related studies (FR - 2.6, FR - 2.7).
 
@@ -502,7 +562,9 @@ class SystematicReviewAgent(BaseAgent):
         for study in studies:
             try:
                 # Create screening prompt
-                screening_prompt = self._create_screening_prompt(study, criteria, "title_abstract")
+                screening_prompt = self._create_screening_prompt(
+                    study, criteria, "title_abstract"
+                )
 
                 # Get AI decision (simplified - would use actual AI client)
                 ai_response = await self._get_ai_screening_decision(screening_prompt)
@@ -535,10 +597,14 @@ class SystematicReviewAgent(BaseAgent):
                     study["screening_result"] = screening_result
                     excluded_studies.append(study)
                     if screening_result.reason_code:
-                        exclusion_reasons.append({"code": screening_result.reason_code, "count": 1})
+                        exclusion_reasons.append(
+                            {"code": screening_result.reason_code, "count": 1}
+                        )
 
             except Exception as e:
-                self.logger.error(f"Screening failed for study {study.get('id', 'unknown')}: {e}")
+                self.logger.error(
+                    f"Screening failed for study {study.get('id', 'unknown')}: {e}"
+                )
                 # Default to exclude if screening fails
                 excluded_studies.append(study)
 
@@ -548,7 +614,9 @@ class SystematicReviewAgent(BaseAgent):
             code = reason["code"]
             reason_counts[code] = reason_counts.get(code, 0) + reason["count"]
 
-        aggregated_reasons = [{"code": code, "count": count} for code, count in reason_counts.items()]
+        aggregated_reasons = [
+            {"code": code, "count": count} for code, count in reason_counts.items()
+        ]
 
         return {
             "included_studies": included_studies,
@@ -558,7 +626,9 @@ class SystematicReviewAgent(BaseAgent):
             "exclusion_reasons": aggregated_reasons,
         }
 
-    async def _full_text_screening(self, studies: List[Dict[str, Any]], criteria: Dict[str, Any]) -> Dict[str, Any]:
+    async def _full_text_screening(
+        self, studies: List[Dict[str, Any]], criteria: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Perform full text screening (FR - 3).
 
@@ -589,7 +659,9 @@ class SystematicReviewAgent(BaseAgent):
                     exclusion_reasons.append({"code": "INSUFFICIENT_DATA", "count": 1})
 
             except Exception as e:
-                self.logger.error(f"Full text screening failed for study {study.get('id', 'unknown')}: {e}")
+                self.logger.error(
+                    f"Full text screening failed for study {study.get('id', 'unknown')}: {e}"
+                )
                 excluded_studies.append(study)
 
         return {
@@ -618,7 +690,9 @@ class SystematicReviewAgent(BaseAgent):
 
         return " ".join(query_parts)
 
-    def _convert_to_study_records(self, results: List[Dict[str, Any]], source: str) -> List[Dict[str, Any]]:
+    def _convert_to_study_records(
+        self, results: List[Dict[str, Any]], source: str
+    ) -> List[Dict[str, Any]]:
         """Convert search results to standardized study records."""
         study_records = []
 
@@ -725,7 +799,9 @@ class SystematicReviewAgent(BaseAgent):
         # Create normalized content string for hashing
         normalized_content = {
             "title": content.get("title", "").lower().strip(),
-            "authors": sorted([a.lower().strip() for a in self._extract_authors(content)]),
+            "authors": sorted(
+                [a.lower().strip() for a in self._extract_authors(content)]
+            ),
             "year": self._extract_year(content),
         }
 
@@ -747,11 +823,15 @@ class SystematicReviewAgent(BaseAgent):
             if i in clustered_studies:
                 continue
 
-            cluster = {"cluster_id": generate_timestamped_id("cluster"), "primary_study": study, "related_studies": []}
+            cluster = {
+                "cluster_id": generate_timestamped_id("cluster"),
+                "primary_study": study,
+                "related_studies": [],
+            }
 
             study_authors = set(study.get("authors", []))
 
-            for j, other_study in enumerate(studies[i + 1 :], i + 1):
+            for j, other_study in enumerate(studies[i + 1:], i + 1):
                 if j in clustered_studies:
                     continue
 
@@ -768,7 +848,9 @@ class SystematicReviewAgent(BaseAgent):
 
         return clusters
 
-    def _create_screening_prompt(self, study: Dict[str, Any], criteria: Dict[str, Any], stage: str) -> str:
+    def _create_screening_prompt(
+        self, study: Dict[str, Any], criteria: Dict[str, Any], stage: str
+    ) -> str:
         """Create prompt for LLM - assisted screening."""
         title = study.get("title", "No title")
         abstract = study.get("abstract", "No abstract available")
@@ -817,7 +899,9 @@ Respond in JSON format:
             "decision": decision,
             "confidence": random.uniform(0.6, 0.95),
             "reason_code": (
-                random.choice(list(self.exclusion_reasons.keys())) if decision == ScreeningDecision.EXCLUDE else None
+                random.choice(list(self.exclusion_reasons.keys()))
+                if decision == ScreeningDecision.EXCLUDE
+                else None
             ),
             "rationale": f"Based on {prompt[:50]}... analysis",
         }
@@ -828,7 +912,9 @@ if __name__ == "__main__":
     import sys
 
     # Add the project root to the Python path
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     sys.path.insert(0, project_root)
 
     async def main():
@@ -847,12 +933,18 @@ if __name__ == "__main__":
                 "population": "Healthcare providers and patients",
                 "intervention": "AI - assisted diagnostic tools",
                 "comparison": "Traditional diagnostic methods",
-                "outcomes": ["diagnostic accuracy", "time to diagnosis", "cost effectiveness"],
+                "outcomes": [
+                    "diagnostic accuracy",
+                    "time to diagnosis",
+                    "cost effectiveness",
+                ],
                 "timeframe": "2020 - 2025",
             }
 
             # Run systematic review workflow
-            result = await agent.systematic_review_workflow(research_plan, "test_task_001", "test_user")
+            result = await agent.systematic_review_workflow(
+                research_plan, "test_task_001", "test_user"
+            )
 
             print("Systematic Review Results:")
             print(json.dumps(result, indent=2, default=str))

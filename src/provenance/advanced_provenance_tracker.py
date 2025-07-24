@@ -12,7 +12,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 
 class ProvenanceType(Enum):
@@ -53,7 +53,12 @@ class ProvenanceAgent:
     configuration: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """TODO: Add docstring for to_dict."""
+        """
+        Convert the provenance agent information to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing agent fields.
+        """
         return asdict(self)
 
 
@@ -68,7 +73,12 @@ class ProvenanceEntity:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """TODO: Add docstring for to_dict."""
+        """
+        Convert the provenance entity information to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing entity fields.
+        """
         return asdict(self)
 
 
@@ -88,7 +98,12 @@ class ProvenanceActivity:
     error_details: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """TODO: Add docstring for to_dict."""
+        """
+        Convert the provenance activity information to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing activity fields.
+        """
         return asdict(self)
 
 
@@ -104,7 +119,12 @@ class ProvenanceRelation:
     properties: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """TODO: Add docstring for to_dict."""
+        """
+        Convert the provenance relation information to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing relation fields.
+        """
         return asdict(self)
 
 
@@ -142,7 +162,12 @@ class ProvenanceRecord:
         return hashlib.sha256(record_json.encode()).hexdigest()
 
     def to_dict(self) -> Dict[str, Any]:
-        """TODO: Add docstring for to_dict."""
+        """
+        Convert the complete provenance record to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary representation of the provenance record.
+        """
         return asdict(self)
 
     def verify_integrity(self) -> bool:
@@ -165,7 +190,12 @@ class ProvenanceQuery:
     entity_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """TODO: Add docstring for to_dict."""
+        """
+        Convert the provenance query parameters to a dictionary, excluding None values.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing provided query parameters.
+        """
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
@@ -266,7 +296,9 @@ class AdvancedProvenanceTracker:
             error_details: Error information if status is FAILED
         """
         if activity_id not in self.active_activities:
-            self.logger.warning(f"Activity {activity_id} not found in active activities")
+            self.logger.warning(
+                f"Activity {activity_id} not found in active activities"
+            )
             return
 
         activity = self.active_activities[activity_id]
@@ -441,7 +473,11 @@ class AdvancedProvenanceTracker:
             activity_type=ProvenanceType.SEARCH_EXECUTION,
             activity_name=f"Search execution on {database_name}",
             agent=agent,
-            parameters={"database": database_name, "search_terms": search_terms, "search_strategy": search_strategy},
+            parameters={
+                "database": database_name,
+                "search_terms": search_terms,
+                "search_strategy": search_strategy,
+            },
         )
 
         # Record database entity
@@ -476,7 +512,10 @@ class AdvancedProvenanceTracker:
         self.update_activity_status(
             activity_id=activity_id,
             status=EventStatus.COMPLETED,
-            outputs={"results_count": results_count, "results_entity_id": results_entity_id},
+            outputs={
+                "results_count": results_count,
+                "results_entity_id": results_entity_id,
+            },
         )
 
         return activity_id
@@ -631,7 +670,10 @@ class AdvancedProvenanceTracker:
         self.update_activity_status(
             activity_id=activity_id,
             status=EventStatus.COMPLETED,
-            outputs={"synthesis_entity_id": synthesis_entity_id, "synthesis_results": synthesis_results},
+            outputs={
+                "synthesis_entity_id": synthesis_entity_id,
+                "synthesis_results": synthesis_results,
+            },
         )
 
         return activity_id
@@ -660,7 +702,9 @@ class AdvancedProvenanceTracker:
                     if record.verify_integrity():
                         verified_records.append(record)
                     else:
-                        self.logger.warning(f"Integrity check failed for record {record.record_id}")
+                        self.logger.warning(
+                            f"Integrity check failed for record {record.record_id}"
+                        )
 
                 return verified_records
 
@@ -670,7 +714,9 @@ class AdvancedProvenanceTracker:
             self.logger.error(f"Failed to query provenance: {e}")
             return []
 
-    def generate_provenance_report(self, review_id: str, include_detailed: bool = True) -> Dict[str, Any]:
+    def generate_provenance_report(
+        self, review_id: str, include_detailed: bool = True
+    ) -> Dict[str, Any]:
         """
         Generate comprehensive provenance report for a review.
 
@@ -731,7 +777,9 @@ class AdvancedProvenanceTracker:
             "report_generated": datetime.now().isoformat(),
             "total_records": len(records),
             "summary": {
-                "activities_by_type": {k: len(v) for k, v in activities_by_type.items()},
+                "activities_by_type": {
+                    k: len(v) for k, v in activities_by_type.items()
+                },
                 "entities_by_type": {k: len(v) for k, v in entities_by_type.items()},
                 "relations_by_type": {k: len(v) for k, v in relations_by_type.items()},
             },
@@ -740,14 +788,22 @@ class AdvancedProvenanceTracker:
 
         if include_detailed:
             report["detailed"] = {
-                "activities": {k: [a.to_dict() for a in v] for k, v in activities_by_type.items()},
-                "entities": {k: [e.to_dict() for e in v] for k, v in entities_by_type.items()},
-                "relations": {k: [r.to_dict() for r in v] for k, v in relations_by_type.items()},
+                "activities": {
+                    k: [a.to_dict() for a in v] for k, v in activities_by_type.items()
+                },
+                "entities": {
+                    k: [e.to_dict() for e in v] for k, v in entities_by_type.items()
+                },
+                "relations": {
+                    k: [r.to_dict() for r in v] for k, v in relations_by_type.items()
+                },
             }
 
         return report
 
-    def export_provenance_graph(self, review_id: str, output_format: str = "json") -> Dict[str, Any]:
+    def export_provenance_graph(
+        self, review_id: str, output_format: str = "json"
+    ) -> Dict[str, Any]:
         """
         Export provenance as a graph structure.
 
@@ -788,7 +844,11 @@ class AdvancedProvenanceTracker:
                 nodes.append(entity_node)
 
                 # Edge from activity to entity
-                edge = {"source": record.activity.activity_id, "target": entity.entity_id, "type": "used"}
+                edge = {
+                    "source": record.activity.activity_id,
+                    "target": entity.entity_id,
+                    "type": "used",
+                }
                 edges.append(edge)
 
             # Relation edges
@@ -825,7 +885,9 @@ class AdvancedProvenanceTracker:
                 self.database.create_provenance_record(record_data)
             else:
                 # Log that storage is not implemented
-                self.logger.info(f"Provenance storage not implemented. Record: {record.record_id}")
+                self.logger.info(
+                    f"Provenance storage not implemented. Record: {record.record_id}"
+                )
 
         except Exception as e:
             self.logger.error(f"Failed to store provenance record: {e}")
@@ -884,7 +946,10 @@ class AdvancedProvenanceTracker:
             start_time="2024 - 01 - 16T09:00:00",
             end_time="2024 - 01 - 16T09:30:00",
             duration_seconds=1800.0,
-            parameters={"screening_stage": "title_abstract", "reviewer_id": "reviewer_001"},
+            parameters={
+                "screening_stage": "title_abstract",
+                "reviewer_id": "reviewer_001",
+            },
             outputs={"decision": "include", "confidence_score": 0.85},
         )
 
@@ -917,15 +982,31 @@ async def demonstrate_provenance_tracking():
 
     # Mock database for demonstration
     class MockDatabase:
-        """TODO: Add class docstring for MockDatabase."""
+        """
+        Mock database for provenance record storage demonstration.
+
+        Methods:
+            create_provenance_record: Simulate storing provenance records.
+        """
 
         def create_provenance_record(self, data):
-            """TODO: Add docstring for create_provenance_record."""
-            print(f"📊 Provenance record stored: {data['record_id']} ({data['activity']['activity_type']})")
+            """
+            Simulate storage of a provenance record by printing its ID and type.
+
+            Args:
+                data (Dict[str, Any]): Data of the provenance record to store.
+            """
+            print(
+                f"📊 Provenance record stored: {data['record_id']} ({data['activity']['activity_type']})"
+            )
 
     # Initialize provenance tracker
     db = MockDatabase()
-    config = {"enable_checksums": True, "detailed_tracking": True, "retention_days": 365}
+    config = {
+        "enable_checksums": True,
+        "detailed_tracking": True,
+        "retention_days": 365,
+    }
     tracker = AdvancedProvenanceTracker(db, config)
 
     review_id = "systematic_review_001"
@@ -933,7 +1014,7 @@ async def demonstrate_provenance_tracking():
     print(f"📝 Tracking systematic review workflow: {review_id}")
 
     # 1. Track search execution
-    print(f"\n🔍 1. Tracking search execution...")
+    print("\n🔍 1. Tracking search execution...")
     search_agent = ProvenanceAgent(
         agent_id="agent_literature_001",
         agent_type="LiteratureAgent",
@@ -956,9 +1037,11 @@ async def demonstrate_provenance_tracking():
     print(f"   ✅ Search activity tracked: {search_activity_id}")
 
     # 2. Track screening decisions
-    print(f"\n📋 2. Tracking screening decisions...")
+    print("\n📋 2. Tracking screening decisions...")
     screening_agent = ProvenanceAgent(
-        agent_id="agent_screening_001", agent_type="ScreeningAgent", agent_version="1.5.0"
+        agent_id="agent_screening_001",
+        agent_type="ScreeningAgent",
+        agent_version="1.5.0",
     )
 
     screening_decisions = [
@@ -980,78 +1063,108 @@ async def demonstrate_provenance_tracking():
             agent=screening_agent,
         )
         screening_activity_ids.append(activity_id)
-        print(f"   ✅ Screening decision tracked: {activity_id} ({decision_data['decision']})")
+        print(
+            f"   ✅ Screening decision tracked: {activity_id} ({decision_data['decision']})"
+        )
 
     # 3. Track evidence synthesis
-    print(f"\n📊 3. Tracking evidence synthesis...")
+    print("\n📊 3. Tracking evidence synthesis...")
     synthesis_agent = ProvenanceAgent(
-        agent_id="agent_synthesis_001", agent_type="EvidenceSynthesisEngine", agent_version="1.0.0"
+        agent_id="agent_synthesis_001",
+        agent_type="EvidenceSynthesisEngine",
+        agent_version="1.0.0",
     )
 
     synthesis_activity_id = tracker.track_evidence_synthesis(
         review_id=review_id,
         synthesis_type="meta_analysis",
         included_studies=["study_001", "study_003"],
-        synthesis_parameters={"effect_measure": "odds_ratio", "random_effects": True, "heterogeneity_threshold": 0.5},
-        synthesis_results={"pooled_or": 2.34, "ci_lower": 1.87, "ci_upper": 2.92, "p_value": 0.001, "i2": 45.6},
+        synthesis_parameters={
+            "effect_measure": "odds_ratio",
+            "random_effects": True,
+            "heterogeneity_threshold": 0.5,
+        },
+        synthesis_results={
+            "pooled_or": 2.34,
+            "ci_lower": 1.87,
+            "ci_upper": 2.92,
+            "p_value": 0.001,
+            "i2": 45.6,
+        },
         agent=synthesis_agent,
     )
     print(f"   ✅ Evidence synthesis tracked: {synthesis_activity_id}")
 
     # 4. Query provenance
-    print(f"\n🔍 4. Querying provenance records...")
+    print("\n🔍 4. Querying provenance records...")
     query = ProvenanceQuery(
-        review_id=review_id, activity_types=[ProvenanceType.SEARCH_EXECUTION, ProvenanceType.SCREENING_DECISION]
+        review_id=review_id,
+        activity_types=[
+            ProvenanceType.SEARCH_EXECUTION,
+            ProvenanceType.SCREENING_DECISION,
+        ],
     )
 
     provenance_records = tracker.query_provenance(query)
     print(f"   📊 Retrieved {len(provenance_records)} provenance records")
 
     for record in provenance_records:
-        print(f"     - {record.activity.activity_name} ({record.activity.status.value})")
-        print(f"       Entities: {len(record.entities)}, Relations: {len(record.relations)}")
+        print(
+            f"     - {record.activity.activity_name} ({record.activity.status.value})"
+        )
+        print(
+            f"       Entities: {len(record.entities)}, Relations: {len(record.relations)}"
+        )
         if record.verify_integrity():
-            print(f"       ✅ Integrity verified")
+            print("       ✅ Integrity verified")
         else:
-            print(f"       ❌ Integrity check failed")
+            print("       ❌ Integrity check failed")
 
     # 5. Generate provenance report
-    print(f"\n📈 5. Generating provenance report...")
-    provenance_report = tracker.generate_provenance_report(review_id, include_detailed=False)
+    print("\n📈 5. Generating provenance report...")
+    provenance_report = tracker.generate_provenance_report(
+        review_id, include_detailed=False
+    )
 
-    print(f"   📋 Provenance Report Summary:")
+    print("   📋 Provenance Report Summary:")
     print(f"     Total records: {provenance_report['total_records']}")
-    print(f"     Activities by type:")
-    for activity_type, count in provenance_report["summary"]["activities_by_type"].items():
+    print("     Activities by type:")
+    for activity_type, count in provenance_report["summary"][
+        "activities_by_type"
+    ].items():
         print(f"       {activity_type}: {count}")
 
-    print(f"     Entities by type:")
+    print("     Entities by type:")
     for entity_type, count in provenance_report["summary"]["entities_by_type"].items():
         print(f"       {entity_type}: {count}")
 
     print(f"     Timeline events: {len(provenance_report['timeline'])}")
 
     # 6. Export provenance graph
-    print(f"\n🌐 6. Exporting provenance graph...")
+    print("\n🌐 6. Exporting provenance graph...")
     provenance_graph = tracker.export_provenance_graph(review_id)
 
-    print(f"   📊 Provenance Graph:")
+    print("   📊 Provenance Graph:")
     print(f"     Nodes: {len(provenance_graph['nodes'])}")
     print(f"     Edges: {len(provenance_graph['edges'])}")
     print(f"     Node types: {set(node['type'] for node in provenance_graph['nodes'])}")
     print(f"     Edge types: {set(edge['type'] for edge in provenance_graph['edges'])}")
 
     # 7. Display active activities
-    print(f"\n⚡ 7. Active activities monitor:")
+    print("\n⚡ 7. Active activities monitor:")
     if tracker.active_activities:
         for activity_id, activity in tracker.active_activities.items():
-            print(f"     {activity_id}: {activity.activity_name} ({activity.status.value})")
+            print(
+                f"     {activity_id}: {activity.activity_name} ({activity.status.value})"
+            )
     else:
-        print(f"     No active activities")
+        print("     No active activities")
 
-    print(f"\n✅ Phase 3 Advanced Provenance Tracking demonstration completed!")
+    print("\n✅ Phase 3 Advanced Provenance Tracking demonstration completed!")
     print(f"   Review ID: {review_id}")
-    print(f"   Total activities tracked: {len(screening_activity_ids) + 2}")  # +2 for search and synthesis
+    print(
+        f"   Total activities tracked: {len(screening_activity_ids) + 2}"
+    )  # +2 for search and synthesis
     print(f"   Provenance records: {len(provenance_records)}")
 
     return tracker, provenance_report, provenance_graph

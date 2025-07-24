@@ -10,7 +10,7 @@ import logging
 import sys
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 class LogLevel(Enum):
@@ -81,7 +81,9 @@ class StructuredJSONFormatter(logging.Formatter):
 class MCPLogger:
     """Structured logger for MCP server components"""
 
-    def __init__(self, name: Optional[str] = None, log_level: str = "INFO", config_manager=None):
+    def __init__(
+        self, name: Optional[str] = None, log_level: str = "INFO", config_manager=None
+    ):
         logger_name = name or "mcp.default"
         self.logger = logging.getLogger(logger_name)
         self.logger.setLevel(getattr(logging, log_level.upper()))
@@ -104,11 +106,20 @@ class MCPLogger:
         getattr(self.logger, level.value.lower())(message, extra=extra)
 
     def log_agent_registration(
-        self, agent_id: str, agent_type: str, capabilities: list, success: bool = True, **kwargs
+        self,
+        agent_id: str,
+        agent_type: str,
+        capabilities: list,
+        success: bool = True,
+        **kwargs,
     ):
         """Log agent registration event"""
         level = LogLevel.INFO if success else LogLevel.ERROR
-        message = f"Agent {agent_id} registered successfully" if success else f"Agent {agent_id} registration failed"
+        message = (
+            f"Agent {agent_id} registered successfully"
+            if success
+            else f"Agent {agent_id} registration failed"
+        )
 
         self.log_event(
             level,
@@ -120,7 +131,9 @@ class MCPLogger:
             **kwargs,
         )
 
-    def log_task_dispatch(self, task_id: str, context_id: str, agent_type: str, action: str, **kwargs):
+    def log_task_dispatch(
+        self, task_id: str, context_id: str, agent_type: str, action: str, **kwargs
+    ):
         """Log task dispatch event"""
         self.log_event(
             LogLevel.INFO,
@@ -134,7 +147,13 @@ class MCPLogger:
         )
 
     def log_task_completion(
-        self, task_id: str, context_id: str, agent_type: str, duration: float, success: bool = True, **kwargs
+        self,
+        task_id: str,
+        context_id: str,
+        agent_type: str,
+        duration: float,
+        success: bool = True,
+        **kwargs,
     ):
         """Log task completion event"""
         level = LogLevel.INFO if success else LogLevel.ERROR
@@ -153,7 +172,14 @@ class MCPLogger:
             **kwargs,
         )
 
-    def log_task_timeout(self, task_id: str, context_id: str, agent_type: str, timeout_duration: int, **kwargs):
+    def log_task_timeout(
+        self,
+        task_id: str,
+        context_id: str,
+        agent_type: str,
+        timeout_duration: int,
+        **kwargs,
+    ):
         """Log task timeout event"""
         self.log_event(
             LogLevel.WARNING,
@@ -166,7 +192,15 @@ class MCPLogger:
             **kwargs,
         )
 
-    def log_task_retry(self, task_id: str, context_id: str, agent_type: str, retry_attempt: int, reason: str, **kwargs):
+    def log_task_retry(
+        self,
+        task_id: str,
+        context_id: str,
+        agent_type: str,
+        retry_attempt: int,
+        reason: str,
+        **kwargs,
+    ):
         """Log task retry event"""
         self.log_event(
             LogLevel.WARNING,
@@ -179,7 +213,9 @@ class MCPLogger:
             **kwargs,
         )
 
-    def log_client_connect(self, client_id: str, client_type: str = "unknown", **kwargs):
+    def log_client_connect(
+        self, client_id: str, client_type: str = "unknown", **kwargs
+    ):
         """Log client connection event"""
         self.log_event(
             LogLevel.INFO,
@@ -221,7 +257,9 @@ class MCPLogger:
             **kwargs,
         )
 
-    def log_server_lifecycle(self, event: str, details: Optional[Dict[str, Any]] = None):
+    def log_server_lifecycle(
+        self, event: str, details: Optional[Dict[str, Any]] = None
+    ):
         """Log server lifecycle events"""
         event_type = LogEvent.SERVER_START if event == "start" else LogEvent.SERVER_STOP
         message = f"MCP Server {event}"

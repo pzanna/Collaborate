@@ -1,6 +1,5 @@
 Research Question: How do I culture neurons using grocery store ingredients and nutritional supplements?"
 
-
 🎯 Research Objectives (4):
    1. Determine the feasibility of culturing neurons using non-traditional, readily available materials such as grocery store ingredients and nutritional supplements.
    2. Identify which grocery store ingredients and nutritional supplements contain the necessary nutrients and compounds to support neuron survival, growth, and differentiation.

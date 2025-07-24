@@ -20,13 +20,11 @@ import asyncio
 import json
 import logging
 import re
-import sqlite3
-import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import bibtexparser
 
@@ -123,37 +121,32 @@ class CitationManager(ABC):
     @abstractmethod
     async def authenticate(self) -> bool:
         """Authenticate with the citation manager"""
-        pass
 
     @abstractmethod
     async def import_library(self, library_id: str) -> ReferenceLibrary:
         """Import a reference library"""
-        pass
 
     @abstractmethod
-    async def export_library(self, library: ReferenceLibrary, format_type: CitationFormat) -> str:
+    async def export_library(
+        self, library: ReferenceLibrary, format_type: CitationFormat
+    ) -> str:
         """Export library in specified format"""
-        pass
 
     @abstractmethod
     async def add_reference(self, library_id: str, reference: Reference) -> bool:
         """Add a reference to the library"""
-        pass
 
     @abstractmethod
     async def update_reference(self, library_id: str, reference: Reference) -> bool:
         """Update an existing reference"""
-        pass
 
     @abstractmethod
     async def delete_reference(self, library_id: str, reference_id: str) -> bool:
         """Delete a reference from the library"""
-        pass
 
     @abstractmethod
     async def search_references(self, library_id: str, query: str) -> List[Reference]:
         """Search references in the library"""
-        pass
 
 
 class ZoteroIntegration(CitationManager):
@@ -161,8 +154,17 @@ class ZoteroIntegration(CitationManager):
 
     BASE_URL = "https://api.zotero.org"
 
-    def __init__(self, api_key: str, user_id: Optional[str] = None, group_id: Optional[str] = None):
-        credentials = {"api_key": api_key, "user_id": user_id or "", "group_id": group_id or ""}
+    def __init__(
+        self,
+        api_key: str,
+        user_id: Optional[str] = None,
+        group_id: Optional[str] = None,
+    ):
+        credentials = {
+            "api_key": api_key,
+            "user_id": user_id or "",
+            "group_id": group_id or "",
+        }
         super().__init__(credentials)
         self.api_key = api_key
         self.user_id = user_id
@@ -202,7 +204,7 @@ class ZoteroIntegration(CitationManager):
     async def import_library(self, library_id: str = "main") -> ReferenceLibrary:
         """Import Zotero library"""
         try:
-            import aiohttp
+            pass
 
             if not self.is_authenticated:
                 await self.authenticate()
@@ -273,9 +275,16 @@ class ZoteroIntegration(CitationManager):
 
         async with aiohttp.ClientSession() as session:
             while True:
-                params = {"start": start, "limit": limit, "format": "json", "include": "data"}
+                params = {
+                    "start": start,
+                    "limit": limit,
+                    "format": "json",
+                    "include": "data",
+                }
 
-                async with session.get(f"{base_url}/items", headers=headers, params=params) as response:
+                async with session.get(
+                    f"{base_url}/items", headers=headers, params=params
+                ) as response:
                     if response.status != 200:
                         break
 
@@ -324,7 +333,9 @@ class ZoteroIntegration(CitationManager):
             reference_type = self._map_zotero_type(zotero_type)
 
             # Extract tags
-            tags = [tag.get("tag", "") for tag in data.get("tags", []) if tag.get("tag")]
+            tags = [
+                tag.get("tag", "") for tag in data.get("tags", []) if tag.get("tag")
+            ]
 
             return Reference(
                 reference_id=item.get("key", ""),
@@ -398,11 +409,17 @@ class ZoteroIntegration(CitationManager):
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{base_url}/collections", headers=headers) as response:
+                async with session.get(
+                    f"{base_url}/collections", headers=headers
+                ) as response:
                     if response.status == 200:
                         collection_data = await response.json()
-                        collections = [c.get("data", {}).get("name", "") for c in collection_data]
-                        collections = [c for c in collections if c]  # Remove empty names
+                        collections = [
+                            c.get("data", {}).get("name", "") for c in collection_data
+                        ]
+                        collections = [
+                            c for c in collections if c
+                        ]  # Remove empty names
         except Exception as e:
             logger.error(f"Error fetching collections: {e}")
 
@@ -426,7 +443,9 @@ class ZoteroIntegration(CitationManager):
 
         return tags
 
-    async def export_library(self, library: ReferenceLibrary, format_type: CitationFormat) -> str:
+    async def export_library(
+        self, library: ReferenceLibrary, format_type: CitationFormat
+    ) -> str:
         """Export library in specified format"""
         if format_type == CitationFormat.BIBTEX:
             return self._export_bibtex(library)
@@ -446,9 +465,13 @@ class ZoteroIntegration(CitationManager):
             entry_type = self._get_bibtex_type(ref.reference_type)
 
             # Create BibTeX key
-            author_key = ref.authors[0].split()[-1].lower() if ref.authors else "unknown"
+            author_key = (
+                ref.authors[0].split()[-1].lower() if ref.authors else "unknown"
+            )
             year_key = str(ref.publication_year) if ref.publication_year else "nodate"
-            title_key = re.sub(r"[^\w]", "", ref.title[:20].lower()) if ref.title else "notitle"
+            title_key = (
+                re.sub(r"[^\w]", "", ref.title[:20].lower()) if ref.title else "notitle"
+            )
             bibtex_key = f"{author_key}{year_key}{title_key}"
 
             # Build entry
@@ -564,7 +587,11 @@ class ZoteroIntegration(CitationManager):
         csl_items = []
 
         for ref in library.references:
-            csl_item = {"id": ref.reference_id, "type": self._get_csl_type(ref.reference_type), "title": ref.title}
+            csl_item = {
+                "id": ref.reference_id,
+                "type": self._get_csl_type(ref.reference_type),
+                "title": ref.title,
+            }
 
             # Authors
             if ref.authors:
@@ -572,7 +599,12 @@ class ZoteroIntegration(CitationManager):
                 for author in ref.authors:
                     name_parts = author.split()
                     if len(name_parts) >= 2:
-                        csl_item["author"].append({"given": " ".join(name_parts[:-1]), "family": name_parts[-1]})
+                        csl_item["author"].append(
+                            {
+                                "given": " ".join(name_parts[:-1]),
+                                "family": name_parts[-1],
+                            }
+                        )
                     else:
                         csl_item["author"].append({"literal": author})
 
@@ -619,19 +651,25 @@ class ZoteroIntegration(CitationManager):
     async def add_reference(self, library_id: str, reference: Reference) -> bool:
         """Add reference to Zotero library"""
         # Implementation would require Zotero write API calls
-        logger.info(f"Would add reference '{reference.title}' to Zotero library {library_id}")
+        logger.info(
+            f"Would add reference '{reference.title}' to Zotero library {library_id}"
+        )
         return True
 
     async def update_reference(self, library_id: str, reference: Reference) -> bool:
         """Update reference in Zotero library"""
         # Implementation would require Zotero write API calls
-        logger.info(f"Would update reference '{reference.title}' in Zotero library {library_id}")
+        logger.info(
+            f"Would update reference '{reference.title}' in Zotero library {library_id}"
+        )
         return True
 
     async def delete_reference(self, library_id: str, reference_id: str) -> bool:
         """Delete reference from Zotero library"""
         # Implementation would require Zotero write API calls
-        logger.info(f"Would delete reference {reference_id} from Zotero library {library_id}")
+        logger.info(
+            f"Would delete reference {reference_id} from Zotero library {library_id}"
+        )
         return True
 
     async def search_references(self, library_id: str, query: str) -> List[Reference]:
@@ -727,7 +765,11 @@ class BibTeXManager(CitationManager):
                 isbn=entry.get("isbn"),
                 url=entry.get("url"),
                 abstract=entry.get("abstract"),
-                keywords=entry.get("keywords", "").split(",") if entry.get("keywords") else [],
+                keywords=(
+                    entry.get("keywords", "").split(",")
+                    if entry.get("keywords")
+                    else []
+                ),
                 reference_type=reference_type,
                 language=entry.get("language"),
                 publisher=entry.get("publisher"),
@@ -762,7 +804,9 @@ class BibTeXManager(CitationManager):
         }
         return mapping.get(bibtex_type, ReferenceType.JOURNAL_ARTICLE)
 
-    async def export_library(self, library: ReferenceLibrary, format_type: CitationFormat) -> str:
+    async def export_library(
+        self, library: ReferenceLibrary, format_type: CitationFormat
+    ) -> str:
         """Export library (BibTeX manager only exports BibTeX)"""
         if format_type != CitationFormat.BIBTEX:
             raise ValueError("BibTeX manager only supports BibTeX export")
@@ -802,7 +846,9 @@ class MendeleyConnector(CitationManager):
     async def import_library(self, library_id: str) -> ReferenceLibrary:
         raise NotImplementedError("Mendeley integration not yet implemented")
 
-    async def export_library(self, library: ReferenceLibrary, format_type: CitationFormat) -> str:
+    async def export_library(
+        self, library: ReferenceLibrary, format_type: CitationFormat
+    ) -> str:
         raise NotImplementedError("Mendeley integration not yet implemented")
 
     async def add_reference(self, library_id: str, reference: Reference) -> bool:
@@ -827,7 +873,9 @@ class EndNoteCompatibility(CitationManager):
     async def import_library(self, library_id: str) -> ReferenceLibrary:
         raise NotImplementedError("EndNote integration not yet implemented")
 
-    async def export_library(self, library: ReferenceLibrary, format_type: CitationFormat) -> str:
+    async def export_library(
+        self, library: ReferenceLibrary, format_type: CitationFormat
+    ) -> str:
         raise NotImplementedError("EndNote integration not yet implemented")
 
     async def add_reference(self, library_id: str, reference: Reference) -> bool:
@@ -906,7 +954,9 @@ if __name__ == "__main__":
             print("Testing export formats...")
 
             # Export as BibTeX
-            bibtex_export = await bibtex_manager.export_library(library, CitationFormat.BIBTEX)
+            bibtex_export = await bibtex_manager.export_library(
+                library, CitationFormat.BIBTEX
+            )
             print(f"\nBibTeX export (first 200 chars):\n{bibtex_export[:200]}...")
 
             # Test Zotero integration (would require API key)

@@ -7,27 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from src.core.research_manager import ResearchManager
 from src.models.hierarchical_data_models import (  # Request models; Update models; Response models; Utility models
-    BulkTaskRequest,
-    BulkTaskStatusUpdate,
-    ErrorResponse,
-    PlanStats,
-    ProjectHierarchy,
-    ProjectRequest,
-    ProjectResponse,
-    ProjectStats,
-    ProjectUpdate,
-    ResearchPlanRequest,
-    ResearchPlanResponse,
-    ResearchPlanUpdate,
-    ResearchTopicRequest,
-    ResearchTopicResponse,
-    ResearchTopicUpdate,
-    SuccessResponse,
-    TaskRequest,
-    TaskResponse,
-    TaskUpdate,
-    TopicStats,
-)
+    PlanStats, ProjectHierarchy, ProjectRequest, ProjectResponse, ProjectStats,
+    ProjectUpdate, ResearchPlanRequest, ResearchPlanResponse,
+    ResearchPlanUpdate, ResearchTopicRequest, ResearchTopicResponse,
+    ResearchTopicUpdate, SuccessResponse, TaskRequest, TaskResponse,
+    TaskUpdate, TopicStats)
 from src.storage.hierarchical_database import HierarchicalDatabaseManager
 
 # Create router for V2 hierarchical research endpoints
@@ -58,13 +42,14 @@ def get_database() -> HierarchicalDatabaseManager:
             # Fall back to creating a new instance if not set
             _hierarchical_db = HierarchicalDatabaseManager()
         except Exception as e:
-            raise HTTPException(status_code=503, detail=f"Database initialization failed: {str(e)}")
+            raise HTTPException(
+                status_code=503, detail=f"Database initialization failed: {str(e)}"
+            )
     return _hierarchical_db
 
 
 def get_research_manager() -> Optional[ResearchManager]:
     """Dependency to get research manager."""
-    global _research_manager
     return _research_manager
 
 
@@ -74,7 +59,10 @@ def get_research_manager() -> Optional[ResearchManager]:
 
 
 @v2_router.post("/projects", response_model=ProjectResponse)
-async def create_project(project_request: ProjectRequest, db: HierarchicalDatabaseManager = Depends(get_database)):
+async def create_project(
+    project_request: ProjectRequest,
+    db: HierarchicalDatabaseManager = Depends(get_database),
+):
     """Create a new project."""
     try:
         import json
@@ -124,7 +112,8 @@ async def list_projects(
 
 @v2_router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
-    project_id: str = Path(..., description="Project ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    project_id: str = Path(..., description="Project ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get a specific project."""
     try:
@@ -171,7 +160,8 @@ async def update_project(
 
 @v2_router.delete("/projects/{project_id}", response_model=SuccessResponse)
 async def delete_project(
-    project_id: str = Path(..., description="Project ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    project_id: str = Path(..., description="Project ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Delete a project and all its related data."""
     try:
@@ -224,7 +214,9 @@ async def create_research_topic(
 
         topic = db.create_research_topic(topic_data)
         if not topic:
-            raise HTTPException(status_code=500, detail="Failed to create research topic")
+            raise HTTPException(
+                status_code=500, detail="Failed to create research topic"
+            )
 
         return ResearchTopicResponse(**topic)
 
@@ -234,7 +226,9 @@ async def create_research_topic(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@v2_router.get("/projects/{project_id}/topics", response_model=List[ResearchTopicResponse])
+@v2_router.get(
+    "/projects/{project_id}/topics", response_model=List[ResearchTopicResponse]
+)
 async def list_research_topics(
     project_id: str = Path(..., description="Project ID"),
     status: Optional[str] = Query(None, description="Filter by topic status"),
@@ -256,7 +250,8 @@ async def list_research_topics(
 
 @v2_router.get("/topics/{topic_id}", response_model=ResearchTopicResponse)
 async def get_research_topic(
-    topic_id: str = Path(..., description="Topic ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    topic_id: str = Path(..., description="Topic ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get a specific research topic."""
     try:
@@ -303,7 +298,8 @@ async def update_research_topic(
 
 @v2_router.delete("/topics/{topic_id}", response_model=SuccessResponse)
 async def delete_research_topic(
-    topic_id: str = Path(..., description="Topic ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    topic_id: str = Path(..., description="Topic ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Delete a research topic and all its related data."""
     try:
@@ -360,7 +356,9 @@ async def create_research_plan(
 
         plan = db.create_research_plan(plan_data)
         if not plan:
-            raise HTTPException(status_code=500, detail="Failed to create research plan")
+            raise HTTPException(
+                status_code=500, detail="Failed to create research plan"
+            )
 
         return ResearchPlanResponse(**plan)
 
@@ -392,7 +390,8 @@ async def list_research_plans(
 
 @v2_router.get("/plans/{plan_id}", response_model=ResearchPlanResponse)
 async def get_research_plan(
-    plan_id: str = Path(..., description="Plan ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    plan_id: str = Path(..., description="Plan ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get a specific research plan."""
     try:
@@ -443,7 +442,8 @@ async def update_research_plan(
 
 @v2_router.delete("/plans/{plan_id}", response_model=SuccessResponse)
 async def delete_research_plan(
-    plan_id: str = Path(..., description="Plan ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    plan_id: str = Path(..., description="Plan ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Delete a research plan and all its related data."""
     try:
@@ -459,7 +459,8 @@ async def delete_research_plan(
 
 @v2_router.post("/plans/{plan_id}/approve", response_model=ResearchPlanResponse)
 async def approve_research_plan(
-    plan_id: str = Path(..., description="Plan ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    plan_id: str = Path(..., description="Plan ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Approve a research plan and update its approval status."""
     try:
@@ -471,16 +472,23 @@ async def approve_research_plan(
         # Update the plan to approved status
         # Note: We use plan_approved field, not status change to 'approved'
         # Status remains as draft / active / completed / cancelled per the model definition
-        update_data = {"plan_approved": True, "status": "active"}  # Set to active when approved
+        update_data = {
+            "plan_approved": True,
+            "status": "active",
+        }  # Set to active when approved
 
         success = db.update_research_plan(plan_id, update_data)
         if not success:
-            raise HTTPException(status_code=500, detail="Failed to approve research plan")
+            raise HTTPException(
+                status_code=500, detail="Failed to approve research plan"
+            )
 
         # Get the updated plan
         updated_plan = db.get_research_plan(plan_id)
         if not updated_plan:
-            raise HTTPException(status_code=500, detail="Failed to retrieve updated plan")
+            raise HTTPException(
+                status_code=500, detail="Failed to retrieve updated plan"
+            )
 
         return ResearchPlanResponse(**updated_plan)
 
@@ -562,7 +570,9 @@ async def list_tasks(
         if not plan:
             raise HTTPException(status_code=404, detail="Research plan not found")
 
-        tasks = db.get_tasks_by_plan(plan_id, status_filter=status, type_filter=task_type)
+        tasks = db.get_tasks_by_plan(
+            plan_id, status_filter=status, type_filter=task_type
+        )
         return [TaskResponse(**task) for task in tasks]
 
     except Exception as e:
@@ -571,7 +581,8 @@ async def list_tasks(
 
 @v2_router.get("/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(
-    task_id: str = Path(..., description="Task ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    task_id: str = Path(..., description="Task ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get a specific task."""
     try:
@@ -630,7 +641,8 @@ async def update_task(
 
 @v2_router.delete("/tasks/{task_id}", response_model=SuccessResponse)
 async def delete_task(
-    task_id: str = Path(..., description="Task ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    task_id: str = Path(..., description="Task ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Delete a task."""
     try:
@@ -664,7 +676,10 @@ async def execute_task(
 
         # Check if task is in a valid state for execution
         if task["status"] not in ["pending", "failed"]:
-            raise HTTPException(status_code=400, detail=f"Task cannot be executed in status: {task['status']}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task cannot be executed in status: {task['status']}",
+            )
 
         # Check if research manager is available
         if not research_manager:
@@ -697,7 +712,11 @@ async def execute_task(
                 "success": True,
                 "task_id": research_task_id,
                 "cost_info": cost_info,
-                "results": [{"message": "Research task started successfully with AI planning agent"}],
+                "results": [
+                    {
+                        "message": "Research task started successfully with AI planning agent"
+                    }
+                ],
                 "research_plan": {"status": "AI plan generation in progress"},
             }
 
@@ -720,7 +739,12 @@ async def execute_task(
                 if task_result.get("research_plan") and task.get("plan_id"):
                     plan_structure = task_result["research_plan"]
                     db.update_research_plan(
-                        task["plan_id"], {"plan_structure": plan_structure, "status": "active", "plan_approved": True}
+                        task["plan_id"],
+                        {
+                            "plan_structure": plan_structure,
+                            "status": "active",
+                            "plan_approved": True,
+                        },
                     )
 
             else:
@@ -729,7 +753,9 @@ async def execute_task(
                     "status": "failed",
                     "stage": "failed",
                     "progress": 0.0,
-                    "execution_results": [{"error": task_result.get("error", "Unknown error occurred")}],
+                    "execution_results": [
+                        {"error": task_result.get("error", "Unknown error occurred")}
+                    ],
                 }
 
         except Exception as e:
@@ -738,12 +764,16 @@ async def execute_task(
                 "status": "failed",
                 "stage": "failed",
                 "progress": 0.0,
-                "execution_results": [{"error": f"Research execution failed: {str(e)}"}],
+                "execution_results": [
+                    {"error": f"Research execution failed: {str(e)}"}
+                ],
             }
 
         final_task = db.update_task(task_id, execution_result)
         if not final_task:
-            raise HTTPException(status_code=500, detail="Failed to update task after execution")
+            raise HTTPException(
+                status_code=500, detail="Failed to update task after execution"
+            )
 
         # Ensure metadata is properly parsed as dict for TaskResponse validation
         if isinstance(final_task.get("metadata"), str):
@@ -762,7 +792,8 @@ async def execute_task(
 
 @v2_router.post("/tasks/{task_id}/cancel", response_model=SuccessResponse)
 async def cancel_task(
-    task_id: str = Path(..., description="Task ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    task_id: str = Path(..., description="Task ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Cancel a running task."""
     try:
@@ -771,7 +802,10 @@ async def cancel_task(
             raise HTTPException(status_code=404, detail="Task not found")
 
         if task["status"] != "running":
-            raise HTTPException(status_code=400, detail=f"Cannot cancel task with status: {task['status']}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel task with status: {task['status']}",
+            )
 
         # Update task status to cancelled
         update_data = {"status": "cancelled", "stage": "complete"}
@@ -790,7 +824,8 @@ async def cancel_task(
 
 @v2_router.get("/projects/{project_id}/hierarchy", response_model=ProjectHierarchy)
 async def get_project_hierarchy(
-    project_id: str = Path(..., description="Project ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    project_id: str = Path(..., description="Project ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get complete hierarchy for a project (topics -> plans -> tasks)."""
     try:
@@ -811,7 +846,8 @@ async def get_project_hierarchy(
 
 @v2_router.get("/projects/{project_id}/stats", response_model=ProjectStats)
 async def get_project_stats(
-    project_id: str = Path(..., description="Project ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    project_id: str = Path(..., description="Project ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get project statistics."""
     try:
@@ -827,7 +863,8 @@ async def get_project_stats(
 
 @v2_router.get("/topics/{topic_id}/stats", response_model=TopicStats)
 async def get_topic_stats(
-    topic_id: str = Path(..., description="Topic ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    topic_id: str = Path(..., description="Topic ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get topic statistics."""
     try:
@@ -843,7 +880,8 @@ async def get_topic_stats(
 
 @v2_router.get("/plans/{plan_id}/stats", response_model=PlanStats)
 async def get_plan_stats(
-    plan_id: str = Path(..., description="Plan ID"), db: HierarchicalDatabaseManager = Depends(get_database)
+    plan_id: str = Path(..., description="Plan ID"),
+    db: HierarchicalDatabaseManager = Depends(get_database),
 ):
     """Get plan statistics."""
     try:
@@ -866,7 +904,9 @@ async def get_plan_stats(
 async def search_project_hierarchy(
     project_id: str = Path(..., description="Project ID"),
     q: str = Query(..., description="Search query"),
-    types: Optional[List[str]] = Query(None, description="Entity types to search (topic, plan, task)"),
+    types: Optional[List[str]] = Query(
+        None, description="Entity types to search (topic, plan, task)"
+    ),
     status: Optional[List[str]] = Query(None, description="Status filters"),
     db: HierarchicalDatabaseManager = Depends(get_database),
 ):
@@ -877,7 +917,9 @@ async def search_project_hierarchy(
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        results = db.search_project_hierarchy(project_id=project_id, query=q, entity_types=types, status_filters=status)
+        results = db.search_project_hierarchy(
+            project_id=project_id, query=q, entity_types=types, status_filters=status
+        )
 
         return results
 
@@ -906,7 +948,9 @@ async def start_research(
 
         # Check if research manager is available
         if not research_manager:
-            raise HTTPException(status_code=503, detail="Research Manager not available")
+            raise HTTPException(
+                status_code=503, detail="Research Manager not available"
+            )
 
         # Start research - let the Research Manager handle plans and tasks
         research_task_id, cost_info = await research_manager.start_research_task(

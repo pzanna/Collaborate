@@ -10,12 +10,8 @@ in non - randomised studies of interventions. BMJ, 355, i4919.
 
 from typing import Any, Dict, List
 
-from ..quality_appraisal.plugin_architecture import (
-    AssessmentDomain,
-    BaseAIQualityPlugin,
-    BiasLevel,
-    QualityAssessment,
-)
+from ..quality_appraisal.plugin_architecture import (AssessmentDomain,
+                                                     BaseAIQualityPlugin)
 
 
 class RobinsIPlugin(BaseAIQualityPlugin):
@@ -29,7 +25,9 @@ class RobinsIPlugin(BaseAIQualityPlugin):
     @property
     def tool_name(self) -> str:
         """TODO: Add docstring for tool_name."""
-        return "ROBINS - I (Risk of Bias in Non - randomized Studies - of Interventions)"
+        return (
+            "ROBINS - I (Risk of Bias in Non - randomized Studies - of Interventions)"
+        )
 
     @property
     def applicable_study_types(self) -> List[str]:
@@ -57,7 +55,9 @@ class RobinsIPlugin(BaseAIQualityPlugin):
             AssessmentDomain.SELECTION_REPORTED_RESULT,
         ]
 
-    def _build_assessment_prompt(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> str:
+    def _build_assessment_prompt(
+        self, study: Dict[str, Any], criteria: Dict[str, Any]
+    ) -> str:
         """Build ROBINS - I assessment prompt."""
         return f"""
 Please conduct a ROBINS - I (Risk of Bias in Non - randomized Studies - of Interventions) assessment for this study.

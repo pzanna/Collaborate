@@ -47,12 +47,16 @@ class PersonaMCPIntegration:
 
             results = {}
             for persona_type in core_personas:
-                results[persona_type] = await self.persona_registry.initialize_persona(persona_type)
+                results[persona_type] = await self.persona_registry.initialize_persona(
+                    persona_type
+                )
 
             successful = sum(1 for success in results.values() if success)
             total = len(results)
 
-            self.logger.info(f"Persona MCP integration initialized: {successful}/{total} personas ready")
+            self.logger.info(
+                f"Persona MCP integration initialized: {successful}/{total} personas ready"
+            )
             return successful > 0
 
         except Exception as e:
@@ -85,9 +89,13 @@ class PersonaMCPIntegration:
                     persona_type = PersonaType(preferred_persona)
                 except ValueError:
                     self.logger.warning(f"Unknown persona type: {preferred_persona}")
-                    persona_type = await self.persona_registry.find_best_persona(expertise_area)
+                    persona_type = await self.persona_registry.find_best_persona(
+                        expertise_area
+                    )
             else:
-                persona_type = await self.persona_registry.find_best_persona(expertise_area)
+                persona_type = await self.persona_registry.find_best_persona(
+                    expertise_area
+                )
 
             if not persona_type:
                 return self._create_no_persona_response(expertise_area, query)
@@ -98,7 +106,11 @@ class PersonaMCPIntegration:
                 context_id=f"persona_consultation_{uuid.uuid4().hex[:8]}",
                 agent_type=persona_type.value,
                 action="expert_consultation",
-                payload={"query": query, "context": context or {}, "expertise_area": expertise_area},
+                payload={
+                    "query": query,
+                    "context": context or {},
+                    "expertise_area": expertise_area,
+                },
                 priority="normal",
                 created_at=datetime.now(),
             )
@@ -113,21 +125,33 @@ class PersonaMCPIntegration:
             }
 
             # Consult the persona
-            self.logger.info(f"Requesting consultation from {persona_type.value} for {expertise_area}")
+            self.logger.info(
+                f"Requesting consultation from {persona_type.value} for {expertise_area}"
+            )
             response = await self.persona_registry.consult_persona(persona_type, action)
 
             if response:
                 # Update consultation history
                 self.consultation_history[action.task_id].update(
-                    {"status": "completed", "completed_at": datetime.now(), "response_status": response.status}
+                    {
+                        "status": "completed",
+                        "completed_at": datetime.now(),
+                        "response_status": response.status,
+                    }
                 )
 
                 return response
             else:
                 # Handle consultation failure
-                error_response = self._create_consultation_error_response(action, persona_type)
+                error_response = self._create_consultation_error_response(
+                    action, persona_type
+                )
                 self.consultation_history[action.task_id].update(
-                    {"status": "failed", "completed_at": datetime.now(), "error": "Persona consultation failed"}
+                    {
+                        "status": "failed",
+                        "completed_at": datetime.now(),
+                        "error": "Persona consultation failed",
+                    }
                 )
                 return error_response
 
@@ -146,13 +170,16 @@ class PersonaMCPIntegration:
             available_personas = {}
 
             for persona_type in PersonaType:
-                capabilities = self.persona_registry.get_persona_capabilities(persona_type)
+                capabilities = self.persona_registry.get_persona_capabilities(
+                    persona_type
+                )
                 status = await self.persona_registry.get_persona_status(persona_type)
 
                 available_personas[persona_type.value] = {
                     "capabilities": capabilities,
                     "status": status.get("status") if status else "not_initialized",
-                    "active": persona_type.value in [p.value for p in self.persona_registry._active_personas.keys()],
+                    "active": persona_type.value
+                    in [p.value for p in self.persona_registry._active_personas.keys()],
                 }
 
             return {
@@ -178,7 +205,9 @@ class PersonaMCPIntegration:
         try:
             # Sort consultations by request time (most recent first)
             sorted_consultations = sorted(
-                self.consultation_history.items(), key=lambda x: x[1]["requested_at"], reverse=True
+                self.consultation_history.items(),
+                key=lambda x: x[1]["requested_at"],
+                reverse=True,
             )
 
             # Limit results
@@ -186,14 +215,22 @@ class PersonaMCPIntegration:
 
             # Calculate statistics
             total_consultations = len(self.consultation_history)
-            completed_consultations = sum(1 for c in self.consultation_history.values() if c["status"] == "completed")
+            completed_consultations = sum(
+                1
+                for c in self.consultation_history.values()
+                if c["status"] == "completed"
+            )
 
             return {
                 "recent_consultations": recent_consultations,
                 "statistics": {
                     "total_consultations": total_consultations,
                     "completed_consultations": completed_consultations,
-                    "success_rate": completed_consultations / total_consultations if total_consultations > 0 else 0,
+                    "success_rate": (
+                        completed_consultations / total_consultations
+                        if total_consultations > 0
+                        else 0
+                    ),
                 },
             }
 
@@ -201,7 +238,9 @@ class PersonaMCPIntegration:
             self.logger.error(f"Error getting consultation history: {e}")
             return {"error": str(e)}
 
-    def _create_no_persona_response(self, expertise_area: str, query: str) -> AgentResponse:
+    def _create_no_persona_response(
+        self, expertise_area: str, query: str
+    ) -> AgentResponse:
         """Create a response when no suitable persona is found."""
         return AgentResponse(
             task_id=f"no_persona_{uuid.uuid4().hex[:8]}",
@@ -212,7 +251,9 @@ class PersonaMCPIntegration:
             completed_at=datetime.now(),
         )
 
-    def _create_consultation_error_response(self, action: ResearchAction, persona_type: PersonaType) -> AgentResponse:
+    def _create_consultation_error_response(
+        self, action: ResearchAction, persona_type: PersonaType
+    ) -> AgentResponse:
         """Create a response when consultation fails."""
         return AgentResponse(
             task_id=action.task_id,

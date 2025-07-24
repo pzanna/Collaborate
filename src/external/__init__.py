@@ -15,52 +15,23 @@ Date: July 2025
 """
 
 # Citation managers
-from .citation_managers import (
-    BibTeXManager,
-    CitationFormat,
-    CitationManager,
-    EndNoteCompatibility,
-    MendeleyConnector,
-    ReferenceLibrary,
-    ZoteroIntegration,
-)
-
+from .citation_managers import (BibTeXManager, CitationFormat, CitationManager,
+                                EndNoteCompatibility, MendeleyConnector,
+                                ReferenceLibrary, ZoteroIntegration)
 # Data exchange hub
-from .data_hub import (
-    DataExchangeHub,
-    DataFormat,
-    DataValidationResult,
-    DataValidator,
-    ExchangeFormat,
-    ExportEngine,
-    ExportResult,
-    FormatConverter,
-    ImportEngine,
-    ImportResult,
-    ValidationLevel,
-)
-
+from .data_hub import (DataExchangeHub, DataFormat, DataValidationResult,
+                       DataValidator, ExchangeFormat, ExportEngine,
+                       ExportResult, FormatConverter, ImportEngine,
+                       ImportResult, ValidationLevel)
 # Database connectors
-from .database_connectors import (
-    ArxivConnector,
-    CochraneConnector,
-    DatabaseConnector,
-    DatabaseManager,
-    DatabaseSearchQuery,
-    ExternalSearchResult,
-    PubMedConnector,
-)
-
+from .database_connectors import (ArxivConnector, CochraneConnector,
+                                  DatabaseConnector, DatabaseManager,
+                                  DatabaseSearchQuery, ExternalSearchResult,
+                                  PubMedConnector)
 # Research tools
-from .research_tools import (
-    AnalysisResult,
-    GradeProIntegration,
-    ProsperoRegistration,
-    ResearchToolIntegration,
-    RevManCompatibility,
-    RIntegration,
-    ToolInterface,
-)
+from .research_tools import (AnalysisResult, GradeProIntegration,
+                             ProsperoRegistration, ResearchToolIntegration,
+                             RevManCompatibility, RIntegration, ToolInterface)
 
 __all__ = [
     # Database connectors

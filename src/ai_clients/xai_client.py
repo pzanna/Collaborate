@@ -4,11 +4,11 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 from xai_sdk import Client
-from xai_sdk.chat import assistant, system, user
+from xai_sdk.chat import system, user
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -32,7 +32,9 @@ class XAIClient:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-    def get_response(self, user_message: str, system_prompt: Optional[str] = None) -> str:
+    def get_response(
+        self, user_message: str, system_prompt: Optional[str] = None
+    ) -> str:
         """Get response from xAI."""
         start_time = time.time()
         estimated_tokens = self.estimate_tokens(user_message)
@@ -75,10 +77,16 @@ class XAIClient:
             )
 
             # Log response content (truncated and sanitized for log format)
-            content_preview = response_content[:200] + "..." if len(response_content) > 200 else response_content
+            content_preview = (
+                response_content[:200] + "..."
+                if len(response_content) > 200
+                else response_content
+            )
             # Sanitize content for single - line log entry (replace newlines and multiple spaces)
             sanitized_preview = content_preview.replace("\n", " ").replace("\r", " ")
-            sanitized_preview = " ".join(sanitized_preview.split())  # Normalize whitespace
+            sanitized_preview = " ".join(
+                sanitized_preview.split()
+            )  # Normalize whitespace
             self.logger.debug(f"xAI Response content preview: {sanitized_preview}")
 
             return response_content

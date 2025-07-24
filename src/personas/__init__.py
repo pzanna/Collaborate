@@ -9,4 +9,9 @@ from .mcp_integration import PersonaMCPIntegration
 from .neurobiologist_agent import NeurologistPersonaAgent
 from .persona_registry import PersonaRegistry, PersonaType
 
-__all__ = ["NeurologistPersonaAgent", "PersonaRegistry", "PersonaType", "PersonaMCPIntegration"]
+__all__ = [
+    "NeurologistPersonaAgent",
+    "PersonaRegistry",
+    "PersonaType",
+    "PersonaMCPIntegration",
+]

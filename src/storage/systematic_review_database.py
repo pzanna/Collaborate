@@ -8,15 +8,14 @@ specifically for systematic review workflows following PRISMA guidelines.
 import json
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 try:
-    from ..utils.error_handler import DatabaseError, handle_errors
+    from ..utils.error_handler import handle_errors
     from ..utils.id_utils import generate_timestamped_id
 except ImportError:
     # For testing or standalone use
-    from utils.error_handler import DatabaseError, handle_errors
+    from utils.error_handler import handle_errors
     from utils.id_utils import generate_timestamped_id
 
 
@@ -369,7 +368,9 @@ class SystematicReviewDatabase:
         """
         with self.get_connection() as conn:
             # Check if log exists
-            cursor = conn.execute("SELECT id FROM prisma_logs WHERE task_id = ?", (task_id,))
+            cursor = conn.execute(
+                "SELECT id FROM prisma_logs WHERE task_id = ?", (task_id,)
+            )
             existing = cursor.fetchone()
 
             if existing:
@@ -522,8 +523,12 @@ class SystematicReviewDatabase:
             studies = []
             for row in cursor.fetchall():
                 study = dict(row)
-                study["authors"] = json.loads(study["authors"]) if study["authors"] else []
-                study["metadata"] = json.loads(study["metadata"]) if study["metadata"] else {}
+                study["authors"] = (
+                    json.loads(study["authors"]) if study["authors"] else []
+                )
+                study["metadata"] = (
+                    json.loads(study["metadata"]) if study["metadata"] else {}
+                )
                 studies.append(study)
 
             return studies
@@ -550,8 +555,14 @@ class SystematicReviewDatabase:
             row = cursor.fetchone()
             if row:
                 log = dict(row)
-                log["exclusion_reasons"] = json.loads(log["exclusion_reasons"]) if log["exclusion_reasons"] else []
-                log["search_strategy"] = json.loads(log["search_strategy"]) if log["search_strategy"] else {}
+                log["exclusion_reasons"] = (
+                    json.loads(log["exclusion_reasons"])
+                    if log["exclusion_reasons"]
+                    else []
+                )
+                log["search_strategy"] = (
+                    json.loads(log["search_strategy"]) if log["search_strategy"] else {}
+                )
                 return log
 
             return None
@@ -625,7 +636,11 @@ class SystematicReviewDatabase:
             # Get PRISMA log
             prisma_log = self.get_prisma_log(task_id)
 
-            return {"total_studies": total_studies, "screening_statistics": screening_stats, "prisma_log": prisma_log}
+            return {
+                "total_studies": total_studies,
+                "screening_statistics": screening_stats,
+                "prisma_log": prisma_log,
+            }
 
 
 if __name__ == "__main__":
@@ -668,7 +683,10 @@ if __name__ == "__main__":
         "duplicates_removed": 15,
         "screened_title_abstract": 85,
         "excluded_title_abstract": 60,
-        "exclusion_reasons": [{"code": "WRONG_POPULATION", "count": 30}, {"code": "WRONG_INTERVENTION", "count": 20}],
+        "exclusion_reasons": [
+            {"code": "WRONG_POPULATION", "count": 30},
+            {"code": "WRONG_INTERVENTION", "count": 20},
+        ],
     }
 
     db.update_prisma_log("test_task_001", prisma_data)

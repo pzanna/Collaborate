@@ -22,15 +22,13 @@ Date: 2024
 import asyncio
 import json
 import logging
-import math
 import sqlite3
 import statistics
 import uuid
-from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -331,13 +329,15 @@ class CollaborativeQAWorkflows:
 
                 # Create indexes
                 cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_qa_assignments_workflow_stage ON qa_assignments(workflow_id, stage)"
+                    "CREATE INDEX IF NOT EXISTS idx_qa_assignments_workflow_stage ON qa_assignments(workflow_id, "
+                    "stage)"
                 )
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS idx_qa_submissions_study_stage ON qa_submissions(study_id, stage)"
                 )
                 cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_consensus_metrics_project_stage ON consensus_metrics(project_id, stage)"
+                    "CREATE INDEX IF NOT EXISTS idx_consensus_metrics_project_stage ON "
+                    "consensus_metrics(project_id, stage)"
                 )
 
                 conn.commit()
@@ -371,14 +371,22 @@ class CollaborativeQAWorkflows:
         try:
             # Set default configurations
             required_reviewers = {stage: 2 for stage in stages}
-            consensus_thresholds = {stage: self.default_consensus_thresholds.get(stage, 0.8) for stage in stages}
-            auto_advance = {stage: {"consensus_threshold": 0.9, "min_reviewers": 2} for stage in stages}
+            consensus_thresholds = {
+                stage: self.default_consensus_thresholds.get(stage, 0.8)
+                for stage in stages
+            }
+            auto_advance = {
+                stage: {"consensus_threshold": 0.9, "min_reviewers": 2}
+                for stage in stages
+            }
             expert_validation = {QAStage.GRADE_ASSESSMENT, QAStage.FINAL_REVIEW}
 
             # Apply custom configuration
             if custom_config:
                 required_reviewers.update(custom_config.get("required_reviewers", {}))
-                consensus_thresholds.update(custom_config.get("consensus_thresholds", {}))
+                consensus_thresholds.update(
+                    custom_config.get("consensus_thresholds", {})
+                )
                 auto_advance.update(custom_config.get("auto_advance", {}))
                 expert_validation.update(custom_config.get("expert_validation", set()))
 
@@ -397,7 +405,9 @@ class CollaborativeQAWorkflows:
             )
 
             await self._store_workflow(workflow)
-            logger.info(f"Created QA workflow: {workflow_name} for project {project_id}")
+            logger.info(
+                f"Created QA workflow: {workflow_name} for project {project_id}"
+            )
             return workflow
 
         except Exception as e:
@@ -449,7 +459,9 @@ class CollaborativeQAWorkflows:
                     await self._store_assignment(assignment)
                     assignments.append(assignment)
 
-            logger.info(f"Created {len(assignments)} QA assignments for stage {stage.value}")
+            logger.info(
+                f"Created {len(assignments)} QA assignments for stage {stage.value}"
+            )
             return assignments
 
         except Exception as e:
@@ -503,7 +515,9 @@ class CollaborativeQAWorkflows:
             await self._update_assignment_status(assignment_id, "completed")
 
             # Check for consensus and auto - advance
-            await self._check_stage_consensus(assignment.workflow_id, assignment.stage, assignment.study_id)
+            await self._check_stage_consensus(
+                assignment.workflow_id, assignment.stage, assignment.study_id
+            )
 
             logger.info(f"QA submission completed for assignment {assignment_id}")
             return submission
@@ -531,7 +545,9 @@ class CollaborativeQAWorkflows:
             submissions = await self._get_submissions_for_study_stage(study_id, stage)
 
             if len(submissions) < 2:
-                logger.warning(f"Insufficient submissions for consensus calculation: {len(submissions)}")
+                logger.warning(
+                    f"Insufficient submissions for consensus calculation: {len(submissions)}"
+                )
                 return None
 
             # Extract reviewer decisions
@@ -567,11 +583,15 @@ class CollaborativeQAWorkflows:
                         # Consider agreement if values are within 10% of each other
                         mean_value = statistics.mean(values)
                         tolerance = abs(mean_value * 0.1) if mean_value != 0 else 0.1
-                        agreement_count = sum(1 for v in values if abs(v - mean_value) <= tolerance)
+                        agreement_count = sum(
+                            1 for v in values if abs(v - mean_value) <= tolerance
+                        )
                         agreement_ratio = agreement_count / len(values)
 
                     else:
-                        agreement_ratio = 1.0 if all(v == values[0] for v in values) else 0.0
+                        agreement_ratio = (
+                            1.0 if all(v == values[0] for v in values) else 0.0
+                        )
 
                     agreement_scores.append(agreement_ratio)
                     total_comparisons += 1
@@ -588,7 +608,11 @@ class CollaborativeQAWorkflows:
                         )
 
             # Calculate overall agreement percentage
-            agreement_percentage = (total_agreements / total_comparisons) * 100 if total_comparisons > 0 else 0
+            agreement_percentage = (
+                (total_agreements / total_comparisons) * 100
+                if total_comparisons > 0
+                else 0
+            )
 
             # Determine consensus level
             consensus_level = self._determine_consensus_level(agreement_percentage)
@@ -617,7 +641,9 @@ class CollaborativeQAWorkflows:
             )
 
             await self._store_consensus_metrics(metrics)
-            logger.info(f"Consensus metrics calculated: {agreement_percentage:.1f}% agreement")
+            logger.info(
+                f"Consensus metrics calculated: {agreement_percentage:.1f}% agreement"
+            )
             return metrics
 
         except Exception as e:
@@ -655,7 +681,9 @@ class CollaborativeQAWorkflows:
             )
 
             await self._store_expert_validation(validation)
-            logger.info(f"Expert validation requested for study {study_id}, stage {stage.value}")
+            logger.info(
+                f"Expert validation requested for study {study_id}, stage {stage.value}"
+            )
             return validation
 
         except Exception as e:
@@ -688,7 +716,12 @@ class CollaborativeQAWorkflows:
         try:
             # Update validation record
             await self._update_expert_validation(
-                validation_id, expert_decision, validation_status, validation_notes, confidence_score, recommendations
+                validation_id,
+                expert_decision,
+                validation_status,
+                validation_notes,
+                confidence_score,
+                recommendations,
             )
 
             # Get updated validation
@@ -696,7 +729,9 @@ class CollaborativeQAWorkflows:
 
             # If approved, advance workflow stage
             if validation and validation_status == ValidationStatus.APPROVED:
-                await self._advance_workflow_stage(validation.study_id, validation.stage)
+                await self._advance_workflow_stage(
+                    validation.study_id, validation.stage
+                )
 
             logger.info(f"Expert validation completed: {validation_status.value}")
             return validation
@@ -705,7 +740,9 @@ class CollaborativeQAWorkflows:
             logger.error(f"Expert validation completion failed: {str(e)}")
             raise
 
-    async def calculate_qa_metrics(self, project_id: str, time_period: str = "weekly") -> Dict[str, Any]:
+    async def calculate_qa_metrics(
+        self, project_id: str, time_period: str = "weekly"
+    ) -> Dict[str, Any]:
         """
         Calculate comprehensive QA metrics for a project
 
@@ -789,7 +826,9 @@ class CollaborativeQAWorkflows:
         else:
             return ConsensusLevel.POOR
 
-    async def _calculate_kappa_score(self, submissions: List[QASubmission]) -> Optional[float]:
+    async def _calculate_kappa_score(
+        self, submissions: List[QASubmission]
+    ) -> Optional[float]:
         """Calculate inter - rater agreement using Cohen's Kappa"""
         try:
             # Simplified kappa calculation for demonstration
@@ -806,25 +845,36 @@ class CollaborativeQAWorkflows:
             return None
 
     async def _generate_consensus_recommendations(
-        self, agreement_percentage: float, disagreement_items: List[Dict], submissions: List[QASubmission]
+        self,
+        agreement_percentage: float,
+        disagreement_items: List[Dict],
+        submissions: List[QASubmission],
     ) -> List[str]:
         """Generate recommendations for improving consensus"""
         recommendations = []
 
         if agreement_percentage < 70:
-            recommendations.append("Consider additional reviewer training to improve agreement")
+            recommendations.append(
+                "Consider additional reviewer training to improve agreement"
+            )
             recommendations.append("Review and clarify assessment criteria")
 
         if len(disagreement_items) > 0:
-            recommendations.append("Focus on resolving specific disagreement areas through discussion")
+            recommendations.append(
+                "Focus on resolving specific disagreement areas through discussion"
+            )
 
         if agreement_percentage < 50:
             recommendations.append("Consider expert mediation for this assessment")
-            recommendations.append("Review assessment protocols and provide additional guidance")
+            recommendations.append(
+                "Review assessment protocols and provide additional guidance"
+            )
 
         return recommendations
 
-    async def _check_stage_consensus(self, workflow_id: str, stage: QAStage, study_id: str):
+    async def _check_stage_consensus(
+        self, workflow_id: str, stage: QAStage, study_id: str
+    ):
         """Check if consensus is reached for auto - advancing stage"""
         try:
             # Get workflow configuration
@@ -848,12 +898,16 @@ class CollaborativeQAWorkflows:
                     auto_advance = workflow.auto_advance_conditions.get(stage, {})
                     if auto_advance.get("auto_advance", False):
                         await self._advance_workflow_stage(study_id, stage)
-                        logger.info(f"Auto - advanced study {study_id} from stage {stage.value}")
+                        logger.info(
+                            f"Auto - advanced study {study_id} from stage {stage.value}"
+                        )
 
         except Exception as e:
             logger.error(f"Stage consensus check failed: {str(e)}")
 
-    async def _calculate_simple_consensus(self, submissions: List[QASubmission]) -> float:
+    async def _calculate_simple_consensus(
+        self, submissions: List[QASubmission]
+    ) -> float:
         """Calculate simple consensus score from submissions"""
         if len(submissions) < 2:
             return 0.0
@@ -887,15 +941,29 @@ class CollaborativeQAWorkflows:
                         workflow.workflow_name,
                         json.dumps([stage.value for stage in workflow.stages]),
                         json.dumps(
-                            {stage.value: count for stage, count in workflow.required_reviewers_per_stage.items()}
+                            {
+                                stage.value: count
+                                for stage, count in workflow.required_reviewers_per_stage.items()
+                            }
                         ),
                         json.dumps(
-                            {stage.value: threshold for stage, threshold in workflow.consensus_thresholds.items()}
+                            {
+                                stage.value: threshold
+                                for stage, threshold in workflow.consensus_thresholds.items()
+                            }
                         ),
                         json.dumps(
-                            {stage.value: conditions for stage, conditions in workflow.auto_advance_conditions.items()}
+                            {
+                                stage.value: conditions
+                                for stage, conditions in workflow.auto_advance_conditions.items()
+                            }
                         ),
-                        json.dumps([stage.value for stage in workflow.expert_validation_required]),
+                        json.dumps(
+                            [
+                                stage.value
+                                for stage in workflow.expert_validation_required
+                            ]
+                        ),
                         workflow.created_by,
                         workflow.created_date.isoformat(),
                         workflow.is_active,
@@ -925,8 +993,16 @@ class CollaborativeQAWorkflows:
                         assignment.study_id,
                         assignment.reviewer_id,
                         assignment.assigned_date.isoformat(),
-                        assignment.due_date.isoformat() if assignment.due_date else None,
-                        assignment.completion_date.isoformat() if assignment.completion_date else None,
+                        (
+                            assignment.due_date.isoformat()
+                            if assignment.due_date
+                            else None
+                        ),
+                        (
+                            assignment.completion_date.isoformat()
+                            if assignment.completion_date
+                            else None
+                        ),
                         assignment.status,
                         json.dumps(assignment.assignment_data),
                     ),
@@ -1063,7 +1139,9 @@ class CollaborativeQAWorkflows:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM qa_workflows WHERE workflow_id = ?", (workflow_id,))
+                cursor.execute(
+                    "SELECT * FROM qa_workflows WHERE workflow_id = ?", (workflow_id,)
+                )
                 row = cursor.fetchone()
 
                 if row:
@@ -1072,10 +1150,18 @@ class CollaborativeQAWorkflows:
                         project_id=row[1],
                         workflow_name=row[2],
                         stages=[QAStage(stage) for stage in json.loads(row[3])],
-                        required_reviewers_per_stage={QAStage(k): v for k, v in json.loads(row[4]).items()},
-                        consensus_thresholds={QAStage(k): v for k, v in json.loads(row[5]).items()},
-                        auto_advance_conditions={QAStage(k): v for k, v in json.loads(row[6]).items()},
-                        expert_validation_required={QAStage(stage) for stage in json.loads(row[7])},
+                        required_reviewers_per_stage={
+                            QAStage(k): v for k, v in json.loads(row[4]).items()
+                        },
+                        consensus_thresholds={
+                            QAStage(k): v for k, v in json.loads(row[5]).items()
+                        },
+                        auto_advance_conditions={
+                            QAStage(k): v for k, v in json.loads(row[6]).items()
+                        },
+                        expert_validation_required={
+                            QAStage(stage) for stage in json.loads(row[7])
+                        },
                         created_by=row[8],
                         created_date=datetime.fromisoformat(row[9]),
                         is_active=bool(row[10]),
@@ -1090,7 +1176,10 @@ class CollaborativeQAWorkflows:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM qa_assignments WHERE assignment_id = ?", (assignment_id,))
+                cursor.execute(
+                    "SELECT * FROM qa_assignments WHERE assignment_id = ?",
+                    (assignment_id,),
+                )
                 row = cursor.fetchone()
 
                 if row:
@@ -1102,7 +1191,9 @@ class CollaborativeQAWorkflows:
                         reviewer_id=row[4],
                         assigned_date=datetime.fromisoformat(row[5]),
                         due_date=datetime.fromisoformat(row[6]) if row[6] else None,
-                        completion_date=datetime.fromisoformat(row[7]) if row[7] else None,
+                        completion_date=(
+                            datetime.fromisoformat(row[7]) if row[7] else None
+                        ),
                         status=row[8],
                         assignment_data=json.loads(row[9]) if row[9] else {},
                     )
@@ -1111,7 +1202,9 @@ class CollaborativeQAWorkflows:
             logger.error(f"Failed to get assignment: {str(e)}")
             return None
 
-    async def _get_submissions_for_study_stage(self, study_id: str, stage: QAStage) -> List[QASubmission]:
+    async def _get_submissions_for_study_stage(
+        self, study_id: str, stage: QAStage
+    ) -> List[QASubmission]:
         """Get all submissions for a study / stage combination"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -1145,12 +1238,17 @@ class CollaborativeQAWorkflows:
             logger.error(f"Failed to get submissions: {str(e)}")
             return []
 
-    async def _get_expert_validation(self, validation_id: str) -> Optional[ExpertValidation]:
+    async def _get_expert_validation(
+        self, validation_id: str
+    ) -> Optional[ExpertValidation]:
         """Get expert validation by ID"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM expert_validations WHERE validation_id = ?", (validation_id,))
+                cursor.execute(
+                    "SELECT * FROM expert_validations WHERE validation_id = ?",
+                    (validation_id,),
+                )
                 row = cursor.fetchone()
 
                 if row:
@@ -1232,7 +1330,11 @@ class CollaborativeQAWorkflows:
     async def _calculate_completion_rates(self, project_id: str) -> Dict[str, float]:
         """Calculate completion rates by stage"""
         # Placeholder for completion rate calculation
-        return {"initial_screening": 0.95, "detailed_assessment": 0.88, "quality_assessment": 0.92}
+        return {
+            "initial_screening": 0.95,
+            "detailed_assessment": 0.88,
+            "quality_assessment": 0.92,
+        }
 
     async def _calculate_average_consensus(self, project_id: str) -> float:
         """Calculate average consensus score"""
@@ -1259,7 +1361,11 @@ if __name__ == "__main__":
         workflow = await qa_system.create_qa_workflow(
             project_id="test_project",
             workflow_name="Standard Systematic Review QA",
-            stages=[QAStage.INITIAL_SCREENING, QAStage.DETAILED_ASSESSMENT, QAStage.QUALITY_ASSESSMENT],
+            stages=[
+                QAStage.INITIAL_SCREENING,
+                QAStage.DETAILED_ASSESSMENT,
+                QAStage.QUALITY_ASSESSMENT,
+            ],
             created_by="admin",
         )
 
@@ -1276,7 +1382,7 @@ if __name__ == "__main__":
 
         # Submit assessments
         for assignment in assignments[:2]:  # Submit first two
-            submission = await qa_system.submit_qa_assessment(
+            await qa_system.submit_qa_assessment(
                 assignment_id=assignment.assignment_id,
                 submission_data={
                     "decision": "include",
@@ -1289,11 +1395,15 @@ if __name__ == "__main__":
 
         # Calculate consensus
         consensus = await qa_system.calculate_consensus_metrics(
-            project_id="test_project", stage=QAStage.INITIAL_SCREENING, study_id="study1"
+            project_id="test_project",
+            stage=QAStage.INITIAL_SCREENING,
+            study_id="study1",
         )
 
         if consensus:
-            print(f"Consensus: {consensus.agreement_percentage:.1f}% ({consensus.consensus_level.value})")
+            print(
+                f"Consensus: {consensus.agreement_percentage:.1f}% ({consensus.consensus_level.value})"
+            )
 
         # Calculate QA metrics
         metrics = await qa_system.calculate_qa_metrics("test_project")

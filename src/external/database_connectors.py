@@ -16,18 +16,15 @@ Date: July 2025
 """
 
 import asyncio
-import hashlib
-import json
 import logging
 import ssl
 import time
-import urllib.parse
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -145,10 +142,14 @@ class DatabaseConnector(ABC):
             # This can be controlled via environment variable or configuration
             import os
 
-            disable_ssl_verification = os.environ.get("DISABLE_SSL_VERIFICATION", "").lower() in ("true", "1", "yes")
+            disable_ssl_verification = os.environ.get(
+                "DISABLE_SSL_VERIFICATION", ""
+            ).lower() in ("true", "1", "yes")
 
             if disable_ssl_verification:
-                logger.warning("SSL verification disabled via DISABLE_SSL_VERIFICATION environment variable")
+                logger.warning(
+                    "SSL verification disabled via DISABLE_SSL_VERIFICATION environment variable"
+                )
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
             else:
@@ -157,7 +158,9 @@ class DatabaseConnector(ABC):
                 ssl_context.verify_mode = ssl.CERT_REQUIRED
 
                 # Add some common SSL configuration for better compatibility
-                ssl_context.set_ciphers("ECDHE + AESGCM:ECDHE + CHACHA20:DHE + AESGCM:DHE + CHACHA20:!aNULL:!MD5:!DSS")
+                ssl_context.set_ciphers(
+                    "ECDHE + AESGCM:ECDHE + CHACHA20:DHE + AESGCM:DHE + CHACHA20:!aNULL:!MD5:!DSS"
+                )
 
                 # Enable hostname checking
                 ssl_context.check_hostname = True
@@ -173,13 +176,19 @@ class DatabaseConnector(ABC):
         # Create connector with SSL context (if available)
         if ssl_context:
             try:
-                connector = aiohttp.TCPConnector(ssl=ssl_context, limit=100, limit_per_host=10)
+                connector = aiohttp.TCPConnector(
+                    ssl=ssl_context, limit=100, limit_per_host=10
+                )
                 logger.debug("Created aiohttp connector with SSL context")
             except Exception as e:
                 logger.warning(f"Failed to create connector with SSL context: {e}")
                 # Fallback to no SSL verification
-                connector = aiohttp.TCPConnector(ssl=False, limit=100, limit_per_host=10)
-                logger.warning("SSL verification disabled due to connector creation failure")
+                connector = aiohttp.TCPConnector(
+                    ssl=False, limit=100, limit_per_host=10
+                )
+                logger.warning(
+                    "SSL verification disabled due to connector creation failure"
+                )
         else:
             # Fallback: create connector without SSL verification (for environments with cert issues)
             connector = aiohttp.TCPConnector(ssl=False, limit=100, limit_per_host=10)
@@ -187,14 +196,18 @@ class DatabaseConnector(ABC):
 
         try:
             self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=self.config.timeout), connector=connector
+                timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                connector=connector,
             )
-            logger.debug(f"Created aiohttp session for {self.config.database_type.value}")
+            logger.debug(
+                f"Created aiohttp session for {self.config.database_type.value}"
+            )
         except Exception as e:
             logger.error(f"Failed to create aiohttp session: {e}")
             # Create a basic session as fallback
             self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=30), connector=aiohttp.TCPConnector(ssl=False)
+                timeout=aiohttp.ClientTimeout(total=30),
+                connector=aiohttp.TCPConnector(ssl=False),
             )
 
         return self
@@ -206,17 +219,14 @@ class DatabaseConnector(ABC):
     @abstractmethod
     async def search(self, query: DatabaseSearchQuery) -> List[ExternalSearchResult]:
         """Execute search query and return results"""
-        pass
 
     @abstractmethod
     async def get_full_record(self, external_id: str) -> Optional[ExternalSearchResult]:
         """Retrieve complete record details"""
-        pass
 
     @abstractmethod
     def translate_query(self, search_terms: str, search_fields: List[str]) -> str:
         """Translate search query to database - specific format"""
-        pass
 
     async def test_connection(self) -> bool:
         """Test database connection and authentication"""
@@ -237,9 +247,13 @@ class DatabaseConnector(ABC):
                     offset=0,
                 )
                 results = await self.search(test_query)
-                return len(results) >= 0  # Even 0 results indicate successful connection
+                return (
+                    len(results) >= 0
+                )  # Even 0 results indicate successful connection
         except Exception as e:
-            logger.error(f"Connection test failed for {self.config.database_type.value}: {e}")
+            logger.error(
+                f"Connection test failed for {self.config.database_type.value}: {e}"
+            )
             return False
 
 
@@ -337,7 +351,12 @@ class PubMedConnector(DatabaseConnector):
             # Add date filters
             if query.date_range:
                 if "start_date" in query.date_range and "end_date" in query.date_range:
-                    date_filter = f"(\"{query.date_range['start_date']}\"[Date - Publication] : \"{query.date_range['end_date']}\"[Date - Publication])"
+                    start_date = query.date_range["start_date"]
+                    end_date = query.date_range["end_date"]
+                    date_filter = (
+                        f'("{start_date}"[Date - Publication] : '
+                        f'"{end_date}"[Date - Publication])'
+                    )
                     search_params["term"] += f" AND {date_filter}"
 
             async with self.session.get(search_url, params=search_params) as response:
@@ -346,7 +365,10 @@ class PubMedConnector(DatabaseConnector):
 
                 search_data = await response.json()
 
-                if "esearchresult" not in search_data or "idlist" not in search_data["esearchresult"]:
+                if (
+                    "esearchresult" not in search_data
+                    or "idlist" not in search_data["esearchresult"]
+                ):
                     return []
 
                 pmids = search_data["esearchresult"]["idlist"]
@@ -358,7 +380,12 @@ class PubMedConnector(DatabaseConnector):
             await self.rate_limiter.acquire()
 
             fetch_url = f"{self.EUTILS_BASE}efetch.fcgi"
-            fetch_params = {"db": "pubmed", "id": ",".join(pmids), "retmode": "xml", "rettype": "medline"}
+            fetch_params = {
+                "db": "pubmed",
+                "id": ",".join(pmids),
+                "retmode": "xml",
+                "rettype": "medline",
+            }
 
             if self.config.api_key:
                 fetch_params["api_key"] = self.config.api_key
@@ -391,7 +418,9 @@ class PubMedConnector(DatabaseConnector):
 
         return results
 
-    def _extract_pubmed_article(self, article: ET.Element) -> Optional[ExternalSearchResult]:
+    def _extract_pubmed_article(
+        self, article: ET.Element
+    ) -> Optional[ExternalSearchResult]:
         """Extract article data from PubMed XML"""
         try:
             # PMID
@@ -559,7 +588,13 @@ class CochraneConnector(DatabaseConnector):
         if not search_fields or "all" in search_fields:
             return search_terms
 
-        field_mapping = {"title": "ti", "abstract": "ab", "author": "au", "mesh": "mh", "keyword": "kw"}
+        field_mapping = {
+            "title": "ti",
+            "abstract": "ab",
+            "author": "au",
+            "mesh": "mh",
+            "keyword": "kw",
+        }
 
         if len(search_fields) > 1:
             field_queries = []
@@ -627,7 +662,12 @@ class ArxivConnector(DatabaseConnector):
         if not search_fields or "all" in search_fields:
             return f"all:{search_terms}"
 
-        field_mapping = {"title": "ti", "abstract": "abs", "author": "au", "category": "cat"}
+        field_mapping = {
+            "title": "ti",
+            "abstract": "abs",
+            "author": "au",
+            "category": "cat",
+        }
 
         if len(search_fields) > 1:
             field_queries = []
@@ -646,14 +686,18 @@ class ArxivConnector(DatabaseConnector):
             await self.rate_limiter.acquire()
 
             search_params = {
-                "search_query": self.translate_query(query.search_terms, query.search_fields),
+                "search_query": self.translate_query(
+                    query.search_terms, query.search_fields
+                ),
                 "start": query.offset,
                 "max_results": query.max_results,
                 "sortBy": "relevance",
                 "sortOrder": "descending",
             }
 
-            async with self.session.get(self.config.api_endpoint, params=search_params) as response:
+            async with self.session.get(
+                self.config.api_endpoint, params=search_params
+            ) as response:
                 if response.status != 200:
                     raise Exception(f"arXiv search failed: {response.status}")
 
@@ -683,7 +727,9 @@ class ArxivConnector(DatabaseConnector):
 
         return results
 
-    def _extract_arxiv_entry(self, entry: ET.Element, ns: dict) -> Optional[ExternalSearchResult]:
+    def _extract_arxiv_entry(
+        self, entry: ET.Element, ns: dict
+    ) -> Optional[ExternalSearchResult]:
         """Extract entry data from arXiv XML"""
         try:
             # ID
@@ -695,7 +741,11 @@ class ArxivConnector(DatabaseConnector):
 
             # Title
             title_elem = entry.find("atom:title", ns)
-            title = title_elem.text.strip() if title_elem is not None else "No title available"
+            title = (
+                title_elem.text.strip()
+                if title_elem is not None
+                else "No title available"
+            )
 
             # Authors
             authors = []
@@ -709,7 +759,9 @@ class ArxivConnector(DatabaseConnector):
             pub_date = None
             if published_elem is not None:
                 try:
-                    pub_date = datetime.fromisoformat(published_elem.text.replace("Z", "+00:00"))
+                    pub_date = datetime.fromisoformat(
+                        published_elem.text.replace("Z", "+00:00")
+                    )
                 except ValueError:
                     pass
 
@@ -748,7 +800,11 @@ class ArxivConnector(DatabaseConnector):
                 language="en",  # arXiv is primarily English
                 full_text_available=True,  # arXiv provides full text
                 citation_count=None,
-                metadata={"database": "arXiv", "categories": keywords, "preprint": True},
+                metadata={
+                    "database": "arXiv",
+                    "categories": keywords,
+                    "preprint": True,
+                },
                 retrieved_timestamp=datetime.now(timezone.utc),
                 confidence_score=None,
             )
@@ -810,11 +866,18 @@ class SemanticScholarConnector(DatabaseConnector):
                 "query": self.translate_query(query.search_terms, query.search_fields),
                 "limit": min(query.max_results, 100),  # API limit is 100
                 "offset": query.offset,
-                "fields": "paperId,title,authors,year,journal,abstract,citationCount,url,venue,publicationDate,externalIds",
+                "fields": (
+                    "paperId,title,authors,year,journal,abstract,"
+                    "citationCount,url,venue,publicationDate,externalIds"
+                ),
             }
 
             # Add field - specific search if specified
-            if query.search_fields and "title" in query.search_fields and len(query.search_fields) == 1:
+            if (
+                query.search_fields
+                and "title" in query.search_fields
+                and len(query.search_fields) == 1
+            ):
                 # If only searching titles, we can be more specific
                 search_params["fieldsOfStudy"] = "Computer Science,Medicine,Biology"
 
@@ -822,13 +885,17 @@ class SemanticScholarConnector(DatabaseConnector):
             if self.config.api_key:
                 headers["x - api - key"] = self.config.api_key
 
-            async with self.session.get(self.config.api_endpoint, params=search_params, headers=headers) as response:
+            async with self.session.get(
+                self.config.api_endpoint, params=search_params, headers=headers
+            ) as response:
                 if response.status == 429:
                     # Rate limited
                     await asyncio.sleep(1)
                     return []
                 elif response.status != 200:
-                    raise Exception(f"Semantic Scholar search failed: {response.status}")
+                    raise Exception(
+                        f"Semantic Scholar search failed: {response.status}"
+                    )
 
                 data = await response.json()
 
@@ -841,7 +908,9 @@ class SemanticScholarConnector(DatabaseConnector):
             logger.error(f"Semantic Scholar search error: {e}")
             return []
 
-    def _parse_semantic_scholar_response(self, papers: List[Dict[str, Any]]) -> List[ExternalSearchResult]:
+    def _parse_semantic_scholar_response(
+        self, papers: List[Dict[str, Any]]
+    ) -> List[ExternalSearchResult]:
         """Parse Semantic Scholar API response"""
         results = []
 
@@ -856,7 +925,9 @@ class SemanticScholarConnector(DatabaseConnector):
 
         return results
 
-    def _extract_semantic_scholar_paper(self, paper: Dict[str, Any]) -> Optional[ExternalSearchResult]:
+    def _extract_semantic_scholar_paper(
+        self, paper: Dict[str, Any]
+    ) -> Optional[ExternalSearchResult]:
         """Extract paper data from Semantic Scholar API response"""
         try:
             # Paper ID
@@ -881,7 +952,9 @@ class SemanticScholarConnector(DatabaseConnector):
             pub_date = None
             if paper.get("publicationDate"):
                 try:
-                    pub_date = datetime.fromisoformat(paper["publicationDate"]).replace(tzinfo=timezone.utc)
+                    pub_date = datetime.fromisoformat(paper["publicationDate"]).replace(
+                        tzinfo=timezone.utc
+                    )
                 except ValueError:
                     # Try with just year if full date parsing fails
                     year = paper.get("year")
@@ -916,7 +989,10 @@ class SemanticScholarConnector(DatabaseConnector):
                 arxiv_id = external_ids.get("ArXiv")
 
             # URL
-            url = paper.get("url") or f"https://www.semanticscholar.org / paper/{paper_id}"
+            url = (
+                paper.get("url")
+                or f"https://www.semanticscholar.org / paper/{paper_id}"
+            )
 
             # Citation count
             citation_count = paper.get("citationCount")
@@ -959,16 +1035,21 @@ class SemanticScholarConnector(DatabaseConnector):
         try:
             await self.rate_limiter.acquire()
 
-            url = f"https://api.semanticscholar.org / graph / v1 / paper/{external_id}"
+            url = f"https://api.semanticscholar.org/graph/v1/paper/{external_id}"
             params = {
-                "fields": "paperId,title,authors,year,journal,abstract,citationCount,url,venue,publicationDate,externalIds,fieldsOfStudy"
+                "fields": (
+                    "paperId,title,authors,year,journal,abstract,"
+                    "citationCount,url,venue,publicationDate,externalIds,fieldsOfStudy"
+                )
             }
 
             headers = {}
             if self.config.api_key:
                 headers["x - api - key"] = self.config.api_key
 
-            async with self.session.get(url, params=params, headers=headers) as response:
+            async with self.session.get(
+                url, params=params, headers=headers
+            ) as response:
                 if response.status == 404:
                     return None
                 elif response.status != 200:
@@ -1000,7 +1081,9 @@ class DatabaseManager:
     @property
     def databases(self) -> Dict[str, DatabaseConnector]:
         """Get database connectors by name"""
-        return {db_type.value: connector for db_type, connector in self.connectors.items()}
+        return {
+            db_type.value: connector for db_type, connector in self.connectors.items()
+        }
 
     async def search_multiple_databases(
         self, query: DatabaseSearchQuery, databases: List[DatabaseType]
@@ -1127,7 +1210,9 @@ if __name__ == "__main__":
 
         print("\nTesting Semantic Scholar connection...")
         is_connected_s2 = await semantic_scholar.test_connection()
-        print(f"Semantic Scholar connection: {'✅ SUCCESS' if is_connected_s2 else '❌ FAILED'}")
+        print(
+            f"Semantic Scholar connection: {'✅ SUCCESS' if is_connected_s2 else '❌ FAILED'}"
+        )
 
         # Test search
         print("\nTesting PubMed search...")
@@ -1151,7 +1236,9 @@ if __name__ == "__main__":
 
             for i, result in enumerate(results):
                 print(f"\n{i + 1}. {result.title}")
-                print(f"   Authors: {', '.join(result.authors[:3])}{'...' if len(result.authors) > 3 else ''}")
+                print(
+                    f"   Authors: {', '.join(result.authors[:3])}{'...' if len(result.authors) > 3 else ''}"
+                )
                 print(f"   Journal: {result.journal}")
                 print(f"   PMID: {result.pmid}")
                 print(f"   URL: {result.url}")
@@ -1161,7 +1248,8 @@ if __name__ == "__main__":
         print("Testing multi - database search...")
 
         multi_results = await db_manager.search_multiple_databases(
-            search_query, [DatabaseType.PUBMED, DatabaseType.ARXIV, DatabaseType.SEMANTIC_SCHOLAR]
+            search_query,
+            [DatabaseType.PUBMED, DatabaseType.ARXIV, DatabaseType.SEMANTIC_SCHOLAR],
         )
 
         for db_type, db_results in multi_results.items():

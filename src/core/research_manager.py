@@ -10,7 +10,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -19,7 +19,7 @@ try:
     from ..config.config_manager import ConfigManager
     from ..mcp.client import MCPClient
     from ..mcp.cost_estimator import CostEstimator
-    from ..mcp.protocols import AgentResponse, ResearchAction, TaskStatus
+    from ..mcp.protocols import AgentResponse, ResearchAction
     from ..storage.hierarchical_database import HierarchicalDatabaseManager
     from ..utils.error_handler import ErrorHandler
     from ..utils.id_utils import generate_timestamped_id
@@ -29,7 +29,7 @@ except ImportError:
     from config.config_manager import ConfigManager
     from mcp.client import MCPClient
     from mcp.cost_estimator import CostEstimator
-    from mcp.protocols import AgentResponse, ResearchAction, TaskStatus
+    from mcp.protocols import AgentResponse, ResearchAction
     from storage.hierarchical_database import HierarchicalDatabaseManager
     from utils.error_handler import ErrorHandler
     from utils.id_utils import generate_timestamped_id
@@ -106,7 +106,11 @@ class ResearchManager:
     proper task completion.
     """
 
-    def __init__(self, config_manager: ConfigManager, db_manager: Optional[DatabaseManagerType] = None):
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        db_manager: Optional[DatabaseManagerType] = None,
+    ):
         """
         Initialize the Research Manager.
 
@@ -158,7 +162,10 @@ class ResearchManager:
             try:
                 # Initialize MCP client
                 mcp_config = self.config.get_mcp_config()
-                self.mcp_client = MCPClient(host=mcp_config.get("host", "localhost"), port=mcp_config.get("port", 8765))
+                self.mcp_client = MCPClient(
+                    host=mcp_config.get("host", "localhost"),
+                    port=mcp_config.get("port", 8765),
+                )
 
                 # Connect to MCP server
                 await self.mcp_client.connect()
@@ -172,16 +179,30 @@ class ResearchManager:
                         "data": {"manager_id": "research_manager"},
                         "timestamp": datetime.now().isoformat(),
                     }
-                    self.logger.info(f"Sending research manager identification: {identification_message}")
-                    await self.mcp_client.websocket.send(json.dumps(identification_message))
-                    self.logger.info("✓ Successfully sent research manager identification to MCP server")
+                    self.logger.info(
+                        f"Sending research manager identification: {identification_message}"
+                    )
+                    await self.mcp_client.websocket.send(
+                        json.dumps(identification_message)
+                    )
+                    self.logger.info(
+                        "✓ Successfully sent research manager identification to MCP server"
+                    )
                 else:
-                    self.logger.error("No WebSocket connection available for identification")
+                    self.logger.error(
+                        "No WebSocket connection available for identification"
+                    )
 
                 # Register message handlers
-                self.mcp_client.add_message_handler("agent_response", self._handle_agent_response)
-                self.mcp_client.add_message_handler("agent_registration", self._handle_agent_registration)
-                self.mcp_client.add_message_handler("task_update", self._handle_task_update)
+                self.mcp_client.add_message_handler(
+                    "agent_response", self._handle_agent_response
+                )
+                self.mcp_client.add_message_handler(
+                    "agent_registration", self._handle_agent_registration
+                )
+                self.mcp_client.add_message_handler(
+                    "task_update", self._handle_task_update
+                )
 
                 self.logger.info("MCP client initialized successfully")
 
@@ -216,18 +237,34 @@ class ResearchManager:
                         "data": {"manager_id": "research_manager"},
                         "timestamp": datetime.now().isoformat(),
                     }
-                    self.logger.info(f"Sending research manager identification: {identification_message}")
-                    await self.mcp_client.websocket.send(json.dumps(identification_message))
-                    self.logger.info("✓ Successfully sent research manager identification to MCP server")
+                    self.logger.info(
+                        f"Sending research manager identification: {identification_message}"
+                    )
+                    await self.mcp_client.websocket.send(
+                        json.dumps(identification_message)
+                    )
+                    self.logger.info(
+                        "✓ Successfully sent research manager identification to MCP server"
+                    )
                 else:
-                    self.logger.error("No WebSocket connection available for identification")
+                    self.logger.error(
+                        "No WebSocket connection available for identification"
+                    )
 
                 # Register message handlers
-                self.mcp_client.add_message_handler("agent_response", self._handle_agent_response)
-                self.mcp_client.add_message_handler("agent_registration", self._handle_agent_registration)
-                self.mcp_client.add_message_handler("task_update", self._handle_task_update)
+                self.mcp_client.add_message_handler(
+                    "agent_response", self._handle_agent_response
+                )
+                self.mcp_client.add_message_handler(
+                    "agent_registration", self._handle_agent_registration
+                )
+                self.mcp_client.add_message_handler(
+                    "task_update", self._handle_task_update
+                )
 
-                self.logger.info("Research Manager initialized with external MCP client")
+                self.logger.info(
+                    "Research Manager initialized with external MCP client"
+                )
             else:
                 # Use internal initialization
                 await self._ensure_mcp_client_initialized()
@@ -253,7 +290,9 @@ class ResearchManager:
             tuple: (cost_info, should_proceed, single_agent_mode)
         """
         # Determine agent configuration
-        single_agent_mode = options.get("single_agent_mode", False) if options else False
+        single_agent_mode = (
+            options.get("single_agent_mode", False) if options else False
+        )
 
         if single_agent_mode:
             agents_to_use = ["Literature"]  # Use only literature in single agent mode
@@ -268,7 +307,9 @@ class ResearchManager:
         )
 
         # Check if task should proceed based on cost
-        should_proceed, cost_reason = self.cost_estimator.should_proceed_with_task(cost_estimate, task_id)
+        should_proceed, cost_reason = self.cost_estimator.should_proceed_with_task(
+            cost_estimate, task_id
+        )
 
         # Get cost recommendations
         recommendations = self.cost_estimator.get_cost_recommendations(cost_estimate)
@@ -291,7 +332,11 @@ class ResearchManager:
         return cost_info, should_proceed, single_agent_mode
 
     async def start_research_task(
-        self, query: str, user_id: str, project_id: Optional[str] = None, options: Optional[Dict[str, Any]] = None
+        self,
+        query: str,
+        user_id: str,
+        project_id: Optional[str] = None,
+        options: Optional[Dict[str, Any]] = None,
     ) -> tuple[str, Dict[str, Any]]:
         """
         Start a new research task with cost estimation and control.
@@ -312,14 +357,17 @@ class ResearchManager:
             await self._ensure_mcp_client_initialized()
 
             # Estimate cost for the research task
-            cost_info, should_proceed, single_agent_mode = await self._estimate_task_cost(query, task_id, options)
+            cost_info, should_proceed, single_agent_mode = (
+                await self._estimate_task_cost(query, task_id, options)
+            )
 
             # Create research context
             context = ResearchContext(
                 task_id=task_id,
                 query=query,
                 user_id=user_id,
-                project_id=project_id or (options.get("project_id") if options else None),
+                project_id=project_id
+                or (options.get("project_id") if options else None),
                 estimated_cost=cost_info["estimate"]["cost_usd"],
                 single_agent_mode=single_agent_mode,
             )
@@ -343,12 +391,18 @@ class ResearchManager:
                     plan_id = await self._create_research_plan_and_tasks(context)
                     if plan_id:
                         context.metadata["plan_id"] = plan_id
-                        self.logger.info(f"Created research plan {plan_id} with individual task entries for {task_id}")
+                        self.logger.info(
+                            f"Created research plan {plan_id} with individual task entries for {task_id}"
+                        )
                     else:
-                        self.logger.warning(f"Failed to create research plan and tasks for {task_id}")
+                        self.logger.warning(
+                            f"Failed to create research plan and tasks for {task_id}"
+                        )
 
                 except Exception as e:
-                    self.logger.error(f"Error creating research plan and tasks for {task_id}: {e}")
+                    self.logger.error(
+                        f"Error creating research plan and tasks for {task_id}: {e}"
+                    )
                     # Continue with task execution even if database creation fails
 
                 # Start cost tracking
@@ -367,7 +421,9 @@ class ResearchManager:
             else:
                 # Task not approved due to cost
                 cost_info["task_started"] = False
-                self.logger.warning(f"Research task blocked due to cost: {cost_info['cost_reason']}")
+                self.logger.warning(
+                    f"Research task blocked due to cost: {cost_info['cost_reason']}"
+                )
 
             cost_info["task_started"] = should_proceed or context.cost_approved
             return task_id, cost_info
@@ -393,14 +449,22 @@ class ResearchManager:
                 # Single agent mode - only use literature
                 stages = [
                     (ResearchStage.PLANNING, self._execute_planning_stage),
-                    (ResearchStage.LITERATURE_REVIEW, self._execute_literature_review_stage),
+                    (
+                        ResearchStage.LITERATURE_REVIEW,
+                        self._execute_literature_review_stage,
+                    ),
                 ]
-                self.logger.info(f"Running task {context.task_id} in single - agent mode (cost - optimized)")
+                self.logger.info(
+                    f"Running task {context.task_id} in single - agent mode (cost - optimized)"
+                )
             else:
                 # Full multi - agent mode
                 stages = [
                     (ResearchStage.PLANNING, self._execute_planning_stage),
-                    (ResearchStage.LITERATURE_REVIEW, self._execute_literature_review_stage),
+                    (
+                        ResearchStage.LITERATURE_REVIEW,
+                        self._execute_literature_review_stage,
+                    ),
                     (ResearchStage.REASONING, self._execute_reasoning_stage),
                     (ResearchStage.EXECUTION, self._execute_execution_stage),
                     (ResearchStage.SYNTHESIS, self._execute_synthesis_stage),
@@ -430,7 +494,9 @@ class ResearchManager:
                         context.completed_stages.append(stage)
                         context.updated_at = datetime.now()
                         self._update_task_in_database(context)
-                        self.logger.info(f"Completed stage {stage.value} for task {context.task_id}")
+                        self.logger.info(
+                            f"Completed stage {stage.value} for task {context.task_id}"
+                        )
 
                         # If this was the planning stage, wait for approval before proceeding
                         if stage == ResearchStage.PLANNING:
@@ -440,16 +506,22 @@ class ResearchManager:
 
                             # Update task status to indicate planning is complete and waiting for approval
                             try:
-                                task = self.db_manager.get_research_task(context.task_id)
+                                task = self.db_manager.get_research_task(
+                                    context.task_id
+                                )
                                 if task:
                                     task["stage"] = "planning_complete"
                                     task["status"] = "waiting_approval"
                                     self.db_manager.update_research_task(task)
                             except Exception as e:
-                                self.logger.error(f"Failed to update task status after planning: {e}")
+                                self.logger.error(
+                                    f"Failed to update task status after planning: {e}"
+                                )
 
                             # Wait for plan approval (this will pause the workflow)
-                            approved = await self._wait_for_plan_approval(context.task_id)
+                            approved = await self._wait_for_plan_approval(
+                                context.task_id
+                            )
                             if not approved:
                                 self.logger.info(
                                     f"Research plan for task {context.task_id} was not approved. Stopping workflow."
@@ -466,14 +538,17 @@ class ResearchManager:
                         context.failed_stages.append(stage)
                         context.updated_at = datetime.now()
                         self._update_task_in_database(context)
-                        self.logger.error(f"Failed stage {stage.value} for task {context.task_id}")
+                        self.logger.error(
+                            f"Failed stage {stage.value} for task {context.task_id}"
+                        )
 
                         # Retry logic
                         if context.retry_count < context.max_retries:
                             context.retry_count += 1
                             context.failed_stages.remove(stage)
                             self.logger.info(
-                                f"Retrying stage {stage.value} for task {context.task_id} (attempt {context.retry_count})"
+                                f"Retrying stage {stage.value} for task {context.task_id} "
+                                f"(attempt {context.retry_count})"
                             )
                             # Re - execute the stage
                             success = await executor(context)
@@ -486,7 +561,9 @@ class ResearchManager:
                             break
 
                 except Exception as e:
-                    self.logger.error(f"Error in stage {stage.value} for task {context.task_id}: {e}")
+                    self.logger.error(
+                        f"Error in stage {stage.value} for task {context.task_id}: {e}"
+                    )
                     context.failed_stages.append(stage)
                     break
 
@@ -519,10 +596,14 @@ class ResearchManager:
                     context.actual_cost = final_usage.cost_usd
                     context.updated_at = datetime.now()
                     self._update_task_in_database(context)
-                    self.logger.info(f"Task {context.task_id} completed with final cost: ${context.actual_cost:.4f}")
+                    self.logger.info(
+                        f"Task {context.task_id} completed with final cost: ${context.actual_cost:.4f}"
+                    )
 
             # Clean up context after delay
-            asyncio.create_task(self._cleanup_context(context.task_id, delay=3600))  # 1 hour
+            asyncio.create_task(
+                self._cleanup_context(context.task_id, delay=3600)
+            )  # 1 hour
 
     async def _execute_planning_stage(self, context: ResearchContext) -> bool:
         """
@@ -576,18 +657,33 @@ class ResearchManager:
                             if plan_id:
                                 # Update the plan structure with the AI - generated plan
                                 result = self.db_manager.update_research_plan(
-                                    plan_id, {"plan_structure": plan_data, "status": "active", "plan_approved": True}
+                                    plan_id,
+                                    {
+                                        "plan_structure": plan_data,
+                                        "status": "active",
+                                        "plan_approved": True,
+                                    },
                                 )
                                 if result:
-                                    self.logger.info(f"Research plan stored in database for plan {plan_id}")
+                                    self.logger.info(
+                                        f"Research plan stored in database for plan {plan_id}"
+                                    )
                                 else:
-                                    self.logger.warning(f"Failed to store research plan in database for plan {plan_id}")
+                                    self.logger.warning(
+                                        f"Failed to store research plan in database for plan {plan_id}"
+                                    )
                             else:
-                                self.logger.warning(f"No plan_id found in context metadata for task {context.task_id}")
+                                self.logger.warning(
+                                    f"No plan_id found in context metadata for task {context.task_id}"
+                                )
                         except Exception as e:
-                            self.logger.error(f"Error storing research plan in database: {e}")
+                            self.logger.error(
+                                f"Error storing research plan in database: {e}"
+                            )
                     else:
-                        self.logger.warning(f"No valid plan data found in response for task {context.task_id}")
+                        self.logger.warning(
+                            f"No valid plan data found in response for task {context.task_id}"
+                        )
 
                 return True
 
@@ -696,7 +792,11 @@ class ResearchManager:
                 context_id=context.task_id,
                 agent_type="Executor",
                 action="execute_research",
-                payload={"query": context.query, "context": context.context_data, "execution_type": "comprehensive"},
+                payload={
+                    "query": context.query,
+                    "context": context.context_data,
+                    "execution_type": "comprehensive",
+                },
             )
 
             # Send to execution agent
@@ -706,7 +806,9 @@ class ResearchManager:
                 # Store execution results
                 if response.result:
                     context.execution_results = response.result.get("results", [])
-                    context.context_data["execution_results"] = context.execution_results
+                    context.context_data["execution_results"] = (
+                        context.execution_results
+                    )
                 return True
 
             return False
@@ -756,7 +858,9 @@ class ResearchManager:
             self.logger.error(f"Synthesis stage failed: {e}")
             return False
 
-    async def _send_to_agent(self, agent_type: str, action: ResearchAction) -> Optional[AgentResponse]:
+    async def _send_to_agent(
+        self, agent_type: str, action: ResearchAction
+    ) -> Optional[AgentResponse]:
         """
         Send action to specific agent type.
 
@@ -782,10 +886,14 @@ class ResearchManager:
             if success:
                 # Wait for response with timeout
                 try:
-                    response = await asyncio.wait_for(response_future, timeout=self.response_timeout)
+                    response = await asyncio.wait_for(
+                        response_future, timeout=self.response_timeout
+                    )
                     return response
                 except asyncio.TimeoutError:
-                    self.logger.error(f"Timeout waiting for response from {agent_type} for task {action.task_id}")
+                    self.logger.error(
+                        f"Timeout waiting for response from {agent_type} for task {action.task_id}"
+                    )
                     return None
                 finally:
                     # Clean up pending response
@@ -830,7 +938,6 @@ class ResearchManager:
 
             # Also handle context updates
             if task_id and task_id in self.active_contexts:
-                context = self.active_contexts[task_id]
                 self.logger.debug(f"Received response for task {task_id} in context")
 
         except Exception as e:
@@ -850,7 +957,9 @@ class ResearchManager:
             if agent_id:
                 self.agent_capabilities[agent_id] = capabilities
                 self.agent_availability[agent_id] = True
-                self.logger.info(f"Agent {agent_id} registered with capabilities: {capabilities}")
+                self.logger.info(
+                    f"Agent {agent_id} registered with capabilities: {capabilities}"
+                )
 
         except Exception as e:
             self.logger.error(f"Error handling agent registration: {e}")
@@ -867,7 +976,6 @@ class ResearchManager:
             status = message_data.get("status")
 
             if task_id and task_id in self.active_contexts:
-                context = self.active_contexts[task_id]
                 # Update context based on status
                 self.logger.debug(f"Task {task_id} status update: {status}")
 
@@ -1113,9 +1221,13 @@ class ResearchManager:
                         "updated_at": context.updated_at.isoformat(),
                     }
                     self.db_manager.update_research_task(task_data)
-                    self.logger.debug(f"Updated database entry for cancelled task {task_id}")
+                    self.logger.debug(
+                        f"Updated database entry for cancelled task {task_id}"
+                    )
                 except Exception as e:
-                    self.logger.error(f"Failed to update database for cancelled task {task_id}: {e}")
+                    self.logger.error(
+                        f"Failed to update database for cancelled task {task_id}: {e}"
+                    )
 
                 await self._notify_completion(context, success=False)
                 del self.active_contexts[task_id]
@@ -1144,7 +1256,9 @@ class ResearchManager:
         except Exception as e:
             self.logger.error(f"Error during shutdown: {e}")
 
-    async def _create_research_plan_and_tasks(self, context: ResearchContext) -> Optional[str]:
+    async def _create_research_plan_and_tasks(
+        self, context: ResearchContext
+    ) -> Optional[str]:
         """
         Create a research plan and individual task entries for each stage.
 
@@ -1158,7 +1272,9 @@ class ResearchManager:
             # First, ensure we have a topic for this research
             topic_id = await self._get_or_create_research_topic(context)
             if not topic_id:
-                self.logger.error(f"Failed to create or get research topic for task {context.task_id}")
+                self.logger.error(
+                    f"Failed to create or get research topic for task {context.task_id}"
+                )
                 return None
 
             # Create the research plan
@@ -1168,7 +1284,9 @@ class ResearchManager:
                 "topic_id": topic_id,
                 "name": f"Research Plan: {context.query[:50]}{'...' if len(context.query) > 50 else ''}",
                 "description": f"Research plan for: {context.query}",
-                "plan_type": "single_agent" if context.single_agent_mode else "comprehensive",
+                "plan_type": (
+                    "single_agent" if context.single_agent_mode else "comprehensive"
+                ),
                 "status": "draft",
                 "plan_approved": False,
                 "estimated_cost": context.estimated_cost,
@@ -1180,13 +1298,21 @@ class ResearchManager:
                         "stages": self._get_stage_list(context.single_agent_mode),
                     }
                 ),
-                "metadata": json.dumps({"task_id": context.task_id, "user_id": context.user_id, **context.metadata}),
+                "metadata": json.dumps(
+                    {
+                        "task_id": context.task_id,
+                        "user_id": context.user_id,
+                        **context.metadata,
+                    }
+                ),
             }
 
             # Create the plan in database
             created_plan = self.db_manager.create_research_plan(plan_data)
             if not created_plan:
-                self.logger.error(f"Failed to create research plan for task {context.task_id}")
+                self.logger.error(
+                    f"Failed to create research plan for task {context.task_id}"
+                )
                 return None
 
             # Create main research task entry for web server compatibility
@@ -1208,7 +1334,12 @@ class ResearchManager:
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
                 "metadata": json.dumps(
-                    {"task_id": context.task_id, "user_id": context.user_id, "is_main_task": True, **context.metadata}
+                    {
+                        "task_id": context.task_id,
+                        "user_id": context.user_id,
+                        "is_main_task": True,
+                        **context.metadata,
+                    }
                 ),
                 "task_type": "research",
                 "task_order": 0,
@@ -1218,19 +1349,22 @@ class ResearchManager:
             if main_task_created:
                 self.logger.info(f"Created main research task entry: {context.task_id}")
             else:
-                self.logger.warning(f"Failed to create main research task entry: {context.task_id}")
+                self.logger.warning(
+                    f"Failed to create main research task entry: {context.task_id}"
+                )
 
-            # Note: Individual stage tasks will be created when each stage starts executing
-            # This avoids creating tasks that may never execute due to failures or single - agent mode
-
-            self.logger.info(f"Successfully created research plan {plan_id} and main task entry")
+            self.logger.info(
+                f"Successfully created research plan {plan_id} and main task entry"
+            )
             return plan_id
 
         except Exception as e:
             self.logger.error(f"Error creating research plan and tasks: {e}")
             return None
 
-    async def _get_or_create_research_topic(self, context: ResearchContext) -> Optional[str]:
+    async def _get_or_create_research_topic(
+        self, context: ResearchContext
+    ) -> Optional[str]:
         """
         Get or create a research topic for the given context.
 
@@ -1247,10 +1381,14 @@ class ResearchManager:
                 # Verify the topic exists
                 existing_topic = self.db_manager.get_research_topic(existing_topic_id)
                 if existing_topic:
-                    self.logger.info(f"Using existing research topic {existing_topic_id}")
+                    self.logger.info(
+                        f"Using existing research topic {existing_topic_id}"
+                    )
                     return existing_topic_id
                 else:
-                    self.logger.warning(f"Specified topic {existing_topic_id} not found, creating new topic")
+                    self.logger.warning(
+                        f"Specified topic {existing_topic_id} not found, creating new topic"
+                    )
 
             # Generate a topic ID based on the task or create a new one
             if context.task_id:
@@ -1259,7 +1397,11 @@ class ResearchManager:
                 # For web API requests without task_id, generate timestamp - based ID
                 from src.utils.id_utils import generate_timestamped_id
 
-                topic_id = f"topic_{context.task_id}" if context.task_id else generate_timestamped_id("topic")
+                topic_id = (
+                    f"topic_{context.task_id}"
+                    if context.task_id
+                    else generate_timestamped_id("topic")
+                )
 
             # Check if topic already exists
             existing_topic = self.db_manager.get_research_topic(topic_id)
@@ -1301,7 +1443,13 @@ class ResearchManager:
         if single_agent_mode:
             return ["planning", "literature_review"]
         else:
-            return ["planning", "literature_review", "reasoning", "execution", "synthesis"]
+            return [
+                "planning",
+                "literature_review",
+                "reasoning",
+                "execution",
+                "synthesis",
+            ]
 
     def _create_stage_task_in_database(self, context: ResearchContext) -> bool:
         """
@@ -1316,14 +1464,18 @@ class ResearchManager:
         try:
             plan_id = context.metadata.get("plan_id")
             if not plan_id:
-                self.logger.warning(f"No plan_id found for task {context.task_id}, cannot create stage task")
+                self.logger.warning(
+                    f"No plan_id found for task {context.task_id}, cannot create stage task"
+                )
                 return False
 
             # Check if stage task already exists to prevent duplicates
             stage_task_id = f"{context.task_id}_{context.stage.value}"
             existing_task = self.db_manager.get_research_task(stage_task_id)
             if existing_task:
-                self.logger.debug(f"Stage task {stage_task_id} already exists, skipping creation")
+                self.logger.debug(
+                    f"Stage task {stage_task_id} already exists, skipping creation"
+                )
                 return True
 
             # Calculate stage order
@@ -1339,16 +1491,22 @@ class ResearchManager:
                 "project_id": context.project_id,
                 "plan_id": plan_id,
                 "query": context.query,
-                "name": f"{context.stage.value.title()}: {context.query[:40]}{'...' if len(context.query) > 40 else ''}",
+                "name": (
+                    f"{context.stage.value.title()}: {context.query[:40]}"
+                    f"{'...' if len(context.query) > 40 else ''}"
+                ),
                 "status": "running",
                 "stage": context.stage.value,
                 "created_at": context.updated_at.isoformat(),
                 "updated_at": context.updated_at.isoformat(),
-                "estimated_cost": context.estimated_cost / len(all_stages),  # Distribute cost across stages
+                "estimated_cost": context.estimated_cost
+                / len(all_stages),  # Distribute cost across stages
                 "actual_cost": 0.0,
                 "cost_approved": context.cost_approved,
                 "single_agent_mode": context.single_agent_mode,
-                "research_mode": "single_agent" if context.single_agent_mode else "comprehensive",
+                "research_mode": (
+                    "single_agent" if context.single_agent_mode else "comprehensive"
+                ),
                 "max_results": 10,
                 "progress": 0.0,
                 "search_results": json.dumps([]),
@@ -1370,7 +1528,9 @@ class ResearchManager:
 
             created_task = self.db_manager.create_research_task(task_data)
             if created_task:
-                self.logger.info(f"Created database entry for {context.stage.value} stage task: {stage_task_id}")
+                self.logger.info(
+                    f"Created database entry for {context.stage.value} stage task: {stage_task_id}"
+                )
                 return True
             else:
                 self.logger.warning(
@@ -1394,7 +1554,9 @@ class ResearchManager:
             if context.single_agent_mode:
                 total_stages = 2  # planning, literature review only
             else:
-                total_stages = 5  # planning, literature review, reasoning, execution, synthesis
+                total_stages = (
+                    5  # planning, literature review, reasoning, execution, synthesis
+                )
 
             progress = (len(context.completed_stages) / total_stages) * 100.0
 
@@ -1404,7 +1566,9 @@ class ResearchManager:
             # Check if stage task exists first
             existing_task = self.db_manager.get_research_task(stage_task_id)
             if not existing_task:
-                self.logger.debug(f"Stage task {stage_task_id} does not exist yet, skipping update")
+                self.logger.debug(
+                    f"Stage task {stage_task_id} does not exist yet, skipping update"
+                )
                 return
 
             # Determine task status based on context
@@ -1422,15 +1586,21 @@ class ResearchManager:
                 "stage": context.stage.value,
                 "updated_at": context.updated_at.isoformat(),
                 "progress": (
-                    100.0 if context.stage in context.completed_stages else (50.0 if task_status == "running" else 0.0)
+                    100.0
+                    if context.stage in context.completed_stages
+                    else (50.0 if task_status == "running" else 0.0)
                 ),
                 "metadata": json.dumps(
                     {
                         "main_task_id": context.task_id,
                         "user_id": context.user_id,
                         "retry_count": context.retry_count,
-                        "completed_stages": [stage.value for stage in context.completed_stages],
-                        "failed_stages": [stage.value for stage in context.failed_stages],
+                        "completed_stages": [
+                            stage.value for stage in context.completed_stages
+                        ],
+                        "failed_stages": [
+                            stage.value for stage in context.failed_stages
+                        ],
                         **context.metadata,
                     }
                 ),
@@ -1442,22 +1612,32 @@ class ResearchManager:
             elif context.stage == ResearchStage.REASONING:
                 stage_task_data["reasoning_output"] = context.reasoning_output
             elif context.stage == ResearchStage.EXECUTION:
-                stage_task_data["execution_results"] = json.dumps(context.execution_results)
+                stage_task_data["execution_results"] = json.dumps(
+                    context.execution_results
+                )
             elif context.stage == ResearchStage.SYNTHESIS:
                 stage_task_data["synthesis"] = context.synthesis
 
             # Update the stage task in database
             updated = self.db_manager.update_research_task(stage_task_data)
             if updated:
-                self.logger.debug(f"Updated database entry for stage task {stage_task_id}")
+                self.logger.debug(
+                    f"Updated database entry for stage task {stage_task_id}"
+                )
             else:
-                self.logger.warning(f"Failed to update database entry for stage task {stage_task_id}")
+                self.logger.warning(
+                    f"Failed to update database entry for stage task {stage_task_id}"
+                )
 
             # Also update the research plan with overall progress
             plan_id = context.metadata.get("plan_id")
             if plan_id:
                 plan_update_data = {
-                    "status": "approved" if context.stage != ResearchStage.PLANNING else "draft",
+                    "status": (
+                        "approved"
+                        if context.stage != ResearchStage.PLANNING
+                        else "draft"
+                    ),
                     "plan_approved": context.stage != ResearchStage.PLANNING,
                     "updated_at": context.updated_at.isoformat(),
                     "actual_cost": context.actual_cost,
@@ -1466,13 +1646,19 @@ class ResearchManager:
                             "main_task_id": context.task_id,
                             "overall_progress": progress,
                             "current_stage": context.stage.value,
-                            "completed_stages": [stage.value for stage in context.completed_stages],
-                            "failed_stages": [stage.value for stage in context.failed_stages],
+                            "completed_stages": [
+                                stage.value for stage in context.completed_stages
+                            ],
+                            "failed_stages": [
+                                stage.value for stage in context.failed_stages
+                            ],
                         }
                     ),
                 }
 
-                plan_updated = self.db_manager.update_research_plan(plan_id, plan_update_data)
+                plan_updated = self.db_manager.update_research_plan(
+                    plan_id, plan_update_data
+                )
                 if plan_updated:
                     self.logger.debug(f"Updated research plan {plan_id} progress")
                 else:
@@ -1483,7 +1669,8 @@ class ResearchManager:
                 "id": context.task_id,
                 "status": (
                     "completed"
-                    if context.stage == ResearchStage.SYNTHESIS and context.stage in context.completed_stages
+                    if context.stage == ResearchStage.SYNTHESIS
+                    and context.stage in context.completed_stages
                     else "running"
                 ),
                 "stage": context.stage.value,
@@ -1491,9 +1678,19 @@ class ResearchManager:
                 "actual_cost": context.actual_cost,
                 "updated_at": context.updated_at.isoformat(),
                 # Include all results for completed task
-                "search_results": json.dumps(context.search_results) if context.search_results else None,
-                "reasoning_output": context.reasoning_output if context.reasoning_output else None,
-                "execution_results": json.dumps(context.execution_results) if context.execution_results else None,
+                "search_results": (
+                    json.dumps(context.search_results)
+                    if context.search_results
+                    else None
+                ),
+                "reasoning_output": (
+                    context.reasoning_output if context.reasoning_output else None
+                ),
+                "execution_results": (
+                    json.dumps(context.execution_results)
+                    if context.execution_results
+                    else None
+                ),
                 "synthesis": context.synthesis if context.synthesis else None,
                 "metadata": json.dumps(
                     {
@@ -1501,8 +1698,12 @@ class ResearchManager:
                         "user_id": context.user_id,
                         "overall_progress": progress,
                         "current_stage": context.stage.value,
-                        "completed_stages": [stage.value for stage in context.completed_stages],
-                        "failed_stages": [stage.value for stage in context.failed_stages],
+                        "completed_stages": [
+                            stage.value for stage in context.completed_stages
+                        ],
+                        "failed_stages": [
+                            stage.value for stage in context.failed_stages
+                        ],
                         "is_main_task": True,
                         **context.metadata,
                     }
@@ -1513,7 +1714,9 @@ class ResearchManager:
             if main_task_updated:
                 self.logger.debug(f"Updated main research task {context.task_id}")
             else:
-                self.logger.warning(f"Failed to update main research task {context.task_id}")
+                self.logger.warning(
+                    f"Failed to update main research task {context.task_id}"
+                )
 
         except Exception as e:
             self.logger.error(f"Error updating task {context.task_id} in database: {e}")
@@ -1532,7 +1735,9 @@ class ResearchManager:
         """
         return self.cost_estimator.get_usage_summary(session_id)
 
-    async def estimate_query_cost_async(self, query: str, single_agent_mode: bool = False) -> Dict[str, Any]:
+    async def estimate_query_cost_async(
+        self, query: str, single_agent_mode: bool = False
+    ) -> Dict[str, Any]:
         """
         Estimate cost for a query without starting the task (async version).
 
@@ -1545,7 +1750,9 @@ class ResearchManager:
         """
         options = {"single_agent_mode": single_agent_mode}
         cost_info, _, _ = await self._estimate_task_cost(
-            query=query, task_id="estimate_only", options=options  # Dummy task ID for estimation
+            query=query,
+            task_id="estimate_only",
+            options=options,  # Dummy task ID for estimation
         )
 
         # Remove task - specific fields for estimation - only response
@@ -1555,7 +1762,9 @@ class ResearchManager:
 
         return cost_info
 
-    def estimate_query_cost(self, query: str, single_agent_mode: bool = False) -> Dict[str, Any]:
+    def estimate_query_cost(
+        self, query: str, single_agent_mode: bool = False
+    ) -> Dict[str, Any]:
         """
         Estimate cost for a query without starting the task (synchronous version).
 
@@ -1566,7 +1775,11 @@ class ResearchManager:
         Returns:
             Dict[str, Any]: Cost estimation details
         """
-        agents_to_use = ["Literature"] if single_agent_mode else ["Literature", "Planning", "Executor", "Memory"]
+        agents_to_use = (
+            ["Literature"]
+            if single_agent_mode
+            else ["Literature", "Planning", "Executor", "Memory"]
+        )
         parallel_execution = not single_agent_mode
 
         estimate = self.cost_estimator.estimate_task_cost(
@@ -1648,7 +1861,9 @@ class ResearchManager:
 
     # Phase 4: Debug UI Methods
 
-    async def get_latest_plan(self, context_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_latest_plan(
+        self, context_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Get the latest RM AI plan for debugging.
 
@@ -1669,8 +1884,16 @@ class ResearchManager:
                 "prompt": f"Research plan for: {context.query}",
                 "raw_response": "RM AI response for active research context",
                 "parsed_tasks": [
-                    {"task_id": "task_1", "agent": "literature", "action": "search_web"},
-                    {"task_id": "task_2", "agent": "planning", "action": "analyze_results"},
+                    {
+                        "task_id": "task_1",
+                        "agent": "literature",
+                        "action": "search_web",
+                    },
+                    {
+                        "task_id": "task_2",
+                        "agent": "planning",
+                        "action": "analyze_results",
+                    },
                 ],
                 "created_at": datetime.now().isoformat(),
                 "execution_status": context.stage.value,
@@ -1714,7 +1937,9 @@ class ResearchManager:
 
         return True
 
-    async def list_plans(self, context_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    async def list_plans(
+        self, context_id: Optional[str] = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         """
         List RM AI plans with optional context filtering.
 
@@ -1749,7 +1974,9 @@ class ResearchManager:
         # Return only real active contexts, no mock data
         return plans[:limit]
 
-    async def _wait_for_plan_approval(self, task_id: str, timeout_minutes: int = 60) -> bool:
+    async def _wait_for_plan_approval(
+        self, task_id: str, timeout_minutes: int = 60
+    ) -> bool:
         """
         Wait for plan approval for a specific task.
 
@@ -1767,7 +1994,9 @@ class ResearchManager:
         check_interval = 5  # Check every 5 seconds
         elapsed_time = 0
 
-        self.logger.info(f"Waiting for plan approval for task {task_id} (timeout: {timeout_minutes} minutes)")
+        self.logger.info(
+            f"Waiting for plan approval for task {task_id} (timeout: {timeout_minutes} minutes)"
+        )
 
         while elapsed_time < timeout_seconds:
             try:
@@ -1779,7 +2008,9 @@ class ResearchManager:
                     # Check the research plan's approval status
                     plan = self.db_manager.get_research_plan(plan_id)
                     if plan and plan.get("plan_approved"):
-                        self.logger.info(f"Research plan {plan_id} approved for task {task_id}")
+                        self.logger.info(
+                            f"Research plan {plan_id} approved for task {task_id}"
+                        )
 
                         # Update the planning stage task status
                         planning_task_id = f"{task_id}_planning"
@@ -1794,14 +2025,18 @@ class ResearchManager:
 
                     # Check if plan was cancelled or failed
                     if plan and plan.get("status") in ["cancelled", "failed"]:
-                        self.logger.info(f"Plan {plan_id} was cancelled or failed while waiting for approval")
+                        self.logger.info(
+                            f"Plan {plan_id} was cancelled or failed while waiting for approval"
+                        )
                         return False
                 else:
                     # Fallback: check the individual planning task
                     planning_task_id = f"{task_id}_planning"
                     planning_task = self.db_manager.get_research_task(planning_task_id)
                     if planning_task and planning_task.get("status") == "completed":
-                        self.logger.info(f"Planning task {planning_task_id} completed for task {task_id}")
+                        self.logger.info(
+                            f"Planning task {planning_task_id} completed for task {task_id}"
+                        )
                         return True
 
                 # Wait before checking again
@@ -1809,7 +2044,9 @@ class ResearchManager:
                 elapsed_time += check_interval
 
             except Exception as e:
-                self.logger.error(f"Error checking plan approval for task {task_id}: {e}")
+                self.logger.error(
+                    f"Error checking plan approval for task {task_id}: {e}"
+                )
                 await asyncio.sleep(check_interval)
                 elapsed_time += check_interval
 
@@ -1823,6 +2060,8 @@ class ResearchManager:
                 task["status"] = "waiting_approval_timeout"
                 self.db_manager.update_research_task(task)
         except Exception as e:
-            self.logger.error(f"Failed to update task status after approval timeout: {e}")
+            self.logger.error(
+                f"Failed to update task status after approval timeout: {e}"
+            )
 
         return False

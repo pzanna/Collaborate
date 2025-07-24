@@ -11,7 +11,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 
 @dataclass
@@ -48,7 +48,11 @@ class StudyDeduplicator:
     4. Author + year + title fuzzy matching
     """
 
-    def __init__(self, title_similarity_threshold: float = 0.9, fuzzy_match_threshold: float = 0.85):
+    def __init__(
+        self,
+        title_similarity_threshold: float = 0.9,
+        fuzzy_match_threshold: float = 0.85,
+    ):
         """
         Initialize the deduplicator.
 
@@ -70,7 +74,12 @@ class StudyDeduplicator:
             Dict containing unique studies and duplication information
         """
         if not studies:
-            return {"unique_studies": [], "duplicates": [], "duplicate_pairs": [], "duplicates_removed": 0}
+            return {
+                "unique_studies": [],
+                "duplicates": [],
+                "duplicate_pairs": [],
+                "duplicates_removed": 0,
+            }
 
         # Track matches and duplicates
         duplicate_matches = []
@@ -118,10 +127,14 @@ class StudyDeduplicator:
             "duplicates": duplicates,
             "duplicate_pairs": duplicate_matches,
             "duplicates_removed": len(duplicates),
-            "deduplication_summary": self._create_deduplication_summary(duplicate_matches),
+            "deduplication_summary": self._create_deduplication_summary(
+                duplicate_matches
+            ),
         }
 
-    def _find_doi_duplicates(self, studies: List[Dict[str, Any]]) -> List[DuplicationMatch]:
+    def _find_doi_duplicates(
+        self, studies: List[Dict[str, Any]]
+    ) -> List[DuplicationMatch]:
         """Find duplicates based on DOI matching."""
         matches = []
         doi_map = {}
@@ -150,7 +163,9 @@ class StudyDeduplicator:
 
         return matches
 
-    def _find_hash_duplicates(self, studies: List[Dict[str, Any]]) -> List[DuplicationMatch]:
+    def _find_hash_duplicates(
+        self, studies: List[Dict[str, Any]]
+    ) -> List[DuplicationMatch]:
         """Find duplicates based on content hash matching."""
         matches = []
         hash_map = {}
@@ -180,7 +195,9 @@ class StudyDeduplicator:
 
         return matches
 
-    def _find_title_duplicates(self, studies: List[Dict[str, Any]]) -> List[DuplicationMatch]:
+    def _find_title_duplicates(
+        self, studies: List[Dict[str, Any]]
+    ) -> List[DuplicationMatch]:
         """Find duplicates based on title similarity."""
         matches = []
 
@@ -189,7 +206,7 @@ class StudyDeduplicator:
             if not title1:
                 continue
 
-            for j, study2 in enumerate(studies[i + 1 :], i + 1):
+            for j, study2 in enumerate(studies[i + 1:], i + 1):
                 title2 = self._normalize_title(study2.get("title", ""))
                 if not title2:
                     continue
@@ -201,13 +218,19 @@ class StudyDeduplicator:
                         study2_id=study2.get("id", ""),
                         match_type="title_similarity",
                         confidence=similarity,
-                        details={"title1": title1, "title2": title2, "similarity_score": similarity},
+                        details={
+                            "title1": title1,
+                            "title2": title2,
+                            "similarity_score": similarity,
+                        },
                     )
                     matches.append(match)
 
         return matches
 
-    def _find_fuzzy_duplicates(self, studies: List[Dict[str, Any]]) -> List[DuplicationMatch]:
+    def _find_fuzzy_duplicates(
+        self, studies: List[Dict[str, Any]]
+    ) -> List[DuplicationMatch]:
         """Find duplicates using fuzzy matching of author + year + title."""
         matches = []
 
@@ -216,19 +239,25 @@ class StudyDeduplicator:
             if not signature1:
                 continue
 
-            for j, study2 in enumerate(studies[i + 1 :], i + 1):
+            for j, study2 in enumerate(studies[i + 1:], i + 1):
                 signature2 = self._create_study_signature(study2)
                 if not signature2:
                     continue
 
-                similarity = self._calculate_signature_similarity(signature1, signature2)
+                similarity = self._calculate_signature_similarity(
+                    signature1, signature2
+                )
                 if similarity >= self.fuzzy_match_threshold:
                     match = DuplicationMatch(
                         study1_id=study1.get("id", ""),
                         study2_id=study2.get("id", ""),
                         match_type="fuzzy_match",
                         confidence=similarity,
-                        details={"signature1": signature1, "signature2": signature2, "similarity_score": similarity},
+                        details={
+                            "signature1": signature1,
+                            "signature2": signature2,
+                            "similarity_score": similarity,
+                        },
                     )
                     matches.append(match)
 
@@ -288,7 +317,19 @@ class StudyDeduplicator:
         normalized = re.sub(r"[^\w\s]", "", normalized)
 
         # Remove common stop words that don't affect content
-        stop_words = {"a", "an", "and", "the", "of", "for", "in", "on", "at", "to", "by"}
+        stop_words = {
+            "a",
+            "an",
+            "and",
+            "the",
+            "of",
+            "for",
+            "in",
+            "on",
+            "at",
+            "to",
+            "by",
+        }
         words = normalized.split()
         words = [word for word in words if word not in stop_words]
 
@@ -355,14 +396,18 @@ class StudyDeduplicator:
         # Create normalized content for hashing
         normalized_content = {
             "title": self._normalize_title(study.get("title", "")),
-            "authors": sorted([self._normalize_author_name(a) for a in study.get("authors", [])]),
+            "authors": sorted(
+                [self._normalize_author_name(a) for a in study.get("authors", [])]
+            ),
             "year": study.get("year"),
         }
 
         content_str = json.dumps(normalized_content, sort_keys=True)
         return hashlib.sha256(content_str.encode()).hexdigest()
 
-    def _create_deduplication_summary(self, matches: List[DuplicationMatch]) -> Dict[str, Any]:
+    def _create_deduplication_summary(
+        self, matches: List[DuplicationMatch]
+    ) -> Dict[str, Any]:
         """Create a summary of deduplication results."""
         summary = {
             "total_matches": len(matches),
@@ -452,11 +497,13 @@ class StudyClusterer:
             max_overlap = 0
             shared_authors_set = set()
 
-            for j, other_study in enumerate(studies[i + 1 :], i + 1):
+            for j, other_study in enumerate(studies[i + 1:], i + 1):
                 if other_study.get("id", "") in clustered_studies:
                     continue
 
-                other_authors = set(self._normalize_authors(other_study.get("authors", [])))
+                other_authors = set(
+                    self._normalize_authors(other_study.get("authors", []))
+                )
                 if not other_authors:
                     continue
 
@@ -474,7 +521,9 @@ class StudyClusterer:
 
             # Create cluster if minimum size is met
             if len(cluster_studies) >= self.min_cluster_size:
-                confidence = min(1.0, max_overlap / len(study_authors)) if study_authors else 0.5
+                confidence = (
+                    min(1.0, max_overlap / len(study_authors)) if study_authors else 0.5
+                )
 
                 cluster = StudyCluster(
                     cluster_id=f"auth_cluster_{len(clusters) + 1}",
@@ -519,7 +568,10 @@ class StudyClusterer:
                     related_study_ids=related_ids,
                     cluster_type="topic_similarity",
                     confidence=0.7,  # Simplified confidence score
-                    metadata={"shared_keyword": keyword, "cluster_size": len(group_studies)},
+                    metadata={
+                        "shared_keyword": keyword,
+                        "cluster_size": len(group_studies),
+                    },
                 )
                 clusters.append(cluster)
 
@@ -619,7 +671,9 @@ if __name__ == "__main__":
     print(f"Duplicate pairs found: {len(dedup_results['duplicate_pairs'])}")
 
     for match in dedup_results["duplicate_pairs"]:
-        print(f"  {match.match_type}: {match.study1_id} -> {match.study2_id} (confidence: {match.confidence:.2f})")
+        print(
+            f"  {match.match_type}: {match.study1_id} -> {match.study2_id} (confidence: {match.confidence:.2f})"
+        )
 
     print("\nDeduplication Summary:")
     print(json.dumps(dedup_results["deduplication_summary"], indent=2))
@@ -628,10 +682,12 @@ if __name__ == "__main__":
     clusterer = StudyClusterer()
     clusters = clusterer.cluster_studies(test_studies)
 
-    print(f"\nClustering Results:")
+    print("\nClustering Results:")
     print(f"Clusters found: {len(clusters)}")
 
     for cluster in clusters:
-        print(f"  {cluster.cluster_type}: {cluster.primary_study_id} + {len(cluster.related_study_ids)} related")
+        print(
+            f"  {cluster.cluster_type}: {cluster.primary_study_id} + {len(cluster.related_study_ids)} related"
+        )
         print(f"    Confidence: {cluster.confidence:.2f}")
         print(f"    Metadata: {cluster.metadata}")

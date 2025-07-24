@@ -17,13 +17,12 @@ Date: July 2025
 import asyncio
 import json
 import logging
-import math
 import statistics
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -120,7 +119,9 @@ class MetricCalculator:
             MetricType.VALIDATION_SCORE: self._calculate_validation_score,
         }
 
-    async def calculate_metric(self, metric_type: MetricType, data: Dict[str, Any]) -> float:
+    async def calculate_metric(
+        self, metric_type: MetricType, data: Dict[str, Any]
+    ) -> float:
         """
         Calculate specific metric value
 
@@ -162,11 +163,21 @@ class MetricCalculator:
         # Calculate Cohen's Kappa for two raters
         # Simplified calculation - assumes binary decisions
         total_decisions = len(agreements)
-        observed_agreement = sum(1 for agreement in agreements if agreement.get("agree", False))
+        observed_agreement = sum(
+            1 for agreement in agreements if agreement.get("agree", False)
+        )
 
         # Calculate expected agreement by chance
-        rater1_positive = sum(1 for agreement in agreements if agreement.get("rater1_decision") == "include")
-        rater2_positive = sum(1 for agreement in agreements if agreement.get("rater2_decision") == "include")
+        rater1_positive = sum(
+            1
+            for agreement in agreements
+            if agreement.get("rater1_decision") == "include"
+        )
+        rater2_positive = sum(
+            1
+            for agreement in agreements
+            if agreement.get("rater2_decision") == "include"
+        )
 
         p1_positive = rater1_positive / total_decisions
         p2_positive = rater2_positive / total_decisions
@@ -192,7 +203,12 @@ class MetricCalculator:
             return 0.0
 
         # Weight different validation aspects
-        weights = {"completeness": 0.3, "accuracy": 0.3, "consistency": 0.2, "validity": 0.2}
+        weights = {
+            "completeness": 0.3,
+            "accuracy": 0.3,
+            "consistency": 0.2,
+            "validity": 0.2,
+        }
 
         total_score = 0.0
         for aspect, weight in weights.items():
@@ -210,7 +226,6 @@ class MetricCalculator:
             return 0.0
 
         # Check consistency between different review stages
-        consistency_scores = []
 
         # Title / abstract vs full - text consistency
         title_decisions = {}
@@ -239,7 +254,10 @@ class MetricCalculator:
                 # Consistency rules: include->include, exclude->exclude, uncertain->any
                 if title_decision == fulltext_decision:
                     consistent_decisions += 1
-                elif title_decision == "include" and fulltext_decision in ["include", "uncertain"]:
+                elif title_decision == "include" and fulltext_decision in [
+                    "include",
+                    "uncertain",
+                ]:
                     consistent_decisions += 1
                 elif title_decision == "uncertain":  # Uncertain can go either way
                     consistent_decisions += 1
@@ -274,7 +292,13 @@ class MetricCalculator:
             return 0.0
 
         # Score based on bias risk levels
-        risk_scores = {"no_bias": 100, "low_risk": 85, "moderate_risk": 70, "high_risk": 50, "critical_risk": 25}
+        risk_scores = {
+            "no_bias": 100,
+            "low_risk": 85,
+            "moderate_risk": 70,
+            "high_risk": 50,
+            "critical_risk": 25,
+        }
 
         total_score = 0.0
         for assessment in bias_assessments:
@@ -325,7 +349,9 @@ class MetricCalculator:
         total_records = validation_result.get("total_records", 1)
 
         # Calculate score based on issue severity and frequency
-        issue_penalty = critical_issues * 10 + high_issues * 5 + medium_issues * 2 + low_issues * 1
+        issue_penalty = (
+            critical_issues * 10 + high_issues * 5 + medium_issues * 2 + low_issues * 1
+        )
 
         # Normalize by number of records
         penalty_per_record = issue_penalty / total_records
@@ -358,10 +384,15 @@ class MetricAggregator:
 
         # Clean old metrics
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.retention_period)
-        while self.metric_history[key] and self.metric_history[key][0].timestamp < cutoff_date:
+        while (
+            self.metric_history[key]
+            and self.metric_history[key][0].timestamp < cutoff_date
+        ):
             self.metric_history[key].popleft()
 
-    def get_metric_trend(self, metric_type: MetricType, metric_id: str, days: int = 7) -> str:
+    def get_metric_trend(
+        self, metric_type: MetricType, metric_id: str, days: int = 7
+    ) -> str:
         """
         Calculate trend for a specific metric
 
@@ -413,7 +444,9 @@ class MetricAggregator:
         else:
             return "stable"
 
-    def get_metric_statistics(self, metric_type: MetricType, metric_id: str, days: int = 7) -> Dict[str, Any]:
+    def get_metric_statistics(
+        self, metric_type: MetricType, metric_id: str, days: int = 7
+    ) -> Dict[str, Any]:
         """
         Get statistical summary for a metric
 
@@ -429,7 +462,15 @@ class MetricAggregator:
         metrics = list(self.metric_history[key])
 
         if not metrics:
-            return {"count": 0, "mean": 0.0, "median": 0.0, "std_dev": 0.0, "min": 0.0, "max": 0.0, "trend": "stable"}
+            return {
+                "count": 0,
+                "mean": 0.0,
+                "median": 0.0,
+                "std_dev": 0.0,
+                "min": 0.0,
+                "max": 0.0,
+                "trend": "stable",
+            }
 
         # Filter to recent days
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -508,7 +549,9 @@ class QualityMetricsDashboard:
         self.is_running = False
         logger.info("Stopped quality metrics monitoring")
 
-    async def update_metric(self, metric_type: MetricType, metric_id: str, data: Dict[str, Any]):
+    async def update_metric(
+        self, metric_type: MetricType, metric_id: str, data: Dict[str, Any]
+    ):
         """
         Update a specific quality metric
 
@@ -551,12 +594,16 @@ class QualityMetricsDashboard:
             if self.config.alert_enabled:
                 await self._check_metric_alert(metric)
 
-            logger.debug(f"Updated metric {metric_type.value}: {value:.2f} ({status.value})")
+            logger.debug(
+                f"Updated metric {metric_type.value}: {value:.2f} ({status.value})"
+            )
 
         except Exception as e:
             logger.error(f"Failed to update metric {metric_type.value}: {e}")
 
-    def _determine_metric_status(self, metric_type: MetricType, value: float) -> MetricStatus:
+    def _determine_metric_status(
+        self, metric_type: MetricType, value: float
+    ) -> MetricStatus:
         """Determine status based on metric value and thresholds"""
         thresholds = self.config.metric_thresholds.get(metric_type)
 
@@ -617,15 +664,25 @@ class QualityMetricsDashboard:
         # Filter metrics by task_id if provided
         relevant_metrics = self.current_metrics
         if task_id:
-            relevant_metrics = {k: v for k, v in self.current_metrics.items() if v.context.get("task_id") == task_id}
+            relevant_metrics = {
+                k: v
+                for k, v in self.current_metrics.items()
+                if v.context.get("task_id") == task_id
+            }
 
         if not relevant_metrics:
-            return {"metrics": [], "summary": "No metrics available", "overall_status": "unknown"}
+            return {
+                "metrics": [],
+                "summary": "No metrics available",
+                "overall_status": "unknown",
+            }
 
         # Calculate status distribution
         status_counts = {}
         for status in MetricStatus:
-            status_counts[status.value] = sum(1 for metric in relevant_metrics.values() if metric.status == status)
+            status_counts[status.value] = sum(
+                1 for metric in relevant_metrics.values() if metric.status == status
+            )
 
         # Determine overall status
         if status_counts.get("critical", 0) > 0:
@@ -654,7 +711,9 @@ class QualityMetricsDashboard:
         # Metric summaries
         metric_summaries = []
         for metric in relevant_metrics.values():
-            stats = self.aggregator.get_metric_statistics(metric.metric_type, metric.metric_id)
+            stats = self.aggregator.get_metric_statistics(
+                metric.metric_type, metric.metric_id
+            )
 
             metric_summaries.append(
                 {
@@ -679,7 +738,9 @@ class QualityMetricsDashboard:
             "last_update": datetime.now(timezone.utc).isoformat(),
         }
 
-    def get_metric_history(self, metric_type: MetricType, metric_id: str, days: int = 7) -> List[Dict[str, Any]]:
+    def get_metric_history(
+        self, metric_type: MetricType, metric_id: str, days: int = 7
+    ) -> List[Dict[str, Any]]:
         """
         Get historical data for a specific metric
 
@@ -708,7 +769,9 @@ class QualityMetricsDashboard:
             for metric in recent_metrics
         ]
 
-    async def generate_quality_report(self, task_id: Optional[str] = None) -> Dict[str, Any]:
+    async def generate_quality_report(
+        self, task_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Generate comprehensive quality report
 
@@ -728,18 +791,24 @@ class QualityMetricsDashboard:
             quality_score = 0.0
 
         # Identify areas for improvement
-        concerning_metrics = [m for m in metrics if m["status"] in ["critical", "concerning"]]
+        concerning_metrics = [
+            m for m in metrics if m["status"] in ["critical", "concerning"]
+        ]
 
         recommendations = []
         for metric in concerning_metrics:
             if metric["type"] == "completion_rate":
-                recommendations.append("Increase review progress pace to meet deadlines")
+                recommendations.append(
+                    "Increase review progress pace to meet deadlines"
+                )
             elif metric["type"] == "inter_rater_reliability":
                 recommendations.append("Provide additional training to reviewers")
             elif metric["type"] == "data_quality":
                 recommendations.append("Implement additional data validation checks")
             elif metric["type"] == "consistency":
-                recommendations.append("Review screening criteria and decision guidelines")
+                recommendations.append(
+                    "Review screening criteria and decision guidelines"
+                )
 
         # Generate executive summary
         total_metrics = len(metrics)
@@ -747,13 +816,20 @@ class QualityMetricsDashboard:
         critical_count = dashboard_summary["status_distribution"].get("critical", 0)
 
         if critical_count > 0:
-            summary = f"Quality concerns identified: {critical_count} critical metrics require immediate attention."
+            summary = (
+                f"Quality concerns identified: {critical_count} critical "
+                "metrics require immediate attention."
+            )
         elif excellent_count / total_metrics > 0.8:
             summary = (
-                f"High quality standards maintained: {excellent_count}/{total_metrics} metrics at excellent level."
+                f"High quality standards maintained: {excellent_count}/"
+                f"{total_metrics} metrics at excellent level."
             )
         else:
-            summary = f"Quality standards acceptable: monitoring {total_metrics} metrics with room for improvement."
+            summary = (
+                f"Quality standards acceptable: monitoring {total_metrics} "
+                "metrics with room for improvement."
+            )
 
         return {
             "report_date": datetime.now(timezone.utc).isoformat(),
@@ -849,23 +925,50 @@ async def demo_quality_dashboard():
 
     # Update various metrics with sample data
     metrics_data = [
-        (MetricType.COMPLETION_RATE, "review_001", {"total_tasks": 100, "completed_tasks": 75}),
+        (
+            MetricType.COMPLETION_RATE,
+            "review_001",
+            {"total_tasks": 100, "completed_tasks": 75},
+        ),
         (
             MetricType.INTER_RATER_RELIABILITY,
             "review_001",
             {
                 "agreements": [
-                    {"agree": True, "rater1_decision": "include", "rater2_decision": "include"},
-                    {"agree": False, "rater1_decision": "include", "rater2_decision": "exclude"},
-                    {"agree": True, "rater1_decision": "exclude", "rater2_decision": "exclude"},
-                    {"agree": True, "rater1_decision": "include", "rater2_decision": "include"},
+                    {
+                        "agree": True,
+                        "rater1_decision": "include",
+                        "rater2_decision": "include",
+                    },
+                    {
+                        "agree": False,
+                        "rater1_decision": "include",
+                        "rater2_decision": "exclude",
+                    },
+                    {
+                        "agree": True,
+                        "rater1_decision": "exclude",
+                        "rater2_decision": "exclude",
+                    },
+                    {
+                        "agree": True,
+                        "rater1_decision": "include",
+                        "rater2_decision": "include",
+                    },
                 ]
             },
         ),
         (
             MetricType.DATA_QUALITY,
             "review_001",
-            {"validation_results": {"completeness": 95.0, "accuracy": 90.0, "consistency": 88.0, "validity": 92.0}},
+            {
+                "validation_results": {
+                    "completeness": 95.0,
+                    "accuracy": 90.0,
+                    "consistency": 88.0,
+                    "validity": 92.0,
+                }
+            },
         ),
         (
             MetricType.VALIDATION_SCORE,
@@ -889,34 +992,36 @@ async def demo_quality_dashboard():
     # Get dashboard summary
     summary = dashboard.get_dashboard_summary()
 
-    print(f"✅ Dashboard Summary:")
+    print("✅ Dashboard Summary:")
     print(f"   Overall status: {summary['overall_status']}")
     print(f"   Total metrics: {summary['total_metrics']}")
     print(f"   Monitoring active: {summary['monitoring_active']}")
 
-    print(f"\n📋 Current Metrics:")
+    print("\n📋 Current Metrics:")
     for metric in summary["metrics"]:
-        print(f"   • {metric['name']}: {metric['current_value']:.1f} ({metric['status']})")
+        print(
+            f"   • {metric['name']}: {metric['current_value']:.1f} ({metric['status']})"
+        )
         if metric["trend"] != "stable":
             print(f"     Trend: {metric['trend']}")
 
     # Check for alerts
     if summary["recent_alerts"]:
-        print(f"\n🚨 Recent Alerts:")
+        print("\n🚨 Recent Alerts:")
         for alert in summary["recent_alerts"]:
             print(f"   • {alert['severity'].upper()}: {alert['message']}")
     else:
-        print(f"\n✅ No active alerts")
+        print("\n✅ No active alerts")
 
     # Generate quality report
     report = await dashboard.generate_quality_report()
 
-    print(f"\n📊 Quality Report:")
+    print("\n📊 Quality Report:")
     print(f"   Overall quality score: {report['overall_quality_score']}")
     print(f"   Executive summary: {report['executive_summary']}")
 
     if report["recommendations"]:
-        print(f"   Key recommendations:")
+        print("   Key recommendations:")
         for rec in report["recommendations"][:3]:
             print(f"     • {rec}")
 

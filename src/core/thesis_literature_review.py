@@ -29,15 +29,15 @@ import logging
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
-import yaml
+# Eunice AI client imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # External dependencies
 try:
@@ -62,11 +62,6 @@ except ImportError:
     validate = None
     ValidationError = None
     JSONSCHEMA_AVAILABLE = False
-
-# Eunice AI client imports
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from ai_clients.openai_client import AIProviderConfig, OpenAIClient
-from ai_clients.xai_client import XAIClient
 
 
 @dataclass
@@ -192,17 +187,23 @@ class DeterministicCache:
         except IOError as e:
             logging.error(f"Failed to save cache: {e}")
 
-    def _generate_key(self, prompt: str, model: str, temperature: float, top_p: float) -> str:
+    def _generate_key(
+        self, prompt: str, model: str, temperature: float, top_p: float
+    ) -> str:
         """Generate deterministic cache key."""
         content = f"{prompt}|{model}|{temperature}|{top_p}|{self.version}"
         return hashlib.sha256(content.encode("utf - 8")).hexdigest()
 
-    def get(self, prompt: str, model: str, temperature: float, top_p: float) -> Optional[str]:
+    def get(
+        self, prompt: str, model: str, temperature: float, top_p: float
+    ) -> Optional[Dict[str, Any]]:
         """Get cached response."""
         key = self._generate_key(prompt, model, temperature, top_p)
         return self.cache.get(key)
 
-    def set(self, prompt: str, model: str, temperature: float, top_p: float, response: str):
+    def set(
+        self, prompt: str, model: str, temperature: float, top_p: float, response: str
+    ):
         """Cache response."""
         key = self._generate_key(prompt, model, temperature, top_p)
         self.cache[key] = {
@@ -236,20 +237,30 @@ class PRISMAValidator:
     def extract_studies(prisma_data: Dict[str, Any]) -> List[StudyRecord]:
         """Extract and normalize study records."""
         studies = []
-        study_table = prisma_data["data_extraction_tables"]["table_1_study_characteristics"]
+        study_table = prisma_data["data_extraction_tables"][
+            "table_1_study_characteristics"
+        ]
 
         for study_data in study_table["data"]:
             try:
                 study = StudyRecord(
                     id=study_data.get("study", "Unknown"),
                     title=study_data.get("title", ""),
-                    authors=study_data.get("authors", "").split(", ") if study_data.get("authors") else [],
+                    authors=(
+                        study_data.get("authors", "").split(", ")
+                        if study_data.get("authors")
+                        else []
+                    ),
                     year=int(study_data.get("year", 2024)),
                     journal=study_data.get("journal", ""),
                     design=study_data.get("design", ""),
                     sample_size=int(study_data.get("sample_size", 0)),
                     population=study_data.get("population", ""),
-                    outcomes=study_data.get("outcomes", "").split(", ") if study_data.get("outcomes") else [],
+                    outcomes=(
+                        study_data.get("outcomes", "").split(", ")
+                        if study_data.get("outcomes")
+                        else []
+                    ),
                     effect_summary=study_data.get("effect_summary", ""),
                     bias_overall=study_data.get("bias_overall", ""),
                     doi=study_data.get("doi"),
@@ -268,7 +279,11 @@ class ThesisLiteratureReviewGenerator:
 
     def __init__(self, config: ThesisConfig):
         self.config = config
-        self.cache = DeterministicCache(config.cache_dir, config.cache_version) if config.enable_cache else None
+        self.cache = (
+            DeterministicCache(config.cache_dir, config.cache_version)
+            if config.enable_cache
+            else None
+        )
         self.logger = self._setup_logging()
         self.ai_client = self._setup_ai_client()
         self.jinja_env = self._setup_jinja() if jinja2 else None
@@ -288,7 +303,9 @@ class ThesisLiteratureReviewGenerator:
         handler.setLevel(logging.INFO)
 
         # Create formatter
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
@@ -306,7 +323,9 @@ class ThesisLiteratureReviewGenerator:
             ai_config = AIProviderConfig(
                 provider=self.config.ai_provider,
                 model=self.config.ai_model,
-                temperature=self.config.temperature if not self.config.deterministic else 0.0,
+                temperature=(
+                    self.config.temperature if not self.config.deterministic else 0.0
+                ),
                 max_tokens=self.config.max_tokens,
             )
             return OpenAIClient(api_key, ai_config)
@@ -323,10 +342,14 @@ class ThesisLiteratureReviewGenerator:
                 ai_config = {
                     "provider": self.config.ai_provider,
                     "model": self.config.ai_model,
-                    "temperature": self.config.temperature if not self.config.deterministic else 0.0,
+                    "temperature": (
+                        self.config.temperature
+                        if not self.config.deterministic
+                        else 0.0
+                    ),
                     "max_tokens": self.config.max_tokens,
                 }
-                return XAIClient(api_key, ai_config)
+                return XAIClient(api_key, ai_config)  # type: ignore
             except ImportError:
                 raise ValueError("XAI client not available")
 
@@ -344,7 +367,12 @@ class ThesisLiteratureReviewGenerator:
             template_dir.mkdir(parents=True, exist_ok=True)
             self._create_default_templates(template_dir)
 
-        return Environment(loader=FileSystemLoader(template_dir), autoescape=select_autoescape(["html", "xml"]))
+        if Environment and FileSystemLoader and select_autoescape:
+            return Environment(
+                loader=FileSystemLoader(template_dir),
+                autoescape=select_autoescape(["html", "xml"]),
+            )
+        return None
 
     def _create_default_templates(self, template_dir: Path):
         """Create default Jinja2 templates."""
@@ -508,19 +536,31 @@ class ThesisLiteratureReviewGenerator:
         with open(template_dir / "thesis_chapter.tex", "w") as f:
             f.write(latex_template)
 
-    def _call_ai_model(self, prompt: str, system_prompt: Optional[str] = None, schema: Optional[Dict] = None) -> str:
+    def _call_ai_model(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        schema: Optional[Dict] = None,
+    ) -> str:
         """Call AI model with caching and validation."""
         # Check cache first
         if self.cache:
-            cached_response = self.cache.get(prompt, self.config.ai_model, self.config.temperature, self.config.top_p)
-            if cached_response and isinstance(cached_response, dict) and "response" in cached_response:
+            cached_response = self.cache.get(
+                prompt, self.config.ai_model, self.config.temperature, self.config.top_p
+            )
+            if (
+                cached_response
+                and isinstance(cached_response, dict)
+                and "response" in cached_response
+            ):
                 self.logger.info("Using cached AI response")
                 return cached_response["response"]
 
         # Prepare system prompt for strict JSON
         if schema:
             json_instruction = (
-                f"\n\nIMPORTANT: Respond with valid JSON that matches this schema: {json.dumps(schema, indent=2)}"
+                "\n\nIMPORTANT: Respond with valid JSON that matches this schema: "
+                f"{json.dumps(schema, indent=2)}"
             )
             if system_prompt:
                 system_prompt += json_instruction
@@ -534,7 +574,7 @@ class ThesisLiteratureReviewGenerator:
             processing_time = time.time() - start_time
 
             # Validate JSON if schema provided
-            if schema and JSONSCHEMA_AVAILABLE:
+            if schema and JSONSCHEMA_AVAILABLE and validate:
                 try:
                     response_json = json.loads(response)
                     validate(response_json, schema)
@@ -551,7 +591,13 @@ class ThesisLiteratureReviewGenerator:
 
             # Cache response
             if self.cache:
-                self.cache.set(prompt, self.config.ai_model, self.config.temperature, self.config.top_p, response)
+                self.cache.set(
+                    prompt,
+                    self.config.ai_model,
+                    self.config.temperature,
+                    self.config.top_p,
+                    response,
+                )
 
             # Log to audit trail
             self.audit_log.append(
@@ -571,7 +617,9 @@ class ThesisLiteratureReviewGenerator:
             self.logger.error(f"AI model call failed: {e}")
             raise
 
-    def extract_themes(self, studies: List[StudyRecord], prisma_data: Dict) -> List[Theme]:
+    def extract_themes(
+        self, studies: List[StudyRecord], prisma_data: Dict
+    ) -> List[Theme]:
         """Extract themes using LLM - based synthesis."""
         self.logger.info("Extracting themes from literature...")
 
@@ -591,8 +639,12 @@ class ThesisLiteratureReviewGenerator:
 
         # Prepare narrative texts
         narrative_texts = {
-            "summary_of_findings": prisma_data.get("discussion", {}).get("summary_of_findings", {}),
-            "clinical_implications": prisma_data.get("discussion", {}).get("clinical_implications", {}),
+            "summary_of_findings": prisma_data.get("discussion", {}).get(
+                "summary_of_findings", {}
+            ),
+            "clinical_implications": prisma_data.get("discussion", {}).get(
+                "clinical_implications", {}
+            ),
             "conclusions": prisma_data.get("conclusions", {}),
         }
 
@@ -640,10 +692,23 @@ class ThesisLiteratureReviewGenerator:
                         "type": "object",
                         "properties": {
                             "name": {"type": "string", "maxLength": 50},
-                            "summary": {"type": "string", "minLength": 100, "maxLength": 300},
-                            "representative_studies": {"type": "array", "items": {"type": "string"}},
-                            "contradictions": {"type": "array", "items": {"type": "string"}},
-                            "strength_of_evidence": {"type": "string", "enum": ["High", "Moderate", "Low"]},
+                            "summary": {
+                                "type": "string",
+                                "minLength": 100,
+                                "maxLength": 300,
+                            },
+                            "representative_studies": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "contradictions": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "strength_of_evidence": {
+                                "type": "string",
+                                "enum": ["High", "Moderate", "Low"],
+                            },
                             "study_count": {"type": "integer", "minimum": 1},
                         },
                         "required": [
@@ -679,7 +744,9 @@ class ThesisLiteratureReviewGenerator:
         self.logger.info(f"Extracted {len(themes)} themes")
         return themes
 
-    def analyze_gaps(self, themes: List[Theme], studies: List[StudyRecord]) -> List[ResearchGap]:
+    def analyze_gaps(
+        self, themes: List[Theme], studies: List[StudyRecord]
+    ) -> List[ResearchGap]:
         """Analyze research gaps based on thematic synthesis."""
         self.logger.info("Analyzing research gaps...")
 
@@ -740,12 +807,35 @@ class ThesisLiteratureReviewGenerator:
                         "type": "object",
                         "properties": {
                             "title": {"type": "string", "maxLength": 100},
-                            "description": {"type": "string", "minLength": 80, "maxLength": 200},
-                            "justification": {"type": "string", "minLength": 50, "maxLength": 150},
-                            "impact_score": {"type": "number", "minimum": 1, "maximum": 5},
-                            "feasibility_score": {"type": "number", "minimum": 1, "maximum": 5},
-                            "novelty_score": {"type": "number", "minimum": 1, "maximum": 5},
-                            "related_themes": {"type": "array", "items": {"type": "string"}},
+                            "description": {
+                                "type": "string",
+                                "minLength": 80,
+                                "maxLength": 200,
+                            },
+                            "justification": {
+                                "type": "string",
+                                "minLength": 50,
+                                "maxLength": 150,
+                            },
+                            "impact_score": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 5,
+                            },
+                            "feasibility_score": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 5,
+                            },
+                            "novelty_score": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 5,
+                            },
+                            "related_themes": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                         },
                         "required": [
                             "title",
@@ -770,7 +860,11 @@ class ThesisLiteratureReviewGenerator:
         gaps = []
         for i, gap_json in enumerate(gap_data["gaps"]):
             # Calculate priority rank based on combined scores
-            combined_score = (gap_json["impact_score"] + gap_json["feasibility_score"] + gap_json["novelty_score"]) / 3
+            (
+                gap_json["impact_score"]
+                + gap_json["feasibility_score"]
+                + gap_json["novelty_score"]
+            ) / 3
 
             gap = ResearchGap(
                 title=gap_json["title"],
@@ -785,20 +879,27 @@ class ThesisLiteratureReviewGenerator:
             gaps.append(gap)
 
         # Sort by combined score and update rankings
-        gaps.sort(key=lambda g: (g.impact_score + g.feasibility_score + g.novelty_score) / 3, reverse=True)
+        gaps.sort(
+            key=lambda g: (g.impact_score + g.feasibility_score + g.novelty_score) / 3,
+            reverse=True,
+        )
         for i, gap in enumerate(gaps):
             gap.priority_rank = i + 1
 
         self.logger.info(f"Identified {len(gaps)} research gaps")
         return gaps
 
-    def generate_conceptual_model(self, themes: List[Theme], gaps: List[ResearchGap]) -> ConceptualModel:
+    def generate_conceptual_model(
+        self, themes: List[Theme], gaps: List[ResearchGap]
+    ) -> ConceptualModel:
         """Generate conceptual framework model."""
         self.logger.info("Generating conceptual model...")
 
         # Prepare input data
         theme_data = [{"name": t.name, "summary": t.summary} for t in themes]
-        gap_data = [{"title": g.title, "description": g.description} for g in gaps[:3]]  # Top 3 gaps
+        gap_data = [
+            {"title": g.title, "description": g.description} for g in gaps[:3]
+        ]  # Top 3 gaps
 
         prompt = dedent(
             f"""
@@ -837,7 +938,10 @@ class ThesisLiteratureReviewGenerator:
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "properties": {"name": {"type": "string"}, "description": {"type": "string"}},
+                        "properties": {
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
                         "required": ["name", "description"],
                     },
                     "minItems": 3,
@@ -858,7 +962,13 @@ class ThesisLiteratureReviewGenerator:
                 "mermaid_diagram": {"type": "string"},
                 "tikz_diagram": {"type": "string"},
             },
-            "required": ["description", "constructs", "relationships", "mermaid_diagram", "tikz_diagram"],
+            "required": [
+                "description",
+                "constructs",
+                "relationships",
+                "mermaid_diagram",
+                "tikz_diagram",
+            ],
         }
 
         response = self._call_ai_model(prompt, schema=model_schema)
@@ -937,9 +1047,15 @@ class ThesisLiteratureReviewGenerator:
                     "items": {
                         "type": "object",
                         "properties": {
-                            "type": {"type": "string", "enum": ["question", "hypothesis"]},
+                            "type": {
+                                "type": "string",
+                                "enum": ["question", "hypothesis"],
+                            },
                             "text": {"type": "string", "minLength": 20},
-                            "constructs": {"type": "array", "items": {"type": "string"}},
+                            "constructs": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                             "predicted_direction": {
                                 "type": "string",
                                 "enum": ["positive", "negative", "moderated", None],
@@ -947,7 +1063,13 @@ class ThesisLiteratureReviewGenerator:
                             "justification": {"type": "string", "minLength": 50},
                             "related_gap": {"type": "string"},
                         },
-                        "required": ["type", "text", "constructs", "justification", "related_gap"],
+                        "required": [
+                            "type",
+                            "text",
+                            "constructs",
+                            "justification",
+                            "related_gap",
+                        ],
                     },
                     "minItems": 2,
                     "maxItems": 4,
@@ -971,7 +1093,9 @@ class ThesisLiteratureReviewGenerator:
             )
             research_questions.append(rq)
 
-        self.logger.info(f"Generated {len(research_questions)} research questions / hypotheses")
+        self.logger.info(
+            f"Generated {len(research_questions)} research questions / hypotheses"
+        )
         return research_questions
 
     def human_checkpoint(self, checkpoint_name: str, data: Any) -> Any:
@@ -982,10 +1106,17 @@ class ThesisLiteratureReviewGenerator:
         self.logger.info(f"Human checkpoint: {checkpoint_name}")
 
         # Save current data for review
-        checkpoint_file = Path(self.config.output_dir) / f"checkpoint_{checkpoint_name}.json"
+        checkpoint_file = (
+            Path(self.config.output_dir) / f"checkpoint_{checkpoint_name}.json"
+        )
         with open(checkpoint_file, "w") as f:
             if hasattr(data, "__dict__"):
-                json.dump(asdict(data) if hasattr(data, "__dict__") else data, f, indent=2, default=str)
+                json.dump(
+                    asdict(data) if hasattr(data, "__dict__") else data,
+                    f,
+                    indent=2,
+                    default=str,
+                )
             else:
                 json.dump(data, f, indent=2, default=str)
 
@@ -993,7 +1124,7 @@ class ThesisLiteratureReviewGenerator:
         print(f"HUMAN CHECKPOINT: {checkpoint_name.upper()}")
         print(f"{'='*60}")
         print(f"Review file: {checkpoint_file}")
-        print(f"Current data summary:")
+        print("Current data summary:")
 
         if isinstance(data, list):
             print(f"  - {len(data)} items")
@@ -1113,8 +1244,12 @@ class ThesisLiteratureReviewGenerator:
     def _markdown_to_html(self, markdown_content: str) -> str:
         """Convert markdown to HTML (basic implementation)."""
         # This is a simplified conversion - in practice, use a proper markdown library
-        html_content = markdown_content.replace("\n## ", "\n<h2>").replace("\n### ", "\n<h3>")
-        html_content = html_content.replace("\n**", "\n<strong>").replace("**", "</strong>")
+        html_content = markdown_content.replace("\n## ", "\n<h2>").replace(
+            "\n### ", "\n<h3>"
+        )
+        html_content = html_content.replace("\n**", "\n<strong>").replace(
+            "**", "</strong>"
+        )
         html_content = f"<html><body>{html_content}</body></html>"
         return html_content
 
@@ -1126,13 +1261,22 @@ class ThesisLiteratureReviewGenerator:
 
         for format_name, content in outputs.items():
             if format_name == "markdown":
-                output_file = Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.md"
+                output_file = (
+                    Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.md"
+                )
             elif format_name == "latex":
-                output_file = Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.tex"
+                output_file = (
+                    Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.tex"
+                )
             elif format_name == "html":
-                output_file = Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.html"
+                output_file = (
+                    Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.html"
+                )
             else:
-                output_file = Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.{format_name}"
+                output_file = (
+                    Path(self.config.output_dir)
+                    / f"thesis_chapter_{timestamp}.{format_name}"
+                )
 
             with open(output_file, "w", encoding="utf - 8") as f:
                 f.write(content)
@@ -1144,10 +1288,16 @@ class ThesisLiteratureReviewGenerator:
                 self._pandoc_convert(output_file, timestamp)
 
         # Export metadata and audit log
-        metadata_file = Path(self.config.output_dir) / f"generation_metadata_{timestamp}.json"
+        metadata_file = (
+            Path(self.config.output_dir) / f"generation_metadata_{timestamp}.json"
+        )
         with open(metadata_file, "w") as f:
             json.dump(
-                {"metadata": metadata, "audit_log": self.audit_log, "config": asdict(self.config)},
+                {
+                    "metadata": metadata,
+                    "audit_log": self.audit_log,
+                    "config": asdict(self.config),
+                },
                 f,
                 indent=2,
                 default=str,
@@ -1159,15 +1309,28 @@ class ThesisLiteratureReviewGenerator:
             # Convert to PDF
             pdf_file = Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.pdf"
             subprocess.run(
-                ["pandoc", str(markdown_file), "-o", str(pdf_file), "--pdf - engine=xelatex", "--template=default"],
+                [
+                    "pandoc",
+                    str(markdown_file),
+                    "-o",
+                    str(pdf_file),
+                    "--pdf - engine=xelatex",
+                    "--template=default",
+                ],
                 check=True,
                 capture_output=True,
             )
             self.logger.info(f"Generated PDF: {pdf_file}")
 
             # Convert to DOCX
-            docx_file = Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.docx"
-            subprocess.run(["pandoc", str(markdown_file), "-o", str(docx_file)], check=True, capture_output=True)
+            docx_file = (
+                Path(self.config.output_dir) / f"thesis_chapter_{timestamp}.docx"
+            )
+            subprocess.run(
+                ["pandoc", str(markdown_file), "-o", str(docx_file)],
+                check=True,
+                capture_output=True,
+            )
             self.logger.info(f"Generated DOCX: {docx_file}")
 
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
@@ -1198,11 +1361,17 @@ class ThesisLiteratureReviewGenerator:
 
             # 4. Generate conceptual model
             conceptual_model = self.generate_conceptual_model(themes, gaps)
-            conceptual_model = self.human_checkpoint("conceptual_model", conceptual_model)
+            conceptual_model = self.human_checkpoint(
+                "conceptual_model", conceptual_model
+            )
 
             # 5. Generate research questions
-            research_questions = self.generate_research_questions(gaps, conceptual_model)
-            research_questions = self.human_checkpoint("research_questions", research_questions)
+            research_questions = self.generate_research_questions(
+                gaps, conceptual_model
+            )
+            research_questions = self.human_checkpoint(
+                "research_questions", research_questions
+            )
 
             # 6. Prepare template data
             template_data = {
@@ -1240,19 +1409,42 @@ class ThesisLiteratureReviewGenerator:
 
 def main():
     """CLI interface for thesis literature review generation."""
-    parser = argparse.ArgumentParser(description="Generate thesis - style literature review from PRISMA data")
+    parser = argparse.ArgumentParser(
+        description="Generate thesis - style literature review from PRISMA data"
+    )
 
     parser.add_argument("--input", "-i", required=True, help="Input PRISMA JSON file")
     parser.add_argument("--output", "-o", default="output", help="Output directory")
-    parser.add_argument("--templates", "-t", default="templates", help="Template directory")
+    parser.add_argument(
+        "--templates", "-t", default="templates", help="Template directory"
+    )
     parser.add_argument("--cache", "-c", default="cache", help="Cache directory")
-    parser.add_argument("--provider", "-p", default="openai", choices=["openai", "xai"], help="AI provider")
+    parser.add_argument(
+        "--provider",
+        "-p",
+        default="openai",
+        choices=["openai", "xai"],
+        help="AI provider",
+    )
     parser.add_argument("--model", "-m", default="gpt - 4", help="AI model name")
-    parser.add_argument("--deterministic", action="store_true", help="Use deterministic generation (temp=0)")
+    parser.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="Use deterministic generation (temp=0)",
+    )
     parser.add_argument("--no - cache", action="store_true", help="Disable caching")
-    parser.add_argument("--no - checkpoints", action="store_true", help="Skip human checkpoints")
-    parser.add_argument("--themes", type=int, default=5, help="Number of themes to extract")
-    parser.add_argument("--formats", nargs="+", default=["markdown", "html", "latex"], help="Output formats")
+    parser.add_argument(
+        "--no - checkpoints", action="store_true", help="Skip human checkpoints"
+    )
+    parser.add_argument(
+        "--themes", type=int, default=5, help="Number of themes to extract"
+    )
+    parser.add_argument(
+        "--formats",
+        nargs="+",
+        default=["markdown", "html", "latex"],
+        help="Output formats",
+    )
 
     args = parser.parse_args()
 
@@ -1275,10 +1467,14 @@ def main():
     generator = ThesisLiteratureReviewGenerator(config)
     result = generator.generate_thesis_chapter()
 
-    print(f"\n✅ Thesis literature review generated successfully!")
+    print("\n✅ Thesis literature review generated successfully!")
     print(f"📁 Output directory: {config.output_dir}")
-    print(f"📊 Generated {len(result['themes'])} themes and {len(result['gaps'])} research gaps")
-    print(f"🎯 Created {len(result['research_questions'])} research questions / hypotheses")
+    print(
+        f"📊 Generated {len(result['themes'])} themes and {len(result['gaps'])} research gaps"
+    )
+    print(
+        f"🎯 Created {len(result['research_questions'])} research questions / hypotheses"
+    )
 
 
 if __name__ == "__main__":

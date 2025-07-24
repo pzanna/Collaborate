@@ -25,10 +25,10 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -110,19 +110,24 @@ class ResearchToolIntegration(ABC):
     @abstractmethod
     async def check_availability(self) -> bool:
         """Check if the tool is available and properly configured"""
-        pass
 
     @abstractmethod
     async def execute_analysis(
-        self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
     ) -> AnalysisResult:
         """Execute analysis with the external tool"""
-        pass
 
     @abstractmethod
-    def generate_script(self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def generate_script(
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
+    ) -> str:
         """Generate analysis script for the tool"""
-        pass
 
     def cleanup(self):
         """Clean up temporary files"""
@@ -143,7 +148,11 @@ class RIntegration(ResearchToolIntegration):
             tool_type=ToolType.R_STATISTICAL,
             tool_path=r_path,
             version=None,
-            configuration={"rscript_path": rscript_path, "timeout": 300, "memory_limit": "8G"},  # 5 minutes
+            configuration={
+                "rscript_path": rscript_path,
+                "timeout": 300,
+                "memory_limit": "8G",
+            },  # 5 minutes
             is_available=False,
             last_used=None,
             usage_stats={},
@@ -155,7 +164,12 @@ class RIntegration(ResearchToolIntegration):
         """Check if R is available"""
         try:
             # Test R installation
-            result = subprocess.run([self.config.tool_path, "--version"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [self.config.tool_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
 
             if result.returncode == 0:
                 # Extract version info
@@ -209,7 +223,10 @@ cat("Package check complete\\n")
             logger.warning(f"R package check failed: {e}")
 
     async def execute_analysis(
-        self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
     ) -> AnalysisResult:
         """Execute R statistical analysis"""
         start_time = datetime.now()
@@ -222,7 +239,9 @@ cat("Package check complete\\n")
             result = await self._execute_r_script(r_script)
 
             # Parse results
-            analysis_result = self._parse_r_output(result, analysis_type, data, parameters, r_script)
+            analysis_result = self._parse_r_output(
+                result, analysis_type, data, parameters, r_script
+            )
 
             # Calculate execution time
             execution_time = (datetime.now() - start_time).total_seconds()
@@ -234,7 +253,12 @@ cat("Package check complete\\n")
             logger.error(f"R analysis failed: {e}")
             raise
 
-    def generate_script(self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def generate_script(
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
+    ) -> str:
         """Generate R script for analysis"""
 
         if analysis_type == AnalysisType.META_ANALYSIS:
@@ -248,10 +272,12 @@ cat("Package check complete\\n")
         else:
             raise ValueError(f"Unsupported analysis type: {analysis_type}")
 
-    def _generate_meta_analysis_script(self, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def _generate_meta_analysis_script(
+        self, data: Dict[str, Any], parameters: Dict[str, Any]
+    ) -> str:
         """Generate R script for meta - analysis"""
 
-        effect_measure = parameters.get("effect_measure", "MD")  # MD, SMD, OR, RR
+        parameters.get("effect_measure", "MD")  # MD, SMD, OR, RR
         model_type = parameters.get("model", "random")  # fixed, random
         method = parameters.get("method", "REML")  # REML, DL, etc.
 
@@ -325,7 +351,9 @@ print(summary_stats)
 """
         return script
 
-    def _generate_forest_plot_script(self, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def _generate_forest_plot_script(
+        self, data: Dict[str, Any], parameters: Dict[str, Any]
+    ) -> str:
         """Generate R script for forest plot"""
 
         script = f"""
@@ -376,7 +404,9 @@ cat("Forest plot generated successfully\\n")
 """
         return script
 
-    def _generate_funnel_plot_script(self, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def _generate_funnel_plot_script(
+        self, data: Dict[str, Any], parameters: Dict[str, Any]
+    ) -> str:
         """Generate R script for funnel plot"""
 
         script = f"""
@@ -427,7 +457,9 @@ print(bias_tests)
 """
         return script
 
-    def _generate_subgroup_analysis_script(self, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def _generate_subgroup_analysis_script(
+        self, data: Dict[str, Any], parameters: Dict[str, Any]
+    ) -> str:
         """Generate R script for subgroup analysis"""
 
         subgroup_var = parameters.get("subgroup_variable", "study_design")
@@ -492,7 +524,9 @@ print(subgroup_summary)
 """
         return script
 
-    async def _execute_r_script(self, script: str, timeout: int = 300) -> Dict[str, Any]:
+    async def _execute_r_script(
+        self, script: str, timeout: int = 300
+    ) -> Dict[str, Any]:
         """Execute R script and return results"""
 
         # Write script to temporary file
@@ -503,11 +537,19 @@ print(subgroup_summary)
         try:
             # Execute R script
             result = subprocess.run(
-                [self.rscript_path, script_file], capture_output=True, text=True, timeout=timeout, cwd=self.temp_dir
+                [self.rscript_path, script_file],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=self.temp_dir,
             )
 
             if result.returncode == 0:
-                return {"stdout": result.stdout, "stderr": result.stderr, "success": True}
+                return {
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "success": True,
+                }
             else:
                 raise Exception(f"R script failed: {result.stderr}")
 
@@ -582,7 +624,7 @@ print(subgroup_summary)
             tool_type=ToolType.R_STATISTICAL,
             analysis_type=analysis_type,
             title=f"R {analysis_type.value.replace('_', ' ').title()}",
-            description=f"Statistical analysis performed using R",
+            description="Statistical analysis performed using R",
             input_data=data,
             output_data=output_data,
             plots=plots,
@@ -596,7 +638,11 @@ print(subgroup_summary)
             log_output=result.get("stdout", ""),
             created_timestamp=datetime.now(timezone.utc),
             execution_time=None,  # Set by caller
-            metadata={"r_version": self.config.version, "parameters": parameters, "temp_dir": self.temp_dir},
+            metadata={
+                "r_version": self.config.version,
+                "parameters": parameters,
+                "temp_dir": self.temp_dir,
+            },
         )
 
 
@@ -625,12 +671,20 @@ class RevManCompatibility(ResearchToolIntegration):
         return False
 
     async def execute_analysis(
-        self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
     ) -> AnalysisResult:
         """Execute RevMan analysis (placeholder)"""
         raise NotImplementedError("RevMan integration not yet implemented")
 
-    def generate_script(self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def generate_script(
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
+    ) -> str:
         """Generate RevMan - compatible data (placeholder)"""
         raise NotImplementedError("RevMan script generation not yet implemented")
 
@@ -666,7 +720,10 @@ class ProsperoRegistration(ResearchToolIntegration):
             tool_type=ToolType.PROSPERO,
             tool_path="https://www.crd.york.ac.uk / prospero/",
             version="1.0",
-            configuration={"api_endpoint": "https://www.crd.york.ac.uk / prospero / api/", "timeout": 30},
+            configuration={
+                "api_endpoint": "https://www.crd.york.ac.uk / prospero / api/",
+                "timeout": 30,
+            },
             is_available=True,
             last_used=None,
             usage_stats={},
@@ -692,7 +749,10 @@ class ProsperoRegistration(ResearchToolIntegration):
             return False
 
     async def execute_analysis(
-        self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
     ) -> AnalysisResult:
         """Execute PROSPERO operations (placeholder)"""
 
@@ -721,7 +781,12 @@ class ProsperoRegistration(ResearchToolIntegration):
             metadata={"prospero_id": parameters.get("prospero_id")},
         )
 
-    def generate_script(self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def generate_script(
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
+    ) -> str:
         """Generate PROSPERO registration data"""
         return f"PROSPERO registration for: {data.get('title', 'Unnamed Review')}"
 
@@ -759,16 +824,23 @@ class GradeProIntegration(ResearchToolIntegration):
         return True
 
     async def execute_analysis(
-        self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
     ) -> AnalysisResult:
         """Execute GRADE assessment"""
 
         if analysis_type == AnalysisType.RISK_OF_BIAS_ASSESSMENT:
             return await self._perform_grade_assessment(data, parameters)
         else:
-            raise ValueError(f"Unsupported analysis type for GRADE Pro: {analysis_type}")
+            raise ValueError(
+                f"Unsupported analysis type for GRADE Pro: {analysis_type}"
+            )
 
-    async def _perform_grade_assessment(self, data: Dict[str, Any], parameters: Dict[str, Any]) -> AnalysisResult:
+    async def _perform_grade_assessment(
+        self, data: Dict[str, Any], parameters: Dict[str, Any]
+    ) -> AnalysisResult:
         """Perform GRADE quality assessment"""
 
         # Simulate GRADE assessment
@@ -817,7 +889,9 @@ class GradeProIntegration(ResearchToolIntegration):
             metadata={"grade_version": "simulated"},
         )
 
-    def _assess_domain(self, outcome: Dict[str, Any], domain: str, parameters: Dict[str, Any]) -> str:
+    def _assess_domain(
+        self, outcome: Dict[str, Any], domain: str, parameters: Dict[str, Any]
+    ) -> str:
         """Assess a single GRADE domain"""
         # Simplified assessment logic (would use detailed GRADE criteria)
 
@@ -857,7 +931,9 @@ class GradeProIntegration(ResearchToolIntegration):
         """Calculate confidence in assessment"""
         # Simple confidence calculation
         total_domains = len(domain_scores)
-        serious_issues = sum(1 for score in domain_scores.values() if "serious" in score)
+        serious_issues = sum(
+            1 for score in domain_scores.values() if "serious" in score
+        )
 
         return max(0.5, 1.0 - (serious_issues / total_domains * 0.3))
 
@@ -892,7 +968,12 @@ class GradeProIntegration(ResearchToolIntegration):
 
         return table_data
 
-    def generate_script(self, analysis_type: AnalysisType, data: Dict[str, Any], parameters: Dict[str, Any]) -> str:
+    def generate_script(
+        self,
+        analysis_type: AnalysisType,
+        data: Dict[str, Any],
+        parameters: Dict[str, Any],
+    ) -> str:
         """Generate GRADE assessment script"""
         return f"GRADE assessment script for {len(data.get('outcomes', []))} outcomes"
 
@@ -908,7 +989,9 @@ if __name__ == "__main__":
         # Test R availability
         r_integration = RIntegration()
         is_available = await r_integration.check_availability()
-        print(f"R availability: {'✅ AVAILABLE' if is_available else '❌ NOT AVAILABLE'}")
+        print(
+            f"R availability: {'✅ AVAILABLE' if is_available else '❌ NOT AVAILABLE'}"
+        )
 
         if is_available:
             # Test meta - analysis
@@ -924,9 +1007,11 @@ if __name__ == "__main__":
             parameters = {"effect_measure": "MD", "model": "random", "method": "REML"}
 
             try:
-                result = await r_integration.execute_analysis(AnalysisType.META_ANALYSIS, sample_data, parameters)
+                result = await r_integration.execute_analysis(
+                    AnalysisType.META_ANALYSIS, sample_data, parameters
+                )
 
-                print(f"\n✅ Meta - analysis completed:")
+                print("\n✅ Meta - analysis completed:")
                 print(f"   Overall effect: {result.effect_sizes.get('overall', 0):.3f}")
                 print(f"   I²: {result.heterogeneity.get('i_squared', 0):.1f}%")
                 print(f"   p - value: {result.p_values.get('overall_effect', 1):.3f}")
@@ -942,12 +1027,16 @@ if __name__ == "__main__":
         # PROSPERO
         prospero = ProsperoRegistration()
         prospero_available = await prospero.check_availability()
-        print(f"PROSPERO availability: {'✅ AVAILABLE' if prospero_available else '❌ NOT AVAILABLE'}")
+        print(
+            f"PROSPERO availability: {'✅ AVAILABLE' if prospero_available else '❌ NOT AVAILABLE'}"
+        )
 
         # GRADE Pro
         grade_pro = GradeProIntegration()
         grade_available = await grade_pro.check_availability()
-        print(f"GRADE Pro availability: {'✅ AVAILABLE' if grade_available else '❌ NOT AVAILABLE'}")
+        print(
+            f"GRADE Pro availability: {'✅ AVAILABLE' if grade_available else '❌ NOT AVAILABLE'}"
+        )
 
         if grade_available:
             # Test GRADE assessment
@@ -958,10 +1047,14 @@ if __name__ == "__main__":
                 ]
             }
 
-            grade_result = await grade_pro.execute_analysis(AnalysisType.RISK_OF_BIAS_ASSESSMENT, grade_data, {})
+            grade_result = await grade_pro.execute_analysis(
+                AnalysisType.RISK_OF_BIAS_ASSESSMENT, grade_data, {}
+            )
 
-            print(f"\n✅ GRADE assessment completed:")
-            print(f"   Outcomes assessed: {grade_result.statistics.get('n_outcomes', 0)}")
+            print("\n✅ GRADE assessment completed:")
+            print(
+                f"   Outcomes assessed: {grade_result.statistics.get('n_outcomes', 0)}"
+            )
             print(f"   Tables generated: {len(grade_result.tables)}")
 
         print("\n✅ Research tool integration tests completed")

@@ -23,9 +23,8 @@ import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
 from scipy import stats
 
 # Configure logging
@@ -77,13 +76,18 @@ class BiasAssessment:
     individual_tests: List[BiasTest]
     summary: str
     recommendations: List[str]
-    assessment_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    assessment_date: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     confidence_score: float = 0.0
 
     @property
     def has_significant_bias(self) -> bool:
         """Check if significant bias detected"""
-        return self.overall_risk in [BiasAssessmentLevel.HIGH_RISK, BiasAssessmentLevel.CRITICAL_RISK]
+        return self.overall_risk in [
+            BiasAssessmentLevel.HIGH_RISK,
+            BiasAssessmentLevel.CRITICAL_RISK,
+        ]
 
 
 class PublicationBiasDetector:
@@ -92,9 +96,17 @@ class PublicationBiasDetector:
     """
 
     def __init__(self):
-        self.methods = ["funnel_plot_asymmetry", "egger_test", "begg_test", "trim_and_fill", "fail_safe_n"]
+        self.methods = [
+            "funnel_plot_asymmetry",
+            "egger_test",
+            "begg_test",
+            "trim_and_fill",
+            "fail_safe_n",
+        ]
 
-    async def detect_publication_bias(self, studies: List[Dict[str, Any]]) -> List[BiasTest]:
+    async def detect_publication_bias(
+        self, studies: List[Dict[str, Any]]
+    ) -> List[BiasTest]:
         """
         Detect publication bias using multiple methods
 
@@ -153,10 +165,14 @@ class PublicationBiasDetector:
         except Exception as e:
             logger.error(f"Fail - safe N test failed: {e}")
 
-        logger.info(f"Publication bias detection completed: {len(tests)} tests performed")
+        logger.info(
+            f"Publication bias detection completed: {len(tests)} tests performed"
+        )
         return tests
 
-    def _extract_effect_data(self, studies: List[Dict[str, Any]]) -> List[Tuple[float, float]]:
+    def _extract_effect_data(
+        self, studies: List[Dict[str, Any]]
+    ) -> List[Tuple[float, float]]:
         """Extract effect sizes and standard errors from studies"""
         effect_data = []
 
@@ -192,7 +208,9 @@ class PublicationBiasDetector:
 
         # Linear regression: effect_size ~ precision
         try:
-            slope, intercept, r_value, p_value, std_err = stats.linregress(precisions, effects)
+            slope, intercept, r_value, p_value, std_err = stats.linregress(
+                precisions, effects
+            )
 
             # Test if intercept significantly different from 0
             t_stat = intercept / std_err if std_err > 0 else 0
@@ -213,7 +231,10 @@ class PublicationBiasDetector:
             )
 
             recommendations = []
-            if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+            if risk_level in [
+                BiasAssessmentLevel.MODERATE_RISK,
+                BiasAssessmentLevel.HIGH_RISK,
+            ]:
                 recommendations.extend(
                     [
                         "Consider searching for additional unpublished studies",
@@ -278,9 +299,15 @@ class PublicationBiasDetector:
             )
 
             recommendations = []
-            if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+            if risk_level in [
+                BiasAssessmentLevel.MODERATE_RISK,
+                BiasAssessmentLevel.HIGH_RISK,
+            ]:
                 recommendations.extend(
-                    ["Investigate potential publication bias", "Consider sensitivity analysis excluding small studies"]
+                    [
+                        "Investigate potential publication bias",
+                        "Consider sensitivity analysis excluding small studies",
+                    ]
                 )
 
             return BiasTest(
@@ -307,7 +334,9 @@ class PublicationBiasDetector:
                 interpretation=f"Test failed: {str(e)}",
             )
 
-    async def _funnel_plot_asymmetry(self, effect_data: List[Tuple[float, float]]) -> BiasTest:
+    async def _funnel_plot_asymmetry(
+        self, effect_data: List[Tuple[float, float]]
+    ) -> BiasTest:
         """
         Assess funnel plot asymmetry using visual and statistical measures
         """
@@ -316,7 +345,7 @@ class PublicationBiasDetector:
 
         try:
             # Calculate mean effect
-            mean_effect = statistics.mean(effects)
+            statistics.mean(effects)
 
             # Assess asymmetry by comparing studies above / below mean precision
             median_se = statistics.median(standard_errors)
@@ -348,7 +377,10 @@ class PublicationBiasDetector:
                 )
 
                 recommendations = []
-                if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+                if risk_level in [
+                    BiasAssessmentLevel.MODERATE_RISK,
+                    BiasAssessmentLevel.HIGH_RISK,
+                ]:
                     recommendations.extend(
                         [
                             "Visual inspection of funnel plot recommended",
@@ -446,7 +478,10 @@ class PublicationBiasDetector:
             )
 
             recommendations = []
-            if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+            if risk_level in [
+                BiasAssessmentLevel.MODERATE_RISK,
+                BiasAssessmentLevel.HIGH_RISK,
+            ]:
                 recommendations.extend(
                     [
                         "Search more extensively for unpublished studies",
@@ -534,14 +569,18 @@ class SelectionBiasDetector:
         logger.info(f"Selection bias detection completed: {len(tests)} tests performed")
         return tests
 
-    async def _assess_database_coverage(self, search_strategy: Dict[str, Any]) -> BiasTest:
+    async def _assess_database_coverage(
+        self, search_strategy: Dict[str, Any]
+    ) -> BiasTest:
         """Assess database coverage adequacy"""
         databases = search_strategy.get("databases", [])
 
         # Key databases for medical research
         key_databases = ["pubmed", "embase", "cochrane", "web_of_science", "scopus"]
 
-        covered_key_dbs = sum(1 for db in databases if any(key in db.lower() for key in key_databases))
+        covered_key_dbs = sum(
+            1 for db in databases if any(key in db.lower() for key in key_databases)
+        )
         coverage_ratio = covered_key_dbs / len(key_databases)
 
         if coverage_ratio >= 0.8:
@@ -559,9 +598,18 @@ class SelectionBiasDetector:
         )
 
         recommendations = []
-        if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
-            missing_dbs = [db for db in key_databases if not any(db in covered.lower() for covered in databases)]
-            recommendations.append(f"Consider searching additional databases: {', '.join(missing_dbs)}")
+        if risk_level in [
+            BiasAssessmentLevel.MODERATE_RISK,
+            BiasAssessmentLevel.HIGH_RISK,
+        ]:
+            missing_dbs = [
+                db
+                for db in key_databases
+                if not any(db in covered.lower() for covered in databases)
+            ]
+            recommendations.append(
+                f"Consider searching additional databases: {', '.join(missing_dbs)}"
+            )
 
         return BiasTest(
             test_name="Database Coverage",
@@ -592,7 +640,9 @@ class SelectionBiasDetector:
         for lang in languages:
             language_counts[lang] = language_counts.get(lang, 0) + 1
 
-        english_ratio = language_counts.get("english", 0) / len(studies) if studies else 0
+        english_ratio = (
+            language_counts.get("english", 0) / len(studies) if studies else 0
+        )
 
         # Risk assessment based on English dominance
         if english_ratio >= 0.95:
@@ -610,7 +660,10 @@ class SelectionBiasDetector:
         )
 
         recommendations = []
-        if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+        if risk_level in [
+            BiasAssessmentLevel.MODERATE_RISK,
+            BiasAssessmentLevel.HIGH_RISK,
+        ]:
             recommendations.extend(
                 [
                     "Consider searching non - English databases",
@@ -635,12 +688,16 @@ class SelectionBiasDetector:
             },
         )
 
-    async def _assess_publication_type_bias(self, studies: List[Dict[str, Any]]) -> BiasTest:
+    async def _assess_publication_type_bias(
+        self, studies: List[Dict[str, Any]]
+    ) -> BiasTest:
         """Assess publication type bias"""
         pub_types = []
 
         for study in studies:
-            pub_type = study.get("publication_type", study.get("type", "journal_article")).lower()
+            pub_type = study.get(
+                "publication_type", study.get("type", "journal_article")
+            ).lower()
             pub_types.append(pub_type)
 
         # Calculate publication type distribution
@@ -648,7 +705,9 @@ class SelectionBiasDetector:
         for pub_type in pub_types:
             type_counts[pub_type] = type_counts.get(pub_type, 0) + 1
 
-        journal_ratio = type_counts.get("journal_article", 0) / len(studies) if studies else 0
+        journal_ratio = (
+            type_counts.get("journal_article", 0) / len(studies) if studies else 0
+        )
 
         # Risk assessment - high journal article ratio may indicate bias against grey literature
         if journal_ratio >= 0.98:
@@ -666,7 +725,10 @@ class SelectionBiasDetector:
         )
 
         recommendations = []
-        if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+        if risk_level in [
+            BiasAssessmentLevel.MODERATE_RISK,
+            BiasAssessmentLevel.HIGH_RISK,
+        ]:
             recommendations.extend(
                 [
                     "Consider including grey literature (theses, reports, conference abstracts)",
@@ -743,7 +805,10 @@ class SelectionBiasDetector:
         )
 
         recommendations = []
-        if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+        if risk_level in [
+            BiasAssessmentLevel.MODERATE_RISK,
+            BiasAssessmentLevel.HIGH_RISK,
+        ]:
             recommendations.extend(
                 [
                     "Consider extending search to earlier years",
@@ -777,7 +842,9 @@ class ReportingBiasDetector:
     Reporting bias detection for selective outcome reporting
     """
 
-    async def detect_reporting_bias(self, studies: List[Dict[str, Any]]) -> List[BiasTest]:
+    async def detect_reporting_bias(
+        self, studies: List[Dict[str, Any]]
+    ) -> List[BiasTest]:
         """
         Detect reporting bias in outcome reporting
 
@@ -802,7 +869,9 @@ class ReportingBiasDetector:
         logger.info(f"Reporting bias detection completed: {len(tests)} tests performed")
         return tests
 
-    async def _assess_outcome_reporting(self, studies: List[Dict[str, Any]]) -> BiasTest:
+    async def _assess_outcome_reporting(
+        self, studies: List[Dict[str, Any]]
+    ) -> BiasTest:
         """Assess completeness of outcome reporting"""
         total_studies = len(studies)
         studies_with_outcomes = 0
@@ -816,7 +885,9 @@ class ReportingBiasDetector:
 
                 for outcome in outcomes:
                     total_outcomes += 1
-                    if outcome.get("reported", True):  # Assume reported unless specified
+                    if outcome.get(
+                        "reported", True
+                    ):  # Assume reported unless specified
                         reported_outcomes += 1
 
         if total_outcomes == 0:
@@ -849,7 +920,10 @@ class ReportingBiasDetector:
         )
 
         recommendations = []
-        if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+        if risk_level in [
+            BiasAssessmentLevel.MODERATE_RISK,
+            BiasAssessmentLevel.HIGH_RISK,
+        ]:
             recommendations.extend(
                 [
                     "Contact study authors for missing outcome data",
@@ -935,7 +1009,10 @@ class ReportingBiasDetector:
         )
 
         recommendations = []
-        if risk_level in [BiasAssessmentLevel.MODERATE_RISK, BiasAssessmentLevel.HIGH_RISK]:
+        if risk_level in [
+            BiasAssessmentLevel.MODERATE_RISK,
+            BiasAssessmentLevel.HIGH_RISK,
+        ]:
             recommendations.extend(
                 [
                     "Examine p - value distribution for signs of selective reporting",
@@ -994,12 +1071,18 @@ class BiasDetectionSystem:
                 BiasAssessmentLevel.LOW_RISK: 1,
                 BiasAssessmentLevel.NO_BIAS: 0,
             },
-            "confidence_thresholds": {"high_confidence": 0.8, "moderate_confidence": 0.6, "low_confidence": 0.4},
+            "confidence_thresholds": {
+                "high_confidence": 0.8,
+                "moderate_confidence": 0.6,
+                "low_confidence": 0.4,
+            },
             "min_studies_for_publication_bias": 3,
         }
 
     async def comprehensive_bias_assessment(
-        self, studies: List[Dict[str, Any]], search_strategy: Optional[Dict[str, Any]] = None
+        self,
+        studies: List[Dict[str, Any]],
+        search_strategy: Optional[Dict[str, Any]] = None,
     ) -> BiasAssessment:
         """
         Perform comprehensive bias assessment
@@ -1018,7 +1101,9 @@ class BiasDetectionSystem:
         try:
             # Publication bias detection
             if len(studies) >= self.config["min_studies_for_publication_bias"]:
-                pub_tests = await self.publication_detector.detect_publication_bias(studies)
+                pub_tests = await self.publication_detector.detect_publication_bias(
+                    studies
+                )
                 all_tests.extend(pub_tests)
                 logger.info(f"Publication bias tests completed: {len(pub_tests)} tests")
             else:
@@ -1026,7 +1111,9 @@ class BiasDetectionSystem:
 
             # Selection bias detection
             if search_strategy:
-                sel_tests = await self.selection_detector.detect_selection_bias(search_strategy, studies)
+                sel_tests = await self.selection_detector.detect_selection_bias(
+                    search_strategy, studies
+                )
                 all_tests.extend(sel_tests)
                 logger.info(f"Selection bias tests completed: {len(sel_tests)} tests")
 
@@ -1055,7 +1142,9 @@ class BiasDetectionSystem:
 
             self.assessment_history.append(assessment)
 
-            logger.info(f"Comprehensive bias assessment completed: {overall_risk.value} risk level")
+            logger.info(
+                f"Comprehensive bias assessment completed: {overall_risk.value} risk level"
+            )
             return assessment
 
         except Exception as e:
@@ -1099,7 +1188,9 @@ class BiasDetectionSystem:
         else:
             return BiasAssessmentLevel.NO_BIAS
 
-    def _generate_summary(self, tests: List[BiasTest], overall_risk: BiasAssessmentLevel) -> str:
+    def _generate_summary(
+        self, tests: List[BiasTest], overall_risk: BiasAssessmentLevel
+    ) -> str:
         """Generate bias assessment summary"""
         if not tests:
             return "No bias tests performed."
@@ -1109,8 +1200,12 @@ class BiasDetectionSystem:
         risk_counts = {}
 
         for test in tests:
-            bias_types[test.bias_type.value] = bias_types.get(test.bias_type.value, 0) + 1
-            risk_counts[test.risk_level.value] = risk_counts.get(test.risk_level.value, 0) + 1
+            bias_types[test.bias_type.value] = (
+                bias_types.get(test.bias_type.value, 0) + 1
+            )
+            risk_counts[test.risk_level.value] = (
+                risk_counts.get(test.risk_level.value, 0) + 1
+            )
 
         summary_parts = [
             f"Comprehensive bias assessment completed with {len(tests)} tests.",
@@ -1118,8 +1213,13 @@ class BiasDetectionSystem:
             f"Bias types assessed: {', '.join(bias_types.keys())}.",
         ]
 
-        if risk_counts.get("high_risk", 0) > 0 or risk_counts.get("critical_risk", 0) > 0:
-            summary_parts.append("Significant bias concerns identified requiring attention.")
+        if (
+            risk_counts.get("high_risk", 0) > 0
+            or risk_counts.get("critical_risk", 0) > 0
+        ):
+            summary_parts.append(
+                "Significant bias concerns identified requiring attention."
+            )
         elif risk_counts.get("moderate_risk", 0) > 0:
             summary_parts.append("Moderate bias concerns identified.")
         else:
@@ -1127,7 +1227,9 @@ class BiasDetectionSystem:
 
         return " ".join(summary_parts)
 
-    def _generate_recommendations(self, tests: List[BiasTest], overall_risk: BiasAssessmentLevel) -> List[str]:
+    def _generate_recommendations(
+        self, tests: List[BiasTest], overall_risk: BiasAssessmentLevel
+    ) -> List[str]:
         """Generate bias mitigation recommendations"""
         recommendations = set()
 
@@ -1136,8 +1238,13 @@ class BiasDetectionSystem:
             recommendations.update(test.recommendations)
 
         # Add overall recommendations based on risk level
-        if overall_risk in [BiasAssessmentLevel.HIGH_RISK, BiasAssessmentLevel.CRITICAL_RISK]:
-            recommendations.add("Consider sensitivity analyses to assess impact of bias")
+        if overall_risk in [
+            BiasAssessmentLevel.HIGH_RISK,
+            BiasAssessmentLevel.CRITICAL_RISK,
+        ]:
+            recommendations.add(
+                "Consider sensitivity analyses to assess impact of bias"
+            )
             recommendations.add("Document bias limitations in review conclusions")
             recommendations.add("Consider downgrading evidence certainty due to bias")
 
@@ -1183,9 +1290,13 @@ class BiasDetectionSystem:
 
         risk_distribution = {}
         for level in BiasAssessmentLevel:
-            risk_distribution[level.value] = sum(1 for a in relevant_assessments if a.overall_risk == level)
+            risk_distribution[level.value] = sum(
+                1 for a in relevant_assessments if a.overall_risk == level
+            )
 
-        avg_confidence = sum(a.confidence_score for a in relevant_assessments) / total_assessments
+        avg_confidence = (
+            sum(a.confidence_score for a in relevant_assessments) / total_assessments
+        )
 
         # Latest assessment
         latest = relevant_assessments[-1]
@@ -1211,7 +1322,9 @@ class BiasDetectionSystem:
             ],
         }
 
-    async def export_assessment(self, assessment: BiasAssessment, format_type: str = "json") -> str:
+    async def export_assessment(
+        self, assessment: BiasAssessment, format_type: str = "json"
+    ) -> str:
         """
         Export bias assessment in specified format
 
@@ -1304,28 +1417,36 @@ async def demo_bias_detection():
         },
     ]
 
-    search_strategy = {"databases": ["pubmed", "embase"], "date_limits": {"start_year": 2018, "end_year": 2023}}
+    search_strategy = {
+        "databases": ["pubmed", "embase"],
+        "date_limits": {"start_year": 2018, "end_year": 2023},
+    }
 
     # Perform bias assessment
-    assessment = await bias_detector.comprehensive_bias_assessment(studies, search_strategy)
+    assessment = await bias_detector.comprehensive_bias_assessment(
+        studies, search_strategy
+    )
 
-    print(f"✅ Bias Assessment completed:")
+    print("✅ Bias Assessment completed:")
     print(f"   Overall risk: {assessment.overall_risk.value}")
     print(f"   Has significant bias: {assessment.has_significant_bias}")
     print(f"   Confidence score: {assessment.confidence_score:.2f}")
     print(f"   Tests performed: {len(assessment.individual_tests)}")
 
-    print(f"\n📋 Individual Test Results:")
+    print("\n📋 Individual Test Results:")
     for test in assessment.individual_tests:
-        print(f"   • {test.test_name}: {test.risk_level.value} ({test.interpretation[:60]}...)")
+        print(
+            f"   • {test.test_name}: {test.risk_level.value} "
+            f"({test.interpretation[:60]}...)"
+        )
 
-    print(f"\n💡 Key Recommendations:")
+    print("\n💡 Key Recommendations:")
     for rec in assessment.recommendations[:3]:
         print(f"   • {rec}")
 
     # Get assessment summary
     summary = bias_detector.get_assessment_summary()
-    print(f"\n📊 Assessment Summary:")
+    print("\n📊 Assessment Summary:")
     print(f"   Total assessments: {summary['total_assessments']}")
     print(f"   Average confidence: {summary['average_confidence']}")
 

@@ -1,8 +1,6 @@
 """Enhanced error handling utilities for the Eunice application."""
 
 import logging
-import sys
-import traceback
 from datetime import datetime
 from enum import Enum
 from functools import wraps
@@ -56,7 +54,10 @@ class NetworkError(EuniceError):
     """Network - related errors."""
 
     def __init__(
-        self, message: str, details: Optional[Dict[str, Any]] = None, original_error: Optional[Exception] = None
+        self,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+        original_error: Optional[Exception] = None,
     ):
         super().__init__(message, ErrorType.NETWORK_ERROR, details, original_error)
 
@@ -105,7 +106,9 @@ class ConfigurationError(EuniceError):
         details = details or {}
         if config_key:
             details.update({"config_key": config_key})
-        super().__init__(message, ErrorType.CONFIGURATION_ERROR, details, original_error)
+        super().__init__(
+            message, ErrorType.CONFIGURATION_ERROR, details, original_error
+        )
 
 
 class ValidationError(EuniceError):
@@ -150,7 +153,9 @@ class ErrorHandler:
         self.recent_errors: list = []
         self.max_recent_errors = 50
 
-    def handle_error(self, error: Exception, context: Optional[str] = None) -> EuniceError:
+    def handle_error(
+        self, error: Exception, context: Optional[str] = None
+    ) -> EuniceError:
         """Handle an error and convert it to a EuniceError if needed."""
         if isinstance(error, EuniceError):
             eunice_error = error
@@ -165,29 +170,56 @@ class ErrorHandler:
 
         return eunice_error
 
-    def _convert_to_eunice_error(self, error: Exception, context: Optional[str] = None) -> EuniceError:
+    def _convert_to_eunice_error(
+        self, error: Exception, context: Optional[str] = None
+    ) -> EuniceError:
         """Convert a generic exception to a EuniceError."""
         error_str = str(error)
 
         # Network - related errors
-        if any(keyword in error_str.lower() for keyword in ["connection", "timeout", "network", "dns"]):
+        if any(
+            keyword in error_str.lower()
+            for keyword in ["connection", "timeout", "network", "dns"]
+        ):
             return NetworkError(f"Network error: {error_str}", original_error=error)
 
         # API - related errors
-        if any(keyword in error_str.lower() for keyword in ["api", "http", "request", "response"]):
+        if any(
+            keyword in error_str.lower()
+            for keyword in ["api", "http", "request", "response"]
+        ):
             return APIError(f"API error: {error_str}", "unknown", original_error=error)
 
         # Database - related errors
-        if any(keyword in error_str.lower() for keyword in ["database", "sql", "sqlite"]):
-            return DatabaseError(f"Database error: {error_str}", context or "unknown", original_error=error)
+        if any(
+            keyword in error_str.lower() for keyword in ["database", "sql", "sqlite"]
+        ):
+            return DatabaseError(
+                f"Database error: {error_str}",
+                context or "unknown",
+                original_error=error,
+            )
 
         # File - related errors
-        if any(keyword in error_str.lower() for keyword in ["file", "directory", "path", "permission"]):
-            return FileError(f"File error: {error_str}", "unknown", context or "unknown", original_error=error)
+        if any(
+            keyword in error_str.lower()
+            for keyword in ["file", "directory", "path", "permission"]
+        ):
+            return FileError(
+                f"File error: {error_str}",
+                "unknown",
+                context or "unknown",
+                original_error=error,
+            )
 
         # Configuration - related errors
-        if any(keyword in error_str.lower() for keyword in ["config", "setting", "environment"]):
-            return ConfigurationError(f"Configuration error: {error_str}", original_error=error)
+        if any(
+            keyword in error_str.lower()
+            for keyword in ["config", "setting", "environment"]
+        ):
+            return ConfigurationError(
+                f"Configuration error: {error_str}", original_error=error
+            )
 
         # Generic error
         return EuniceError(f"Unexpected error: {error_str}", original_error=error)
@@ -203,7 +235,10 @@ class ErrorHandler:
         # Log at appropriate level
         if error.error_type in [ErrorType.NETWORK_ERROR, ErrorType.API_ERROR]:
             self.logger.warning(log_message, extra={"error_details": error_dict})
-        elif error.error_type in [ErrorType.DATABASE_ERROR, ErrorType.CONFIGURATION_ERROR]:
+        elif error.error_type in [
+            ErrorType.DATABASE_ERROR,
+            ErrorType.CONFIGURATION_ERROR,
+        ]:
             self.logger.error(log_message, extra={"error_details": error_dict})
         else:
             self.logger.info(log_message, extra={"error_details": error_dict})
@@ -211,7 +246,9 @@ class ErrorHandler:
     def _track_error(self, error: EuniceError):
         """Track error statistics and recent errors."""
         # Update error counts
-        self.error_counts[error.error_type] = self.error_counts.get(error.error_type, 0) + 1
+        self.error_counts[error.error_type] = (
+            self.error_counts.get(error.error_type, 0) + 1
+        )
 
         # Add to recent errors (maintain max size)
         self.recent_errors.append(error)
@@ -222,9 +259,14 @@ class ErrorHandler:
         """Get error statistics."""
         return {
             "total_errors": sum(self.error_counts.values()),
-            "error_counts": {error_type.value: count for error_type, count in self.error_counts.items()},
+            "error_counts": {
+                error_type.value: count
+                for error_type, count in self.error_counts.items()
+            },
             "recent_errors_count": len(self.recent_errors),
-            "recent_errors": [error.to_dict() for error in self.recent_errors[-10:]],  # Last 10 errors
+            "recent_errors": [
+                error.to_dict() for error in self.recent_errors[-10:]
+            ],  # Last 10 errors
         }
 
     def reset_stats(self):
@@ -237,7 +279,9 @@ class ErrorHandler:
 _error_handler = ErrorHandler()
 
 
-def handle_errors(context: Optional[str] = None, reraise: bool = True, fallback_return: Any = None) -> Callable:
+def handle_errors(
+    context: Optional[str] = None, reraise: bool = True, fallback_return: Any = None
+) -> Callable:
     """Decorator for handling errors in functions."""
 
     def decorator(func: Callable) -> Callable:
@@ -261,7 +305,13 @@ def get_error_handler() -> ErrorHandler:
     return _error_handler
 
 
-def safe_execute(func: Callable, *args, context: Optional[str] = None, fallback_return: Any = None, **kwargs) -> Any:
+def safe_execute(
+    func: Callable,
+    *args,
+    context: Optional[str] = None,
+    fallback_return: Any = None,
+    **kwargs,
+) -> Any:
     """Safely execute a function and handle any errors."""
     try:
         return func(*args, **kwargs)

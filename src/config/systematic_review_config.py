@@ -47,7 +47,7 @@ class ScreeningConfig:
             "FULL_TEXT_UNAVAILABLE",
         ]
     )
-    ai_model: str = "gpt - 4o"
+    ai_model: str = "gpt-4o"
     batch_size: int = 10
 
 
@@ -66,7 +66,7 @@ class QualityAppraisalConfig:
 class SynthesisConfig:
     """Configuration for evidence synthesis."""
 
-    default_method: str = "narrative"  # narrative, thematic, meta - aggregation
+    default_method: str = "narrative"  # narrative, thematic, meta-aggregation
     enable_contradiction_detection: bool = True
     confidence_grading: bool = True
     evidence_table_format: str = "markdown"  # markdown, csv, json
@@ -102,7 +102,11 @@ class WorkflowConfig:
     """Configuration for workflow orchestration."""
 
     checkpoints: List[str] = field(
-        default_factory=lambda: ["after_query_generation", "after_screening", "before_publication"]
+        default_factory=lambda: [
+            "after_query_generation",
+            "after_screening",
+            "before_publication",
+        ]
     )
     enable_resumption: bool = True
     auto_save_interval: int = 300  # seconds
@@ -114,7 +118,7 @@ class WorkflowConfig:
 class LLMConfig:
     """Configuration for LLM usage."""
 
-    model: str = "gpt - 4o"
+    model: str = "gpt-4o"
     temperature: float = 0.0
     seed: int = 42
     max_tokens: int = 4096
@@ -129,7 +133,9 @@ class SystematicReviewConfig:
 
     sources: List[SourceConfig] = field(default_factory=list)
     screening: ScreeningConfig = field(default_factory=ScreeningConfig)
-    quality_appraisal: QualityAppraisalConfig = field(default_factory=QualityAppraisalConfig)
+    quality_appraisal: QualityAppraisalConfig = field(
+        default_factory=QualityAppraisalConfig
+    )
     synthesis: SynthesisConfig = field(default_factory=SynthesisConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
@@ -144,10 +150,22 @@ class SystematicReviewConfig:
     def _get_default_sources(self) -> List[SourceConfig]:
         """Get default source configurations."""
         return [
-            SourceConfig(name="pubmed", enabled=True, max_results=5000, api_key_name="pubmed_api_key", rate_limit=10),
-            SourceConfig(name="semantic_scholar", enabled=True, max_results=2000, rate_limit=100),
-            SourceConfig(name="crossref", enabled=True, max_results=3000, rate_limit=50),
-            SourceConfig(name="openalex", enabled=False, max_results=2000, rate_limit=10),
+            SourceConfig(
+                name="pubmed",
+                enabled=True,
+                max_results=5000,
+                api_key_name="pubmed_api_key",
+                rate_limit=10,
+            ),
+            SourceConfig(
+                name="semantic_scholar", enabled=True, max_results=2000, rate_limit=100
+            ),
+            SourceConfig(
+                name="crossref", enabled=True, max_results=3000, rate_limit=50
+            ),
+            SourceConfig(
+                name="openalex", enabled=False, max_results=2000, rate_limit=10
+            ),
             SourceConfig(name="arxiv", enabled=False, max_results=1000, rate_limit=3),
         ]
 
@@ -343,17 +361,21 @@ class SystematicReviewConfigManager:
 
         # Validate quality appraisal
         if not (0.0 <= self.config.quality_appraisal.confidence_threshold <= 1.0):
-            errors.append("Quality appraisal confidence threshold must be between 0.0 and 1.0")
+            errors.append(
+                "Quality appraisal confidence threshold must be between 0.0 and 1.0"
+            )
 
         # Validate synthesis
-        valid_methods = ["narrative", "thematic", "meta - aggregation"]
+        valid_methods = ["narrative", "thematic", "meta-aggregation"]
         if self.config.synthesis.default_method not in valid_methods:
             errors.append(f"Invalid synthesis method. Must be one of: {valid_methods}")
 
         # Validate output
         valid_formats = ["markdown", "csv", "json"]
         if self.config.synthesis.evidence_table_format not in valid_formats:
-            errors.append(f"Invalid evidence table format. Must be one of: {valid_formats}")
+            errors.append(
+                f"Invalid evidence table format. Must be one of: {valid_formats}"
+            )
 
         # Validate LLM
         if not (0.0 <= self.config.llm.temperature <= 2.0):
@@ -408,7 +430,7 @@ screening:
   confidence_threshold: 0.8
   require_human_review: true
 llm:
-  model: gpt - 4o
+  model: gpt-4o
   temperature: 0.0
   seed: 42
 output:
@@ -425,9 +447,13 @@ output:
         print("Loaded Configuration:")
         print(f"Sources: {len(config_manager.config.sources)}")
         for source in config_manager.config.sources:
-            print(f"  - {source.name}: enabled={source.enabled}, max_results={source.max_results}")
+            print(
+                f"  - {source.name}: enabled={source.enabled}, max_results={source.max_results}"
+            )
 
-        print(f"Screening confidence threshold: {config_manager.config.screening.confidence_threshold}")
+        print(
+            f"Screening confidence threshold: {config_manager.config.screening.confidence_threshold}"
+        )
         print(f"LLM model: {config_manager.config.llm.model}")
         print(f"Output citation style: {config_manager.config.output.citation_style}")
 

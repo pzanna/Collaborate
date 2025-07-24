@@ -6,7 +6,7 @@ Handles task timeouts, tracking, and cancellation for long - running tasks.
 
 import asyncio
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable, Dict, Optional
 
 from src.mcp.protocols import ResearchAction, TimeoutEvent
@@ -61,7 +61,11 @@ class TaskTimeoutManager:
 
         self.logger.log_server_lifecycle("stop", {"component": "timeout_manager"})
 
-    def start_task_timeout(self, research_action: ResearchAction, timeout_callback: Optional[Callable] = None) -> str:
+    def start_task_timeout(
+        self,
+        research_action: ResearchAction,
+        timeout_callback: Optional[Callable] = None,
+    ) -> str:
         """Start timeout tracking for a task"""
         task_id = research_action.task_id
         timeout_duration = research_action.timeout or self.default_timeout
@@ -78,7 +82,9 @@ class TaskTimeoutManager:
         }
 
         # Start timeout coroutine
-        timeout_task = asyncio.create_task(self._timeout_task(task_id, timeout_duration))
+        timeout_task = asyncio.create_task(
+            self._timeout_task(task_id, timeout_duration)
+        )
         self.timeout_tasks[task_id] = timeout_task
 
         self.logger.log_task_dispatch(
@@ -221,7 +227,10 @@ class TaskTimeoutManager:
 
                 for task_id, task_info in self.running_tasks.items():
                     # Clean up tasks older than 1 hour that are not running
-                    if task_info["status"] != "running" and current_time - task_info["start_time"] > 3600:
+                    if (
+                        task_info["status"] != "running"
+                        and current_time - task_info["start_time"] > 3600
+                    ):
                         stale_tasks.append(task_id)
 
                 for task_id in stale_tasks:
@@ -241,7 +250,9 @@ class TaskTimeoutManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.log_error(f"Error in cleanup loop: {e}", error_code="CLEANUP_ERROR")
+                self.logger.log_error(
+                    f"Error in cleanup loop: {e}", error_code="CLEANUP_ERROR"
+                )
 
 
 class RetryManager:
@@ -256,7 +267,11 @@ class RetryManager:
     def should_retry(self, task_id: str, error_reason: str) -> bool:
         """Determine if a task should be retried"""
         if task_id not in self.retry_history:
-            self.retry_history[task_id] = {"attempts": 0, "last_attempt": datetime.now(), "reasons": []}
+            self.retry_history[task_id] = {
+                "attempts": 0,
+                "last_attempt": datetime.now(),
+                "reasons": [],
+            }
 
         history = self.retry_history[task_id]
         history["attempts"] += 1

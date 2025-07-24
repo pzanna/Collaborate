@@ -9,17 +9,17 @@ from fastapi.responses import JSONResponse
 
 from src.agents.literature_agent import LiteratureAgent
 from src.config.config_manager import ConfigManager
-from src.models.academic_search_models import (
-    AcademicPaper,
-    AcademicSearchError,
-    AcademicSearchRequest,
-    AcademicSearchResponse,
-    AcademicSourceInfo,
-    AcademicSourcesResponse,
-)
+from src.models.academic_search_models import (AcademicPaper,
+                                               AcademicSearchError,
+                                               AcademicSearchRequest,
+                                               AcademicSearchResponse,
+                                               AcademicSourceInfo,
+                                               AcademicSourcesResponse)
 
 # Create router for academic search endpoints
-v2_academic_router = APIRouter(prefix="/api / v2 / academic", tags=["v2 - academic - search"])
+v2_academic_router = APIRouter(
+    prefix="/api / v2 / academic", tags=["v2 - academic - search"]
+)
 
 # Global instances
 _config_manager: Optional[ConfigManager] = None
@@ -40,11 +40,15 @@ async def get_literature_agent() -> LiteratureAgent:
         return _literature_agent
 
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Failed to initialize Literature Agent: {str(e)}")
+        raise HTTPException(
+            status_code=503, detail=f"Failed to initialize Literature Agent: {str(e)}"
+        )
 
 
 def convert_results_to_response_format(
-    query: str, results_by_source: Dict[str, List[Dict[str, Any]]], cache_used: bool = False
+    query: str,
+    results_by_source: Dict[str, List[Dict[str, Any]]],
+    cache_used: bool = False,
 ) -> AcademicSearchResponse:
     """Convert LiteratureAgent results to API response format."""
 
@@ -89,7 +93,8 @@ def convert_results_to_response_format(
 
 @v2_academic_router.post("/search", response_model=AcademicSearchResponse)
 async def comprehensive_academic_search(
-    request: AcademicSearchRequest, literature_agent: LiteratureAgent = Depends(get_literature_agent)
+    request: AcademicSearchRequest,
+    literature_agent: LiteratureAgent = Depends(get_literature_agent),
 ):
     """
     Perform comprehensive academic search across multiple databases.
@@ -125,8 +130,14 @@ async def comprehensive_academic_search(
     """
     try:
         # Validate that at least one source is selected
-        if not (request.include_pubmed or request.include_arxiv or request.include_semantic_scholar):
-            raise HTTPException(status_code=400, detail="At least one search source must be enabled")
+        if not (
+            request.include_pubmed
+            or request.include_arxiv
+            or request.include_semantic_scholar
+        ):
+            raise HTTPException(
+                status_code=400, detail="At least one search source must be enabled"
+            )
 
         # Execute the comprehensive academic search
         results_by_source = await literature_agent.comprehensive_academic_search(
@@ -140,7 +151,9 @@ async def comprehensive_academic_search(
 
         # Convert to response format
         response = convert_results_to_response_format(
-            query=request.query, results_by_source=results_by_source, cache_used=request.use_cache
+            query=request.query,
+            results_by_source=results_by_source,
+            cache_used=request.use_cache,
         )
 
         return response
@@ -179,11 +192,17 @@ async def comprehensive_academic_search(
 @v2_academic_router.get("/search", response_model=AcademicSearchResponse)
 async def comprehensive_academic_search_get(
     query: str = Query(..., description="Search query", min_length=1, max_length=500),
-    max_results_per_source: int = Query(default=10, description="Maximum results per source", ge=1, le=50),
+    max_results_per_source: int = Query(
+        default=10, description="Maximum results per source", ge=1, le=50
+    ),
     include_pubmed: bool = Query(default=True, description="Include PubMed in search"),
     include_arxiv: bool = Query(default=True, description="Include arXiv in search"),
-    include_semantic_scholar: bool = Query(default=True, description="Include Semantic Scholar in search"),
-    use_cache: bool = Query(default=True, description="Use cached results if available"),
+    include_semantic_scholar: bool = Query(
+        default=True, description="Include Semantic Scholar in search"
+    ),
+    use_cache: bool = Query(
+        default=True, description="Use cached results if available"
+    ),
     literature_agent: LiteratureAgent = Depends(get_literature_agent),
 ):
     """
@@ -224,7 +243,15 @@ async def get_available_sources():
             name="PubMed",
             description="Biomedical literature database maintained by NCBI",
             url="https://pubmed.ncbi.nlm.nih.gov/",
-            fields=["title", "abstract", "authors", "journal", "publication_date", "pmid", "doi"],
+            fields=[
+                "title",
+                "abstract",
+                "authors",
+                "journal",
+                "publication_date",
+                "pmid",
+                "doi",
+            ],
             specialties=["medicine", "biology", "life_sciences", "biomedical_research"],
             api_documentation="https://www.ncbi.nlm.nih.gov / books / NBK25501/",
             rate_limit="3 requests per second",
@@ -235,8 +262,20 @@ async def get_available_sources():
             name="arXiv",
             description="Open - access repository of electronic preprints",
             url="https://arxiv.org/",
-            fields=["title", "abstract", "authors", "categories", "publication_date", "arxiv_id"],
-            specialties=["physics", "mathematics", "computer_science", "quantitative_biology"],
+            fields=[
+                "title",
+                "abstract",
+                "authors",
+                "categories",
+                "publication_date",
+                "arxiv_id",
+            ],
+            specialties=[
+                "physics",
+                "mathematics",
+                "computer_science",
+                "quantitative_biology",
+            ],
             api_documentation="https://arxiv.org / help / api/",
             rate_limit="1 request per 3 seconds",
             ssl_enabled=True,
@@ -246,12 +285,30 @@ async def get_available_sources():
             name="Semantic Scholar",
             description="AI - powered research tool for scientific literature",
             url="https://www.semanticscholar.org/",
-            fields=["title", "abstract", "authors", "venue", "year", "citation_count", "doi", "pdf_url"],
-            specialties=["computer_science", "medicine", "biology", "multidisciplinary"],
+            fields=[
+                "title",
+                "abstract",
+                "authors",
+                "venue",
+                "year",
+                "citation_count",
+                "doi",
+                "pdf_url",
+            ],
+            specialties=[
+                "computer_science",
+                "medicine",
+                "biology",
+                "multidisciplinary",
+            ],
             api_documentation="https://api.semanticscholar.org/",
             rate_limit="1 request per second (higher with API key)",
             ssl_enabled=True,
-            features=["citation_tracking", "open_access_detection", "paper_recommendations"],
+            features=[
+                "citation_tracking",
+                "open_access_detection",
+                "paper_recommendations",
+            ],
         ),
     }
 
@@ -264,7 +321,9 @@ async def get_available_sources():
 
 
 @v2_academic_router.get("/health", response_model=Dict[str, Any])
-async def health_check(literature_agent: LiteratureAgent = Depends(get_literature_agent)):
+async def health_check(
+    literature_agent: LiteratureAgent = Depends(get_literature_agent),
+):
     """
     Health check endpoint for academic search service.
 
@@ -281,11 +340,19 @@ async def health_check(literature_agent: LiteratureAgent = Depends(get_literatur
             "literature_agent": agent_status,
             "ssl_verification": "enabled",
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "sources": {"pubmed": "available", "arxiv": "available", "semantic_scholar": "available"},
+            "sources": {
+                "pubmed": "available",
+                "arxiv": "available",
+                "semantic_scholar": "available",
+            },
         }
 
     except Exception as e:
         return JSONResponse(
             status_code=503,
-            content={"status": "unhealthy", "error": str(e), "timestamp": datetime.utcnow().isoformat() + "Z"},
+            content={
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            },
         )

@@ -6,11 +6,11 @@ import os
 import sys
 from pathlib import Path
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent))
-
 from .config.config_manager import ConfigManager
 from .storage.hierarchical_database import HierarchicalDatabaseManager
+
+# Add src directory to path
+sys.path.insert(0, str(Path(__file__).parent))
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
     config_manager.setup_logging()
 
     # Initialize database
-    db_manager = HierarchicalDatabaseManager(config_manager.config.storage.database_path)
+    HierarchicalDatabaseManager(config_manager.config.storage.database_path)
 
     print("✓ Eunice application initialized successfully")
     print("📋 Use web_server.py to start the web interface")

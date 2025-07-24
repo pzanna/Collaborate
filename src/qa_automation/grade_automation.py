@@ -21,8 +21,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -92,7 +91,9 @@ class GRADEAssessment:
     upgrades: Dict[GRADECriteria, int] = field(default_factory=dict)
     rationale: Dict[str, str] = field(default_factory=dict)
     evidence_profile: Optional[EvidenceProfile] = None
-    assessment_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    assessment_date: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     confidence_score: float = 0.0
 
 
@@ -156,10 +157,16 @@ class GRADEAutomation:
                 "large_effect_threshold": 2.0,
                 "very_large_effect_threshold": 5.0,
             },
-            "confidence_thresholds": {"high_confidence": 0.8, "moderate_confidence": 0.6, "low_confidence": 0.4},
+            "confidence_thresholds": {
+                "high_confidence": 0.8,
+                "moderate_confidence": 0.6,
+                "low_confidence": 0.4,
+            },
         }
 
-    async def assess_evidence(self, evidence_profile: EvidenceProfile) -> GRADEAssessment:
+    async def assess_evidence(
+        self, evidence_profile: EvidenceProfile
+    ) -> GRADEAssessment:
         """
         Perform automated GRADE assessment
 
@@ -169,10 +176,14 @@ class GRADEAutomation:
         Returns:
             Complete GRADE assessment
         """
-        logger.info(f"Starting GRADE assessment for outcome: {evidence_profile.outcome}")
+        logger.info(
+            f"Starting GRADE assessment for outcome: {evidence_profile.outcome}"
+        )
 
         # Determine initial certainty based on study design
-        initial_certainty = self._determine_initial_certainty(evidence_profile.study_design)
+        initial_certainty = self._determine_initial_certainty(
+            evidence_profile.study_design
+        )
 
         # Assess downgrading factors
         downgrades = await self._assess_downgrades(evidence_profile)
@@ -181,13 +192,19 @@ class GRADEAutomation:
         upgrades = await self._assess_upgrades(evidence_profile)
 
         # Calculate final certainty
-        final_certainty = self._calculate_final_certainty(initial_certainty, downgrades, upgrades)
+        final_certainty = self._calculate_final_certainty(
+            initial_certainty, downgrades, upgrades
+        )
 
         # Generate rationale
-        rationale = await self._generate_rationale(evidence_profile, downgrades, upgrades)
+        rationale = await self._generate_rationale(
+            evidence_profile, downgrades, upgrades
+        )
 
         # Calculate confidence score
-        confidence_score = self._calculate_confidence_score(evidence_profile, downgrades, upgrades)
+        confidence_score = self._calculate_confidence_score(
+            evidence_profile, downgrades, upgrades
+        )
 
         assessment = GRADEAssessment(
             outcome=evidence_profile.outcome,
@@ -218,13 +235,17 @@ class GRADEAutomation:
 
         return design_certainty_map.get(study_design, GRADELevel.VERY_LOW)
 
-    async def _assess_downgrades(self, evidence_profile: EvidenceProfile) -> Dict[GRADECriteria, int]:
+    async def _assess_downgrades(
+        self, evidence_profile: EvidenceProfile
+    ) -> Dict[GRADECriteria, int]:
         """Assess factors that downgrade evidence certainty"""
         downgrades = {}
 
         # Risk of bias
         if evidence_profile.risk_of_bias_concerns:
-            risk_score = len(evidence_profile.risk_of_bias_concerns) / len(evidence_profile.studies)
+            risk_score = len(evidence_profile.risk_of_bias_concerns) / len(
+                evidence_profile.studies
+            )
             if risk_score >= self.config["thresholds"]["high_risk_of_bias"]:
                 downgrades[GRADECriteria.RISK_OF_BIAS] = 2 if risk_score > 0.6 else 1
 
@@ -242,9 +263,13 @@ class GRADEAutomation:
 
         # Imprecision
         if evidence_profile.imprecision_concerns:
-            imprecision_score = len(evidence_profile.imprecision_concerns) / 3  # Normalize
+            imprecision_score = (
+                len(evidence_profile.imprecision_concerns) / 3
+            )  # Normalize
             if imprecision_score >= self.config["thresholds"]["imprecision_threshold"]:
-                downgrades[GRADECriteria.IMPRECISION] = 2 if imprecision_score > 0.7 else 1
+                downgrades[GRADECriteria.IMPRECISION] = (
+                    2 if imprecision_score > 0.7 else 1
+                )
 
         # Publication bias
         if evidence_profile.publication_bias_detected:
@@ -252,16 +277,23 @@ class GRADEAutomation:
 
         return downgrades
 
-    async def _assess_upgrades(self, evidence_profile: EvidenceProfile) -> Dict[GRADECriteria, int]:
+    async def _assess_upgrades(
+        self, evidence_profile: EvidenceProfile
+    ) -> Dict[GRADECriteria, int]:
         """Assess factors that upgrade evidence certainty"""
         upgrades = {}
 
         # Large effect size
         if evidence_profile.large_effect_size and evidence_profile.effect_estimate:
             effect_magnitude = abs(evidence_profile.effect_estimate)
-            if effect_magnitude >= self.config["thresholds"]["very_large_effect_threshold"]:
+            if (
+                effect_magnitude
+                >= self.config["thresholds"]["very_large_effect_threshold"]
+            ):
                 upgrades[GRADECriteria.LARGE_EFFECT] = 2
-            elif effect_magnitude >= self.config["thresholds"]["large_effect_threshold"]:
+            elif (
+                effect_magnitude >= self.config["thresholds"]["large_effect_threshold"]
+            ):
                 upgrades[GRADECriteria.LARGE_EFFECT] = 1
 
         # Dose - response gradient
@@ -275,11 +307,19 @@ class GRADEAutomation:
         return upgrades
 
     def _calculate_final_certainty(
-        self, initial: GRADELevel, downgrades: Dict[GRADECriteria, int], upgrades: Dict[GRADECriteria, int]
+        self,
+        initial: GRADELevel,
+        downgrades: Dict[GRADECriteria, int],
+        upgrades: Dict[GRADECriteria, int],
     ) -> GRADELevel:
         """Calculate final certainty level"""
         # Convert to numeric scale
-        certainty_scale = {GRADELevel.VERY_LOW: 0, GRADELevel.LOW: 1, GRADELevel.MODERATE: 2, GRADELevel.HIGH: 3}
+        certainty_scale = {
+            GRADELevel.VERY_LOW: 0,
+            GRADELevel.LOW: 1,
+            GRADELevel.MODERATE: 2,
+            GRADELevel.HIGH: 3,
+        }
 
         reverse_scale = {v: k for k, v in certainty_scale.items()}
 
@@ -326,9 +366,13 @@ class GRADEAutomation:
                     f"{', '.join(evidence_profile.indirectness_concerns[:2])}"
                 )
             elif criteria == GRADECriteria.IMPRECISION:
-                rationale[criteria.value] = f"Downgraded {level} level(s) due to imprecision in results"
+                rationale[criteria.value] = (
+                    f"Downgraded {level} level(s) due to imprecision in results"
+                )
             elif criteria == GRADECriteria.PUBLICATION_BIAS:
-                rationale[criteria.value] = f"Downgraded {level} level(s) due to suspected publication bias"
+                rationale[criteria.value] = (
+                    f"Downgraded {level} level(s) due to suspected publication bias"
+                )
 
         # Upgrade rationales
         for criteria, level in upgrades.items():
@@ -338,9 +382,13 @@ class GRADEAutomation:
                     f"(effect estimate: {evidence_profile.effect_estimate})"
                 )
             elif criteria == GRADECriteria.DOSE_RESPONSE:
-                rationale[criteria.value] = f"Upgraded {level} level(s) due to dose - response gradient"
+                rationale[criteria.value] = (
+                    f"Upgraded {level} level(s) due to dose - response gradient"
+                )
             elif criteria == GRADECriteria.CONFOUNDERS:
-                rationale[criteria.value] = f"Upgraded {level} level(s) as confounders would reduce the effect"
+                rationale[criteria.value] = (
+                    f"Upgraded {level} level(s) as confounders would reduce the effect"
+                )
 
         return rationale
 
@@ -363,7 +411,13 @@ class GRADEAutomation:
         downgrade_penalty = sum(downgrades.values()) * 0.1
         upgrade_bonus = sum(upgrades.values()) * 0.05
 
-        confidence = base_score + study_factor * 0.2 + sample_factor * 0.1 - downgrade_penalty + upgrade_bonus
+        confidence = (
+            base_score
+            + study_factor * 0.2
+            + sample_factor * 0.1
+            - downgrade_penalty
+            + upgrade_bonus
+        )
 
         return max(0.0, min(1.0, confidence))
 
@@ -381,12 +435,18 @@ class GRADEAutomation:
             GRADE recommendation
         """
         # Determine recommendation strength
-        strength = "strong" if assessment.final_certainty in [GRADELevel.HIGH, GRADELevel.MODERATE] else "conditional"
+        strength = (
+            "strong"
+            if assessment.final_certainty in [GRADELevel.HIGH, GRADELevel.MODERATE]
+            else "conditional"
+        )
 
         # Determine direction based on effect estimate
         direction = "for"
         if assessment.evidence_profile and assessment.evidence_profile.effect_estimate:
-            direction = "for" if assessment.evidence_profile.effect_estimate > 0 else "against"
+            direction = (
+                "for" if assessment.evidence_profile.effect_estimate > 0 else "against"
+            )
 
         # Generate rationale
         rationale = self._generate_recommendation_rationale(assessment, context)
@@ -402,7 +462,9 @@ class GRADEAutomation:
             considerations=considerations,
         )
 
-    def _generate_recommendation_rationale(self, assessment: GRADEAssessment, context: Dict[str, Any]) -> str:
+    def _generate_recommendation_rationale(
+        self, assessment: GRADEAssessment, context: Dict[str, Any]
+    ) -> str:
         """Generate rationale for recommendation"""
         certainty_text = assessment.final_certainty.value.replace("_", " ")
 
@@ -412,17 +474,25 @@ class GRADEAutomation:
         )
 
         if assessment.evidence_profile and assessment.evidence_profile.participants:
-            rationale += f" involving {assessment.evidence_profile.participants} participants"
+            rationale += (
+                f" involving {assessment.evidence_profile.participants} participants"
+            )
 
         # Add key concerns
         if assessment.downgrades:
-            major_concerns = [k.value.replace("_", " ") for k, v in assessment.downgrades.items() if v >= 2]
+            major_concerns = [
+                k.value.replace("_", " ")
+                for k, v in assessment.downgrades.items()
+                if v >= 2
+            ]
             if major_concerns:
                 rationale += f". Major concerns include {', '.join(major_concerns)}"
 
         return rationale + "."
 
-    def _generate_considerations(self, assessment: GRADEAssessment, context: Dict[str, Any]) -> List[str]:
+    def _generate_considerations(
+        self, assessment: GRADEAssessment, context: Dict[str, Any]
+    ) -> List[str]:
         """Generate additional considerations"""
         considerations = []
 
@@ -434,14 +504,18 @@ class GRADEAutomation:
             considerations.append("Evaluate resource requirements and feasibility")
 
         if assessment.final_certainty in [GRADELevel.LOW, GRADELevel.VERY_LOW]:
-            considerations.append("Additional high - quality research may change this recommendation")
+            considerations.append(
+                "Additional high - quality research may change this recommendation"
+            )
 
         # Add assessment - specific considerations
         if GRADECriteria.INDIRECTNESS in assessment.downgrades:
             considerations.append("Direct evidence in target population may be limited")
 
         if GRADECriteria.IMPRECISION in assessment.downgrades:
-            considerations.append("Confidence intervals include both beneficial and harmful effects")
+            considerations.append(
+                "Confidence intervals include both beneficial and harmful effects"
+            )
 
         return considerations
 
@@ -458,7 +532,10 @@ class GRADEAutomation:
         task_assessments = [
             a
             for a in self.assessment_history
-            if (a.evidence_profile and getattr(a.evidence_profile, "task_id", None) == task_id)
+            if (
+                a.evidence_profile
+                and getattr(a.evidence_profile, "task_id", None) == task_id
+            )
         ]
 
         if not task_assessments:
@@ -467,9 +544,13 @@ class GRADEAutomation:
         # Calculate summary statistics
         certainty_distribution = {}
         for level in GRADELevel:
-            certainty_distribution[level.value] = sum(1 for a in task_assessments if a.final_certainty == level)
+            certainty_distribution[level.value] = sum(
+                1 for a in task_assessments if a.final_certainty == level
+            )
 
-        avg_confidence = sum(a.confidence_score for a in task_assessments) / len(task_assessments)
+        avg_confidence = sum(a.confidence_score for a in task_assessments) / len(
+            task_assessments
+        )
 
         return {
             "total_assessments": len(task_assessments),
@@ -486,7 +567,9 @@ class GRADEAutomation:
             ],
         }
 
-    async def export_assessment(self, assessment: GRADEAssessment, format_type: str = "json") -> str:
+    async def export_assessment(
+        self, assessment: GRADEAssessment, format_type: str = "json"
+    ) -> str:
         """
         Export GRADE assessment in specified format
 
@@ -503,7 +586,9 @@ class GRADEAutomation:
                     "outcome": assessment.outcome,
                     "initial_certainty": assessment.initial_certainty.value,
                     "final_certainty": assessment.final_certainty.value,
-                    "downgrades": {k.value: v for k, v in assessment.downgrades.items()},
+                    "downgrades": {
+                        k.value: v for k, v in assessment.downgrades.items()
+                    },
                     "upgrades": {k.value: v for k, v in assessment.upgrades.items()},
                     "rationale": assessment.rationale,
                     "confidence_score": assessment.confidence_score,
@@ -545,7 +630,7 @@ async def demo_grade_automation():
     # Perform assessment
     assessment = await grade.assess_evidence(evidence_profile)
 
-    print(f"✅ GRADE Assessment completed:")
+    print("✅ GRADE Assessment completed:")
     print(f"   Outcome: {assessment.outcome}")
     print(f"   Initial certainty: {assessment.initial_certainty.value}")
     print(f"   Final certainty: {assessment.final_certainty.value}")
@@ -555,7 +640,7 @@ async def demo_grade_automation():
     context = {"population_specific": True, "resource_implications": False}
     recommendation = await grade.generate_recommendation(assessment, context)
 
-    print(f"\n🎯 Recommendation:")
+    print("\n🎯 Recommendation:")
     print(f"   Strength: {recommendation.strength}")
     print(f"   Direction: {recommendation.direction}")
     print(f"   Rationale: {recommendation.rationale}")

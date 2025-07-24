@@ -14,21 +14,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 try:
     from .dependency_manager import TaskDependencyManager
     from .fanout_manager import FanoutStrategy, TaskFanoutManager
-    from .protocols import AgentResponse, ResearchAction
-    from .rm_system_prompt import (
-        get_enhanced_rm_prompt,
-        suggest_parallelism,
-        validate_parallelism_value,
-    )
+    from .protocols import ResearchAction
+    from .rm_system_prompt import (get_enhanced_rm_prompt, suggest_parallelism,
+                                   validate_parallelism_value)
 except ImportError:
     from dependency_manager import TaskDependencyManager
     from fanout_manager import FanoutStrategy, TaskFanoutManager
-    from protocols import AgentResponse, ResearchAction
-    from rm_system_prompt import (
-        get_enhanced_rm_prompt,
-        suggest_parallelism,
-        validate_parallelism_value,
-    )
+    from protocols import ResearchAction
+    from rm_system_prompt import (get_enhanced_rm_prompt, suggest_parallelism,
+                                  validate_parallelism_value)
 
 
 class ParallelismMode(Enum):
@@ -104,9 +98,15 @@ class ParallelismCoordinator:
         """
         try:
             # Check if task already has explicit parallelism setting
-            if hasattr(task, "parallelism") and task.parallelism and task.parallelism > 1:
+            if (
+                hasattr(task, "parallelism")
+                and task.parallelism
+                and task.parallelism > 1
+            ):
                 validated_parallelism = validate_parallelism_value(task.parallelism)
-                self.logger.info(f"Task {task.task_id} has explicit parallelism: {validated_parallelism}")
+                self.logger.info(
+                    f"Task {task.task_id} has explicit parallelism: {validated_parallelism}"
+                )
                 return True, validated_parallelism, ParallelismMode.EXPLICIT
 
             # Analyze task characteristics for automatic parallelism
@@ -116,14 +116,18 @@ class ParallelismCoordinator:
             suggested = suggest_parallelism(task_description, item_count)
 
             if suggested > 1:
-                self.logger.info(f"Task {task.task_id} suggests parallelism: {suggested}")
+                self.logger.info(
+                    f"Task {task.task_id} suggests parallelism: {suggested}"
+                )
                 return True, suggested, ParallelismMode.AUTOMATIC
             else:
                 self.logger.info(f"Task {task.task_id} will run sequentially")
                 return False, 1, ParallelismMode.SEQUENTIAL
 
         except Exception as e:
-            self.logger.error(f"Error analyzing task {task.task_id} for parallelism: {e}")
+            self.logger.error(
+                f"Error analyzing task {task.task_id} for parallelism: {e}"
+            )
             return False, 1, ParallelismMode.SEQUENTIAL
 
     def _extract_item_count(self, task: ResearchAction) -> int:
@@ -198,11 +202,15 @@ class ParallelismCoordinator:
                 # Simple dependency check using completed_tasks set
                 for dep_id in dependencies:
                     if dep_id not in self.dependency_manager.completed_tasks:
-                        self.logger.info(f"Task {task.task_id} blocked by dependency {dep_id}")
+                        self.logger.info(
+                            f"Task {task.task_id} blocked by dependency {dep_id}"
+                        )
                         return None
 
             # Create fanout subtasks
-            subtasks = await self.fanout_manager.create_fanout_task(task, parallelism=parallelism, strategy=strategy)
+            subtasks = await self.fanout_manager.create_fanout_task(
+                task, parallelism=parallelism, strategy=strategy
+            )
 
             if not subtasks:
                 self.logger.error(f"Failed to create fanout for task {task.task_id}")
@@ -224,15 +232,21 @@ class ParallelismCoordinator:
 
             self.active_executions[task.task_id] = execution
 
-            self.logger.info(f"Created parallel execution for {task.task_id} with {len(subtasks)} subtasks")
+            self.logger.info(
+                f"Created parallel execution for {task.task_id} with {len(subtasks)} subtasks"
+            )
 
             return execution
 
         except Exception as e:
-            self.logger.error(f"Error creating parallel execution for {task.task_id}: {e}")
+            self.logger.error(
+                f"Error creating parallel execution for {task.task_id}: {e}"
+            )
             return None
 
-    def _estimate_completion_time(self, task: ResearchAction, parallelism: int) -> float:
+    def _estimate_completion_time(
+        self, task: ResearchAction, parallelism: int
+    ) -> float:
         """
         Estimate completion time for a parallel task.
 
@@ -263,7 +277,9 @@ class ParallelismCoordinator:
         return max(estimated_time, 5)  # Minimum 5 seconds
 
     async def execute_parallel_task(
-        self, execution: ParallelExecution, execution_callback: Optional[Callable] = None
+        self,
+        execution: ParallelExecution,
+        execution_callback: Optional[Callable] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Execute a parallel task plan.
@@ -297,7 +313,7 @@ class ParallelismCoordinator:
             if fanout_info and fanout_info["is_complete"]:
                 # Execution completed successfully
                 end_time = asyncio.get_event_loop().time()
-                actual_time = end_time - start_time
+                end_time - start_time
 
                 self.logger.info(f"Parallel execution completed for {task_id}")
 
@@ -313,10 +329,14 @@ class ParallelismCoordinator:
                 return None
 
         except Exception as e:
-            self.logger.error(f"Error in parallel execution for {execution.original_task.task_id}: {e}")
+            self.logger.error(
+                f"Error in parallel execution for {execution.original_task.task_id}: {e}"
+            )
             return None
 
-    async def _wait_for_subtasks_completion(self, execution: ParallelExecution, timeout: int = 300) -> bool:
+    async def _wait_for_subtasks_completion(
+        self, execution: ParallelExecution, timeout: int = 300
+    ) -> bool:
         """
         Wait for all subtasks in a parallel execution to complete.
 
@@ -390,7 +410,7 @@ class ParallelismCoordinator:
                 return False
 
             # Cancel fanout task
-            cancelled_subtasks = await self.fanout_manager.cancel_fanout_task(task_id)
+            await self.fanout_manager.cancel_fanout_task(task_id)
 
             # Remove from active executions
             del self.active_executions[task_id]
@@ -434,6 +454,8 @@ async def create_parallelism_coordinator() -> ParallelismCoordinator:
 
     # Log the enhanced system prompt availability
     prompt = await coordinator.get_enhanced_system_prompt()
-    coordinator.logger.info(f"Coordinator initialized with enhanced prompt ({len(prompt)} chars)")
+    coordinator.logger.info(
+        f"Coordinator initialized with enhanced prompt ({len(prompt)} chars)"
+    )
 
     return coordinator

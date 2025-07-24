@@ -12,10 +12,14 @@ class AcademicSearchRequest(BaseModel):
     """Request model for comprehensive academic search."""
 
     query: str = Field(..., description="Search query", min_length=1, max_length=500)
-    max_results_per_source: int = Field(default=10, description="Maximum results per source", ge=1, le=50)
+    max_results_per_source: int = Field(
+        default=10, description="Maximum results per source", ge=1, le=50
+    )
     include_pubmed: bool = Field(default=True, description="Include PubMed in search")
     include_arxiv: bool = Field(default=True, description="Include arXiv in search")
-    include_semantic_scholar: bool = Field(default=True, description="Include Semantic Scholar in search")
+    include_semantic_scholar: bool = Field(
+        default=True, description="Include Semantic Scholar in search"
+    )
     use_cache: bool = Field(default=True, description="Use cached results if available")
 
 
@@ -25,11 +29,15 @@ class AcademicPaper(BaseModel):
     title: str = Field(..., description="Paper title")
     url: str = Field(default="", description="URL to the paper")
     content: str = Field(default="", description="Paper description / summary")
-    source: str = Field(..., description="Source database (pubmed, arxiv, semantic_scholar)")
+    source: str = Field(
+        ..., description="Source database (pubmed, arxiv, semantic_scholar)"
+    )
     type: str = Field(default="academic_paper", description="Result type")
     link_type: str = Field(default="", description="Type of link (doi, pdf, etc.)")
     relevance_score: int = Field(default=0, description="Relevance score")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
 
 
 class SourceResults(BaseModel):
@@ -37,18 +45,30 @@ class SourceResults(BaseModel):
 
     source: SourceType = Field(..., description="Source database name")
     count: int = Field(..., description="Number of results from this source")
-    papers: List[AcademicPaper] = Field(..., description="List of papers from this source")
+    papers: List[AcademicPaper] = Field(
+        ..., description="List of papers from this source"
+    )
 
 
 class AcademicSearchResponse(BaseModel):
     """Response model for comprehensive academic search."""
 
     query: str = Field(..., description="Original search query")
-    total_results: int = Field(..., description="Total number of results across all sources")
-    sources_searched: List[str] = Field(..., description="List of sources that were searched")
-    sources_with_results: List[str] = Field(..., description="List of sources that returned results")
-    results_by_source: Dict[str, List[AcademicPaper]] = Field(..., description="Results organized by source")
-    search_timestamp: str = Field(..., description="ISO timestamp of when search was performed")
+    total_results: int = Field(
+        ..., description="Total number of results across all sources"
+    )
+    sources_searched: List[str] = Field(
+        ..., description="List of sources that were searched"
+    )
+    sources_with_results: List[str] = Field(
+        ..., description="List of sources that returned results"
+    )
+    results_by_source: Dict[str, List[AcademicPaper]] = Field(
+        ..., description="Results organized by source"
+    )
+    search_timestamp: str = Field(
+        ..., description="ISO timestamp of when search was performed"
+    )
     cache_used: bool = Field(..., description="Whether cached results were used")
 
     class Config:
@@ -64,8 +84,12 @@ class AcademicSearchResponse(BaseModel):
                     "pubmed": [
                         {
                             "title": "Deep Neural Networks for Medical Image Analysis",
-                            "url": "https://pubmed.ncbi.nlm.nih.gov / 12345678/",
-                            "content": "Academic paper: Deep Neural Networks for Medical Image Analysis | Authors: Smith, J., Doe, A. | Journal: Nature Medicine | Published: 2023 - 01 - 15 | Citations: 150",
+                            "url": "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+                            "content": (
+                                "Academic paper: Deep Neural Networks for Medical Image Analysis | "
+                                "Authors: Smith, J., Doe, A. | Journal: Nature Medicine | "
+                                "Published: 2023-01-15 | Citations: 150"
+                            ),
                             "source": "pubmed",
                             "type": "academic_paper",
                             "link_type": "pubmed",
@@ -91,7 +115,9 @@ class AcademicSearchError(BaseModel):
 
     success: bool = Field(False, description="Always false for errors")
     error: str = Field(..., description="Error message")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    details: Optional[Dict[str, Any]] = Field(
+        None, description="Additional error details"
+    )
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
 
 
@@ -112,7 +138,9 @@ class AcademicSourceInfo(BaseModel):
 class AcademicSourcesResponse(BaseModel):
     """Response model for academic sources information."""
 
-    sources: Dict[str, AcademicSourceInfo] = Field(..., description="Information about each source")
+    sources: Dict[str, AcademicSourceInfo] = Field(
+        ..., description="Information about each source"
+    )
     total_sources: int = Field(..., description="Total number of available sources")
     ssl_verification: str = Field(..., description="SSL verification status")
     last_updated: str = Field(..., description="Last update timestamp")
@@ -127,12 +155,24 @@ class AcademicSourcesResponse(BaseModel):
                         "name": "PubMed",
                         "description": "MEDLINE / PubMed database of biomedical literature",
                         "url": "https://pubmed.ncbi.nlm.nih.gov/",
-                        "fields": ["title", "abstract", "authors", "journal", "pub_date", "pmid", "doi"],
+                        "fields": [
+                            "title",
+                            "abstract",
+                            "authors",
+                            "journal",
+                            "pub_date",
+                            "pmid",
+                            "doi",
+                        ],
                         "specialties": ["medicine", "biology", "life_sciences"],
                         "api_documentation": "https://www.ncbi.nlm.nih.gov / books / NBK25497/",
                         "rate_limit": "3 requests per second",
                         "ssl_enabled": True,
-                        "features": ["mesh_terms", "publication_types", "clinical_trials"],
+                        "features": [
+                            "mesh_terms",
+                            "publication_types",
+                            "clinical_trials",
+                        ],
                     }
                 },
                 "total_sources": 3,

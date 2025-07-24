@@ -89,7 +89,9 @@ class PersonaRegistry:
             success = await persona_agent.initialize()
             if success:
                 self._active_personas[persona_type] = persona_agent
-                self.logger.info(f"Successfully initialized {persona_type.value} persona")
+                self.logger.info(
+                    f"Successfully initialized {persona_type.value} persona"
+                )
                 return True
             else:
                 self.logger.error(f"Failed to initialize {persona_type.value} persona")
@@ -111,11 +113,15 @@ class PersonaRegistry:
             results[persona_type] = await self.initialize_persona(persona_type)
 
         successful_count = sum(1 for success in results.values() if success)
-        self.logger.info(f"Initialized {successful_count}/{len(results)} persona agents")
+        self.logger.info(
+            f"Initialized {successful_count}/{len(results)} persona agents"
+        )
 
         return results
 
-    async def consult_persona(self, persona_type: PersonaType, action: ResearchAction) -> Optional[AgentResponse]:
+    async def consult_persona(
+        self, persona_type: PersonaType, action: ResearchAction
+    ) -> Optional[AgentResponse]:
         """
         Consult a specific persona agent.
 
@@ -130,13 +136,17 @@ class PersonaRegistry:
             if persona_type not in self._active_personas:
                 # Try to initialize the persona if not already active
                 if not await self.initialize_persona(persona_type):
-                    self.logger.error(f"Cannot consult {persona_type.value}: not initialized")
+                    self.logger.error(
+                        f"Cannot consult {persona_type.value}: not initialized"
+                    )
                     return None
 
             persona_agent = self._active_personas[persona_type]
             response = await persona_agent.process_action(action)
 
-            self.logger.info(f"Consultation with {persona_type.value} completed: {response.status}")
+            self.logger.info(
+                f"Consultation with {persona_type.value} completed: {response.status}"
+            )
             return response
 
         except Exception as e:
@@ -159,12 +169,17 @@ class PersonaRegistry:
 
         # If no exact match, return a general - purpose persona
         # For now, default to neurobiologist for biological queries
-        if any(term in expertise_area.lower() for term in ["bio", "neuro", "cell", "neural"]):
+        if any(
+            term in expertise_area.lower()
+            for term in ["bio", "neuro", "cell", "neural"]
+        ):
             return PersonaType.NEUROBIOLOGIST
 
         return None
 
-    async def get_persona_status(self, persona_type: PersonaType) -> Optional[Dict[str, Any]]:
+    async def get_persona_status(
+        self, persona_type: PersonaType
+    ) -> Optional[Dict[str, Any]]:
         """
         Get the status of a specific persona agent.
 

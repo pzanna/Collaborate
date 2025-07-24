@@ -13,10 +13,16 @@ import signal
 import sys
 import uuid
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import websockets
+
+from .protocols import (AgentRegistration, AgentResponse,
+                        PersonaConsultationRequest,
+                        PersonaConsultationResponse, ResearchAction)
+from .queue import TaskQueue
+from .registry import AgentRegistry
+from .structured_logger import get_mcp_logger
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -27,22 +33,6 @@ except ImportError:
     # Fallback for test environment
     from src.config.config_manager import ConfigManager
 
-from .protocols import (
-    MESSAGE_TYPES,
-    AgentRegistration,
-    AgentResponse,
-    PersonaConsultationRequest,
-    PersonaConsultationResponse,
-    RegisterCapabilities,
-    ResearchAction,
-    TaskUpdate,
-    TimeoutEvent,
-    deserialize_message,
-    serialize_message,
-)
-from .queue import TaskQueue
-from .registry import AgentRegistry
-from .structured_logger import get_mcp_logger
 
 # Import persona integration conditionally
 try:
@@ -94,7 +84,9 @@ class MCPServer:
         except AttributeError:
             max_queue_size = 50
 
-        self.task_queue = TaskQueue(max_size=max_queue_size, retry_attempts=self.config.retry_attempts)
+        self.task_queue = TaskQueue(
+            max_size=max_queue_size, retry_attempts=self.config.retry_attempts
+        )
 
         # Initialize persona system
         self.persona_integration = None
@@ -134,7 +126,9 @@ class MCPServer:
                 if persona_init_success:
                     logger.info("✅ Persona system initialized successfully")
                 else:
-                    logger.warning("⚠️ Persona system initialization failed - consultations will be unavailable")
+                    logger.warning(
+                        "⚠️ Persona system initialization failed - consultations will be unavailable"
+                    )
             else:
                 logger.warning("⚠️ Persona system not available - import failed")
 
@@ -143,7 +137,11 @@ class MCPServer:
 
             # Start WebSocket server
             self.server = await websockets.serve(
-                self._handle_client, self.config.host, self.config.port, ping_interval=30, ping_timeout=60
+                self._handle_client,
+                self.config.host,
+                self.config.port,
+                ping_interval=30,
+                ping_timeout=60,
             )
 
             logger.info(f"MCP Server started on {self.config.host}:{self.config.port}")
@@ -178,7 +176,10 @@ class MCPServer:
 
         # Close all client connections
         if self.clients:
-            await asyncio.gather(*[client.close() for client in self.clients.values()], return_exceptions=True)
+            await asyncio.gather(
+                *[client.close() for client in self.clients.values()],
+                return_exceptions=True,
+            )
 
         # Stop WebSocket server
         if self.server:
@@ -223,7 +224,9 @@ class MCPServer:
             async for message in websocket:
                 try:
                     data = json.loads(message)
-                    logger.info(f"Received message from client {client_id}: type={data.get('type', 'unknown')}")
+                    logger.info(
+                        f"Received message from client {client_id}: type={data.get('type', 'unknown')}"
+                    )
                     await self._handle_message(client_id, data)
                     self.stats["total_messages_received"] += 1
                 except json.JSONDecodeError:
@@ -311,13 +314,20 @@ class MCPServer:
 
                 # Send acknowledgment
                 await self._send_to_client(
-                    client_id, {"type": "task_queued", "data": {"task_id": action.task_id, "status": "queued"}}
+                    client_id,
+                    {
+                        "type": "task_queued",
+                        "data": {"task_id": action.task_id, "status": "queued"},
+                    },
                 )
             else:
                 # Send error
                 await self._send_to_client(
                     client_id,
-                    {"type": "task_rejected", "data": {"task_id": action.task_id, "error": "Task queue full"}},
+                    {
+                        "type": "task_rejected",
+                        "data": {"task_id": action.task_id, "error": "Task queue full"},
+                    },
                 )
 
         except Exception as e:
@@ -328,31 +338,42 @@ class MCPServer:
         try:
             logger.info(f"Received response from client {client_id}: {data}")
             response = AgentResponse.from_dict(data)
-            logger.info(f"Received response for task {response.task_id} from agent {response.agent_type}")
+            logger.info(
+                f"Received response for task {response.task_id} from agent {response.agent_type}"
+            )
 
             # Get agent ID from client mapping
             agent_id = self.client_to_agent.get(client_id)
             if agent_id:
                 # Update agent registry to mark task as complete
                 await self.agent_registry.complete_task(agent_id, response.task_id)
-                logger.debug(f"Marked task {response.task_id} as complete for agent {agent_id}")
+                logger.debug(
+                    f"Marked task {response.task_id} as complete for agent {agent_id}"
+                )
 
             # Mark task as completed or failed
             if response.status == "completed":
                 await self.task_queue.complete_task(response.task_id, response.result)
                 logger.info(f"Task {response.task_id} marked as completed")
             elif response.status == "failed":
-                await self.task_queue.fail_task(response.task_id, response.error or "Unknown error")
+                await self.task_queue.fail_task(
+                    response.task_id, response.error or "Unknown error"
+                )
                 logger.info(f"Task {response.task_id} marked as failed")
 
             # Forward response to Research Manager
             if self.research_manager_client:
                 await self._send_to_client(
-                    self.research_manager_client, {"type": "agent_response", "data": response.to_dict()}
+                    self.research_manager_client,
+                    {"type": "agent_response", "data": response.to_dict()},
                 )
-                logger.info(f"Forwarded response for task {response.task_id} to research manager")
+                logger.info(
+                    f"Forwarded response for task {response.task_id} to research manager"
+                )
             else:
-                logger.warning(f"No research manager client available to forward response for task {response.task_id}")
+                logger.warning(
+                    f"No research manager client available to forward response for task {response.task_id}"
+                )
 
             logger.info(f"Successfully processed response for task {response.task_id}")
 
@@ -373,16 +394,26 @@ class MCPServer:
                 self.client_to_agent[client_id] = registration.agent_id
 
                 self.stats["total_agents_registered"] += 1
-                logger.info(f"Registered agent {registration.agent_id} from client {client_id}")
+                logger.info(
+                    f"Registered agent {registration.agent_id} from client {client_id}"
+                )
 
                 # Send acknowledgment
                 await self._send_to_client(
-                    client_id, {"type": "registration_confirmed", "data": {"agent_id": registration.agent_id}}
+                    client_id,
+                    {
+                        "type": "registration_confirmed",
+                        "data": {"agent_id": registration.agent_id},
+                    },
                 )
             else:
                 # Send error
                 await self._send_to_client(
-                    client_id, {"type": "registration_failed", "data": {"agent_id": registration.agent_id}}
+                    client_id,
+                    {
+                        "type": "registration_failed",
+                        "data": {"agent_id": registration.agent_id},
+                    },
                 )
 
         except Exception as e:
@@ -411,7 +442,11 @@ class MCPServer:
             success = await self.task_queue.cancel_task(task_id)
 
             await self._send_to_client(
-                client_id, {"type": "task_cancelled" if success else "cancel_failed", "data": {"task_id": task_id}}
+                client_id,
+                {
+                    "type": "task_cancelled" if success else "cancel_failed",
+                    "data": {"task_id": task_id},
+                },
             )
 
     async def _handle_get_task_status(self, client_id: str, data: Dict[str, Any]):
@@ -423,7 +458,11 @@ class MCPServer:
             status = await self.task_queue.get_task_status(task_id)
 
             await self._send_to_client(
-                client_id, {"type": "task_status_response", "data": {"response_id": response_id, "task_status": status}}
+                client_id,
+                {
+                    "type": "task_status_response",
+                    "data": {"response_id": response_id, "task_status": status},
+                },
             )
 
     async def _handle_get_server_stats(self, client_id: str, data: Dict[str, Any]):
@@ -439,20 +478,30 @@ class MCPServer:
                 **self.stats,
                 "queue": queue_stats,
                 "agents": registry_stats,
-                "uptime_seconds": (datetime.now() - self.stats["started_at"]).total_seconds(),
+                "uptime_seconds": (
+                    datetime.now() - self.stats["started_at"]
+                ).total_seconds(),
             }
 
             await self._send_to_client(
                 client_id,
-                {"type": "server_stats_response", "data": {"response_id": response_id, "stats": combined_stats}},
+                {
+                    "type": "server_stats_response",
+                    "data": {"response_id": response_id, "stats": combined_stats},
+                },
             )
 
-    async def _handle_identify_research_manager(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_identify_research_manager(
+        self, client_id: str, data: Dict[str, Any]
+    ):
         """Handle Research Manager identification"""
         self.research_manager_client = client_id
         logger.info(f"Research Manager identified: {client_id}")
 
-        await self._send_to_client(client_id, {"type": "research_manager_confirmed", "data": {"client_id": client_id}})
+        await self._send_to_client(
+            client_id,
+            {"type": "research_manager_confirmed", "data": {"client_id": client_id}},
+        )
 
     async def _handle_get_active_tasks(self, client_id: str, data: Dict[str, Any]):
         """Handle request for active tasks"""
@@ -488,7 +537,10 @@ class MCPServer:
 
                 await self._send_to_client(
                     client_id,
-                    {"type": "active_tasks_response", "data": {"response_id": response_id, "tasks": tasks_data}},
+                    {
+                        "type": "active_tasks_response",
+                        "data": {"response_id": response_id, "tasks": tasks_data},
+                    },
                 )
 
             except Exception as e:
@@ -497,7 +549,11 @@ class MCPServer:
                     client_id,
                     {
                         "type": "active_tasks_response",
-                        "data": {"response_id": response_id, "tasks": [], "error": str(e)},
+                        "data": {
+                            "response_id": response_id,
+                            "tasks": [],
+                            "error": str(e),
+                        },
                     },
                 )
 
@@ -536,14 +592,21 @@ class MCPServer:
 
                     await self._send_to_client(
                         client_id,
-                        {"type": "task_details_response", "data": {"response_id": response_id, "task": task_info}},
+                        {
+                            "type": "task_details_response",
+                            "data": {"response_id": response_id, "task": task_info},
+                        },
                     )
                 else:
                     await self._send_to_client(
                         client_id,
                         {
                             "type": "task_details_response",
-                            "data": {"response_id": response_id, "task": None, "error": "Task not found"},
+                            "data": {
+                                "response_id": response_id,
+                                "task": None,
+                                "error": "Task not found",
+                            },
                         },
                     )
 
@@ -553,17 +616,25 @@ class MCPServer:
                     client_id,
                     {
                         "type": "task_details_response",
-                        "data": {"response_id": response_id, "task": None, "error": str(e)},
+                        "data": {
+                            "response_id": response_id,
+                            "task": None,
+                            "error": str(e),
+                        },
                     },
                 )
 
     # Background Task Methods
 
-    async def _handle_persona_consultation_request(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_persona_consultation_request(
+        self, client_id: str, data: Dict[str, Any]
+    ):
         """Handle request for expert consultation from persona agents"""
         try:
             request = PersonaConsultationRequest.from_dict(data)
-            logger.info(f"Persona consultation request {request.request_id} from client {client_id}")
+            logger.info(
+                f"Persona consultation request {request.request_id} from client {client_id}"
+            )
 
             if not self.persona_integration:
                 # Persona system not available
@@ -574,7 +645,11 @@ class MCPServer:
                     error="Persona system not available",
                 )
                 await self._send_to_client(
-                    client_id, {"type": "persona_consultation_response", "data": response.to_dict()}
+                    client_id,
+                    {
+                        "type": "persona_consultation_response",
+                        "data": response.to_dict(),
+                    },
                 )
                 return
 
@@ -601,29 +676,48 @@ class MCPServer:
                     request_id=request.request_id,
                     persona_type="unknown",
                     status="error",
-                    error=agent_response.error if agent_response else "No response from persona",
+                    error=(
+                        agent_response.error
+                        if agent_response
+                        else "No response from persona"
+                    ),
                 )
 
             # Send response to client
-            await self._send_to_client(client_id, {"type": "persona_consultation_response", "data": response.to_dict()})
+            await self._send_to_client(
+                client_id,
+                {"type": "persona_consultation_response", "data": response.to_dict()},
+            )
 
         except Exception as e:
             logger.error(f"Error handling persona consultation request: {e}")
             # Send error response
             error_response = PersonaConsultationResponse(
-                request_id=data.get("request_id", "unknown"), persona_type="system", status="error", error=str(e)
+                request_id=data.get("request_id", "unknown"),
+                persona_type="system",
+                status="error",
+                error=str(e),
             )
             await self._send_to_client(
-                client_id, {"type": "persona_consultation_response", "data": error_response.to_dict()}
+                client_id,
+                {
+                    "type": "persona_consultation_response",
+                    "data": error_response.to_dict(),
+                },
             )
 
-    async def _handle_get_persona_capabilities(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_get_persona_capabilities(
+        self, client_id: str, data: Dict[str, Any]
+    ):
         """Handle request for persona capabilities information"""
         response_id = data.get("response_id")
 
         try:
             if not self.persona_integration:
-                capabilities = {"available": False, "error": "Persona system not initialized"}
+                capabilities = {
+                    "available": False,
+                    "error": "Persona system not initialized",
+                }
             else:
                 capabilities = await self.persona_integration.get_persona_capabilities()
 
@@ -641,7 +735,10 @@ class MCPServer:
                 client_id,
                 {
                     "type": "persona_capabilities_response",
-                    "data": {"response_id": response_id, "capabilities": {"available": False, "error": str(e)}},
+                    "data": {
+                        "response_id": response_id,
+                        "capabilities": {"available": False, "error": str(e)},
+                    },
                 },
             )
 
@@ -652,9 +749,14 @@ class MCPServer:
 
         try:
             if not self.persona_integration:
-                history = {"consultations": [], "error": "Persona system not initialized"}
+                history = {
+                    "consultations": [],
+                    "error": "Persona system not initialized",
+                }
             else:
-                history_data = await self.persona_integration.get_consultation_history(limit=limit)
+                history_data = await self.persona_integration.get_consultation_history(
+                    limit=limit
+                )
                 history = {
                     "consultations": history_data.get("recent_consultations", []),
                     "statistics": history_data.get("statistics", {}),
@@ -662,7 +764,10 @@ class MCPServer:
 
             await self._send_to_client(
                 client_id,
-                {"type": "persona_history_response", "data": {"response_id": response_id, "history": history}},
+                {
+                    "type": "persona_history_response",
+                    "data": {"response_id": response_id, "history": history},
+                },
             )
 
         except Exception as e:
@@ -671,7 +776,10 @@ class MCPServer:
                 client_id,
                 {
                     "type": "persona_history_response",
-                    "data": {"response_id": response_id, "history": {"consultations": [], "error": str(e)}},
+                    "data": {
+                        "response_id": response_id,
+                        "history": {"consultations": [], "error": str(e)},
+                    },
                 },
             )
 
@@ -684,24 +792,36 @@ class MCPServer:
                 task = await self.task_queue.get_next_task()
 
                 if task:
-                    logger.info(f"Processing task {task.action.task_id} with action '{task.action.action}'")
+                    logger.info(
+                        f"Processing task {task.action.task_id} with action '{task.action.action}'"
+                    )
 
                     # Find available agent
-                    agents = await self.agent_registry.get_available_agents(task.action.action)
+                    agents = await self.agent_registry.get_available_agents(
+                        task.action.action
+                    )
 
-                    logger.info(f"Found {len(agents)} available agents for action '{task.action.action}': {agents}")
+                    logger.info(
+                        f"Found {len(agents)} available agents for action '{task.action.action}': {agents}"
+                    )
 
                     if agents:
                         agent_id = agents[0]  # Use least loaded agent
 
                         # Assign task to agent
-                        await self.agent_registry.assign_task(agent_id, task.action.task_id)
-                        await self.task_queue.assign_agent(task.action.task_id, agent_id)
+                        await self.agent_registry.assign_task(
+                            agent_id, task.action.task_id
+                        )
+                        await self.task_queue.assign_agent(
+                            task.action.task_id, agent_id
+                        )
 
                         # Send task to agent
                         await self._send_task_to_agent(agent_id, task.action)
 
-                        logger.info(f"Assigned task {task.action.task_id} to agent {agent_id}")
+                        logger.info(
+                            f"Assigned task {task.action.task_id} to agent {agent_id}"
+                        )
                     else:
                         # Debug: Get all registered agents and capabilities
                         all_agents = await self.agent_registry.get_all_agents()
@@ -711,22 +831,32 @@ class MCPServer:
                             f"No available agents for task {task.action.task_id} with action '{task.action.action}'"
                         )
                         logger.warning(f"Registered agents: {list(all_agents.keys())}")
-                        logger.warning(f"Available capabilities: {list(capabilities.keys())}")
+                        logger.warning(
+                            f"Available capabilities: {list(capabilities.keys())}"
+                        )
 
                         # Check specific capability
                         if task.action.action in capabilities:
                             agent_ids = capabilities[task.action.action]
-                            logger.warning(f"Agents with capability '{task.action.action}': {list(agent_ids)}")
+                            logger.warning(
+                                f"Agents with capability '{task.action.action}': {list(agent_ids)}"
+                            )
                             for agent_id in agent_ids:
                                 if agent_id in all_agents:
                                     agent = all_agents[agent_id]
                                     logger.warning(
-                                        f"Agent {agent_id}: available={agent.is_available}, status={agent.registration.status}, tasks={len(agent.current_tasks)}"
+                                        f"Agent {agent_id}: available={agent.is_available}, "
+                                        f"status={agent.registration.status}, "
+                                        f"tasks={len(agent.current_tasks)}"
                                     )
 
                         # No available agents, put task back in queue
-                        await self.task_queue.fail_task(task.action.task_id, "No available agents", retry=True)
-                        logger.warning(f"Failed task {task.action.task_id} due to no available agents")
+                        await self.task_queue.fail_task(
+                            task.action.task_id, "No available agents", retry=True
+                        )
+                        logger.warning(
+                            f"Failed task {task.action.task_id} due to no available agents"
+                        )
 
                 # Small delay to prevent tight loop
                 await asyncio.sleep(0.1)
@@ -758,10 +888,14 @@ class MCPServer:
                 except Exception as e:
                     logger.error(f"Error sending task to agent {agent_id}: {e}")
                     # Mark task as failed if we can't send it
-                    await self.task_queue.fail_task(action.task_id, f"Failed to send to agent: {e}")
+                    await self.task_queue.fail_task(
+                        action.task_id, f"Failed to send to agent: {e}"
+                    )
             else:
                 logger.error(f"Client {client_id} for agent {agent_id} not found")
-                await self.task_queue.fail_task(action.task_id, "Agent client disconnected")
+                await self.task_queue.fail_task(
+                    action.task_id, "Agent client disconnected"
+                )
         else:
             logger.error(f"Agent {agent_id} not found in agent - to - client mapping")
             await self.task_queue.fail_task(action.task_id, "Agent not registered")
@@ -834,7 +968,10 @@ async def main():
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(os.path.join(log_path, "mcp_server.log")), logging.StreamHandler()],
+        handlers=[
+            logging.FileHandler(os.path.join(log_path, "mcp_server.log")),
+            logging.StreamHandler(),
+        ],
     )
 
     # Load configuration

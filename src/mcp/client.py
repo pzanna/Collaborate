@@ -10,16 +10,11 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import websockets
 
-from .protocols import (
-    AgentResponse,
-    ResearchAction,
-    deserialize_message,
-    serialize_message,
-)
+from .protocols import AgentResponse, ResearchAction, serialize_message
 from .structured_logger import get_mcp_logger
 
 logger = logging.getLogger(__name__)
@@ -126,7 +121,11 @@ class MCPClient:
             return False
 
         try:
-            message = {"type": "cancel_task", "data": {"task_id": task_id}, "timestamp": datetime.now().isoformat()}
+            message = {
+                "type": "cancel_task",
+                "data": {"task_id": task_id},
+                "timestamp": datetime.now().isoformat(),
+            }
             await self.websocket.send(json.dumps(message))
             logger.debug(f"Sent cancel request for task {task_id}")
             return True
@@ -279,7 +278,9 @@ class MCPClient:
             logger.error(f"Failed to get task details for {task_id}: {e}")
             return None
 
-    def add_message_handler(self, message_type: str, handler: Callable[[Dict[str, Any]], Any]):
+    def add_message_handler(
+        self, message_type: str, handler: Callable[[Dict[str, Any]], Any]
+    ):
         """Add a message handler for specific message types (can be sync or async)"""
         self.message_handlers[message_type] = handler
 

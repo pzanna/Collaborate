@@ -24,7 +24,11 @@ class ConversationConfig(BaseModel):
 class StorageConfig(BaseModel):
     """Configuration for data storage."""
 
-    database_path: str = Field(default_factory=lambda: os.path.join(os.getenv("EUNICE_DATA_PATH", "data"), "eunice.db"))
+    database_path: str = Field(
+        default_factory=lambda: os.path.join(
+            os.getenv("EUNICE_DATA_PATH", "data"), "eunice.db"
+        )
+    )
     export_path: str = "exports/"
 
 
@@ -32,12 +36,20 @@ class LoggingConfig(BaseModel):
     """Configuration for logging."""
 
     level: str = Field(default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO"))
-    file: str = Field(default_factory=lambda: os.path.join(os.getenv("EUNICE_LOG_PATH", "logs"), "eunice.log"))
+    file: str = Field(
+        default_factory=lambda: os.path.join(
+            os.getenv("EUNICE_LOG_PATH", "logs"), "eunice.log"
+        )
+    )
     enable_ai_api_logging: bool = True
     ai_api_log_file: str = Field(
-        default_factory=lambda: os.path.join(os.getenv("EUNICE_LOG_PATH", "logs"), "ai_api.log")
+        default_factory=lambda: os.path.join(
+            os.getenv("EUNICE_LOG_PATH", "logs"), "ai_api.log"
+        )
     )
-    ai_api_log_level: str = Field(default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO"))
+    ai_api_log_level: str = Field(
+        default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO")
+    )
 
 
 class CoordinationConfig(BaseModel):
@@ -57,10 +69,14 @@ class MCPServerConfig(BaseModel):
     port: int = 9000
     task_timeout: int = 300
     retry_attempts: int = 3
-    log_level: str = Field(default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO"))
+    log_level: str = Field(
+        default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO")
+    )
     enable_task_logging: bool = True
     task_log_file: str = Field(
-        default_factory=lambda: os.path.join(os.getenv("EUNICE_LOG_PATH", "logs"), "mcp_tasks.log")
+        default_factory=lambda: os.path.join(
+            os.getenv("EUNICE_LOG_PATH", "logs"), "mcp_tasks.log"
+        )
     )
 
 
@@ -81,7 +97,9 @@ class ResearchTasksConfig(BaseModel):
     result_cache_ttl: int = 3600
     enable_task_persistence: bool = True
     task_db: str = Field(
-        default_factory=lambda: os.path.join(os.getenv("EUNICE_DATA_PATH", "data"), "research_tasks.db")
+        default_factory=lambda: os.path.join(
+            os.getenv("EUNICE_DATA_PATH", "data"), "research_tasks.db"
+        )
     )
 
 
@@ -117,7 +135,9 @@ class Config(BaseModel):
     mcp_server: MCPServerConfig = Field(default_factory=MCPServerConfig)
     agents: Dict[str, AgentConfig] = Field(default_factory=dict)
     research_tasks: ResearchTasksConfig = Field(default_factory=ResearchTasksConfig)
-    research_manager: ResearchManagerConfig = Field(default_factory=ResearchManagerConfig)
+    research_manager: ResearchManagerConfig = Field(
+        default_factory=ResearchManagerConfig
+    )
 
 
 class ConfigManager:
@@ -129,7 +149,7 @@ class ConfigManager:
 
     def _get_default_config_path(self) -> str:
         """Get the default configuration file path."""
-        return os.getenv("EUNICE_CONFIG_PATH", "config / default_config.json")
+        return os.getenv("EUNICE_CONFIG_PATH", "config/default_config.json")
 
     def _load_config(self) -> Config:
         """Load configuration from file and apply environment variable overrides."""
@@ -142,7 +162,9 @@ class ConfigManager:
 
             # Fix provider field in ai_providers
             if "ai_providers" in config_data:
-                for provider_name, provider_config in config_data["ai_providers"].items():
+                for provider_name, provider_config in config_data[
+                    "ai_providers"
+                ].items():
                     if "provider" not in provider_config:
                         provider_config["provider"] = provider_name
 
@@ -157,17 +179,23 @@ class ConfigManager:
         if data_path:
             if "storage" not in config_data:
                 config_data["storage"] = {}
-            config_data["storage"]["database_path"] = os.path.join(data_path, "eunice.db")
+            config_data["storage"]["database_path"] = os.path.join(
+                data_path, "eunice.db"
+            )
 
             if "research_tasks" not in config_data:
                 config_data["research_tasks"] = {}
-            config_data["research_tasks"]["task_db"] = os.path.join(data_path, "research_tasks.db")
+            config_data["research_tasks"]["task_db"] = os.path.join(
+                data_path, "research_tasks.db"
+            )
 
             # Update agent memory storage path
             if "agents" in config_data and "memory" in config_data["agents"]:
                 if "storage" not in config_data["agents"]["memory"]:
                     config_data["agents"]["memory"]["storage"] = {}
-                config_data["agents"]["memory"]["storage"]["context_db"] = os.path.join(data_path, "context.db")
+                config_data["agents"]["memory"]["storage"]["context_db"] = os.path.join(
+                    data_path, "context.db"
+                )
 
         # Log path and level overrides
         log_path = os.getenv("EUNICE_LOG_PATH")
@@ -179,7 +207,9 @@ class ConfigManager:
 
             if log_path:
                 config_data["logging"]["file"] = os.path.join(log_path, "eunice.log")
-                config_data["logging"]["ai_api_log_file"] = os.path.join(log_path, "ai_api.log")
+                config_data["logging"]["ai_api_log_file"] = os.path.join(
+                    log_path, "ai_api.log"
+                )
 
             if log_level:
                 config_data["logging"]["level"] = log_level
@@ -190,7 +220,9 @@ class ConfigManager:
                 config_data["mcp_server"] = {}
 
             if log_path:
-                config_data["mcp_server"]["task_log_file"] = os.path.join(log_path, "mcp_tasks.log")
+                config_data["mcp_server"]["task_log_file"] = os.path.join(
+                    log_path, "mcp_tasks.log"
+                )
 
             if log_level:
                 config_data["mcp_server"]["log_level"] = log_level
@@ -248,7 +280,9 @@ class ConfigManager:
     def update_provider_config(self, provider: str, **kwargs) -> None:
         """Update configuration for a specific provider."""
         if provider not in self.config.ai_providers:
-            self.config.ai_providers[provider] = AIProviderConfig(provider=provider, model="")
+            self.config.ai_providers[provider] = AIProviderConfig(
+                provider=provider, model=""
+            )
 
         for key, value in kwargs.items():
             if hasattr(self.config.ai_providers[provider], key):
@@ -257,8 +291,17 @@ class ConfigManager:
     def get_mcp_config(self) -> Dict[str, Any]:
         """Get MCP server configuration."""
         if hasattr(self.config, "mcp_server") and self.config.mcp_server:
-            return self.config.mcp_server if isinstance(self.config.mcp_server, dict) else self.config.mcp_server.dict()
-        return {"host": "localhost", "port": 9000, "max_connections": 50, "heartbeat_interval": 30}
+            return (
+                self.config.mcp_server
+                if isinstance(self.config.mcp_server, dict)
+                else self.config.mcp_server.dict()
+            )
+        return {
+            "host": "localhost",
+            "port": 9000,
+            "max_connections": 50,
+            "heartbeat_interval": 30,
+        }
 
     def get_research_config(self) -> Dict[str, Any]:
         """Get research task configuration."""
@@ -268,15 +311,24 @@ class ConfigManager:
                 if isinstance(self.config.research_tasks, dict)
                 else self.config.research_tasks.dict()
             )
-        return {"max_concurrent_tasks": 5, "task_timeout": 600, "retry_attempts": 3, "search_depth": "comprehensive"}
+        return {
+            "max_concurrent_tasks": 5,
+            "task_timeout": 600,
+            "retry_attempts": 3,
+            "search_depth": "comprehensive",
+        }
 
     def get_agent_config(self) -> Dict[str, Any]:
         """Get agent configuration."""
         if hasattr(self.config, "agents") and self.config.agents:
-            return self.config.agents if isinstance(self.config.agents, dict) else self.config.agents.dict()
+            return (
+                self.config.agents
+                if isinstance(self.config.agents, dict)
+                else self.config.agents.dict()
+            )
         return {
             "literature": {"enabled": True, "max_results": 10},
-            "planning": {"enabled": True, "model": "gpt - 4"},
+            "planning": {"enabled": True, "model": "gpt-4"},
             "executor": {"enabled": True, "timeout": 60},
             "memory": {"enabled": True, "max_entries": 1000},
         }
@@ -295,7 +347,10 @@ class ConfigManager:
             logging.basicConfig(
                 level=getattr(logging, logging_config.level.upper()),
                 format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                handlers=[logging.FileHandler(logging_config.file), logging.StreamHandler()],
+                handlers=[
+                    logging.FileHandler(logging_config.file),
+                    logging.StreamHandler(),
+                ],
                 force=True,  # Override any existing configuration
             )
 
@@ -306,7 +361,11 @@ class ConfigManager:
 
                 # Create file handler for AI API logs
                 ai_api_handler = logging.FileHandler(logging_config.ai_api_log_file)
-                ai_api_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+                ai_api_handler.setFormatter(
+                    logging.Formatter(
+                        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                    )
+                )
 
                 # Set up individual AI client loggers with dedicated handler
                 # Handle various import path scenarios (direct import, src.*, personas.*, etc.)
@@ -331,35 +390,52 @@ class ConfigManager:
 
                     # Add only our dedicated AI API handler
                     client_logger.addHandler(ai_api_handler)
-                    client_logger.setLevel(getattr(logging, logging_config.ai_api_log_level.upper()))
+                    client_logger.setLevel(
+                        getattr(logging, logging_config.ai_api_log_level.upper())
+                    )
 
                     # CRITICAL: Prevent propagation to root logger to avoid logs going to mcp_server.log
                     client_logger.propagate = False
 
             # Set up MCP task logging if enabled
-            if hasattr(self.config, "mcp_server") and self.config.mcp_server.enable_task_logging:
+            if (
+                hasattr(self.config, "mcp_server")
+                and self.config.mcp_server.enable_task_logging
+            ):
                 task_log_path = Path(self.config.mcp_server.task_log_file)
                 task_log_path.parent.mkdir(exist_ok=True)
 
                 # Create a separate logger for MCP tasks
                 mcp_logger = logging.getLogger("mcp_tasks")
                 mcp_handler = logging.FileHandler(self.config.mcp_server.task_log_file)
-                mcp_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+                mcp_handler.setFormatter(
+                    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+                )
                 mcp_logger.addHandler(mcp_handler)
-                mcp_logger.setLevel(getattr(logging, self.config.mcp_server.log_level.upper()))
+                mcp_logger.setLevel(
+                    getattr(logging, self.config.mcp_server.log_level.upper())
+                )
                 mcp_logger.propagate = False
 
-            logging.getLogger(__name__).info("Logging configuration set up successfully")
+            logging.getLogger(__name__).info(
+                "Logging configuration set up successfully"
+            )
 
         except Exception as e:
             # If logging setup fails, at least ensure basic console logging
             logging.basicConfig(
-                level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", force=True
+                level=logging.INFO,
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                force=True,
             )
             logging.getLogger(__name__).error(f"Failed to set up logging: {e}")
 
     def get_logging_config(self) -> Dict[str, Any]:
         """Get logging configuration."""
         if hasattr(self.config, "logging") and self.config.logging:
-            return self.config.logging if isinstance(self.config.logging, dict) else self.config.logging.dict()
+            return (
+                self.config.logging
+                if isinstance(self.config.logging, dict)
+                else self.config.logging.dict()
+            )
         return {"level": "INFO", "file": "logs / eunice.log"}

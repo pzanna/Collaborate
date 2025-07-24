@@ -11,12 +11,7 @@ from typing import Any, Dict, List, Optional
 
 # Import existing models
 try:
-    from ..utils.error_handler import (
-        DatabaseError,
-        ValidationError,
-        handle_errors,
-        safe_execute,
-    )
+    from ..utils.error_handler import DatabaseError, handle_errors
     from ..utils.id_utils import generate_timestamped_id, generate_uuid_id
 except ImportError:
     # For direct execution or testing
@@ -27,34 +22,17 @@ except ImportError:
     project_root = Path(__file__).parent.parent.parent
     sys.path.insert(0, str(project_root))
 
-    from src.utils.error_handler import (
-        DatabaseError,
-        ValidationError,
-        handle_errors,
-        safe_execute,
-    )
+    from src.utils.error_handler import DatabaseError, handle_errors
     from src.utils.id_utils import generate_timestamped_id, generate_uuid_id
 
 # Import new hierarchical models
 try:
-    from ..models.hierarchical_data_models import (
-        ResearchPlan,
-        ResearchPlanRequest,
-        ResearchTopic,
-        ResearchTopicRequest,
-        Task,
-        TaskRequest,
-    )
+    from ..models.hierarchical_data_models import (ResearchPlan, ResearchTopic,
+                                                   Task)
 except ImportError:
     try:
-        from models.hierarchical_data_models import (
-            ResearchPlan,
-            ResearchPlanRequest,
-            ResearchTopic,
-            ResearchTopicRequest,
-            Task,
-            TaskRequest,
-        )
+        from models.hierarchical_data_models import (ResearchPlan,
+                                                     ResearchTopic, Task)
     except ImportError:
         # Fallback for development - these will be implemented
         ResearchTopic = None
@@ -122,7 +100,9 @@ class HierarchicalDatabaseManager:
                 conn.commit()
 
         except Exception as e:
-            raise DatabaseError("Failed to initialize database", f"Database initialization failed: {e}")
+            raise DatabaseError(
+                "Failed to initialize database", f"Database initialization failed: {e}"
+            )
 
     def _create_all_tables(self, conn: sqlite3.Connection) -> None:
         """Create all database tables with final schema - no migrations needed."""
@@ -217,7 +197,9 @@ class HierarchicalDatabaseManager:
 
     # Research Topics Methods
     @handle_errors(context="create_research_topic")
-    def create_research_topic(self, topic_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def create_research_topic(
+        self, topic_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Create a new research topic."""
         try:
             topic_id = topic_data.get("id", generate_timestamped_id("topic"))
@@ -245,7 +227,9 @@ class HierarchicalDatabaseManager:
                 return self.get_research_topic(topic_id)
 
         except Exception as e:
-            raise DatabaseError("Failed to create research topic", f"Topic creation failed: {e}")
+            raise DatabaseError(
+                "Failed to create research topic", f"Topic creation failed: {e}"
+            )
 
     @handle_errors(context="get_research_topic")
     def get_research_topic(self, topic_id: str) -> Optional[Dict[str, Any]]:
@@ -288,7 +272,9 @@ class HierarchicalDatabaseManager:
                 return None
 
         except Exception as e:
-            raise DatabaseError("Failed to get research topic", f"Topic retrieval failed: {e}")
+            raise DatabaseError(
+                "Failed to get research topic", f"Topic retrieval failed: {e}"
+            )
 
     @handle_errors(context="get_research_topics_by_project")
     def get_research_topics_by_project(
@@ -333,11 +319,15 @@ class HierarchicalDatabaseManager:
                 return topics
 
         except Exception as e:
-            raise DatabaseError("Failed to get research topics", f"Topics retrieval failed: {e}")
+            raise DatabaseError(
+                "Failed to get research topics", f"Topics retrieval failed: {e}"
+            )
 
     # Research Plans Methods
     @handle_errors(context="create_research_plan")
-    def create_research_plan(self, plan_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def create_research_plan(
+        self, plan_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Create a new research plan."""
         try:
             plan_id = plan_data.get("id", generate_timestamped_id("plan"))
@@ -371,7 +361,9 @@ class HierarchicalDatabaseManager:
                 return self.get_research_plan(plan_id)
 
         except Exception as e:
-            raise DatabaseError("Failed to create research plan", f"Plan creation failed: {e}")
+            raise DatabaseError(
+                "Failed to create research plan", f"Plan creation failed: {e}"
+            )
 
     @handle_errors(context="get_research_plan")
     def get_research_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
@@ -420,10 +412,14 @@ class HierarchicalDatabaseManager:
                 return None
 
         except Exception as e:
-            raise DatabaseError("Failed to get research plan", f"Plan retrieval failed: {e}")
+            raise DatabaseError(
+                "Failed to get research plan", f"Plan retrieval failed: {e}"
+            )
 
     @handle_errors(context="get_research_plans_by_topic")
-    def get_research_plans_by_topic(self, topic_id: str, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_research_plans_by_topic(
+        self, topic_id: str, status_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Get all research plans for a topic."""
         try:
             with self.get_connection() as conn:
@@ -448,7 +444,9 @@ class HierarchicalDatabaseManager:
                 plans = []
                 for row in cursor.fetchall():
                     plan = dict(row)
-                    plan["plan_structure"] = json.loads(plan.get("plan_structure", "{}"))
+                    plan["plan_structure"] = json.loads(
+                        plan.get("plan_structure", "{}")
+                    )
                     # Handle metadata parsing with double - encoded JSON
                     metadata_raw = plan.get("metadata", "{}")
                     try:
@@ -464,7 +462,9 @@ class HierarchicalDatabaseManager:
                 return plans
 
         except Exception as e:
-            raise DatabaseError("Failed to get research plans", f"Plans retrieval failed: {e}")
+            raise DatabaseError(
+                "Failed to get research plans", f"Plans retrieval failed: {e}"
+            )
 
     # Enhanced Task Methods (renamed from research_tasks)
     @handle_errors(context="create_task")
@@ -557,9 +557,17 @@ class HierarchicalDatabaseManager:
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = [] if field in ["search_results", "execution_results"] else {}
+                                task[field] = (
+                                    []
+                                    if field in ["search_results", "execution_results"]
+                                    else {}
+                                )
                         else:
-                            task[field] = [] if field in ["search_results", "execution_results"] else {}
+                            task[field] = (
+                                []
+                                if field in ["search_results", "execution_results"]
+                                else {}
+                            )
 
                     # Ensure required fields have proper defaults
                     task.setdefault("description", "")
@@ -576,7 +584,10 @@ class HierarchicalDatabaseManager:
 
     @handle_errors(context="get_tasks_by_plan")
     def get_tasks_by_plan(
-        self, plan_id: str, status_filter: Optional[str] = None, type_filter: Optional[str] = None
+        self,
+        plan_id: str,
+        status_filter: Optional[str] = None,
+        type_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get all tasks for a plan."""
         try:
@@ -632,7 +643,9 @@ class HierarchicalDatabaseManager:
             return {"project": project, "topics": topics}
 
         except Exception as e:
-            raise DatabaseError("Failed to get project hierarchy", f"Hierarchy retrieval failed: {e}")
+            raise DatabaseError(
+                "Failed to get project hierarchy", f"Hierarchy retrieval failed: {e}"
+            )
 
     # Delete methods
     @handle_errors(context="delete_research_topic")
@@ -641,7 +654,9 @@ class HierarchicalDatabaseManager:
         try:
             with self.get_connection() as conn:
                 # Check if topic exists
-                cursor = conn.execute("SELECT id FROM research_topics WHERE id = ?", (topic_id,))
+                cursor = conn.execute(
+                    "SELECT id FROM research_topics WHERE id = ?", (topic_id,)
+                )
                 if not cursor.fetchone():
                     return False
 
@@ -657,7 +672,9 @@ class HierarchicalDatabaseManager:
                 )
 
                 # Delete all plans for this topic
-                conn.execute("DELETE FROM research_plans WHERE topic_id = ?", (topic_id,))
+                conn.execute(
+                    "DELETE FROM research_plans WHERE topic_id = ?", (topic_id,)
+                )
 
                 # Delete the topic
                 conn.execute("DELETE FROM research_topics WHERE id = ?", (topic_id,))
@@ -666,10 +683,14 @@ class HierarchicalDatabaseManager:
                 return True
 
         except Exception as e:
-            raise DatabaseError("Failed to delete research topic", f"Topic deletion failed: {e}")
+            raise DatabaseError(
+                "Failed to delete research topic", f"Topic deletion failed: {e}"
+            )
 
     @handle_errors(context="update_research_plan")
-    def update_research_plan(self, plan_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_research_plan(
+        self, plan_id: str, update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Update a research plan."""
         try:
             # Check if plan exists
@@ -682,7 +703,13 @@ class HierarchicalDatabaseManager:
             update_values = []
 
             for field, value in update_data.items():
-                if field in ["name", "description", "plan_type", "status", "plan_approved"]:
+                if field in [
+                    "name",
+                    "description",
+                    "plan_type",
+                    "status",
+                    "plan_approved",
+                ]:
                     update_fields.append(f"{field} = ?")
                     update_values.append(value)
                 elif field in ["plan_structure", "metadata"]:
@@ -709,7 +736,9 @@ class HierarchicalDatabaseManager:
             return self.get_research_plan(plan_id)
 
         except Exception as e:
-            raise DatabaseError("Failed to update research plan", f"Plan update failed: {e}")
+            raise DatabaseError(
+                "Failed to update research plan", f"Plan update failed: {e}"
+            )
 
     @handle_errors(context="delete_research_plan")
     def delete_research_plan(self, plan_id: str) -> bool:
@@ -717,7 +746,9 @@ class HierarchicalDatabaseManager:
         try:
             with self.get_connection() as conn:
                 # Check if plan exists
-                cursor = conn.execute("SELECT id FROM research_plans WHERE id = ?", (plan_id,))
+                cursor = conn.execute(
+                    "SELECT id FROM research_plans WHERE id = ?", (plan_id,)
+                )
                 if not cursor.fetchone():
                     return False
 
@@ -731,7 +762,9 @@ class HierarchicalDatabaseManager:
                 return True
 
         except Exception as e:
-            raise DatabaseError("Failed to delete research plan", f"Plan deletion failed: {e}")
+            raise DatabaseError(
+                "Failed to delete research plan", f"Plan deletion failed: {e}"
+            )
 
     @handle_errors(context="delete_task")
     def delete_task(self, task_id: str) -> bool:
@@ -739,7 +772,9 @@ class HierarchicalDatabaseManager:
         try:
             with self.get_connection() as conn:
                 # Check if task exists
-                cursor = conn.execute("SELECT id FROM research_tasks WHERE id = ?", (task_id,))
+                cursor = conn.execute(
+                    "SELECT id FROM research_tasks WHERE id = ?", (task_id,)
+                )
                 if not cursor.fetchone():
                     return False
 
@@ -757,7 +792,9 @@ class HierarchicalDatabaseManager:
         """Get a research task by ID."""
         return self.get_task(task_id)
 
-    def update_research_task(self, task_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_research_task(
+        self, task_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Update a research task."""
         # Extract task ID from the data
         task_id = task_data.get("id")
@@ -843,7 +880,9 @@ class HierarchicalDatabaseManager:
 
             if existing_topics:
                 # Use the first active topic, or create a new one if all are inactive
-                active_topics = [t for t in existing_topics if t.get("status") == "active"]
+                active_topics = [
+                    t for t in existing_topics if t.get("status") == "active"
+                ]
                 if active_topics:
                     topic_id = active_topics[0]["id"]
                 else:
@@ -858,7 +897,9 @@ class HierarchicalDatabaseManager:
                     "project_id": project_id,
                     "name": topic_name,
                     "description": (
-                        f"Research topic for: {query[:100]}..." if len(query) > 100 else f"Research topic for: {query}"
+                        f"Research topic for: {query[:100]}..."
+                        if len(query) > 100
+                        else f"Research topic for: {query}"
                     ),
                     "status": "active",
                 }
@@ -885,7 +926,10 @@ class HierarchicalDatabaseManager:
                     "research_mode": task_data.get("research_mode", "comprehensive"),
                     "max_results": task_data.get("max_results", 10),
                 },
-                "metadata": {"created_from_task": True, "task_name": task_data.get("name")},
+                "metadata": {
+                    "created_from_task": True,
+                    "task_name": task_data.get("name"),
+                },
             }
 
             created_plan = self.create_research_plan(plan_data)
@@ -904,7 +948,8 @@ class HierarchicalDatabaseManager:
 
         except Exception as e:
             raise DatabaseError(
-                "Failed to create research task with hierarchy", f"Hierarchical task creation failed: {e}"
+                "Failed to create research task with hierarchy",
+                f"Hierarchical task creation failed: {e}",
             )
 
     def _generate_topic_name_from_query(self, query: str) -> str:
@@ -986,12 +1031,14 @@ class HierarchicalDatabaseManager:
                     "description": getattr(project_data, "description", ""),
                     "created_at": (
                         project_data.created_at.isoformat()
-                        if hasattr(project_data, "created_at") and hasattr(project_data.created_at, "isoformat")
+                        if hasattr(project_data, "created_at")
+                        and hasattr(project_data.created_at, "isoformat")
                         else datetime.now().isoformat()
                     ),
                     "updated_at": (
                         project_data.updated_at.isoformat()
-                        if hasattr(project_data, "updated_at") and hasattr(project_data.updated_at, "isoformat")
+                        if hasattr(project_data, "updated_at")
+                        and hasattr(project_data.updated_at, "isoformat")
                         else datetime.now().isoformat()
                     ),
                 }
@@ -1063,9 +1110,17 @@ class HierarchicalDatabaseManager:
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = [] if field in ["search_results", "execution_results"] else {}
+                                task[field] = (
+                                    []
+                                    if field in ["search_results", "execution_results"]
+                                    else {}
+                                )
                         else:
-                            task[field] = [] if field in ["search_results", "execution_results"] else {}
+                            task[field] = (
+                                []
+                                if field in ["search_results", "execution_results"]
+                                else {}
+                            )
                     tasks.append(task)
                 return tasks
         except Exception as e:
@@ -1088,7 +1143,10 @@ class HierarchicalDatabaseManager:
             return 0
 
     def list_research_tasks(
-        self, project_id: Optional[str] = None, status_filter: Optional[str] = None, limit: int = 100
+        self,
+        project_id: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """List research tasks with filters."""
         try:
@@ -1117,9 +1175,17 @@ class HierarchicalDatabaseManager:
                             try:
                                 task[field] = json.loads(task[field])
                             except (json.JSONDecodeError, TypeError):
-                                task[field] = [] if field in ["search_results", "execution_results"] else {}
+                                task[field] = (
+                                    []
+                                    if field in ["search_results", "execution_results"]
+                                    else {}
+                                )
                         else:
-                            task[field] = [] if field in ["search_results", "execution_results"] else {}
+                            task[field] = (
+                                []
+                                if field in ["search_results", "execution_results"]
+                                else {}
+                            )
                     tasks.append(task)
                 return tasks
         except Exception as e:
@@ -1217,7 +1283,9 @@ class HierarchicalDatabaseManager:
         """Get a project by ID."""
         try:
             with self.get_connection() as conn:
-                result = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+                result = conn.execute(
+                    "SELECT * FROM projects WHERE id = ?", (project_id,)
+                ).fetchone()
 
                 if result:
                     data = dict(result)
@@ -1235,7 +1303,9 @@ class HierarchicalDatabaseManager:
             print(f"Failed to get project: {e}")
             return None
 
-    def get_projects(self, status_filter: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_projects(
+        self, status_filter: Optional[str] = None, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
         """Get all projects with optional filters."""
         try:
             with self.get_connection() as conn:
@@ -1272,7 +1342,9 @@ class HierarchicalDatabaseManager:
             print(f"Failed to get projects: {e}")
             return []
 
-    def update_project(self, project_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_project(
+        self, project_id: str, update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Update a project."""
         try:
             with self.get_connection() as conn:
@@ -1304,7 +1376,9 @@ class HierarchicalDatabaseManager:
             print(f"Failed to update project: {e}")
             return None
 
-    def update_research_topic(self, topic_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_research_topic(
+        self, topic_id: str, update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Update a research topic."""
         try:
             with self.get_connection() as conn:
@@ -1326,7 +1400,9 @@ class HierarchicalDatabaseManager:
 
                 params.append(topic_id)
 
-                query = f"UPDATE research_topics SET {', '.join(set_clauses)} WHERE id = ?"
+                query = (
+                    f"UPDATE research_topics SET {', '.join(set_clauses)} WHERE id = ?"
+                )
                 conn.execute(query, params)
                 conn.commit()
 
@@ -1336,7 +1412,9 @@ class HierarchicalDatabaseManager:
             print(f"Failed to update research topic: {e}")
             return None
 
-    def update_task(self, task_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_task(
+        self, task_id: str, update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Update a task."""
         try:
             with self.get_connection() as conn:
@@ -1358,7 +1436,9 @@ class HierarchicalDatabaseManager:
 
                 params.append(task_id)
 
-                query = f"UPDATE research_tasks SET {', '.join(set_clauses)} WHERE id = ?"
+                query = (
+                    f"UPDATE research_tasks SET {', '.join(set_clauses)} WHERE id = ?"
+                )
                 conn.execute(query, params)
                 conn.commit()
 
@@ -1374,7 +1454,8 @@ class HierarchicalDatabaseManager:
             with self.get_connection() as conn:
                 # Count topics
                 topics_count = conn.execute(
-                    "SELECT COUNT(*) FROM research_topics WHERE project_id = ?", (project_id,)
+                    "SELECT COUNT(*) FROM research_topics WHERE project_id = ?",
+                    (project_id,),
                 ).fetchone()[0]
 
                 # Count plans
@@ -1414,7 +1495,9 @@ class HierarchicalDatabaseManager:
                     (project_id,),
                 ).fetchone()[0]
 
-                completion_rate = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                completion_rate = (
+                    (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                )
 
                 return {
                     "topics_count": topics_count,
@@ -1434,7 +1517,8 @@ class HierarchicalDatabaseManager:
             with self.get_connection() as conn:
                 # Count plans
                 plans_count = conn.execute(
-                    "SELECT COUNT(*) FROM research_plans WHERE topic_id = ?", (topic_id,)
+                    "SELECT COUNT(*) FROM research_plans WHERE topic_id = ?",
+                    (topic_id,),
                 ).fetchone()[0]
 
                 # Count tasks
@@ -1463,7 +1547,9 @@ class HierarchicalDatabaseManager:
                     (topic_id,),
                 ).fetchone()[0]
 
-                completion_rate = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                completion_rate = (
+                    (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                )
 
                 return {
                     "plans_count": plans_count,
@@ -1487,18 +1573,22 @@ class HierarchicalDatabaseManager:
 
                 # Count completed tasks
                 completed_tasks = conn.execute(
-                    "SELECT COUNT(*) FROM research_tasks WHERE plan_id = ? AND status = 'completed'", (plan_id,)
+                    "SELECT COUNT(*) FROM research_tasks WHERE plan_id = ? AND status = 'completed'",
+                    (plan_id,),
                 ).fetchone()[0]
 
                 # Calculate total cost
                 total_cost_result = conn.execute(
-                    "SELECT SUM(actual_cost) FROM research_tasks WHERE plan_id = ?", (plan_id,)
+                    "SELECT SUM(actual_cost) FROM research_tasks WHERE plan_id = ?",
+                    (plan_id,),
                 ).fetchone()
 
                 total_cost = total_cost_result[0] if total_cost_result[0] else 0.0
 
                 # Calculate progress
-                progress = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                progress = (
+                    (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                )
 
                 return {
                     "tasks_count": tasks_count,
@@ -1532,7 +1622,9 @@ class HierarchicalDatabaseManager:
                     params = [project_id, f"%{query}%", f"%{query}%"]
 
                     if status_filters:
-                        topic_query += f" AND status IN ({','.join(['?'] * len(status_filters))})"
+                        topic_query += (
+                            f" AND status IN ({','.join(['?'] * len(status_filters))})"
+                        )
                         params.extend(status_filters)
 
                     topic_results = conn.execute(topic_query, params).fetchall()
@@ -1558,7 +1650,9 @@ class HierarchicalDatabaseManager:
                     for result in plan_results:
                         data = dict(result)
                         data["metadata"] = json.loads(data.get("metadata", "{}"))
-                        data["plan_structure"] = json.loads(data.get("plan_structure", "{}"))
+                        data["plan_structure"] = json.loads(
+                            data.get("plan_structure", "{}")
+                        )
                         results["plans"].append(data)
 
                 # Search tasks
@@ -1579,8 +1673,12 @@ class HierarchicalDatabaseManager:
                     for result in task_results:
                         data = dict(result)
                         data["metadata"] = json.loads(data.get("metadata", "{}"))
-                        data["search_results"] = json.loads(data.get("search_results", "[]"))
-                        data["execution_results"] = json.loads(data.get("execution_results", "[]"))
+                        data["search_results"] = json.loads(
+                            data.get("search_results", "[]")
+                        )
+                        data["execution_results"] = json.loads(
+                            data.get("execution_results", "[]")
+                        )
                         results["tasks"].append(data)
 
                 return results

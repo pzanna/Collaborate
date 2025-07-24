@@ -13,19 +13,17 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     from ..ai_clients.openai_client import OpenAIClient
     from ..storage.systematic_review_database import SystematicReviewDatabase
     from ..utils.error_handler import ValidationError, handle_errors
-    from ..utils.id_utils import generate_timestamped_id
 except ImportError:
     # For testing or standalone use
     from ai_clients.openai_client import OpenAIClient
     from storage.systematic_review_database import SystematicReviewDatabase
     from utils.error_handler import ValidationError, handle_errors
-    from utils.id_utils import generate_timestamped_id
 
 
 class BiasLevel(Enum):
@@ -97,28 +95,26 @@ class QualityAppraisalPlugin(ABC):
     @abstractmethod
     def tool_id(self) -> str:
         """Unique identifier for the assessment tool."""
-        pass
 
     @property
     @abstractmethod
     def tool_name(self) -> str:
         """Human - readable name for the assessment tool."""
-        pass
 
     @property
     @abstractmethod
     def applicable_study_types(self) -> List[str]:
         """List of study types this tool can assess."""
-        pass
 
     @property
     @abstractmethod
     def assessment_domains(self) -> List[AssessmentDomain]:
         """List of domains this tool assesses."""
-        pass
 
     @abstractmethod
-    async def assess_study(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> QualityAssessment:
+    async def assess_study(
+        self, study: Dict[str, Any], criteria: Dict[str, Any]
+    ) -> QualityAssessment:
         """
         Conduct quality assessment for a study.
 
@@ -129,7 +125,6 @@ class QualityAppraisalPlugin(ABC):
         Returns:
             Complete quality assessment
         """
-        pass
 
     @abstractmethod
     def validate_assessment(self, assessment: QualityAssessment) -> List[str]:
@@ -142,7 +137,6 @@ class QualityAppraisalPlugin(ABC):
         Returns:
             List of validation errors (empty if valid)
         """
-        pass
 
 
 class QualityAppraisalManager:
@@ -184,7 +178,9 @@ class QualityAppraisalManager:
                     "tool_id": plugin.tool_id,
                     "tool_name": plugin.tool_name,
                     "applicable_study_types": plugin.applicable_study_types,
-                    "assessment_domains": [domain.value for domain in plugin.assessment_domains],
+                    "assessment_domains": [
+                        domain.value for domain in plugin.assessment_domains
+                    ],
                 }
             )
         return tools
@@ -204,7 +200,10 @@ class QualityAppraisalManager:
         # Simple recommendation logic
         if "randomized" in study_type or "rct" in study_type:
             return "rob2"  # RoB 2 for randomized trials
-        elif any(word in study_type for word in ["cohort", "case - control", "cross - sectional"]):
+        elif any(
+            word in study_type
+            for word in ["cohort", "case - control", "cross - sectional"]
+        ):
             return "robins - i"  # ROBINS - I for non - randomized studies
 
         # Default to ROBINS - I for most studies
@@ -212,7 +211,10 @@ class QualityAppraisalManager:
 
     @handle_errors(context="quality_assessment")
     async def assess_studies(
-        self, studies: List[Dict[str, Any]], tool_id: Optional[str] = None, criteria: Optional[Dict[str, Any]] = None
+        self,
+        studies: List[Dict[str, Any]],
+        tool_id: Optional[str] = None,
+        criteria: Optional[Dict[str, Any]] = None,
     ) -> List[QualityAssessment]:
         """
         Assess quality for multiple studies.
@@ -232,7 +234,9 @@ class QualityAppraisalManager:
             assessment_tool_id = tool_id or self.get_recommended_tool(study)
 
             if assessment_tool_id not in self.plugins:
-                raise ValidationError(f"Assessment tool not available: {assessment_tool_id}")
+                raise ValidationError(
+                    f"Assessment tool not available: {assessment_tool_id}"
+                )
 
             plugin = self.plugins[assessment_tool_id]
 
@@ -327,7 +331,9 @@ class QualityAppraisalManager:
 
             return assessments
 
-    def calculate_inter_rater_reliability(self, study_ids: List[str], tool_id: str) -> Dict[str, Any]:
+    def calculate_inter_rater_reliability(
+        self, study_ids: List[str], tool_id: str
+    ) -> Dict[str, Any]:
         """
         Calculate inter - rater reliability metrics.
 
@@ -369,7 +375,14 @@ class QualityAppraisalManager:
 
                 domain_bias_levels = []
                 for assessment in assessments:
-                    domain_assessment = next((da for da in assessment.domain_assessments if da.domain == domain), None)
+                    domain_assessment = next(
+                        (
+                            da
+                            for da in assessment.domain_assessments
+                            if da.domain == domain
+                        ),
+                        None,
+                    )
                     if domain_assessment:
                         domain_bias_levels.append(domain_assessment.bias_level)
 
@@ -380,7 +393,11 @@ class QualityAppraisalManager:
                         domain_agreements[domain.value].append(0.0)
 
         # Calculate summary statistics
-        overall_agreement = sum(overall_agreements) / len(overall_agreements) if overall_agreements else 0.0
+        overall_agreement = (
+            sum(overall_agreements) / len(overall_agreements)
+            if overall_agreements
+            else 0.0
+        )
 
         domain_agreement_summary = {}
         for domain, agreements in domain_agreements.items():
@@ -391,7 +408,9 @@ class QualityAppraisalManager:
             "overall_agreement": overall_agreement,
             "domain_agreements": domain_agreement_summary,
             "studies_analyzed": len(assessments_by_study),
-            "total_assessments": sum(len(assessments) for assessments in assessments_by_study.values()),
+            "total_assessments": sum(
+                len(assessments) for assessments in assessments_by_study.values()
+            ),
         }
 
 
@@ -409,7 +428,9 @@ class BaseAIQualityPlugin(QualityAppraisalPlugin):
         self.ai_client = ai_client
         self.assessor = assessor
 
-    async def assess_study(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> QualityAssessment:
+    async def assess_study(
+        self, study: Dict[str, Any], criteria: Dict[str, Any]
+    ) -> QualityAssessment:
         """Conduct AI - assisted quality assessment."""
         start_time = datetime.now()
 
@@ -418,7 +439,9 @@ class BaseAIQualityPlugin(QualityAppraisalPlugin):
 
         # Get AI assessment
         try:
-            response = self.ai_client.get_response(user_message=prompt, system_prompt=self._get_system_prompt())
+            response = self.ai_client.get_response(
+                user_message=prompt, system_prompt=self._get_system_prompt()
+            )
 
             # Parse assessment response
             assessment_data = self._parse_assessment_response(response)
@@ -464,14 +487,14 @@ class BaseAIQualityPlugin(QualityAppraisalPlugin):
             )
 
     @abstractmethod
-    def _build_assessment_prompt(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> str:
+    def _build_assessment_prompt(
+        self, study: Dict[str, Any], criteria: Dict[str, Any]
+    ) -> str:
         """Build assessment prompt for the specific tool."""
-        pass
 
     @abstractmethod
     def _get_system_prompt(self) -> str:
         """Get system prompt for the assessment tool."""
-        pass
 
     def _parse_assessment_response(self, response: str) -> Dict[str, Any]:
         """
@@ -514,24 +537,42 @@ class BaseAIQualityPlugin(QualityAppraisalPlugin):
 
         missing_domains = required_domains - assessed_domains
         if missing_domains:
-            errors.append(f"Missing assessments for domains: {[d.value for d in missing_domains]}")
+            errors.append(
+                f"Missing assessments for domains: {[d.value for d in missing_domains]}"
+            )
 
         # Check overall bias consistency with domain assessments
         domain_bias_levels = [da.bias_level for da in assessment.domain_assessments]
         if domain_bias_levels:
             max_domain_bias = max(
                 domain_bias_levels,
-                key=lambda x: ["low", "moderate", "serious", "critical", "no_information"].index(x.value),
+                key=lambda x: [
+                    "low",
+                    "moderate",
+                    "serious",
+                    "critical",
+                    "no_information",
+                ].index(x.value),
             )
 
-            overall_severity = ["low", "moderate", "serious", "critical", "no_information"].index(
-                assessment.overall_bias.value
-            )
-            max_domain_severity = ["low", "moderate", "serious", "critical", "no_information"].index(
-                max_domain_bias.value
-            )
+            overall_severity = [
+                "low",
+                "moderate",
+                "serious",
+                "critical",
+                "no_information",
+            ].index(assessment.overall_bias.value)
+            max_domain_severity = [
+                "low",
+                "moderate",
+                "serious",
+                "critical",
+                "no_information",
+            ].index(max_domain_bias.value)
 
             if overall_severity < max_domain_severity:
-                errors.append("Overall bias rating is less severe than worst domain rating")
+                errors.append(
+                    "Overall bias rating is less severe than worst domain rating"
+                )
 
         return errors

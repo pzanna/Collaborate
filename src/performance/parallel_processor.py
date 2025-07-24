@@ -16,17 +16,13 @@ Date: July 2025
 
 import asyncio
 import logging
-import multiprocessing as mp
 import queue
-import sys
-import threading
 import time
-import uuid
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional
 
 # Try to import psutil, fallback gracefully
 try:
@@ -208,7 +204,9 @@ class ResourceMonitor:
             "cpu_percent": psutil.cpu_percent(interval=0.1),
             "memory_percent": psutil.virtual_memory().percent,
             "memory_available_mb": psutil.virtual_memory().available / (1024 * 1024),
-            "disk_io": disk_io._asdict() if disk_io and hasattr(disk_io, "_asdict") else {},
+            "disk_io": (
+                disk_io._asdict() if disk_io and hasattr(disk_io, "_asdict") else {}
+            ),
             "network_io": net_io._asdict() if hasattr(net_io, "_asdict") else {},
             "process_count": len(psutil.pids()),
             "timestamp": time.time(),
@@ -229,7 +227,9 @@ class ResourceMonitor:
         memory_values = [m["memory_percent"] for m in self.metrics_history]
 
         return {
-            "monitoring_duration": time.time() - self.start_time if self.start_time else 0,
+            "monitoring_duration": (
+                time.time() - self.start_time if self.start_time else 0
+            ),
             "cpu_avg": sum(cpu_values) / len(cpu_values),
             "cpu_max": max(cpu_values),
             "memory_avg": sum(memory_values) / len(memory_values),
@@ -317,7 +317,9 @@ class ParallelProcessor:
         if self.config.max_workers is None:
             self.config.max_workers = min(32, (psutil.cpu_count() or 4) + 4)
 
-        logger.info(f"Parallel processor initialized with {self.config.max_workers} max workers")
+        logger.info(
+            f"Parallel processor initialized with {self.config.max_workers} max workers"
+        )
 
     async def process_batch(self, batch: TaskBatch) -> ProcessingResult:
         """
@@ -332,7 +334,9 @@ class ParallelProcessor:
         start_time = time.time()
         self.resource_monitor.start_monitoring()
 
-        logger.info(f"Starting batch processing: {batch.batch_id} ({len(batch.tasks)} tasks)")
+        logger.info(
+            f"Starting batch processing: {batch.batch_id} ({len(batch.tasks)} tasks)"
+        )
 
         try:
             # Choose processing strategy
@@ -371,14 +375,18 @@ class ParallelProcessor:
                 completed_tasks=completed_count,
                 failed_tasks=failed_count,
                 total_duration=total_duration,
-                average_task_time=total_duration / len(batch.tasks) if batch.tasks else 0,
+                average_task_time=(
+                    total_duration / len(batch.tasks) if batch.tasks else 0
+                ),
                 success_rate=completed_count / len(batch.tasks) if batch.tasks else 0,
                 results=[r.get("result") for r in results],
                 errors=error_list,
                 performance_metrics=self.resource_monitor.get_performance_summary(),
             )
 
-            logger.info(f"Batch processing completed: {completed_count}/{len(batch.tasks)} tasks successful")
+            logger.info(
+                f"Batch processing completed: {completed_count}/{len(batch.tasks)} tasks successful"
+            )
             return result
 
         except Exception as e:
@@ -418,13 +426,18 @@ class ParallelProcessor:
                 # Execute task with timeout
                 if asyncio.iscoroutinefunction(task.function):
                     if task.timeout:
-                        result = await asyncio.wait_for(task.function(*task.args, **task.kwargs), timeout=task.timeout)
+                        result = await asyncio.wait_for(
+                            task.function(*task.args, **task.kwargs),
+                            timeout=task.timeout,
+                        )
                     else:
                         result = await task.function(*task.args, **task.kwargs)
                 else:
                     # Run sync function in thread pool
                     loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(None, lambda: task.function(*task.args, **task.kwargs))
+                    result = await loop.run_in_executor(
+                        None, lambda: task.function(*task.args, **task.kwargs)
+                    )
 
                 task.result = result
                 task.status = TaskStatus.COMPLETED
@@ -456,9 +469,16 @@ class ParallelProcessor:
         results = []
 
         for i in range(0, len(batch.tasks), batch_size):
-            batch_chunk = batch.tasks[i : i + batch_size]
-            chunk_results = await asyncio.gather(*[execute_task(task) for task in batch_chunk], return_exceptions=True)
-            results.extend([r if isinstance(r, dict) else {"status": "failed", "error": r} for r in chunk_results])
+            batch_chunk = batch.tasks[i:i + batch_size]
+            chunk_results = await asyncio.gather(
+                *[execute_task(task) for task in batch_chunk], return_exceptions=True
+            )
+            results.extend(
+                [
+                    r if isinstance(r, dict) else {"status": "failed", "error": r}
+                    for r in chunk_results
+                ]
+            )
 
         return results
 
@@ -499,10 +519,16 @@ class ParallelProcessor:
         results = []
         with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
             loop = asyncio.get_event_loop()
-            futures = [loop.run_in_executor(executor, execute_task_sync, task) for task in batch.tasks]
+            futures = [
+                loop.run_in_executor(executor, execute_task_sync, task)
+                for task in batch.tasks
+            ]
 
             completed_futures = await asyncio.gather(*futures, return_exceptions=True)
-            results = [f if isinstance(f, dict) else {"status": "failed", "error": f} for f in completed_futures]
+            results = [
+                f if isinstance(f, dict) else {"status": "failed", "error": f}
+                for f in completed_futures
+            ]
 
         return results
 
@@ -522,7 +548,12 @@ class ParallelProcessor:
                 end_time = datetime.now(timezone.utc)
                 duration = (end_time - start_time).total_seconds()
 
-                return {"task_id": task_data["task_id"], "status": "completed", "result": result, "duration": duration}
+                return {
+                    "task_id": task_data["task_id"],
+                    "status": "completed",
+                    "result": result,
+                    "duration": duration,
+                }
 
             except Exception as e:
                 return {
@@ -536,16 +567,27 @@ class ParallelProcessor:
         task_data_list = []
         for task in batch.tasks:
             task_data_list.append(
-                {"task_id": task.task_id, "function": task.function, "args": task.args, "kwargs": task.kwargs}
+                {
+                    "task_id": task.task_id,
+                    "function": task.function,
+                    "args": task.args,
+                    "kwargs": task.kwargs,
+                }
             )
 
         results = []
         with ProcessPoolExecutor(max_workers=self.config.max_workers) as executor:
             loop = asyncio.get_event_loop()
-            futures = [loop.run_in_executor(executor, execute_task_process, task_data) for task_data in task_data_list]
+            futures = [
+                loop.run_in_executor(executor, execute_task_process, task_data)
+                for task_data in task_data_list
+            ]
 
             completed_futures = await asyncio.gather(*futures, return_exceptions=True)
-            results = [f if isinstance(f, dict) else {"status": "failed", "error": str(f)} for f in completed_futures]
+            results = [
+                f if isinstance(f, dict) else {"status": "failed", "error": str(f)}
+                for f in completed_futures
+            ]
 
         return results
 
@@ -558,7 +600,17 @@ class ParallelProcessor:
         for task in batch.tasks:
             # Simple heuristic: if function name suggests I / O, use async
             func_name = getattr(task.function, "__name__", "").lower()
-            if any(keyword in func_name for keyword in ["fetch", "request", "download", "upload", "read", "write"]):
+            if any(
+                keyword in func_name
+                for keyword in [
+                    "fetch",
+                    "request",
+                    "download",
+                    "upload",
+                    "read",
+                    "write",
+                ]
+            ):
                 io_tasks.append(task)
             else:
                 cpu_tasks.append(task)
@@ -567,13 +619,19 @@ class ParallelProcessor:
 
         # Process I / O tasks asynchronously
         if io_tasks:
-            io_batch = TaskBatch(batch_id=f"{batch.batch_id}_io", tasks=io_tasks, priority=batch.priority)
+            io_batch = TaskBatch(
+                batch_id=f"{batch.batch_id}_io", tasks=io_tasks, priority=batch.priority
+            )
             io_results = await self._process_async_batch(io_batch)
             results.extend(io_results)
 
         # Process CPU tasks in thread pool
         if cpu_tasks:
-            cpu_batch = TaskBatch(batch_id=f"{batch.batch_id}_cpu", tasks=cpu_tasks, priority=batch.priority)
+            cpu_batch = TaskBatch(
+                batch_id=f"{batch.batch_id}_cpu",
+                tasks=cpu_tasks,
+                priority=batch.priority,
+            )
             cpu_results = await self._process_thread_pool(cpu_batch)
             results.extend(cpu_results)
 
@@ -599,7 +657,9 @@ class ParallelProcessor:
                         "task_id": task.task_id,
                         "status": "completed",
                         "result": result,
-                        "duration": (task.completed_at - task.started_at).total_seconds(),
+                        "duration": (
+                            task.completed_at - task.started_at
+                        ).total_seconds(),
                     }
                 )
 
@@ -613,13 +673,17 @@ class ParallelProcessor:
                         "task_id": task.task_id,
                         "status": "failed",
                         "error": e,
-                        "duration": (task.completed_at - task.started_at).total_seconds(),
+                        "duration": (
+                            task.completed_at - task.started_at
+                        ).total_seconds(),
                     }
                 )
 
         return results
 
-    async def process_literature_screening(self, studies: List[Dict[str, Any]]) -> ProcessingResult:
+    async def process_literature_screening(
+        self, studies: List[Dict[str, Any]]
+    ) -> ProcessingResult:
         """
         Optimized literature screening processing
 
@@ -632,11 +696,20 @@ class ParallelProcessor:
         # Create screening tasks
         tasks = []
         for i, study in enumerate(studies):
-            task = Task(task_id=f"screen_{i}", function=self._screen_study, args=(study,), priority=TaskPriority.HIGH)
+            task = Task(
+                task_id=f"screen_{i}",
+                function=self._screen_study,
+                args=(study,),
+                priority=TaskPriority.HIGH,
+            )
             tasks.append(task)
 
         # Create batch
-        batch = TaskBatch(batch_id=f"literature_screening_{int(time.time())}", tasks=tasks, priority=TaskPriority.HIGH)
+        batch = TaskBatch(
+            batch_id=f"literature_screening_{int(time.time())}",
+            tasks=tasks,
+            priority=TaskPriority.HIGH,
+        )
 
         return await self.process_batch(batch)
 
@@ -650,7 +723,12 @@ class ParallelProcessor:
         abstract = study.get("abstract", "").lower()
 
         # Example criteria
-        relevant_keywords = ["machine learning", "ai", "artificial intelligence", "systematic review"]
+        relevant_keywords = [
+            "machine learning",
+            "ai",
+            "artificial intelligence",
+            "systematic review",
+        ]
         exclusion_keywords = ["case study", "editorial", "letter"]
 
         score = 0
@@ -673,24 +751,33 @@ class ParallelProcessor:
 
 
 # Example utility functions for creating common task patterns
-def create_literature_screening_batch(studies: List[Dict[str, Any]], batch_size: int = 100) -> List[TaskBatch]:
+def create_literature_screening_batch(
+    studies: List[Dict[str, Any]], batch_size: int = 100
+) -> List[TaskBatch]:
     """Create optimized batches for literature screening"""
     batches = []
 
     for i in range(0, len(studies), batch_size):
-        batch_studies = studies[i : i + batch_size]
+        batch_studies = studies[i:i + batch_size]
         tasks = []
 
         for j, study in enumerate(batch_studies):
             task = Task(
                 task_id=f"screen_{i + j}",
-                function=lambda s: {"study_id": s.get("id"), "decision": "include"},  # Placeholder
+                function=lambda s: {
+                    "study_id": s.get("id"),
+                    "decision": "include",
+                },  # Placeholder
                 args=(study,),
                 priority=TaskPriority.NORMAL,
             )
             tasks.append(task)
 
-        batch = TaskBatch(batch_id=f"screening_batch_{i // batch_size}", tasks=tasks, priority=TaskPriority.NORMAL)
+        batch = TaskBatch(
+            batch_id=f"screening_batch_{i // batch_size}",
+            tasks=tasks,
+            priority=TaskPriority.NORMAL,
+        )
         batches.append(batch)
 
     return batches
@@ -702,31 +789,42 @@ async def demo_parallel_processing():
     print("=" * 40)
 
     # Initialize processor
-    config = ParallelConfig(max_workers=8, strategy=ProcessingStrategy.HYBRID, batch_size=50)
+    config = ParallelConfig(
+        max_workers=8, strategy=ProcessingStrategy.HYBRID, batch_size=50
+    )
     processor = ParallelProcessor(config)
 
     # Create sample tasks
     def sample_task(task_id: int, duration: float = 0.1) -> Dict[str, Any]:
         """TODO: Add docstring for sample_task."""
         time.sleep(duration)
-        return {"task_id": task_id, "result": f"Task {task_id} completed", "timestamp": time.time()}
+        return {
+            "task_id": task_id,
+            "result": f"Task {task_id} completed",
+            "timestamp": time.time(),
+        }
 
     tasks = []
     for i in range(100):
-        task = Task(task_id=f"task_{i}", function=sample_task, args=(i, 0.05), priority=TaskPriority.NORMAL)
+        task = Task(
+            task_id=f"task_{i}",
+            function=sample_task,
+            args=(i, 0.05),
+            priority=TaskPriority.NORMAL,
+        )
         tasks.append(task)
 
     # Create batch
     batch = TaskBatch(batch_id="demo_batch", tasks=tasks)
 
     print(f"Processing {len(tasks)} tasks...")
-    start_time = time.time()
+    time.time()
 
     result = await processor.process_batch(batch)
 
-    end_time = time.time()
+    time.time()
 
-    print(f"\n📊 Results:")
+    print("\n📊 Results:")
     print(f"   Total tasks: {result.total_tasks}")
     print(f"   Completed: {result.completed_tasks}")
     print(f"   Failed: {result.failed_tasks}")
@@ -736,7 +834,9 @@ async def demo_parallel_processing():
 
     if result.performance_metrics:
         print(f"   CPU usage: {result.performance_metrics.get('cpu_avg', 0):.1f}%")
-        print(f"   Memory usage: {result.performance_metrics.get('memory_avg', 0):.1f}%")
+        print(
+            f"   Memory usage: {result.performance_metrics.get('memory_avg', 0):.1f}%"
+        )
 
     return processor
 

@@ -16,4 +16,11 @@ from .memory_agent import MemoryAgent
 from .planning_agent import PlanningAgent
 from .systematic_review_agent import SystematicReviewAgent
 
-__all__ = ["BaseAgent", "LiteratureAgent", "PlanningAgent", "ExecutorAgent", "MemoryAgent", "SystematicReviewAgent"]
+__all__ = [
+    "BaseAgent",
+    "LiteratureAgent",
+    "PlanningAgent",
+    "ExecutorAgent",
+    "MemoryAgent",
+    "SystematicReviewAgent",
+]

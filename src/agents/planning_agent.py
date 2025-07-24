@@ -7,15 +7,14 @@ and synthesis tasks for the research system.
 
 import asyncio
 import json
-import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..ai_clients.openai_client import OpenAIClient
 from ..ai_clients.xai_client import XAIClient
 from ..config.config_manager import ConfigManager
 from ..mcp.protocols import ResearchAction
-from .base_agent import AgentStatus, BaseAgent
+from .base_agent import BaseAgent
 
 
 class PlanningAgent(BaseAgent):
@@ -71,20 +70,28 @@ class PlanningAgent(BaseAgent):
         # Initialize OpenAI client
         if "openai" in ai_providers:
             api_key = self.config.get_api_key("openai")
-            self.ai_clients["openai"] = OpenAIClient(api_key=api_key, config=ai_providers["openai"])
+            self.ai_clients["openai"] = OpenAIClient(
+                api_key=api_key, config=ai_providers["openai"]
+            )
 
         # Initialize XAI client
         if "xai" in ai_providers:
             api_key = self.config.get_api_key("xai")
-            self.ai_clients["xai"] = XAIClient(api_key=api_key, config=ai_providers["xai"])
+            self.ai_clients["xai"] = XAIClient(
+                api_key=api_key, config=ai_providers["xai"]
+            )
 
         # Set default client
-        self.default_client = self.ai_clients.get("openai") or self.ai_clients.get("xai")
+        self.default_client = self.ai_clients.get("openai") or self.ai_clients.get(
+            "xai"
+        )
 
         if not self.default_client:
             raise RuntimeError("No AI client available for planning")
 
-        self.logger.info(f"Planning Agent initialized with {len(self.ai_clients)} AI clients")
+        self.logger.info(
+            f"Planning Agent initialized with {len(self.ai_clients)} AI clients"
+        )
 
     async def _cleanup_agent(self) -> None:
         """Clean up planning - specific resources."""
@@ -177,7 +184,12 @@ class PlanningAgent(BaseAgent):
         # Parse the response into structured format
         plan = self._parse_research_plan(response)
 
-        return {"query": query, "plan": plan, "raw_response": response, "planning_model": self.default_model}
+        return {
+            "query": query,
+            "plan": plan,
+            "raw_response": response,
+            "planning_model": self.default_model,
+        }
 
     async def _analyze_information(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -195,7 +207,9 @@ class PlanningAgent(BaseAgent):
 
         # If no search results available, provide analysis based on available context
         if not search_results:
-            self.logger.info(f"No search results available for analysis, proceeding with general knowledge")
+            self.logger.info(
+                "No search results available for analysis, proceeding with general knowledge"
+            )
             # Use general knowledge to provide analysis
             prompt = f"""
             Please provide a comprehensive analysis of the topic: {query}
@@ -348,7 +362,11 @@ class PlanningAgent(BaseAgent):
 
         response = await self._get_ai_response(prompt)
 
-        return {"query": query, "reasoning_chain": response, "reasoning_model": self.default_model}
+        return {
+            "query": query,
+            "reasoning_chain": response,
+            "reasoning_model": self.default_model,
+        }
 
     async def _summarize_content(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Summarize content."""
@@ -395,7 +413,11 @@ class PlanningAgent(BaseAgent):
 
         response = await self._get_ai_response(prompt)
 
-        return {"content_analyzed": len(content), "insights": response, "extraction_model": self.default_model}
+        return {
+            "content_analyzed": len(content),
+            "insights": response,
+            "extraction_model": self.default_model,
+        }
 
     async def _compare_sources(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Compare multiple sources."""
@@ -419,7 +441,11 @@ class PlanningAgent(BaseAgent):
 
         response = await self._get_ai_response(prompt)
 
-        return {"sources_compared": len(sources), "comparison": response, "comparison_model": self.default_model}
+        return {
+            "sources_compared": len(sources),
+            "comparison": response,
+            "comparison_model": self.default_model,
+        }
 
     async def _evaluate_credibility(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate source credibility."""
@@ -466,7 +492,9 @@ class PlanningAgent(BaseAgent):
             import asyncio
 
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(None, lambda: self.default_client.get_response(user_message=prompt))
+            response = await loop.run_in_executor(
+                None, lambda: self.default_client.get_response(user_message=prompt)
+            )
 
             return str(response)
 
@@ -474,7 +502,9 @@ class PlanningAgent(BaseAgent):
             self.logger.error(f"AI response generation failed: {e}")
             return f"Error generating response: {str(e)}"
 
-    def _prepare_content_for_analysis(self, search_results: List[Dict[str, Any]]) -> str:
+    def _prepare_content_for_analysis(
+        self, search_results: List[Dict[str, Any]]
+    ) -> str:
         """
         Prepare search results for analysis.
 
@@ -508,7 +538,9 @@ class PlanningAgent(BaseAgent):
         """Parse research plan from AI response."""
         try:
             # Try to extract JSON from the response
-            json_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", response, re.DOTALL)
+            json_match = re.search(
+                r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", response, re.DOTALL
+            )
             if json_match:
                 json_str = json_match.group(0)
                 plan_json = json.loads(json_str)
@@ -524,7 +556,9 @@ class PlanningAgent(BaseAgent):
                 }
             else:
                 # Fallback to text extraction if JSON parsing fails
-                self.logger.warning("No JSON found in response, falling back to text extraction")
+                self.logger.warning(
+                    "No JSON found in response, falling back to text extraction"
+                )
                 return {
                     "raw_plan": response,
                     "objectives": self._extract_section_as_list(response, "objectives"),
@@ -534,7 +568,9 @@ class PlanningAgent(BaseAgent):
                     "outcomes": self._extract_section_as_list(response, "outcomes"),
                 }
         except json.JSONDecodeError as e:
-            self.logger.warning(f"JSON parsing failed: {e}, falling back to text extraction")
+            self.logger.warning(
+                f"JSON parsing failed: {e}, falling back to text extraction"
+            )
             # Fallback to text extraction
             return {
                 "raw_plan": response,
@@ -597,8 +633,16 @@ class PlanningAgent(BaseAgent):
         section_variations = {
             "objectives": ["objectives", "research objectives"],
             "key areas": ["key areas", "key areas to investigate"],
-            "questions": ["questions", "specific questions", "specific questions to answer"],
-            "sources": ["sources", "information sources", "information sources to consult"],
+            "questions": [
+                "questions",
+                "specific questions",
+                "specific questions to answer",
+            ],
+            "sources": [
+                "sources",
+                "information sources",
+                "information sources to consult",
+            ],
             "outcomes": ["outcomes", "expected outcomes"],
         }
 
@@ -608,13 +652,19 @@ class PlanningAgent(BaseAgent):
         for name in possible_names:
             for pattern in patterns:
                 # Create the pattern with the current name variation
-                current_pattern = pattern.replace(re.escape(section_name), re.escape(name))
+                current_pattern = pattern.replace(
+                    re.escape(section_name), re.escape(name)
+                )
                 match = re.search(current_pattern, text, re.IGNORECASE | re.DOTALL)
                 if match:
                     content = match.group(1).strip()
                     # Clean up the content
-                    content = re.sub(r"^-+$", "", content, flags=re.MULTILINE)  # Remove separator lines
-                    content = re.sub(r"\n\s*\n\s*\n", "\n\n", content)  # Remove excessive newlines
+                    content = re.sub(
+                        r"^-+$", "", content, flags=re.MULTILINE
+                    )  # Remove separator lines
+                    content = re.sub(
+                        r"\n\s*\n\s*\n", "\n\n", content
+                    )  # Remove excessive newlines
                     return content.strip()
 
         return ""
@@ -648,7 +698,9 @@ if __name__ == "__main__":
     import sys
 
     # Add the project root to the Python path
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     sys.path.insert(0, project_root)
 
     async def main():

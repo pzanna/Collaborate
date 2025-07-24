@@ -5,14 +5,12 @@ This module provides PRISMA 2020 - compliant report generation capabilities for 
 including flow diagrams, evidence tables, and multiple export formats.
 """
 
-import base64
 import json
 import logging
-import os
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class ReportSection(Enum):
@@ -70,7 +68,9 @@ class PRISMANumbers:
     def calculate_totals(self):
         """Calculate derived totals."""
         self.identification_total = (
-            self.identification_database + self.identification_registers + self.identification_other
+            self.identification_database
+            + self.identification_registers
+            + self.identification_other
         )
 
 
@@ -214,13 +214,19 @@ class PRISMAReportGenerator:
 
             # Generate report sections using AI
             report_sections = await self._generate_report_sections(
-                review_data, prisma_numbers, study_summaries, synthesis_results, template_config
+                review_data,
+                prisma_numbers,
+                study_summaries,
+                synthesis_results,
+                template_config,
             )
 
             # Assemble complete report
             report = PRISMAReport(
                 report_id=f"PRISMA_{review_id}_{datetime.now().strftime('%Y % m%d_ % H%M % S')}",
-                title=report_sections.get("title", f"Systematic Review Report - {review_id}"),
+                title=report_sections.get(
+                    "title", f"Systematic Review Report - {review_id}"
+                ),
                 authors=review_data.get("authors", ["Unknown Author"]),
                 affiliations=review_data.get("affiliations", ["Unknown Affiliation"]),
                 corresponding_author=review_data.get("corresponding_author", "Unknown"),
@@ -231,27 +237,39 @@ class PRISMAReportGenerator:
                 background=report_sections.get("background", ""),
                 objectives=report_sections.get("objectives", ""),
                 research_question=review_data.get("research_question", ""),
-                protocol_registration=review_data.get("protocol_registration", "Not registered"),
+                protocol_registration=review_data.get(
+                    "protocol_registration", "Not registered"
+                ),
                 eligibility_criteria=review_data.get("eligibility_criteria", {}),
                 information_sources=review_data.get("information_sources", []),
                 search_strategy=review_data.get("search_strategy", ""),
                 selection_process=report_sections.get("selection_process", ""),
-                data_collection_process=report_sections.get("data_collection_process", ""),
+                data_collection_process=report_sections.get(
+                    "data_collection_process", ""
+                ),
                 data_items=review_data.get("data_items", []),
-                risk_of_bias_assessment=report_sections.get("risk_of_bias_assessment", ""),
+                risk_of_bias_assessment=report_sections.get(
+                    "risk_of_bias_assessment", ""
+                ),
                 effect_measures=review_data.get("effect_measures", []),
                 synthesis_methods=report_sections.get("synthesis_methods", ""),
                 study_selection=prisma_numbers,
                 study_characteristics=study_summaries,
-                risk_of_bias_results=await self._generate_risk_of_bias_summary(review_id),
+                risk_of_bias_results=await self._generate_risk_of_bias_summary(
+                    review_id
+                ),
                 synthesis_results=synthesis_results,
                 discussion=report_sections.get("discussion", ""),
                 limitations=report_sections.get("limitations", []),
                 conclusions=report_sections.get("conclusions", ""),
                 implications=report_sections.get("implications", ""),
                 funding=review_data.get("funding", "Not specified"),
-                conflicts_of_interest=review_data.get("conflicts_of_interest", "None declared"),
-                data_availability=review_data.get("data_availability", "Available upon request"),
+                conflicts_of_interest=review_data.get(
+                    "conflicts_of_interest", "None declared"
+                ),
+                data_availability=review_data.get(
+                    "data_availability", "Available upon request"
+                ),
             )
 
             # Store report
@@ -261,10 +279,14 @@ class PRISMAReportGenerator:
             return report
 
         except Exception as e:
-            self.logger.error(f"Failed to generate PRISMA report for review {review_id}: {e}")
+            self.logger.error(
+                f"Failed to generate PRISMA report for review {review_id}: {e}"
+            )
             raise
 
-    async def export_report(self, report: PRISMAReport, format: ExportFormat, output_path: str) -> str:
+    async def export_report(
+        self, report: PRISMAReport, format: ExportFormat, output_path: str
+    ) -> str:
         """
         Export report in specified format.
 
@@ -293,10 +315,14 @@ class PRISMAReportGenerator:
                 raise ValueError(f"Unsupported export format: {format}")
 
         except Exception as e:
-            self.logger.error(f"Failed to export report {report.report_id} as {format.value}: {e}")
+            self.logger.error(
+                f"Failed to export report {report.report_id} as {format.value}: {e}"
+            )
             raise
 
-    async def generate_flow_diagram(self, prisma_numbers: PRISMANumbers, output_path: str) -> str:
+    async def generate_flow_diagram(
+        self, prisma_numbers: PRISMANumbers, output_path: str
+    ) -> str:
         """
         Generate PRISMA flow diagram.
 
@@ -333,11 +359,15 @@ class PRISMAReportGenerator:
 
         # Use real data from template_config if available, otherwise return basic structure
         if template_config:
-            research_question = template_config.get("research_question", "Unknown research question")
-            search_results = template_config.get("search_results", [])
+            research_question = template_config.get(
+                "research_question", "Unknown research question"
+            )
+            template_config.get("search_results", [])
 
             # Extract actual keywords from research question
-            keywords = research_question.lower().split()[:5]  # Simple keyword extraction
+            keywords = research_question.lower().split()[
+                :5
+            ]  # Simple keyword extraction
 
             return {
                 "authors": ["AI Research System", "Eunice Literature Agent"],
@@ -412,22 +442,30 @@ class PRISMAReportGenerator:
         template_config = getattr(self, "_current_template_config", {})
         search_results = template_config.get("search_results", [])
         total_papers = template_config.get("total_papers", 0)
-        total_content = template_config.get("total_content", 0)
+        template_config.get("total_content", 0)
 
         # Calculate real numbers from actual search results
-        total_searches = len(search_results)
+        len(search_results)
         identified_total = total_papers
 
         # Use realistic proportions based on actual data
-        duplicates_removed = max(1, int(identified_total * 0.3))  # ~30% duplicates typical
+        duplicates_removed = max(
+            1, int(identified_total * 0.3)
+        )  # ~30% duplicates typical
         records_screened = identified_total - duplicates_removed
-        excluded_title_abstract = max(0, int(records_screened * 0.7))  # ~70% excluded at title / abstract
+        excluded_title_abstract = max(
+            0, int(records_screened * 0.7)
+        )  # ~70% excluded at title / abstract
         reports_sought = records_screened - excluded_title_abstract
         reports_not_retrieved = max(0, int(reports_sought * 0.1))  # ~10% not retrieved
         reports_assessed = reports_sought - reports_not_retrieved
-        excluded_full_text = max(0, int(reports_assessed * 0.6))  # ~60% excluded at full text
+        excluded_full_text = max(
+            0, int(reports_assessed * 0.6)
+        )  # ~60% excluded at full text
         studies_included = reports_assessed - excluded_full_text
-        studies_meta_analysis = max(1, int(studies_included * 0.7))  # ~70% suitable for meta - analysis
+        studies_meta_analysis = max(
+            1, int(studies_included * 0.7)
+        )  # ~70% suitable for meta - analysis
 
         numbers = PRISMANumbers(
             identification_database=identified_total,
@@ -443,12 +481,16 @@ class PRISMAReportGenerator:
             studies_included_review=studies_included,
             studies_included_meta_analysis=studies_meta_analysis,
             exclusion_reasons={
-                "Not relevant to research question": max(1, int(excluded_title_abstract * 0.4)),
+                "Not relevant to research question": max(
+                    1, int(excluded_title_abstract * 0.4)
+                ),
                 "Wrong study design": max(1, int(excluded_title_abstract * 0.3)),
                 "Insufficient data": max(1, int(excluded_full_text * 0.3)),
                 "Language barriers": max(0, int(excluded_full_text * 0.2)),
                 "Duplicate publication": max(0, int(excluded_full_text * 0.2)),
-                "Other reasons": max(0, excluded_full_text - int(excluded_full_text * 0.7)),
+                "Other reasons": max(
+                    0, excluded_full_text - int(excluded_full_text * 0.7)
+                ),
             },
         )
 
@@ -473,7 +515,9 @@ class PRISMAReportGenerator:
 
             # Extract papers from real search results
             papers = results.get("papers", [])
-            for paper in papers[:2]:  # Limit to first 2 papers per search to avoid too many
+            for paper in papers[
+                :2
+            ]:  # Limit to first 2 papers per search to avoid too many
                 # Create study summary from real paper data
                 study_summary = StudySummary(
                     study_id=f"study_{study_counter:03d}",
@@ -481,10 +525,16 @@ class PRISMAReportGenerator:
                     year=paper.get("year", 2024),
                     title=paper.get("title", f"Study from {search_type} search"),
                     study_design=paper.get("study_type", "Research Study"),
-                    intervention_type=paper.get("methodology", "Academic Investigation"),
-                    sample_size=paper.get("sample_size", 100),  # Default if not available
+                    intervention_type=paper.get(
+                        "methodology", "Academic Investigation"
+                    ),
+                    sample_size=paper.get(
+                        "sample_size", 100
+                    ),  # Default if not available
                     primary_outcome=paper.get("primary_findings", "Research outcomes"),
-                    quality_score=paper.get("quality_score", 7.0),  # Default quality score
+                    quality_score=paper.get(
+                        "quality_score", 7.0
+                    ),  # Default quality score
                     inclusion_reason=f"Identified through {search_type} search for: {query[:50]}...",
                 )
                 study_summaries.append(study_summary)
@@ -492,7 +542,9 @@ class PRISMAReportGenerator:
 
         # If no real papers found, create minimal summary based on search queries
         if not study_summaries:
-            for i, search_result in enumerate(search_results[:3], 1):  # Max 3 if no papers
+            for i, search_result in enumerate(
+                search_results[:3], 1
+            ):  # Max 3 if no papers
                 query = search_result.get("query", "Research query")
                 study_summary = StudySummary(
                     study_id=f"search_{i:03d}",
@@ -516,7 +568,9 @@ class PRISMAReportGenerator:
         # Get real data from template config
         template_config = getattr(self, "_current_template_config", {})
         search_results = template_config.get("search_results", [])
-        research_question = template_config.get("research_question", "Unknown research question")
+        research_question = template_config.get(
+            "research_question", "Unknown research question"
+        )
 
         # Generate narrative synthesis based on actual search results
         total_searches = len(search_results)
@@ -524,10 +578,14 @@ class PRISMAReportGenerator:
 
         narrative = f"This systematic review examined the research question: '{research_question}'. "
         narrative += (
-            f"Through {total_searches} targeted literature searches encompassing {', '.join(set(search_types))}, "
+            f"Through {total_searches} targeted literature searches "
+            f"encompassing {', '.join(set(search_types))}, "
         )
         narrative += "the analysis identified key patterns and findings relevant to the research objectives. "
-        narrative += "The evidence base demonstrates the current state of knowledge and highlights areas requiring further investigation."
+        narrative += (
+            "The evidence base demonstrates the current state of knowledge and "
+            "highlights areas requiring further investigation."
+        )
 
         # Generate thematic synthesis from search queries
         themes = []
@@ -536,7 +594,9 @@ class PRISMAReportGenerator:
             theme = f"({i}) {query[:60]}{'...' if len(query) > 60 else ''}"
             themes.append(theme)
 
-        thematic = f"Key themes emerged from the literature analysis: {'; '.join(themes)}."
+        thematic = (
+            f"Key themes emerged from the literature analysis: {'; '.join(themes)}."
+        )
 
         # Generate realistic meta - analysis results based on actual data
         total_papers = template_config.get("total_papers", 0)
@@ -557,12 +617,16 @@ class PRISMAReportGenerator:
                     "primary_domains": len(set(search_types)),
                     "search_diversity": len(search_results),
                     "thematic_coverage": len(themes),
-                    "analysis_depth": "comprehensive" if content_extracted > 0 else "exploratory",
+                    "analysis_depth": (
+                        "comprehensive" if content_extracted > 0 else "exploratory"
+                    ),
                 },
             },
             subgroup_analyses=[],  # No subgroup analysis in this automated pipeline
             sensitivity_analyses=[],  # No sensitivity analysis in this automated pipeline
-            certainty_assessments={"overall_certainty": "Moderate - based on systematic AI - guided search"},
+            certainty_assessments={
+                "overall_certainty": "Moderate - based on systematic AI - guided search"
+            },
             recommendations=[
                 "Further research recommended in identified research areas",
                 "Validation of findings through additional systematic approaches",
@@ -581,13 +645,18 @@ class PRISMAReportGenerator:
         """Generate report sections using REAL research question and data - NO MOCK CONTENT."""
 
         # Get REAL research question and data from template config
-        research_question = review_data.get("research_question", "Unknown research question")
+        research_question = review_data.get(
+            "research_question", "Unknown research question"
+        )
         template_config = template_config or {}
         search_results = template_config.get("search_results", [])
 
         # Generate title based on REAL research question
         title_words = research_question.split()[:6]  # First 6 words
-        title = f"Systematic Literature Review: {' '.join(title_words)}{'...' if len(research_question.split()) > 6 else ''}"
+        title = (
+            f"Systematic Literature Review: {' '.join(title_words)}"
+            f"{'...' if len(research_question.split()) > 6 else ''}"
+        )
 
         # Generate abstract based on ACTUAL data
         abstract = f"""
@@ -605,19 +674,22 @@ Registration: {review_data.get('protocol_registration', 'AI - generated systemat
         """.strip()
 
         # Generate background based on research question context
-        if "neuron" in research_question.lower() or "cell culture" in research_question.lower():
+        if (
+            "neuron" in research_question.lower()
+            or "cell culture" in research_question.lower()
+        ):
             background = f"""
 Cell culture techniques are fundamental to biological and medical research,
-    enabling controlled investigation of cellular processes,
-    development,
-    and therapeutic applications. The specific focus on {research_question.lower()} addresses important practical considerations for researchers working in diverse laboratory settings.
+enabling controlled investigation of cellular processes,
+development,
+and therapeutic applications. The specific focus on {research_question.lower()} addresses important practical considerations for researchers working in diverse laboratory settings.
 
 Accessible and cost - effective approaches to cell culture are particularly important for educational institutions, resource - limited laboratories, and emerging research programs. Traditional cell culture methods often require expensive specialized equipment and reagents that may not be available in all research environments.
 
 This systematic review examines the current state of knowledge regarding {research_question.lower()},
-    synthesizing available evidence to provide practical guidance for researchers and educators. The analysis aims to identify proven methods,
-    alternative approaches,
-    and research gaps that could inform future investigations.
+synthesizing available evidence to provide practical guidance for researchers and educators. The analysis aims to identify proven methods,
+alternative approaches,
+and research gaps that could inform future investigations.
             """.strip()
         else:
             background = f"""
@@ -629,9 +701,7 @@ The integration of AI - guided search methodology with traditional systematic re
             """.strip()
 
         # Generate objectives based on research question
-        primary_objective = (
-            f"To systematically review and analyze the available literature addressing: {research_question}"
-        )
+        primary_objective = f"To systematically review and analyze the available literature addressing: {research_question}"
 
         objectives = f"""
 The primary objective of this systematic review was {primary_objective.lower()}
@@ -674,7 +744,7 @@ The systematic approach utilized in this review demonstrates the value of AI - g
 Key findings from the included studies provide practical insights for researchers and practitioners interested in {research_question.lower()}. The evidence synthesis highlights both established approaches and emerging innovations in this research area.
             """.strip(),
             "limitations": [
-                f"Limited to literature identified through AI - guided search methodology",
+                "Limited to literature identified through AI - guided search methodology",
                 f"Search scope focused on addressing: {research_question}",
                 "Synthesis based on available abstracts and study summaries",
                 "Quality assessment adapted for AI - guided systematic review",
@@ -825,7 +895,9 @@ For Research: Future studies should build upon the identified themes and address
 
         return svg_template
 
-    def _generate_exclusion_reasons_text(self, exclusion_reasons: Dict[str, int]) -> str:
+    def _generate_exclusion_reasons_text(
+        self, exclusion_reasons: Dict[str, int]
+    ) -> str:
         """Generate SVG text elements for exclusion reasons."""
 
         if not exclusion_reasons:
@@ -978,7 +1050,9 @@ For Research: Future studies should build upon the identified themes and address
 
         return "\n".join(rows)
 
-    def _generate_meta_analysis_html(self, meta_results: Optional[Dict[str, Any]]) -> str:
+    def _generate_meta_analysis_html(
+        self, meta_results: Optional[Dict[str, Any]]
+    ) -> str:
         """Generate HTML for meta - analysis results."""
 
         if not meta_results:
@@ -1107,7 +1181,9 @@ For Research: Future studies should build upon the identified themes and address
 
         return header + "\n".join(rows)
 
-    def _generate_meta_analysis_markdown(self, meta_results: Optional[Dict[str, Any]]) -> str:
+    def _generate_meta_analysis_markdown(
+        self, meta_results: Optional[Dict[str, Any]]
+    ) -> str:
         """Generate markdown for meta - analysis results."""
 
         if not meta_results:
@@ -1146,7 +1222,9 @@ For Research: Future studies should build upon the identified themes and address
         await self._export_html(report, html_path)
 
         # In production, would use a library like weasyprint or reportlab
-        self.logger.info(f"PDF export placeholder - HTML version created at {html_path}")
+        self.logger.info(
+            f"PDF export placeholder - HTML version created at {html_path}"
+        )
         return html_path
 
     async def _export_word(self, report: PRISMAReport, output_path: str) -> str:
@@ -1157,7 +1235,9 @@ For Research: Future studies should build upon the identified themes and address
         await self._export_markdown(report, md_path)
 
         # In production, would use python - docx library
-        self.logger.info(f"Word export placeholder - Markdown version created at {md_path}")
+        self.logger.info(
+            f"Word export placeholder - Markdown version created at {md_path}"
+        )
         return md_path
 
     async def _store_report(self, report: PRISMAReport) -> None:
@@ -1171,7 +1251,9 @@ For Research: Future studies should build upon the identified themes and address
                 self.database.create_prisma_report(report_data)
             else:
                 # Log that storage is not implemented
-                self.logger.info(f"PRISMA report storage not implemented. Report: {report.report_id}")
+                self.logger.info(
+                    f"PRISMA report storage not implemented. Report: {report.report_id}"
+                )
 
         except Exception as e:
             self.logger.error(f"Failed to store PRISMA report: {e}")
@@ -1209,10 +1291,12 @@ async def demonstrate_prisma_report_generation():
     print(f"   Title: {report.title}")
     print(f"   Authors: {', '.join(report.authors)}")
     print(f"   Studies included: {report.study_selection.studies_included_review}")
-    print(f"   Meta - analysis studies: {report.study_selection.studies_included_meta_analysis}")
+    print(
+        f"   Meta - analysis studies: {report.study_selection.studies_included_meta_analysis}"
+    )
 
     # Export in multiple formats
-    print(f"\n📤 Exporting report in multiple formats...")
+    print("\n📤 Exporting report in multiple formats...")
 
     export_formats = [
         (ExportFormat.HTML, "/tmp / prisma_report.html"),
@@ -1225,14 +1309,16 @@ async def demonstrate_prisma_report_generation():
     exported_files = []
     for format_type, output_path in export_formats:
         try:
-            exported_path = await generator.export_report(report, format_type, output_path)
+            exported_path = await generator.export_report(
+                report, format_type, output_path
+            )
             exported_files.append((format_type.value.upper(), exported_path))
             print(f"   ✅ {format_type.value.upper()}: {exported_path}")
         except Exception as e:
             print(f"   ❌ {format_type.value.upper()}: Failed ({e})")
 
     # Generate PRISMA flow diagram
-    print(f"\n📊 Generating PRISMA flow diagram...")
+    print("\n📊 Generating PRISMA flow diagram...")
     try:
         flow_diagram_path = await generator.generate_flow_diagram(
             report.study_selection, "/tmp / prisma_flow_diagram.svg"
@@ -1242,30 +1328,36 @@ async def demonstrate_prisma_report_generation():
         print(f"   ❌ Flow diagram: Failed ({e})")
 
     # Display report summary
-    print(f"\n📈 Report Summary:")
-    print(f"   PRISMA Numbers:")
+    print("\n📈 Report Summary:")
+    print("   PRISMA Numbers:")
     print(f"     Records identified: {report.study_selection.identification_total}")
     print(f"     Records screened: {report.study_selection.records_screened}")
     print(f"     Studies included: {report.study_selection.studies_included_review}")
-    print(f"     Meta - analysis: {report.study_selection.studies_included_meta_analysis}")
+    print(
+        f"     Meta - analysis: {report.study_selection.studies_included_meta_analysis}"
+    )
 
-    print(f"\n   Study Characteristics:")
+    print("\n   Study Characteristics:")
     for i, study in enumerate(report.study_characteristics[:3], 1):
         print(f"     {i}. {study.authors} ({study.year}) - {study.study_design}")
         print(f"        Sample: {study.sample_size}, Quality: {study.quality_score}")
 
-    print(f"\n   Synthesis Results:")
+    print("\n   Synthesis Results:")
     if report.synthesis_results.meta_analysis_results:
         for outcome, results in report.synthesis_results.meta_analysis_results.items():
             print(
                 f"     {outcome}: OR {results.get('pooled_or')} (95% CI: {results.get('ci_lower')}-{results.get('ci_upper')})"
             )
 
-    print(f"\n   Quality Assessment:")
-    print(f"     Certainty of Evidence: {len(report.synthesis_results.certainty_assessments)} outcomes assessed")
-    print(f"     Recommendations: {len(report.synthesis_results.recommendations)} provided")
+    print("\n   Quality Assessment:")
+    print(
+        f"     Certainty of Evidence: {len(report.synthesis_results.certainty_assessments)} outcomes assessed"
+    )
+    print(
+        f"     Recommendations: {len(report.synthesis_results.recommendations)} provided"
+    )
 
-    print(f"\n✅ Phase 3 PRISMA Report Generator demonstration completed!")
+    print("\n✅ Phase 3 PRISMA Report Generator demonstration completed!")
     print(f"   Report ID: {report.report_id}")
     print(f"   Exported formats: {len(exported_files)}")
 

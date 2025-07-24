@@ -1,0 +1,81 @@
+{
+  "model": "gpt-4o-mini",
+  "temperature": 0.4,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a scientific search‑strategy assistant. When given a research plan and optional constraints, reply ONLY with VALID JSON matching the schema in the instruction, containing highly targeted literature‑search phrases ready for PubMed / Web of Science / Google Scholar. Do not add commentary or markdown."
+    },
+    {
+      "role": "user",
+      "content": {
+        "research_plan": {
+          "research_question": "How do I culture neurons using grocery store ingredients and nutritional supplements?",
+          "objectives": [
+            "Determine the feasibility of culturing neurons using non‑traditional, readily available materials such as grocery store ingredients and nutritional supplements.",
+            "Identify which grocery store ingredients and nutritional supplements contain the necessary nutrients and compounds to support neuron survival, growth, and differentiation.",
+            "Develop a step‑by‑step protocol for preparing neuron culture media and substrates using these ingredients.",
+            "Evaluate the limitations, risks, and ethical considerations of using non‑standard materials for neuronal culture."
+          ],
+          "key_research_areas": [
+            "Basic requirements for neuron culture including media composition, substrate/coating materials, and environmental conditions (temperature, CO₂, humidity).",
+            "Nutritional and chemical composition of common grocery store ingredients and supplements relevant to neuron growth (e.g., amino acids, vitamins, minerals, glucose).",
+            "Alternatives to commercial culture media and supplements commonly used in neuroscience labs.",
+            "Methods for isolating and preparing neurons or neuronal cell lines in a home or non‑lab setting.",
+            "Sterilisation and contamination control using household or accessible materials.",
+            "Safety, ethical, and legal considerations when culturing neurons outside professional laboratory settings."
+          ],
+          "research_questions": [
+            "What are the essential components of neuron culture media and can these be sourced from grocery store ingredients or nutritional supplements?",
+            "Which grocery store items contain neurotrophic factors, or their precursors, that promote neuron survival and growth?",
+            "How can substrates or coatings (e.g., poly‑D‑lysine, laminin) required for neuron adhesion be substituted with accessible materials?",
+            "What sterilisation methods are feasible outside of a laboratory environment to prevent contamination?",
+            "Are there existing documented attempts or protocols for neuron culture using non‑traditional materials?",
+            "What are the minimal environmental controls needed for successful neuron culturing and how can they be achieved practically?",
+            "What are the legal and ethical considerations of culturing neurons, especially if derived from animals or humans, outside of regulated labs?"
+          ],
+          "information_sources": [
+            "Primary neuroscience literature on neuron culture media composition.",
+            "Standard neuron culture protocols from reputable labs and institutions.",
+            "Biochemistry and nutrition databases detailing the molecular composition of common foods and supplements.",
+            "DIY biohacking and citizen‑science resources.",
+            "Books and reviews on cell‑culture techniques and alternatives to commercial reagents.",
+            "Safety and bioethics guidelines from regulatory bodies.",
+            "Online resources for sterilisation and aseptic technique using household materials."
+          ],
+          "expected_outcomes": [
+            "A detailed understanding of which grocery store ingredients and supplements can partially or fully substitute traditional neuron culture media components.",
+            "A practical protocol for culturing neurons using accessible materials, including media preparation, substrate coating, and environmental controls.",
+            "Identification of major challenges, limitations, and risks associated with this approach.",
+            "Recommendations for safe, ethical, and legal compliance for non‑traditional neuron culture attempts.",
+            "An annotated bibliography of relevant scientific and community resources to support further experimentation or research."
+          ]
+        },
+        "parameters": {
+          "start_year": 2015,
+          "end_year": 2025,
+          "article_types": ["Review", "Research"],
+          "max_phrases_per_section": 8,
+          "include_boolean_operators": true,
+          "language": "English"
+        },
+        "output_format": {
+          "type": "object",
+          "properties": {
+            "search_phrases": {
+              "type": "object",
+              "patternProperties": {
+                ".*": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["search_phrases"]
+        }
+      }
+    }
+  ]
+}

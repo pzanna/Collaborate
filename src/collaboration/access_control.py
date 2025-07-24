@@ -19,16 +19,14 @@ Date: 2024
 """
 
 import asyncio
-import base64
 import hashlib
 import hmac
 import json
 import logging
 import secrets
 import sqlite3
-import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from functools import wraps
@@ -214,7 +212,11 @@ class AccessControlManager:
     def _initialize_role_permissions(self) -> Dict[UserRole, Set[Permission]]:
         """Initialize role - based permission mappings"""
         return {
-            UserRole.OBSERVER: {Permission.VIEW_STUDIES, Permission.VIEW_DECISIONS, Permission.VIEW_PROGRESS},
+            UserRole.OBSERVER: {
+                Permission.VIEW_STUDIES,
+                Permission.VIEW_DECISIONS,
+                Permission.VIEW_PROGRESS,
+            },
             UserRole.REVIEWER: {
                 Permission.VIEW_STUDIES,
                 Permission.VIEW_DECISIONS,
@@ -362,7 +364,9 @@ class AccessControlManager:
                 )
 
                 # Create indexes for performance
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id)")
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id)"
+                )
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS idx_project_access_user_project ON project_access(user_id, project_id)"
                 )
@@ -378,7 +382,12 @@ class AccessControlManager:
             raise
 
     async def create_user(
-        self, username: str, email: str, full_name: str, password: str, role: UserRole = UserRole.REVIEWER
+        self,
+        username: str,
+        email: str,
+        full_name: str,
+        password: str,
+        role: UserRole = UserRole.REVIEWER,
     ) -> User:
         """
         Create a new user with secure password hashing
@@ -579,7 +588,9 @@ class AccessControlManager:
 
             # Optional IP validation
             if ip_address and session.ip_address != ip_address:
-                logger.warning(f"IP mismatch for session {session_id}: {session.ip_address} vs {ip_address}")
+                logger.warning(
+                    f"IP mismatch for session {session_id}: {session.ip_address} vs {ip_address}"
+                )
                 # Could be more strict here depending on security requirements
 
             # Get user
@@ -598,7 +609,11 @@ class AccessControlManager:
             return None
 
     async def check_permission(
-        self, user_id: str, permission: Permission, project_id: Optional[str] = None, resource_id: Optional[str] = None
+        self,
+        user_id: str,
+        permission: Permission,
+        project_id: Optional[str] = None,
+        resource_id: Optional[str] = None,
     ) -> bool:
         """
         Check if user has specific permission
@@ -630,7 +645,9 @@ class AccessControlManager:
                     project_access = await self._get_project_access(user_id, project_id)
                     if project_access and project_access.is_active:
                         # Check if project role has the permission
-                        project_permissions = self.role_permissions.get(project_access.role, set())
+                        project_permissions = self.role_permissions.get(
+                            project_access.role, set()
+                        )
                         return permission in project_permissions
                     else:
                         return False
@@ -644,7 +661,12 @@ class AccessControlManager:
             return False
 
     async def grant_project_access(
-        self, user_id: str, project_id: str, role: UserRole, granted_by: str, expires_date: Optional[datetime] = None
+        self,
+        user_id: str,
+        project_id: str,
+        role: UserRole,
+        granted_by: str,
+        expires_date: Optional[datetime] = None,
     ) -> ProjectAccess:
         """
         Grant user access to a specific project
@@ -692,7 +714,9 @@ class AccessControlManager:
                 success=True,
             )
 
-            logger.info(f"Granted {role.value} access to project {project_id} for user {user_id}")
+            logger.info(
+                f"Granted {role.value} access to project {project_id} for user {user_id}"
+            )
             return project_access
 
         except Exception as e:
@@ -827,11 +851,9 @@ class AccessControlManager:
 
     def _hash_password(self, password: str, salt: str) -> str:
         """Hash password with salt using PBKDF2"""
-        import hashlib
-
         return hashlib.pbkdf2_hmac(
-            "sha256", password.encode("utf - 8"), salt.encode("utf - 8"), 100000  # iterations
-        ).hex()
+            "sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000
+        ).hex()  # iterations
 
     def _verify_password(self, password: str, password_hash: str, salt: str) -> bool:
         """Verify password against hash"""
@@ -898,7 +920,9 @@ class AccessControlManager:
                         created_date=datetime.fromisoformat(row[8]),
                         last_login=datetime.fromisoformat(row[9]) if row[9] else None,
                         failed_login_attempts=row[10],
-                        lockout_until=datetime.fromisoformat(row[11]) if row[11] else None,
+                        lockout_until=(
+                            datetime.fromisoformat(row[11]) if row[11] else None
+                        ),
                         mfa_enabled=bool(row[12]),
                         mfa_secret=row[13],
                     )
@@ -928,7 +952,9 @@ class AccessControlManager:
                         created_date=datetime.fromisoformat(row[8]),
                         last_login=datetime.fromisoformat(row[9]) if row[9] else None,
                         failed_login_attempts=row[10],
-                        lockout_until=datetime.fromisoformat(row[11]) if row[11] else None,
+                        lockout_until=(
+                            datetime.fromisoformat(row[11]) if row[11] else None
+                        ),
                         mfa_enabled=bool(row[12]),
                         mfa_secret=row[13],
                     )
@@ -937,7 +963,9 @@ class AccessControlManager:
             logger.error(f"Failed to get user by ID: {str(e)}")
             return None
 
-    async def _create_session(self, user: User, ip_address: str, user_agent: str) -> Session:
+    async def _create_session(
+        self, user: User, ip_address: str, user_agent: str
+    ) -> Session:
         """Create new user session"""
         try:
             session = Session(
@@ -984,7 +1012,9 @@ class AccessControlManager:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM user_sessions WHERE session_id = ?", (session_id,))
+                cursor.execute(
+                    "SELECT * FROM user_sessions WHERE session_id = ?", (session_id,)
+                )
 
                 row = cursor.fetchone()
                 if row:
@@ -1003,7 +1033,9 @@ class AccessControlManager:
             logger.error(f"Failed to get session: {str(e)}")
             return None
 
-    async def _get_project_access(self, user_id: str, project_id: str) -> Optional[ProjectAccess]:
+    async def _get_project_access(
+        self, user_id: str, project_id: str
+    ) -> Optional[ProjectAccess]:
         """Get project access for user"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -1054,7 +1086,11 @@ class AccessControlManager:
                         json.dumps([p.value for p in project_access.permissions]),
                         project_access.granted_by,
                         project_access.granted_date.isoformat(),
-                        project_access.expires_date.isoformat() if project_access.expires_date else None,
+                        (
+                            project_access.expires_date.isoformat()
+                            if project_access.expires_date
+                            else None
+                        ),
                         project_access.is_active,
                     ),
                 )
@@ -1143,7 +1179,11 @@ class AccessControlManager:
                     SET failed_login_attempts = ?, lockout_until = ?
                     WHERE user_id = ?
                 """,
-                    (new_attempts, lockout_until.isoformat() if lockout_until else None, user.user_id),
+                    (
+                        new_attempts,
+                        lockout_until.isoformat() if lockout_until else None,
+                        user.user_id,
+                    ),
                 )
                 conn.commit()
 
@@ -1243,7 +1283,7 @@ if __name__ == "__main__":
         access_control = AccessControlManager()
 
         # Create test user
-        user = await access_control.create_user(
+        await access_control.create_user(
             username="test_reviewer",
             email="test@example.com",
             full_name="Test Reviewer",
@@ -1253,7 +1293,10 @@ if __name__ == "__main__":
 
         # Authenticate user
         user_result, session = await access_control.authenticate_user(
-            username="test_reviewer", password="secure_password123", ip_address="127.0.0.1", user_agent="test - client"
+            username="test_reviewer",
+            password="secure_password123",
+            ip_address="127.0.0.1",
+            user_agent="test - client",
         )
 
         if user_result and session:
@@ -1286,7 +1329,9 @@ if __name__ == "__main__":
             )
 
             # Get audit logs
-            logs = await access_control.get_audit_logs(user_id=user_result.user_id, limit=10)
+            logs = await access_control.get_audit_logs(
+                user_id=user_result.user_id, limit=10
+            )
             print(f"Audit logs retrieved: {len(logs)}")
 
     # Run test

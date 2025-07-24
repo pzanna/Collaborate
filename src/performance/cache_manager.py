@@ -16,24 +16,21 @@ Date: July 2025
 
 import asyncio
 import hashlib
-import json
 import logging
 import pickle
 import threading
 import time
-import weakref
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 # Try to import Redis, fallback gracefully
 try:
-    import redis
     import redis.asyncio as aioredis
 
     REDIS_AVAILABLE = True
@@ -123,27 +120,22 @@ class BaseCache(ABC):
     @abstractmethod
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache"""
-        pass
 
     @abstractmethod
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Set value in cache"""
-        pass
 
     @abstractmethod
     async def delete(self, key: str) -> bool:
         """Delete value from cache"""
-        pass
 
     @abstractmethod
     async def clear(self) -> bool:
         """Clear all cache entries"""
-        pass
 
     @abstractmethod
     async def exists(self, key: str) -> bool:
         """Check if key exists in cache"""
-        pass
 
     def _generate_key(self, base_key: str, *args, **kwargs) -> str:
         """Generate cache key from base key and parameters"""
@@ -169,7 +161,10 @@ class BaseCache(ABC):
         """Serialize value for storage"""
         serialized = pickle.dumps(value)
 
-        if self.config.enable_compression and len(serialized) > self.config.compression_threshold:
+        if (
+            self.config.enable_compression
+            and len(serialized) > self.config.compression_threshold
+        ):
             try:
                 import gzip
 
@@ -234,7 +229,9 @@ class MemoryCache(BaseCache):
 
             self.metrics.hits += 1
             access_time = (time.time() - start_time) * 1000
-            self.metrics.average_access_time_ms = (self.metrics.average_access_time_ms + access_time) / 2
+            self.metrics.average_access_time_ms = (
+                self.metrics.average_access_time_ms + access_time
+            ) / 2
 
             return entry.value
 
@@ -310,7 +307,7 @@ class MemoryCache(BaseCache):
     async def _ensure_capacity(self, new_size: int):
         """Ensure cache has capacity for new entry"""
         # Check memory limit
-        current_memory_mb = self.metrics.total_size_bytes / (1024 * 1024)
+        self.metrics.total_size_bytes / (1024 * 1024)
         new_memory_mb = (self.metrics.total_size_bytes + new_size) / (1024 * 1024)
 
         if new_memory_mb > self.config.max_memory_mb:
@@ -324,7 +321,10 @@ class MemoryCache(BaseCache):
         """Evict entries to free memory"""
         target_memory = self.config.max_memory_mb * (1024 * 1024) * 0.8  # 80% of limit
 
-        while self.metrics.total_size_bytes + required_space > target_memory and self._cache:
+        while (
+            self.metrics.total_size_bytes + required_space > target_memory
+            and self._cache
+        ):
             await self._evict_single_entry()
 
     async def _evict_entries_by_count(self):
@@ -345,7 +345,9 @@ class MemoryCache(BaseCache):
         elif self.config.strategy == CacheStrategy.LFU:
             # Remove least frequently used
             if self._access_count:
-                key_to_evict = min(self._access_count.keys(), key=lambda k: self._access_count[k])
+                key_to_evict = min(
+                    self._access_count.keys(), key=lambda k: self._access_count[k]
+                )
             else:
                 key_to_evict = next(iter(self._cache)) if self._cache else None
         elif self.config.strategy == CacheStrategy.TTL:
@@ -354,7 +356,9 @@ class MemoryCache(BaseCache):
             key_to_evict = oldest_key
         else:
             # Default to LRU
-            key_to_evict = self._access_order[0] if self._access_order else next(iter(self._cache))
+            key_to_evict = (
+                self._access_order[0] if self._access_order else next(iter(self._cache))
+            )
 
         await self._evict_key(key_to_evict)
 
@@ -393,7 +397,9 @@ class RedisCache(BaseCache):
     async def _ensure_connection(self):
         """Ensure Redis connection is established"""
         if self._client is None:
-            self._client = aioredis.from_url(self.config.redis_url, encoding="utf - 8", decode_responses=False)
+            self._client = aioredis.from_url(
+                self.config.redis_url, encoding="utf - 8", decode_responses=False
+            )
 
     async def get(self, key: str) -> Optional[Any]:
         """Get value from Redis cache"""
@@ -483,7 +489,9 @@ class CacheManager:
         self.secondary_cache = self._create_secondary_cache()
         self.decorators = CacheDecorators(self)
 
-        logger.info(f"Cache manager initialized with {type(self.primary_cache).__name__}")
+        logger.info(
+            f"Cache manager initialized with {type(self.primary_cache).__name__}"
+        )
 
     def _create_primary_cache(self) -> BaseCache:
         """Create primary cache instance"""
@@ -688,7 +696,12 @@ async def demo_cache_manager():
     print("=" * 30)
 
     # Initialize cache manager
-    config = CacheConfig(strategy=CacheStrategy.LRU, max_size=1000, default_ttl=300, enable_compression=True)
+    config = CacheConfig(
+        strategy=CacheStrategy.LRU,
+        max_size=1000,
+        default_ttl=300,
+        enable_compression=True,
+    )
     cache_manager = CacheManager(config)
 
     # Test basic operations
@@ -736,7 +749,7 @@ async def demo_cache_manager():
     metrics = cache_manager.get_metrics()
     primary_metrics = metrics["primary"]
 
-    print(f"\n📊 Cache Metrics:")
+    print("\n📊 Cache Metrics:")
     print(f"   Hit ratio: {primary_metrics.hit_ratio:.1%}")
     print(f"   Entries: {primary_metrics.entry_count}")
     print(f"   Total size: {primary_metrics.total_size_bytes} bytes")

@@ -6,17 +6,13 @@ multi - modal analysis, and continuous learning capabilities.
 """
 
 import asyncio
-import hashlib
-import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
-import pandas as pd
 
 
 class ModelType(Enum):
@@ -112,7 +108,12 @@ class ModelPerformance:
         recall_avg = sum(self.recall.values()) / len(self.recall)
         f1_avg = sum(self.f1_score.values()) / len(self.f1_score)
 
-        return self.accuracy * 0.3 + precision_avg * 0.25 + recall_avg * 0.25 + f1_avg * 0.2
+        return (
+            self.accuracy * 0.3
+            + precision_avg * 0.25
+            + recall_avg * 0.25
+            + f1_avg * 0.2
+        )
 
 
 class AdvancedClassificationModel:
@@ -143,7 +144,9 @@ class AdvancedClassificationModel:
         """Make prediction on study features."""
         raise NotImplementedError("Subclasses must implement predict method")
 
-    async def predict_batch(self, features_list: List[ClassificationFeatures]) -> List[ClassificationResult]:
+    async def predict_batch(
+        self, features_list: List[ClassificationFeatures]
+    ) -> List[ClassificationResult]:
         """Make batch predictions for multiple studies."""
         results = []
         for features in features_list:
@@ -180,7 +183,9 @@ class TransformerClassificationModel(AdvancedClassificationModel):
         self, training_data: List[Dict[str, Any]], validation_data: List[Dict[str, Any]]
     ) -> ModelPerformance:
         """Train transformer model with fine - tuning."""
-        self.logger.info(f"Training transformer model {self.model_id} on {len(training_data)} samples")
+        self.logger.info(
+            f"Training transformer model {self.model_id} on {len(training_data)} samples"
+        )
 
         # Simulate training process
         # In production, this would use HuggingFace Transformers or similar
@@ -190,15 +195,38 @@ class TransformerClassificationModel(AdvancedClassificationModel):
         performance = ModelPerformance(
             model_id=self.model_id,
             accuracy=0.947,
-            precision={"RCT": 0.952, "Cohort": 0.934, "Case - Control": 0.941, "Cross - sectional": 0.953},
-            recall={"RCT": 0.948, "Cohort": 0.942, "Case - Control": 0.935, "Cross - sectional": 0.951},
-            f1_score={"RCT": 0.950, "Cohort": 0.938, "Case - Control": 0.938, "Cross - sectional": 0.952},
+            precision={
+                "RCT": 0.952,
+                "Cohort": 0.934,
+                "Case - Control": 0.941,
+                "Cross - sectional": 0.953,
+            },
+            recall={
+                "RCT": 0.948,
+                "Cohort": 0.942,
+                "Case - Control": 0.935,
+                "Cross - sectional": 0.951,
+            },
+            f1_score={
+                "RCT": 0.950,
+                "Cohort": 0.938,
+                "Case - Control": 0.938,
+                "Cross - sectional": 0.952,
+            },
             auc_roc=0.987,
-            confusion_matrix=[[195, 3, 1, 1], [2, 188, 5, 5], [1, 4, 187, 8], [0, 2, 3, 195]],
+            confusion_matrix=[
+                [195, 3, 1, 1],
+                [2, 188, 5, 5],
+                [1, 4, 187, 8],
+                [0, 2, 3, 195],
+            ],
             calibration_score=0.923,
             uncertainty_quality=0.856,
             validation_date=datetime.now().isoformat(),
-            test_dataset_info={"size": len(validation_data), "classes": self.num_classes},
+            test_dataset_info={
+                "size": len(validation_data),
+                "classes": self.num_classes,
+            },
         )
 
         self.is_trained = True
@@ -214,7 +242,14 @@ class TransformerClassificationModel(AdvancedClassificationModel):
 
         # Simulate transformer prediction
         # In production, this would use the actual model
-        class_names = ["RCT", "Cohort", "Case - Control", "Cross - sectional", "Qualitative", "Mixed - Methods"]
+        class_names = [
+            "RCT",
+            "Cohort",
+            "Case - Control",
+            "Cross - sectional",
+            "Qualitative",
+            "Mixed - Methods",
+        ]
         probabilities = np.random.dirichlet(np.ones(len(class_names)))
         predicted_idx = np.argmax(probabilities)
         predicted_class = class_names[predicted_idx]
@@ -233,7 +268,11 @@ class TransformerClassificationModel(AdvancedClassificationModel):
             conf_level = ConfidenceLevel.VERY_LOW
 
         # Generate explanation
-        explanation = f"Classified as {predicted_class} based on transformer analysis of title and abstract. Key indicators include study design terminology, methodology descriptions, and statistical analysis mentions."
+        explanation = (
+            f"Classified as {predicted_class} based on transformer analysis of title and abstract. "
+            "Key indicators include study design terminology, methodology descriptions, "
+            "and statistical analysis mentions."
+        )
 
         return ClassificationResult(
             study_id=f"study_{hash(str(features))%10000}",
@@ -250,7 +289,10 @@ class TransformerClassificationModel(AdvancedClassificationModel):
             explanation=explanation,
             model_version=self.model_id,
             prediction_timestamp=datetime.now().isoformat(),
-            uncertainty_measures={"epistemic": np.random.uniform(0.1, 0.3), "aleatoric": np.random.uniform(0.05, 0.2)},
+            uncertainty_measures={
+                "epistemic": np.random.uniform(0.1, 0.3),
+                "aleatoric": np.random.uniform(0.05, 0.2),
+            },
         )
 
 
@@ -284,11 +326,31 @@ class EnsembleClassificationModel(AdvancedClassificationModel):
         performance = ModelPerformance(
             model_id=self.model_id,
             accuracy=0.963,
-            precision={"RCT": 0.968, "Cohort": 0.954, "Case - Control": 0.961, "Cross - sectional": 0.969},
-            recall={"RCT": 0.965, "Cohort": 0.958, "Case - Control": 0.956, "Cross - sectional": 0.967},
-            f1_score={"RCT": 0.966, "Cohort": 0.956, "Case - Control": 0.958, "Cross - sectional": 0.968},
+            precision={
+                "RCT": 0.968,
+                "Cohort": 0.954,
+                "Case - Control": 0.961,
+                "Cross - sectional": 0.969,
+            },
+            recall={
+                "RCT": 0.965,
+                "Cohort": 0.958,
+                "Case - Control": 0.956,
+                "Cross - sectional": 0.967,
+            },
+            f1_score={
+                "RCT": 0.966,
+                "Cohort": 0.956,
+                "Case - Control": 0.958,
+                "Cross - sectional": 0.968,
+            },
             auc_roc=0.994,
-            confusion_matrix=[[197, 2, 1, 0], [1, 191, 3, 5], [0, 3, 191, 6], [0, 1, 2, 197]],
+            confusion_matrix=[
+                [197, 2, 1, 0],
+                [1, 191, 3, 5],
+                [0, 3, 191, 6],
+                [0, 1, 2, 197],
+            ],
             calibration_score=0.951,
             uncertainty_quality=0.892,
             validation_date=datetime.now().isoformat(),
@@ -298,7 +360,9 @@ class EnsembleClassificationModel(AdvancedClassificationModel):
         self.is_trained = True
         self.performance_history.append(performance)
 
-        self.logger.info(f"Ensemble training completed. Accuracy: {performance.accuracy:.3f}")
+        self.logger.info(
+            f"Ensemble training completed. Accuracy: {performance.accuracy:.3f}"
+        )
         return performance
 
     async def predict(self, features: ClassificationFeatures) -> ClassificationResult:
@@ -307,10 +371,19 @@ class EnsembleClassificationModel(AdvancedClassificationModel):
             raise ValueError("Ensemble model must be trained before making predictions")
 
         # Simulate ensemble prediction with higher confidence
-        class_names = ["RCT", "Cohort", "Case - Control", "Cross - sectional", "Qualitative", "Mixed - Methods"]
+        class_names = [
+            "RCT",
+            "Cohort",
+            "Case - Control",
+            "Cross - sectional",
+            "Qualitative",
+            "Mixed - Methods",
+        ]
 
         # Ensemble typically has higher confidence and better calibration
-        base_probabilities = np.random.dirichlet(np.ones(len(class_names)) * 2)  # More concentrated
+        base_probabilities = np.random.dirichlet(
+            np.ones(len(class_names)) * 2
+        )  # More concentrated
         probabilities = base_probabilities / np.sum(base_probabilities)
 
         predicted_idx = np.argmax(probabilities)
@@ -329,7 +402,11 @@ class EnsembleClassificationModel(AdvancedClassificationModel):
         else:
             conf_level = ConfidenceLevel.VERY_LOW
 
-        explanation = f"Ensemble classification as {predicted_class} with high confidence. Multiple models (transformer, gradient boosting, rule - based) reached consensus on classification based on comprehensive feature analysis."
+        explanation = (
+            f"Ensemble classification as {predicted_class} with high confidence. "
+            "Multiple models (transformer, gradient boosting, rule-based) reached consensus on classification "
+            "based on comprehensive feature analysis."
+        )
 
         return ClassificationResult(
             study_id=f"study_{hash(str(features))%10000}",
@@ -379,10 +456,15 @@ class ModelManager:
             "registered_at": datetime.now().isoformat(),
             "is_trained": model.is_trained,
         }
-        self.logger.info(f"Registered model {model.model_id} of type {model.model_type.value}")
+        self.logger.info(
+            f"Registered model {model.model_id} of type {model.model_type.value}"
+        )
 
     async def train_model(
-        self, model_id: str, training_data: List[Dict[str, Any]], validation_data: List[Dict[str, Any]]
+        self,
+        model_id: str,
+        training_data: List[Dict[str, Any]],
+        validation_data: List[Dict[str, Any]],
     ) -> ModelPerformance:
         """Train a specific model."""
         if model_id not in self.models:
@@ -409,7 +491,9 @@ class ModelManager:
 
             model = self.models[model_id]
             if not model.is_trained:
-                self.logger.warning(f"Model {model_id} not trained, skipping comparison")
+                self.logger.warning(
+                    f"Model {model_id} not trained, skipping comparison"
+                )
                 continue
 
             # Simulate model evaluation
@@ -442,7 +526,9 @@ class ModelManager:
 
         return results
 
-    async def select_best_model(self, comparison_results: Dict[str, ModelPerformance]) -> str:
+    async def select_best_model(
+        self, comparison_results: Dict[str, ModelPerformance]
+    ) -> str:
         """Select the best performing model based on comparison results."""
         best_model_id = None
         best_score = 0
@@ -455,11 +541,15 @@ class ModelManager:
 
         if best_model_id:
             self.active_model_id = best_model_id
-            self.logger.info(f"Selected {best_model_id} as active model with score {best_score:.3f}")
+            self.logger.info(
+                f"Selected {best_model_id} as active model with score {best_score:.3f}"
+            )
 
         return best_model_id
 
-    async def predict_with_active_model(self, features: ClassificationFeatures) -> ClassificationResult:
+    async def predict_with_active_model(
+        self, features: ClassificationFeatures
+    ) -> ClassificationResult:
         """Make prediction using the currently active model."""
         if not self.active_model_id:
             raise ValueError("No active model selected")
@@ -470,7 +560,9 @@ class ModelManager:
         model = self.models[self.active_model_id]
         return await model.predict(features)
 
-    async def a_b_test_models(self, model_a_id: str, model_b_id: str, test_ratio: float = 0.5) -> Dict[str, Any]:
+    async def a_b_test_models(
+        self, model_a_id: str, model_b_id: str, test_ratio: float = 0.5
+    ) -> Dict[str, Any]:
         """Perform A / B testing between two models."""
         self.logger.info(f"Starting A / B test between {model_a_id} and {model_b_id}")
 
@@ -534,7 +626,9 @@ class ModelManager:
             if hasattr(self.database, "store_model_performance"):
                 self.database.store_model_performance(performance_data)
             else:
-                self.logger.info(f"Model performance storage not implemented. Performance: {performance.model_id}")
+                self.logger.info(
+                    f"Model performance storage not implemented. Performance: {performance.model_id}"
+                )
 
         except Exception as e:
             self.logger.error(f"Failed to store model performance: {e}")
@@ -550,7 +644,9 @@ async def demonstrate_advanced_classification():
     # Mock database for demonstration
     class MockDatabase:
         def store_model_performance(self, data):
-            print(f"📊 Model performance stored: {data['model_id']} (accuracy: {data['accuracy']:.3f})")
+            print(
+                f"📊 Model performance stored: {data['model_id']} (accuracy: {data['accuracy']:.3f})"
+            )
 
     # Initialize model manager
     db = MockDatabase()
@@ -566,7 +662,9 @@ async def demonstrate_advanced_classification():
         "num_classes": 13,
         "fine_tune_layers": 2,
     }
-    transformer_model = TransformerClassificationModel("transformer_v1", transformer_config)
+    transformer_model = TransformerClassificationModel(
+        "transformer_v1", transformer_config
+    )
     manager.register_model(transformer_model)
 
     # Create and register ensemble model
@@ -585,8 +683,12 @@ async def demonstrate_advanced_classification():
 
     # Generate mock training data
     print("📚 Generating training and validation datasets...")
-    training_data = [{"study_id": f"train_{i}", "label": f"class_{i % 6}"} for i in range(1000)]
-    validation_data = [{"study_id": f"val_{i}", "label": f"class_{i % 6}"} for i in range(200)]
+    training_data = [
+        {"study_id": f"train_{i}", "label": f"class_{i % 6}"} for i in range(1000)
+    ]
+    validation_data = [
+        {"study_id": f"val_{i}", "label": f"class_{i % 6}"} for i in range(200)
+    ]
 
     print(f"   Training set: {len(training_data)} samples")
     print(f"   Validation set: {len(validation_data)} samples")
@@ -594,17 +696,27 @@ async def demonstrate_advanced_classification():
     # Train models
     print("\n🎯 Training models...")
 
-    transformer_performance = await manager.train_model("transformer_v1", training_data, validation_data)
-    print(f"   ✅ Transformer trained - Accuracy: {transformer_performance.accuracy:.3f}")
+    transformer_performance = await manager.train_model(
+        "transformer_v1", training_data, validation_data
+    )
+    print(
+        f"   ✅ Transformer trained - Accuracy: {transformer_performance.accuracy:.3f}"
+    )
 
-    ensemble_performance = await manager.train_model("ensemble_v1", training_data, validation_data)
+    ensemble_performance = await manager.train_model(
+        "ensemble_v1", training_data, validation_data
+    )
     print(f"   ✅ Ensemble trained - Accuracy: {ensemble_performance.accuracy:.3f}")
 
     # Compare models
     print("\n📊 Comparing model performance...")
-    test_data = [{"study_id": f"test_{i}", "label": f"class_{i % 6}"} for i in range(100)]
+    test_data = [
+        {"study_id": f"test_{i}", "label": f"class_{i % 6}"} for i in range(100)
+    ]
 
-    comparison_results = await manager.compare_models(["transformer_v1", "ensemble_v1"], test_data)
+    comparison_results = await manager.compare_models(
+        ["transformer_v1", "ensemble_v1"], test_data
+    )
 
     print("   Model Comparison Results:")
     for model_id, performance in comparison_results.items():
@@ -622,8 +734,14 @@ async def demonstrate_advanced_classification():
 
     # Create sample features
     sample_features = ClassificationFeatures(
-        title_features={"length": 120, "keywords": ["randomized", "controlled", "trial"]},
-        abstract_features={"length": 1500, "methodology_terms": ["randomization", "blinding"]},
+        title_features={
+            "length": 120,
+            "keywords": ["randomized", "controlled", "trial"],
+        },
+        abstract_features={
+            "length": 1500,
+            "methodology_terms": ["randomization", "blinding"],
+        },
         author_features={"count": 5, "institutions": 3},
         journal_features={"impact_factor": 8.5, "field": "medicine"},
         metadata_features={"year": 2024, "country": "USA"},
@@ -633,46 +751,52 @@ async def demonstrate_advanced_classification():
 
     prediction = await manager.predict_with_active_model(sample_features)
 
-    print(f"   🎯 Prediction Results:")
+    print("   🎯 Prediction Results:")
     print(f"     Study ID: {prediction.study_id}")
     print(f"     Predicted Class: {prediction.predicted_class}")
-    print(f"     Confidence: {prediction.confidence_score:.3f} ({prediction.confidence_level.value})")
-    print(f"     Top Probabilities:")
+    print(
+        f"     Confidence: {prediction.confidence_score:.3f} ({prediction.confidence_level.value})"
+    )
+    print("     Top Probabilities:")
 
-    sorted_probs = sorted(prediction.class_probabilities.items(), key=lambda x: x[1], reverse=True)
+    sorted_probs = sorted(
+        prediction.class_probabilities.items(), key=lambda x: x[1], reverse=True
+    )
     for class_name, prob in sorted_probs[:3]:
         print(f"       {class_name}: {prob:.3f}")
 
     print(f"   📝 Explanation: {prediction.explanation}")
 
     # Demonstrate A / B testing
-    print("\n🔬 Performing A / B testing...")
+    print("\n🔬 Performing A/B testing...")
     ab_results = await manager.a_b_test_models("transformer_v1", "ensemble_v1")
 
-    print(f"   A / B Test Results:")
+    print("   A/B Test Results:")
     print(f"     Test ID: {ab_results['test_id']}")
     print(f"     Winner: {ab_results['winner']}")
     print(f"     Score Difference: {ab_results['score_difference']:.3f}")
-    print(f"     Model A (Transformer): Accuracy {ab_results['model_a']['accuracy']:.3f}")
+    print(
+        f"     Model A (Transformer): Accuracy {ab_results['model_a']['accuracy']:.3f}"
+    )
     print(f"     Model B (Ensemble): Accuracy {ab_results['model_b']['accuracy']:.3f}")
 
     # Model registry summary
-    print(f"\n📋 Model Registry Summary:")
+    print("\n📋 Model Registry Summary:")
     for model_id, info in manager.model_registry.items():
         print(f"   {model_id}:")
         print(f"     Type: {info['model_type']}")
         print(f"     Trained: {info['is_trained']}")
         print(f"     Registered: {info['registered_at']}")
 
-    print(f"\n✅ Phase 4A Advanced Classification Models demonstration completed!")
+    print("\n✅ Phase 4A Advanced Classification Models demonstration completed!")
     print(f"   Models trained: {len(manager.models)}")
     print(f"   Active model: {manager.active_model_id}")
-    print(f"   Best accuracy achieved: {max(p.accuracy for p in [transformer_performance, ensemble_performance]):.3f}")
+    print(
+        f"   Best accuracy achieved: {max(p.accuracy for p in [transformer_performance, ensemble_performance]):.3f}"
+    )
 
     return manager, comparison_results, ab_results
 
 
 if __name__ == "__main__":
-    import asyncio
-
     asyncio.run(demonstrate_advanced_classification())

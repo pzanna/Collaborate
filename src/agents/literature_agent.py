@@ -6,27 +6,25 @@ and information retrieval tasks for the Eunice research platform.
 """
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
-from urllib.parse import quote_plus, urljoin
+from typing import Any, Dict, List, Optional
 
+from ..ai_clients.openai_client import AIProviderConfig as OpenAIConfig
+from ..ai_clients.openai_client import OpenAIClient
+from ..ai_clients.xai_client import AIProviderConfig as XAIConfig
+from ..ai_clients.xai_client import XAIClient
 from ..config.config_manager import ConfigManager
 from ..external.academic_cache import AcademicCacheManager
-from ..external.database_connectors import (
-    ArxivConnector,
-    DatabaseConnector,
-    DatabaseManager,
-    DatabaseSearchQuery,
-    DatabaseType,
-    ExternalSearchResult,
-    PubMedConnector,
-    SemanticScholarConnector,
-)
+from ..external.database_connectors import (ArxivConnector, DatabaseManager,
+                                            DatabaseSearchQuery, DatabaseType,
+                                            ExternalSearchResult,
+                                            PubMedConnector,
+                                            SemanticScholarConnector)
 from ..mcp.protocols import ResearchAction
-from ..utils.error_handler import ErrorHandler
-from .base_agent import AgentStatus, BaseAgent
+from .base_agent import BaseAgent
 
 
 class LiteratureAgent(BaseAgent):
@@ -67,7 +65,9 @@ class LiteratureAgent(BaseAgent):
         self.max_concurrent_searches = 3
 
         # SSL configuration for API connections
-        self.verify_ssl = True  # Can be set to False for development environments with cert issues
+        self.verify_ssl = (
+            True  # Can be set to False for development environments with cert issues
+        )
         try:
             # Check if SSL verification should be disabled via config
             self.verify_ssl = config_manager.get("ssl_verification", True)
@@ -84,6 +84,47 @@ class LiteratureAgent(BaseAgent):
         self._setup_literature_logging()
 
         self.logger.info("LiteratureAgent initialized")
+        # Initialize AI clients for literature agent
+        self.ai_clients: Dict[str, Any] = {}
+        # Load AI provider configurations
+        try:
+            providers = self.config.config.ai_providers
+        except AttributeError:
+            providers = {}
+        # OpenAI client
+        if "openai" in providers and providers.get("openai") is not None:
+            api_key = self.config.get_api_key("openai")
+            conf = providers["openai"]
+            client_conf = OpenAIConfig(
+                provider=conf.provider,
+                model=conf.model,
+                temperature=conf.temperature,
+                max_tokens=conf.max_tokens,
+                system_prompt=conf.system_prompt,
+                metadata=conf.metadata,
+            )
+            self.ai_clients["openai"] = OpenAIClient(
+                api_key=api_key, config=client_conf
+            )
+        # XAI client
+        if "xai" in providers and providers.get("xai") is not None:
+            api_key = self.config.get_api_key("xai")
+            conf = providers["xai"]
+            client_conf = XAIConfig(
+                provider=conf.provider,
+                model=conf.model,
+                temperature=conf.temperature,
+                max_tokens=conf.max_tokens,
+                system_prompt=conf.system_prompt,
+                metadata=conf.metadata,
+            )
+            self.ai_clients["xai"] = XAIClient(api_key=api_key, config=client_conf)
+        # Default client selection
+        self.default_client = self.ai_clients.get("openai") or self.ai_clients.get(
+            "xai"
+        )
+        if not self.default_client:
+            raise RuntimeError("No AI client available for literature agent")
 
     def _setup_literature_logging(self) -> None:
         """Set up dedicated logging for Literature Agent activities."""
@@ -104,7 +145,8 @@ class LiteratureAgent(BaseAgent):
 
             # Create formatter
             formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
             )
             file_handler.setFormatter(formatter)
 
@@ -113,12 +155,45 @@ class LiteratureAgent(BaseAgent):
 
         self.literature_logger.info("Literature Agent logging initialized")
 
+    async def _get_ai_response(self, prompt: str) -> str:
+        """
+        Get response from AI client.
+
+        Args:
+            prompt: Input prompt
+
+        Returns:
+            str: AI response
+        """
+        if not self.default_client:
+            raise RuntimeError("No AI client available")
+        # Type guard for type checkers: default_client is now non-None
+        client = self.default_client
+        assert client is not None  # type checker: default_client now non-None
+
+        try:
+            # Get response using the correct method name
+            # The AI client expects string parameters, not Message objects
+            # Use run_in_executor to handle the synchronous AI client call
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, lambda: client.get_response(user_message=prompt)
+            )
+
+            return str(response)
+
+        except Exception as e:
+            self.logger.error(f"AI response generation failed: {e}")
+            return f"Error generating response: {str(e)}"
+
     def _init_database_connectors(self) -> None:
         """Initialize database connectors with API keys from config."""
         try:
             # Initialize PubMed connector
             try:
-                pubmed_api_key = self.config.get_api_key("pubmed") or self.config.get_api_key("ncbi")
+                pubmed_api_key = self.config.get_api_key(
+                    "pubmed"
+                ) or self.config.get_api_key("ncbi")
             except ValueError:
                 pubmed_api_key = None
                 self.logger.debug("PubMed / NCBI API key not configured")
@@ -137,7 +212,9 @@ class LiteratureAgent(BaseAgent):
                 semantic_scholar_api_key = None
                 self.logger.debug("Semantic Scholar API key not configured")
 
-            semantic_scholar_connector = SemanticScholarConnector(api_key=semantic_scholar_api_key)
+            semantic_scholar_connector = SemanticScholarConnector(
+                api_key=semantic_scholar_api_key
+            )
             self.db_manager.add_connector(semantic_scholar_connector)
 
             self.logger.info("Database connectors initialized")
@@ -163,7 +240,9 @@ class LiteratureAgent(BaseAgent):
 
         # Check cache first
         if use_cache and self.enable_caching:
-            cached_results = await self.cache_manager.get_cached_results(query, "semantic_scholar", **cache_key_params)
+            cached_results = await self.cache_manager.get_cached_results(
+                query, "semantic_scholar", **cache_key_params
+            )
             if cached_results:
                 return cached_results
 
@@ -196,7 +275,12 @@ class LiteratureAgent(BaseAgent):
             # Cache results if found
             if results and use_cache and self.enable_caching:
                 await self.cache_manager.cache_results(
-                    query, "semantic_scholar", results, self.cache_duration, "semantic_scholar", **cache_key_params
+                    query,
+                    "semantic_scholar",
+                    results,
+                    self.cache_duration,
+                    "semantic_scholar",
+                    **cache_key_params,
                 )
 
             self.literature_logger.info(
@@ -206,7 +290,9 @@ class LiteratureAgent(BaseAgent):
 
         except Exception as e:
             self.logger.error(f"Semantic Scholar search failed: {e}")
-            self.literature_logger.error(f"❌ Semantic Scholar Search Failed: '{query}' | Error: {str(e)}")
+            self.literature_logger.error(
+                f"❌ Semantic Scholar Search Failed: '{query}' | Error: {str(e)}"
+            )
             return []
 
     async def search_pubmed_structured(
@@ -238,7 +324,9 @@ class LiteratureAgent(BaseAgent):
 
         # Check cache first
         if use_cache and self.enable_caching:
-            cached_results = await self.cache_manager.get_cached_results(query, "pubmed_structured", **cache_key_params)
+            cached_results = await self.cache_manager.get_cached_results(
+                query, "pubmed_structured", **cache_key_params
+            )
             if cached_results:
                 return cached_results
 
@@ -259,15 +347,24 @@ class LiteratureAgent(BaseAgent):
             )
 
             # Execute search using database connector
-            pubmed_results = await self.db_manager.search_multiple_databases(db_query, [DatabaseType.PUBMED])
+            pubmed_results = await self.db_manager.search_multiple_databases(
+                db_query, [DatabaseType.PUBMED]
+            )
 
             # Convert to Literature Agent format
-            results = self._convert_external_results_to_literature_format(pubmed_results.get(DatabaseType.PUBMED, []))
+            results = self._convert_external_results_to_literature_format(
+                pubmed_results.get(DatabaseType.PUBMED, [])
+            )
 
             # Cache results
             if results and use_cache and self.enable_caching:
                 await self.cache_manager.cache_results(
-                    query, "pubmed_structured", results, self.cache_duration, "pubmed", **cache_key_params
+                    query,
+                    "pubmed_structured",
+                    results,
+                    self.cache_duration,
+                    "pubmed",
+                    **cache_key_params,
                 )
 
             self.literature_logger.info(
@@ -277,11 +374,17 @@ class LiteratureAgent(BaseAgent):
 
         except Exception as e:
             self.logger.error(f"PubMed structured search failed: {e}")
-            self.literature_logger.error(f"❌ PubMed Search Failed: '{query}' | Error: {str(e)}")
+            self.literature_logger.error(
+                f"❌ PubMed Search Failed: '{query}' | Error: {str(e)}"
+            )
             return []
 
     async def search_arxiv_structured(
-        self, query: str, max_results: int = 10, search_fields: Optional[List[str]] = None, use_cache: bool = True
+        self,
+        query: str,
+        max_results: int = 10,
+        search_fields: Optional[List[str]] = None,
+        use_cache: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Search arXiv using structured database connector with caching.
@@ -295,11 +398,16 @@ class LiteratureAgent(BaseAgent):
         Returns:
             List[Dict[str, Any]]: Search results in Literature Agent format
         """
-        cache_key_params = {"max_results": max_results, "search_fields": search_fields or []}
+        cache_key_params = {
+            "max_results": max_results,
+            "search_fields": search_fields or [],
+        }
 
         # Check cache first
         if use_cache and self.enable_caching:
-            cached_results = await self.cache_manager.get_cached_results(query, "arxiv_structured", **cache_key_params)
+            cached_results = await self.cache_manager.get_cached_results(
+                query, "arxiv_structured", **cache_key_params
+            )
             if cached_results:
                 return cached_results
 
@@ -320,15 +428,24 @@ class LiteratureAgent(BaseAgent):
             )
 
             # Execute search using database connector
-            arxiv_results = await self.db_manager.search_multiple_databases(db_query, [DatabaseType.ARXIV])
+            arxiv_results = await self.db_manager.search_multiple_databases(
+                db_query, [DatabaseType.ARXIV]
+            )
 
             # Convert to Literature Agent format
-            results = self._convert_external_results_to_literature_format(arxiv_results.get(DatabaseType.ARXIV, []))
+            results = self._convert_external_results_to_literature_format(
+                arxiv_results.get(DatabaseType.ARXIV, [])
+            )
 
             # Cache results
             if results and use_cache and self.enable_caching:
                 await self.cache_manager.cache_results(
-                    query, "arxiv_structured", results, self.cache_duration, "arxiv", **cache_key_params
+                    query,
+                    "arxiv_structured",
+                    results,
+                    self.cache_duration,
+                    "arxiv",
+                    **cache_key_params,
                 )
 
             self.literature_logger.info(
@@ -338,8 +455,70 @@ class LiteratureAgent(BaseAgent):
 
         except Exception as e:
             self.logger.error(f"arXiv structured search failed: {e}")
-            self.literature_logger.error(f"❌ arXiv Search Failed: '{query}' | Error: {str(e)}")
+            self.literature_logger.error(
+                f"❌ arXiv Search Failed: '{query}' | Error: {str(e)}"
+            )
             return []
+
+    async def search_term_generator(
+        self, plan: Dict[str, Any], max_results_per_source: int = 10
+    ):
+        """
+        Uses AI to generate search terms for comprehensive academic search.
+
+        Args:
+            query: Research plan in json format
+            max_results_per_source: Max results to return
+
+        Returns:
+            List[Dict[str, Any]]: Search results in Literature Agent format
+        """
+
+        if not plan:
+            raise ValueError("Plan is required for research planning")
+
+        # Create research planning prompt
+        prompt = (
+            "You are a scientific search-strategy assistant. When given a research plan, "
+            "reply ONLY with VALID JSON matching the schema in the instruction, "
+            "containing highly targeted literature-search phrases ready for PubMed / "
+            "Web of Science / Google Scholar. Do not add commentary or markdown.\n\n"
+            f"Plan: {plan}\n\n"
+            "Format your response in JSON with the following structure:\n"
+            "{\n"
+            '    "topic 1": ["Search String 1", "Search String 2", ...],\n'
+            '    "topic 2": ["Search String 1", "Search String 2", ...],\n'
+            '    "topic 3": ["Search String 1", "Search String 2", ...],\n'
+            "    ...\n"
+            "}\n"
+            "Ensure the search strings are specific, relevant, and suitable for "
+            "academic databases.\n"
+        )
+
+        # Get AI response
+        response = await self._get_ai_response(prompt)
+        # Prepare final results list
+        final_results: List[Dict[str, Any]] = []
+        if response:
+            try:
+                # Parse the JSON response and call comprehensive_academic_search for each search string
+                search_terms = json.loads(response)
+                for topic, terms in search_terms.items():
+                    for term in terms:
+                        results = await self.comprehensive_academic_search(term)
+                        # Add the results to the final output
+                        final_results.append(
+                            {
+                                "topic": topic,
+                                "search_string": term,
+                                "results": results,
+                            }
+                        )
+
+            except json.JSONDecodeError:
+                self.logger.error("Failed to parse AI response")
+
+        return final_results
 
     async def comprehensive_academic_search(
         self,
@@ -364,21 +543,35 @@ class LiteratureAgent(BaseAgent):
         Returns:
             Dict[str, List[Dict[str, Any]]]: Results from each source
         """
-        self.literature_logger.info(
-            f"🔍 Comprehensive Academic Search: '{query}' | PubMed: {include_pubmed} | arXiv: {include_arxiv} | Semantic Scholar: {include_semantic_scholar} | Max per source: {max_results_per_source}"
+        self.logger.info(
+            f"🔍 Comprehensive Academic Search: '{query}' | PubMed: {include_pubmed} | "
+            f"arXiv: {include_arxiv} | Semantic Scholar: {include_semantic_scholar} | "
+            f"Max per source: {max_results_per_source}"
         )
 
         # Prepare search tasks
         search_tasks = []
 
         if include_pubmed:
-            search_tasks.append(self.search_pubmed_structured(query, max_results_per_source, use_cache=use_cache))
+            search_tasks.append(
+                self.search_pubmed_structured(
+                    query, max_results_per_source, use_cache=use_cache
+                )
+            )
 
         if include_arxiv:
-            search_tasks.append(self.search_arxiv_structured(query, max_results_per_source, use_cache=use_cache))
+            search_tasks.append(
+                self.search_arxiv_structured(
+                    query, max_results_per_source, use_cache=use_cache
+                )
+            )
 
         if include_semantic_scholar:
-            search_tasks.append(self.search_semantic_scholar_cached(query, max_results_per_source, use_cache=use_cache))
+            search_tasks.append(
+                self.search_semantic_scholar_cached(
+                    query, max_results_per_source, use_cache=use_cache
+                )
+            )
 
         # Execute searches concurrently with semaphore to limit concurrent requests
         semaphore = asyncio.Semaphore(self.max_concurrent_searches)
@@ -388,7 +581,9 @@ class LiteratureAgent(BaseAgent):
                 return await search_coro
 
         # Execute searches
-        results = await asyncio.gather(*[limited_search(task) for task in search_tasks], return_exceptions=True)
+        results = await asyncio.gather(
+            *[limited_search(task) for task in search_tasks], return_exceptions=True
+        )
 
         # Organize results by source
         academic_results = {}
@@ -406,17 +601,22 @@ class LiteratureAgent(BaseAgent):
 
             if isinstance(result, Exception):
                 self.logger.error(f"Search failed for {source_name}: {result}")
-                self.literature_logger.error(f"❌ {source_name.title()} Search Failed: {str(result)}")
+                self.literature_logger.error(
+                    f"❌ {source_name.title()} Search Failed: {str(result)}"
+                )
                 academic_results[source_name] = []
             else:
                 academic_results[source_name] = result or []
 
         # Log summary
         total_results = sum(len(results) for results in academic_results.values())
-        sources_used = [source for source, results in academic_results.items() if results]
+        sources_used = [
+            source for source, results in academic_results.items() if results
+        ]
 
         self.literature_logger.info(
-            f"📊 Comprehensive Search Complete: {total_results} total results from {len(sources_used)} sources | Sources: {', '.join(sources_used) if sources_used else 'None'}"
+            f"📊 Comprehensive Search Complete: {total_results} total results from {len(sources_used)} sources | "
+            f"Sources: {', '.join(sources_used) if sources_used else 'None'}"
         )
 
         return academic_results
@@ -449,14 +649,20 @@ class LiteratureAgent(BaseAgent):
                 content_parts.append(f"Journal: {result.journal}")
 
             if result.publication_date:
-                content_parts.append(f"Published: {result.publication_date.strftime('%Y-%m-%d')}")
+                content_parts.append(
+                    f"Published: {result.publication_date.strftime('%Y-%m-%d')}"
+                )
 
             if result.citation_count:
                 content_parts.append(f"Citations: {result.citation_count}")
 
             if result.abstract:
                 # Add first 200 characters of abstract
-                abstract_preview = result.abstract[:200] + "..." if len(result.abstract) > 200 else result.abstract
+                abstract_preview = (
+                    result.abstract[:200] + "..."
+                    if len(result.abstract) > 200
+                    else result.abstract
+                )
                 content_parts.append(f"Abstract: {abstract_preview}")
 
             content = " | ".join(content_parts)
@@ -483,7 +689,11 @@ class LiteratureAgent(BaseAgent):
                     "external_id": result.external_id,
                     "authors": result.authors,
                     "journal": result.journal,
-                    "publication_date": result.publication_date.isoformat() if result.publication_date else None,
+                    "publication_date": (
+                        result.publication_date.isoformat()
+                        if result.publication_date
+                        else None
+                    ),
                     "doi": result.doi,
                     "pmid": result.pmid,
                     "keywords": result.keywords,
@@ -555,7 +765,9 @@ class LiteratureAgent(BaseAgent):
                     seen_pmids.add(pmid)
                 seen_titles.add(title_normalized)
 
-        self.logger.info(f"Deduplication: {len(all_results)} -> {len(unique_results)} unique results")
+        self.logger.info(
+            f"Deduplication: {len(all_results)} -> {len(unique_results)} unique results"
+        )
         return unique_results
 
     async def get_cache_stats(self) -> Dict[str, Any]:
@@ -617,7 +829,9 @@ class LiteratureAgent(BaseAgent):
                     "sources_used": [],
                 }
 
-            self.literature_logger.info(f"Starting academic paper search for query: {query}")
+            self.literature_logger.info(
+                f"Starting academic paper search for query: {query}"
+            )
 
             # Perform comprehensive search across databases
             results_by_source = await self.comprehensive_academic_search(
@@ -631,7 +845,9 @@ class LiteratureAgent(BaseAgent):
 
             # Deduplicate results if requested
             if deduplicate:
-                final_results = await self.deduplicate_academic_results(results_by_source)
+                final_results = await self.deduplicate_academic_results(
+                    results_by_source
+                )
             else:
                 # Flatten results without deduplication
                 final_results = []
@@ -646,7 +862,9 @@ class LiteratureAgent(BaseAgent):
                 final_results = final_results[:max_results]
 
             # Compile search metadata
-            sources_used = [source for source, results in results_by_source.items() if results]
+            sources_used = [
+                source for source, results in results_by_source.items() if results
+            ]
             total_results = len(final_results)
 
             self.literature_logger.info(
@@ -663,13 +881,22 @@ class LiteratureAgent(BaseAgent):
                     "max_results_requested": max_results,
                     "deduplicated": deduplicate,
                     "cached": use_cache,
-                    "results_by_source": {source: len(results) for source, results in results_by_source.items()},
+                    "results_by_source": {
+                        source: len(results)
+                        for source, results in results_by_source.items()
+                    },
                 },
             }
 
         except Exception as e:
             self.logger.error(f"Academic paper search failed: {e}")
-            return {"success": False, "error": str(e), "results": [], "total_results": 0, "sources_used": []}
+            return {
+                "success": False,
+                "error": str(e),
+                "results": [],
+                "total_results": 0,
+                "sources_used": [],
+            }
 
     def _get_capabilities(self) -> List[str]:
         """Get literature agent capabilities."""
@@ -681,7 +908,9 @@ class LiteratureAgent(BaseAgent):
         """Initialize literature - specific resources."""
         # Literature Agent now only uses academic connector for external access
         # No direct HTTP session needed
-        self.logger.info("LiteratureAgent initialized - using academic connector for external access")
+        self.logger.info(
+            "LiteratureAgent initialized - using academic connector for external access"
+        )
 
     async def _initialize_agent(self) -> None:
         """Initialize literature agent resources."""

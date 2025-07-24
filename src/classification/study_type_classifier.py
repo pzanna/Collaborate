@@ -5,13 +5,12 @@ This module provides automated study design classification capabilities for syst
 enabling proper routing to appropriate quality assessment tools and synthesis methods.
 """
 
-import json
 import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class StudyDesign(Enum):
@@ -166,8 +165,15 @@ class StudyTypeClassifier:
                 r"\bobservational\b",
             ],
             StudyDesign.CASE_CONTROL: [r"\bcase\s * control\b", r"\bretrospec\w*\b"],
-            StudyDesign.CROSS_SECTIONAL: [r"\bcross\s * sectional\b", r"\bsurvey\b", r"\bprevalence\b"],
-            StudyDesign.SYSTEMATIC_REVIEW: [r"\bsystematic\s * review\b", r"\bmeta\s * analysis\b"],
+            StudyDesign.CROSS_SECTIONAL: [
+                r"\bcross\s * sectional\b",
+                r"\bsurvey\b",
+                r"\bprevalence\b",
+            ],
+            StudyDesign.SYSTEMATIC_REVIEW: [
+                r"\bsystematic\s * review\b",
+                r"\bmeta\s * analysis\b",
+            ],
             StudyDesign.QUALITATIVE: [
                 r"\bqualitative\b",
                 r"\binterview\b",
@@ -177,7 +183,9 @@ class StudyTypeClassifier:
             ],
         }
 
-    async def classify_study_design(self, study_record: Dict[str, Any]) -> ClassificationResult:
+    async def classify_study_design(
+        self, study_record: Dict[str, Any]
+    ) -> ClassificationResult:
         """
         Classify study design and extract characteristics.
 
@@ -187,7 +195,9 @@ class StudyTypeClassifier:
         Returns:
             Classification result with study characteristics and routing information
         """
-        self.logger.info(f"Classifying study design for study {study_record.get('id', 'unknown')}")
+        self.logger.info(
+            f"Classifying study design for study {study_record.get('id', 'unknown')}"
+        )
 
         try:
             # Extract study characteristics using AI and rule - based methods
@@ -212,15 +222,21 @@ class StudyTypeClassifier:
             # Store classification result
             await self._store_classification_result(result)
 
-            self.logger.info(f"Classified study {study_record.get('id')} as {characteristics.study_design.value}")
+            self.logger.info(
+                f"Classified study {study_record.get('id')} as {characteristics.study_design.value}"
+            )
             return result
 
         except Exception as e:
-            self.logger.error(f"Failed to classify study {study_record.get('id', 'unknown')}: {e}")
+            self.logger.error(
+                f"Failed to classify study {study_record.get('id', 'unknown')}: {e}"
+            )
             # Return default classification
             return self._create_default_classification(study_record)
 
-    async def batch_classify_studies(self, study_records: List[Dict[str, Any]]) -> List[ClassificationResult]:
+    async def batch_classify_studies(
+        self, study_records: List[Dict[str, Any]]
+    ) -> List[ClassificationResult]:
         """
         Classify multiple studies in batch.
 
@@ -238,7 +254,9 @@ class StudyTypeClassifier:
                 result = await self.classify_study_design(study_record)
                 results.append(result)
             except Exception as e:
-                self.logger.warning(f"Failed to classify study {study_record.get('id', 'unknown')}: {e}")
+                self.logger.warning(
+                    f"Failed to classify study {study_record.get('id', 'unknown')}: {e}"
+                )
                 results.append(self._create_default_classification(study_record))
 
         self.logger.info(f"Completed batch classification of {len(results)} studies")
@@ -256,7 +274,9 @@ class StudyTypeClassifier:
         """
         return self._route_quality_assessment(study_design)
 
-    async def _extract_study_characteristics(self, study_record: Dict[str, Any]) -> StudyCharacteristics:
+    async def _extract_study_characteristics(
+        self, study_record: Dict[str, Any]
+    ) -> StudyCharacteristics:
         """Extract detailed study characteristics using AI and rule - based methods."""
 
         # Combine title and abstract for analysis
@@ -328,12 +348,37 @@ class StudyTypeClassifier:
         text_lower = text.lower()
 
         intervention_patterns = {
-            InterventionType.PHARMACOLOGICAL: [r"\bdrug\b", r"\bmedication\b", r"\bpharma\w*\b"],
-            InterventionType.SURGICAL: [r"\bsurg\w*\b", r"\boperation\b", r"\bprocedure\b"],
-            InterventionType.BEHAVIORAL: [r"\bbehavior\w*\b", r"\btherapy\b", r"\bcounseling\b"],
-            InterventionType.EDUCATIONAL: [r"\beducation\w*\b", r"\btraining\b", r"\bteaching\b"],
-            InterventionType.TECHNOLOGICAL: [r"\btechnology\b", r"\bdevice\b", r"\bsoftware\b", r"\bai\b"],
-            InterventionType.DIAGNOSTIC: [r"\bdiagno\w*\b", r"\bscreen\w*\b", r"\btest\w*\b"],
+            InterventionType.PHARMACOLOGICAL: [
+                r"\bdrug\b",
+                r"\bmedication\b",
+                r"\bpharma\w*\b",
+            ],
+            InterventionType.SURGICAL: [
+                r"\bsurg\w*\b",
+                r"\boperation\b",
+                r"\bprocedure\b",
+            ],
+            InterventionType.BEHAVIORAL: [
+                r"\bbehavior\w*\b",
+                r"\btherapy\b",
+                r"\bcounseling\b",
+            ],
+            InterventionType.EDUCATIONAL: [
+                r"\beducation\w*\b",
+                r"\btraining\b",
+                r"\bteaching\b",
+            ],
+            InterventionType.TECHNOLOGICAL: [
+                r"\btechnology\b",
+                r"\bdevice\b",
+                r"\bsoftware\b",
+                r"\bai\b",
+            ],
+            InterventionType.DIAGNOSTIC: [
+                r"\bdiagno\w*\b",
+                r"\bscreen\w*\b",
+                r"\btest\w*\b",
+            ],
         }
 
         for intervention_type, patterns in intervention_patterns.items():
@@ -387,7 +432,12 @@ class StudyTypeClassifier:
     def _extract_study_duration(self, text: str) -> Optional[str]:
         """Extract study duration from text."""
 
-        duration_patterns = [r"(\d+)\s + months?", r"(\d+)\s + years?", r"(\d+)\s + weeks?", r"(\d+)\s + days?"]
+        duration_patterns = [
+            r"(\d+)\s + months?",
+            r"(\d+)\s + years?",
+            r"(\d+)\s + weeks?",
+            r"(\d+)\s + days?",
+        ]
 
         for pattern in duration_patterns:
             match = re.search(pattern, text.lower())
@@ -416,7 +466,10 @@ class StudyTypeClassifier:
     def _extract_secondary_outcomes(self, text: str) -> List[str]:
         """Extract secondary outcomes from text."""
 
-        secondary_patterns = [r"secondary\s + outcomes?[:\s]+([^.]+)", r"secondary\s + endpoints?[:\s]+([^.]+)"]
+        secondary_patterns = [
+            r"secondary\s + outcomes?[:\s]+([^.]+)",
+            r"secondary\s + endpoints?[:\s]+([^.]+)",
+        ]
 
         outcomes = []
         for pattern in secondary_patterns:
@@ -426,7 +479,9 @@ class StudyTypeClassifier:
                 # Split on common separators
                 for separator in [",", ";", " and ", "&"]:
                     if separator in outcome_text:
-                        outcomes.extend([o.strip() for o in outcome_text.split(separator)])
+                        outcomes.extend(
+                            [o.strip() for o in outcome_text.split(separator)]
+                        )
                         break
                 else:
                     outcomes.append(outcome_text)
@@ -454,7 +509,10 @@ class StudyTypeClassifier:
     def _extract_inclusion_criteria(self, text: str) -> List[str]:
         """Extract inclusion criteria from text."""
 
-        criteria_patterns = [r"inclusion\s + criteria[:\s]+([^.]+)", r"included\s + if[:\s]+([^.]+)"]
+        criteria_patterns = [
+            r"inclusion\s + criteria[:\s]+([^.]+)",
+            r"included\s + if[:\s]+([^.]+)",
+        ]
 
         criteria = []
         for pattern in criteria_patterns:
@@ -469,7 +527,10 @@ class StudyTypeClassifier:
     def _extract_exclusion_criteria(self, text: str) -> List[str]:
         """Extract exclusion criteria from text."""
 
-        criteria_patterns = [r"exclusion\s + criteria[:\s]+([^.]+)", r"excluded\s + if[:\s]+([^.]+)"]
+        criteria_patterns = [
+            r"exclusion\s + criteria[:\s]+([^.]+)",
+            r"excluded\s + if[:\s]+([^.]+)",
+        ]
 
         criteria = []
         for pattern in criteria_patterns:
@@ -536,7 +597,10 @@ class StudyTypeClassifier:
     def _extract_follow_up_duration(self, text: str) -> Optional[str]:
         """Extract follow - up duration from text."""
 
-        followup_patterns = [r"follow\s * up\s+(?:of\s+)?(\d+\s+\w+)", r"followed\s + for\s+(\d+\s+\w+)"]
+        followup_patterns = [
+            r"follow\s * up\s+(?:of\s+)?(\d+\s+\w+)",
+            r"followed\s + for\s+(\d+\s+\w+)",
+        ]
 
         for pattern in followup_patterns:
             match = re.search(pattern, text.lower())
@@ -590,15 +654,23 @@ class StudyTypeClassifier:
 
         return routing_map.get(study_design, "generic_quality")
 
-    def _determine_synthesis_category(self, characteristics: StudyCharacteristics) -> str:
+    def _determine_synthesis_category(
+        self, characteristics: StudyCharacteristics
+    ) -> str:
         """Determine synthesis category based on study characteristics."""
 
         design = characteristics.study_design
         intervention_type = characteristics.intervention_type
 
         # Categorize for synthesis purposes
-        if design in [StudyDesign.RANDOMIZED_CONTROLLED_TRIAL, StudyDesign.QUASI_EXPERIMENTAL]:
-            if intervention_type in [InterventionType.PHARMACOLOGICAL, InterventionType.SURGICAL]:
+        if design in [
+            StudyDesign.RANDOMIZED_CONTROLLED_TRIAL,
+            StudyDesign.QUASI_EXPERIMENTAL,
+        ]:
+            if intervention_type in [
+                InterventionType.PHARMACOLOGICAL,
+                InterventionType.SURGICAL,
+            ]:
                 return "intervention_quantitative"
             else:
                 return "intervention_other"
@@ -611,7 +683,9 @@ class StudyTypeClassifier:
         else:
             return "other"
 
-    def _create_default_classification(self, study_record: Dict[str, Any]) -> ClassificationResult:
+    def _create_default_classification(
+        self, study_record: Dict[str, Any]
+    ) -> ClassificationResult:
         """Create default classification for failed classifications."""
 
         default_characteristics = StudyCharacteristics(
@@ -654,7 +728,9 @@ class StudyTypeClassifier:
                 self.database.create_study_classification(result_data)
             else:
                 # Log that storage is not implemented
-                self.logger.info(f"Study classification storage not implemented. Result: {result.study_id}")
+                self.logger.info(
+                    f"Study classification storage not implemented. Result: {result.study_id}"
+                )
 
         except Exception as e:
             self.logger.error(f"Failed to store classification result: {e}")
@@ -688,29 +764,41 @@ async def demonstrate_study_classification():
     study_records = [
         {
             "id": "study_001",
-            "title": "A Randomized Controlled Trial of AI - Assisted Diagnosis in Emergency Medicine",
-            "abstract": "Background: This double - blind, placebo - controlled randomized controlled trial examined the effectiveness of AI - assisted diagnostic tools. Methods: 300 patients were randomly assigned to AI - assisted diagnosis or standard care. Primary outcome was diagnostic accuracy. Results: AI group showed significantly higher accuracy (p < 0.001).",
+            "title": "A Randomized Controlled Trial of AI-Assisted Diagnosis in Emergency Medicine",
+            "abstract": "Background: This double-blind, placebo-controlled randomized controlled trial examined the "
+            "effectiveness of AI-assisted diagnostic tools. Methods: 300 patients were randomly assigned to "
+            "AI-assisted diagnosis or standard care. Primary outcome was diagnostic accuracy. "
+            "Results: AI group showed significantly higher accuracy (p < 0.001).",
             "authors": "Smith et al.",
             "year": 2023,
         },
         {
             "id": "study_002",
             "title": "Longitudinal Cohort Study of Machine Learning Implementation in Primary Care",
-            "abstract": "Background: We conducted a prospective cohort study following 1,500 primary care patients over 2 years. Methods: Patients were followed for implementation of ML tools. Outcomes included time to diagnosis and patient satisfaction. Results: ML implementation was associated with reduced diagnostic time.",
+            "abstract": "Background: We conducted a prospective cohort study following 1,500 primary care patients "
+            "over 2 years. Methods: Patients were followed for implementation of ML tools. Outcomes included "
+            "time to diagnosis and patient satisfaction. Results: ML implementation was associated with "
+            "reduced diagnostic time.",
             "authors": "Johnson et al.",
             "year": 2023,
         },
         {
             "id": "study_003",
             "title": "Case - Control Study of AI Diagnostic Errors in Radiology",
-            "abstract": "Background: This retrospective case - control study examined factors associated with AI diagnostic errors. Methods: 200 cases with AI errors were matched with 400 controls. Inclusion criteria included complete imaging data. Results: Image quality was significantly associated with errors.",
+            "abstract": "Background: This retrospective case - control study examined factors associated with AI "
+            "diagnostic errors. Methods: 200 cases with AI errors were matched with 400 controls. "
+            "Inclusion criteria included complete imaging data. Results: Image quality was "
+            "significantly associated with errors.",
             "authors": "Chen et al.",
             "year": 2024,
         },
         {
             "id": "study_004",
             "title": "Qualitative Exploration of Physician Experiences with AI Tools",
-            "abstract": "Background: We conducted in - depth interviews with 25 physicians about their experiences with AI diagnostic tools. Methods: Semi - structured interviews were conducted and analyzed using thematic analysis. Results: Three main themes emerged: trust, workflow integration, and training needs.",
+            "abstract": "Background: We conducted in - depth interviews with 25 physicians about their experiences "
+            "with AI diagnostic tools. Methods: Semi - structured interviews were conducted and analyzed "
+            "using thematic analysis. Results: Three main themes emerged: trust, workflow integration, "
+            "and training needs.",
             "authors": "Davis et al.",
             "year": 2024,
         },
@@ -721,7 +809,7 @@ async def demonstrate_study_classification():
     # Classify studies
     classification_results = await classifier.batch_classify_studies(study_records)
 
-    print(f"\n🎯 Classification Results Summary")
+    print("\n🎯 Classification Results Summary")
     print(f"   Total studies classified: {len(classification_results)}")
 
     # Summarize results
@@ -738,30 +826,29 @@ async def demonstrate_study_classification():
         tool_counts[tool] = tool_counts.get(tool, 0) + 1
         synthesis_counts[synthesis] = synthesis_counts.get(synthesis, 0) + 1
 
-    print(f"\n📊 Study Design Distribution:")
+    print("\n📊 Study Design Distribution:")
     for design, count in design_counts.items():
         print(f"   {design.replace('_', ' ').title()}: {count}")
 
-    print(f"\n🔧 Quality Assessment Tool Routing:")
+    print("\n🔧 Quality Assessment Tool Routing:")
     for tool, count in tool_counts.items():
         print(f"   {tool.upper()}: {count}")
 
-    print(f"\n📋 Synthesis Categories:")
+    print("\n📋 Synthesis Categories:")
     for category, count in synthesis_counts.items():
         print(f"   {category.replace('_', ' ').title()}: {count}")
 
-    print(f"\n📝 Detailed Classifications:")
+    print("\n📝 Detailed Classifications:")
     for result in classification_results:
         char = result.study_characteristics
-        print(f"\n   Study {result.study_id}:")
+        print(f"   Study {result.study_id}:")
         print(f"     Design: {char.study_design.value}")
         print(f"     Intervention: {char.intervention_type.value}")
         print(f"     Sample Size: {char.sample_size or 'Not extracted'}")
         print(f"     Quality Tool: {result.quality_assessment_tool}")
         print(f"     Synthesis Category: {result.synthesis_category}")
         print(f"     Confidence: {char.confidence_score:.2f}")
-
-    print(f"\n✅ Phase 3 Study Type Classifier demonstration completed!")
+    print("\n✅ Phase 3 Study Type Classifier demonstration completed!")
     return classification_results
 
 

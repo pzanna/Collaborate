@@ -10,12 +10,8 @@ in randomised trials. BMJ, 366, l4898.
 
 from typing import Any, Dict, List
 
-from ..quality_appraisal.plugin_architecture import (
-    AssessmentDomain,
-    BaseAIQualityPlugin,
-    BiasLevel,
-    QualityAssessment,
-)
+from ..quality_appraisal.plugin_architecture import (AssessmentDomain,
+                                                     BaseAIQualityPlugin)
 
 
 class Rob2Plugin(BaseAIQualityPlugin):
@@ -57,7 +53,9 @@ class Rob2Plugin(BaseAIQualityPlugin):
             AssessmentDomain.SELECTION_REPORTED_ROB2,
         ]
 
-    def _build_assessment_prompt(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> str:
+    def _build_assessment_prompt(
+        self, study: Dict[str, Any], criteria: Dict[str, Any]
+    ) -> str:
         """Build RoB 2 assessment prompt."""
         return f"""
 Please conduct a RoB 2 (Risk of Bias tool for randomized trials) assessment for this study.
@@ -77,8 +75,8 @@ FULL TEXT (if available):
 {study.get('full_text', 'Full text not available - base assessment on available information')}
 
 INTERVENTION AND COMPARISON:
-Intervention: {criteria.get('intervention', 'Not specified')}
-Control / Comparison: {criteria.get('comparison', 'Not specified')}
+Intervention: {criteria.get('interventions', ['Not specified'])[0] if criteria.get('interventions') else 'Not specified'}
+Comparator: {criteria.get('comparators', ['Not specified'])[0] if criteria.get('comparators') else 'Not specified'}
 Population: {criteria.get('population', 'Not specified')}
 Primary Outcome: {criteria.get('outcomes', ['Not specified'])[0] if criteria.get('outcomes') else 'Not specified'}
 All Outcomes: {', '.join(criteria.get('outcomes', []))}
@@ -202,7 +200,8 @@ Guidelines for assessment:
 Key principles:
 - Low risk: The study is judged to be at low risk of bias for all domains
 - Some concerns: The study raises some concerns in at least one domain, but not high risk
-- High risk: The study is judged to be at high risk of bias in at least one domain, or has serious concerns across multiple domains
+- High risk: The study is judged to be at high risk of bias in at least one domain, 
+or has serious concerns across multiple domains
 
 Focus on:
 - Quality of randomization process and allocation concealment

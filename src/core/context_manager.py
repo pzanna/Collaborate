@@ -1,6 +1,5 @@
 """Context Tracking System for maintaining session context across interactions."""
 
-import asyncio
 import json
 import logging
 import uuid
@@ -53,22 +52,28 @@ class ContextManager:
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
-        self.db_connection: Optional[aiosqlite.Connection] = None
-        self.db_path = Path(config_manager.get("storage.database_path", "data / eunice.db"))
+        self.db_connection: Optional["aiosqlite.Connection"] = None
+        self.db_path = Path(
+            config_manager.get("storage.database_path", "data / eunice.db")
+        )
         self.active_contexts: Dict[str, SessionContext] = {}
 
     async def initialize(self) -> None:
         """Initialize the context manager and database."""
         try:
             if aiosqlite is None:
-                self.logger.warning("aiosqlite not available, context tracking disabled")
+                self.logger.warning(
+                    "aiosqlite not available, context tracking disabled"
+                )
                 return
 
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self.db_connection = await aiosqlite.connect(str(self.db_path))
             await self._create_database_schema()
             await self._load_active_contexts()
-            self.logger.info(f"ContextManager initialized with {len(self.active_contexts)} active contexts")
+            self.logger.info(
+                f"ContextManager initialized with {len(self.active_contexts)} active contexts"
+            )
 
         except Exception as e:
             self.logger.error(f"Failed to initialize ContextManager: {e}")
@@ -328,13 +333,17 @@ class ContextManager:
                 )
                 await self.db_connection.commit()
 
-            self.logger.debug(f"Added context trace {trace_id} for context {context_id}")
+            self.logger.debug(
+                f"Added context trace {trace_id} for context {context_id}"
+            )
             return trace_id
         except Exception as e:
             self.logger.error(f"Failed to add context trace: {e}")
             raise
 
-    async def get_context_traces(self, context_id: str, limit: int = 100) -> List[ContextTrace]:
+    async def get_context_traces(
+        self, context_id: str, limit: int = 100
+    ) -> List[ContextTrace]:
         """Get context traces for a context."""
         try:
             if context_id in self.active_contexts:
@@ -372,7 +381,9 @@ class ContextManager:
             self.logger.error(f"Failed to get context traces for {context_id}: {e}")
             return []
 
-    async def list_contexts(self, status: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    async def list_contexts(
+        self, status: Optional[str] = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         """List contexts with optional filtering."""
         try:
             if not self.db_connection:
@@ -414,7 +425,9 @@ class ContextManager:
             self.logger.error(f"Failed to list contexts: {e}")
             return []
 
-    async def update_context_status(self, context_id: str, status: str, current_stage: Optional[str] = None) -> bool:
+    async def update_context_status(
+        self, context_id: str, status: str, current_stage: Optional[str] = None
+    ) -> bool:
         """Update context status and current stage."""
         try:
             if context_id in self.active_contexts:

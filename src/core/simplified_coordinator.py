@@ -4,9 +4,7 @@ Replaces the complex ResponseCoordinator with a natural group conversation appro
 """
 
 import random
-import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 
 class SimplifiedCoordinator:
@@ -19,9 +17,44 @@ class SimplifiedCoordinator:
         self.mention_boost = 0.8  # Boost when mentioned
         self.question_boost = 0.3  # Boost for questions
         self.engagement_boost = 0.2  # Boost for engaging topics
+        self.participants: List[str] = []
+        self.turn_history: List[str] = []
+
+    def register_participant(self, participant_id: str):
+        """Register a new participant."""
+        if participant_id not in self.participants:
+            self.participants.append(participant_id)
+
+    def select_participant(
+        self, prompt: str, available_participants: List[str]
+    ) -> Optional[str]:
+        """Select a single participant to respond."""
+        if not available_participants:
+            return None
+
+        # Simple selection logic: rotate through available participants
+        # More sophisticated logic can be added here (e.g., based on prompt content)
+        if not self.turn_history:
+            # Start with the first available participant
+            selected = available_participants[0]
+        else:
+            last_participant = self.turn_history[-1]
+            try:
+                last_index = available_participants.index(last_participant)
+                next_index = (last_index + 1) % len(available_participants)
+                selected = available_participants[next_index]
+            except ValueError:
+                # Last participant is no longer available, start from the beginning
+                selected = available_participants[0]
+
+        self.turn_history.append(selected)
+        return selected
 
     def get_participating_providers(
-        self, user_message: str, available_providers: List[str], recent_messages: List[Any]
+        self,
+        user_message: str,
+        available_providers: List[str],
+        recent_messages: List[Any],
     ) -> List[str]:
         """Determine which providers should participate based on simple rules"""
 
@@ -38,11 +71,22 @@ class SimplifiedCoordinator:
             participation_score = self.base_participation_chance
 
             # Boost for questions (everyone can answer)
-            if any(indicator in message_lower for indicator in ["?", "how", "what", "why", "when", "where"]):
+            if any(
+                indicator in message_lower
+                for indicator in ["?", "how", "what", "why", "when", "where"]
+            ):
                 participation_score += self.question_boost
 
             # Boost for engaging topics
-            engaging_words = ["think", "opinion", "idea", "approach", "solution", "help", "thoughts"]
+            engaging_words = [
+                "think",
+                "opinion",
+                "idea",
+                "approach",
+                "solution",
+                "help",
+                "thoughts",
+            ]
             if any(word in message_lower for word in engaging_words):
                 participation_score += self.engagement_boost
 
@@ -60,7 +104,11 @@ class SimplifiedCoordinator:
         # Ensure at least one provider responds
         if not participants and available_providers:
             # Pick someone who hasn't spoken recently
-            recent_speakers = {msg.participant for msg in recent_messages[-3:] if hasattr(msg, "participant")}
+            recent_speakers = {
+                msg.participant
+                for msg in recent_messages[-3:]
+                if hasattr(msg, "participant")
+            }
             non_recent = [p for p in available_providers if p not in recent_speakers]
             participants = [non_recent[0] if non_recent else available_providers[0]]
 
@@ -68,7 +116,8 @@ class SimplifiedCoordinator:
 
     def _spoke_recently(self, provider: str, recent_messages: List[Any]) -> bool:
         """Check if provider has dominated recent conversation"""
-        last_messages = recent_messages[-self.max_recent_turns :]
+        last_messages = recent_messages[-self.max_recent_turns:]
         return len(last_messages) >= self.max_recent_turns and all(
-            hasattr(msg, "participant") and msg.participant == provider for msg in last_messages
+            hasattr(msg, "participant") and msg.participant == provider
+            for msg in last_messages
         )

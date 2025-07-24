@@ -9,18 +9,15 @@ Author: Eunice AI System
 Date: July 2025
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import sqlite3
-from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from ..config.config_manager import ConfigManager
-from .database_connectors import DatabaseSearchQuery, DatabaseType, ExternalSearchResult
 
 
 class AcademicCacheManager:
@@ -31,7 +28,9 @@ class AcademicCacheManager:
     and improve response times for repeated queries.
     """
 
-    def __init__(self, config_manager: ConfigManager, cache_db_path: Optional[str] = None):
+    def __init__(
+        self, config_manager: ConfigManager, cache_db_path: Optional[str] = None
+    ):
         """
         Initialize the Academic Cache Manager.
 
@@ -104,14 +103,26 @@ class AcademicCacheManager:
                 )
 
                 # Create indexes for performance
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_cache(expires_at)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_search_cache_type ON search_cache(search_type)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_doi ON academic_papers(doi)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_pmid ON academic_papers(pmid)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_source ON academic_papers(database_source)")
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_cache(expires_at)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_search_cache_type ON search_cache(search_type)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_papers_doi ON academic_papers(doi)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_papers_pmid ON academic_papers(pmid)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_papers_source ON academic_papers(database_source)"
+                )
 
                 conn.commit()
-                self.logger.info(f"Academic cache database initialized at {self.cache_db_path}")
+                self.logger.info(
+                    f"Academic cache database initialized at {self.cache_db_path}"
+                )
 
         except Exception as e:
             self.logger.error(f"Failed to initialize cache database: {e}")
@@ -130,11 +141,17 @@ class AcademicCacheManager:
             str: SHA - 256 hash as cache key
         """
         # Create consistent cache key from all parameters
-        cache_data = {"query": query.strip().lower(), "search_type": search_type, **kwargs}
+        cache_data = {
+            "query": query.strip().lower(),
+            "search_type": search_type,
+            **kwargs,
+        }
         cache_string = json.dumps(cache_data, sort_keys=True)
         return hashlib.sha256(cache_string.encode()).hexdigest()
 
-    async def get_cached_results(self, query: str, search_type: str, **kwargs) -> Optional[List[Dict[str, Any]]]:
+    async def get_cached_results(
+        self, query: str, search_type: str, **kwargs
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Retrieve cached search results if available and not expired.
 
@@ -181,11 +198,15 @@ class AcademicCacheManager:
                     # Parse and return results
                     results = json.loads(results_json)
 
-                    self.logger.info(f"Cache HIT for {search_type} query (hits: {hit_count + 1}): {query[:50]}...")
+                    self.logger.info(
+                        f"Cache HIT for {search_type} query (hits: {hit_count + 1}): {query[:50]}..."
+                    )
 
                     return results
                 else:
-                    self.logger.debug(f"Cache MISS for {search_type} query: {query[:50]}...")
+                    self.logger.debug(
+                        f"Cache MISS for {search_type} query: {query[:50]}..."
+                    )
                     return None
 
         except Exception as e:
@@ -247,19 +268,26 @@ class AcademicCacheManager:
 
                 conn.commit()
 
-                self.logger.info(f"Cached {len(results)} results for {search_type} query: {query[:50]}...")
+                self.logger.info(
+                    f"Cached {len(results)} results for {search_type} query: {query[:50]}..."
+                )
 
         except Exception as e:
             self.logger.error(f"Cache storage error: {e}")
 
     async def _cache_individual_papers(
-        self, cursor: sqlite3.Cursor, results: List[Dict[str, Any]], database_source: Optional[str]
+        self,
+        cursor: sqlite3.Cursor,
+        results: List[Dict[str, Any]],
+        database_source: Optional[str],
     ) -> None:
         """Cache individual papers for cross - referencing."""
         for result in results:
             try:
                 # Generate paper ID
-                paper_id = result.get("metadata", {}).get("paper_id") or result.get("url", "")
+                paper_id = result.get("metadata", {}).get("paper_id") or result.get(
+                    "url", ""
+                )
                 if not paper_id:
                     continue
 
@@ -318,7 +346,9 @@ class AcademicCacheManager:
                 conn.commit()
 
                 if removed_count > 0:
-                    self.logger.info(f"Cleaned up {removed_count} expired cache entries")
+                    self.logger.info(
+                        f"Cleaned up {removed_count} expired cache entries"
+                    )
 
                 return removed_count
 
@@ -358,7 +388,11 @@ class AcademicCacheManager:
 
                 # Get database file size
                 cache_file = Path(self.cache_db_path)
-                file_size_mb = cache_file.stat().st_size / (1024 * 1024) if cache_file.exists() else 0
+                file_size_mb = (
+                    cache_file.stat().st_size / (1024 * 1024)
+                    if cache_file.exists()
+                    else 0
+                )
 
                 return {
                     "total_cache_entries": cache_stats[0] or 0,
@@ -368,14 +402,18 @@ class AcademicCacheManager:
                     "total_cached_results": cache_stats[4] or 0,
                     "cached_papers": paper_count,
                     "cache_file_size_mb": round(file_size_mb, 2),
-                    "cache_efficiency": round((cache_stats[1] or 0) / max(cache_stats[0] or 1, 1), 2),
+                    "cache_efficiency": round(
+                        (cache_stats[1] or 0) / max(cache_stats[0] or 1, 1), 2
+                    ),
                 }
 
         except Exception as e:
             self.logger.error(f"Error getting cache stats: {e}")
             return {}
 
-    async def find_similar_papers(self, title: str, threshold: float = 0.7) -> List[Dict[str, Any]]:
+    async def find_similar_papers(
+        self, title: str, threshold: float = 0.7
+    ) -> List[Dict[str, Any]]:
         """
         Find similar papers in cache based on title similarity.
 
@@ -392,7 +430,7 @@ class AcademicCacheManager:
                 cursor = conn.cursor()
 
                 # Simple keyword - based matching (could be enhanced with proper similarity algorithms)
-                title_words = set(title.lower().split())
+                set(title.lower().split())
 
                 cursor.execute(
                     """
@@ -401,14 +439,25 @@ class AcademicCacheManager:
                     WHERE title LIKE ? OR title LIKE ?
                     LIMIT 10
                 """,
-                    (f"%{title[:20]}%", f"%{title.split()[0]}%" if title.split() else ""),
+                    (
+                        f"%{title[:20]}%",
+                        f"%{title.split()[0]}%" if title.split() else "",
+                    ),
                 )
 
                 results = cursor.fetchall()
 
                 similar_papers = []
                 for result in results:
-                    paper_id, paper_title, authors_json, doi, pmid, db_source, metadata_json = result
+                    (
+                        paper_id,
+                        paper_title,
+                        authors_json,
+                        doi,
+                        pmid,
+                        db_source,
+                        metadata_json,
+                    ) = result
 
                     similar_papers.append(
                         {
@@ -418,7 +467,9 @@ class AcademicCacheManager:
                             "doi": doi,
                             "pmid": pmid,
                             "database_source": db_source,
-                            "metadata": json.loads(metadata_json) if metadata_json else {},
+                            "metadata": (
+                                json.loads(metadata_json) if metadata_json else {}
+                            ),
                         }
                     )
 

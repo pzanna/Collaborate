@@ -12,7 +12,7 @@ import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..config.config_manager import ConfigManager
 from ..mcp.client import MCPClient
@@ -80,7 +80,9 @@ class BaseAgent(ABC):
         self.success_count = 0
         self.error_count = 0
 
-        self.logger.info(f"Agent {self.agent_id} initialized with capabilities: {self.capabilities}")
+        self.logger.info(
+            f"Agent {self.agent_id} initialized with capabilities: {self.capabilities}"
+        )
 
     async def initialize(self) -> bool:
         """
@@ -94,7 +96,10 @@ class BaseAgent(ABC):
 
             # Initialize MCP client
             mcp_config = self.config.get_mcp_config()
-            self.mcp_client = MCPClient(host=mcp_config.get("host", "localhost"), port=mcp_config.get("port", 9000))
+            self.mcp_client = MCPClient(
+                host=mcp_config.get("host", "localhost"),
+                port=mcp_config.get("port", 9000),
+            )
 
             # Connect to MCP server
             await self.mcp_client.connect()
@@ -234,7 +239,11 @@ class BaseAgent(ABC):
             self.error_handler.handle_error(e, f"agent_{self.agent_type}_task")
 
             return AgentResponse(
-                task_id=task_id, context_id=task.context_id, agent_type=self.agent_type, status="failed", error=str(e)
+                task_id=task_id,
+                context_id=task.context_id,
+                agent_type=self.agent_type,
+                status="failed",
+                error=str(e),
             )
 
     def get_status(self) -> Dict[str, Any]:
@@ -281,7 +290,6 @@ class BaseAgent(ABC):
         Returns:
             Dict[str, Any]: Task result
         """
-        pass
 
     @abstractmethod
     def _get_capabilities(self) -> List[str]:
@@ -291,17 +299,14 @@ class BaseAgent(ABC):
         Returns:
             List[str]: List of capabilities
         """
-        pass
 
     @abstractmethod
     async def _initialize_agent(self) -> None:
         """Initialize agent - specific resources (implemented by subclasses)."""
-        pass
 
     @abstractmethod
     async def _cleanup_agent(self) -> None:
         """Clean up agent - specific resources (implemented by subclasses)."""
-        pass
 
     # Helper methods
 
@@ -353,7 +358,9 @@ class BaseAgent(ABC):
         """Main task processing loop."""
         # Set up message handler for incoming tasks
         if self.mcp_client:
-            self.mcp_client.add_message_handler("research_task", self._handle_incoming_task)
+            self.mcp_client.add_message_handler(
+                "research_task", self._handle_incoming_task
+            )
 
         # Initialize heartbeat tracking
         last_heartbeat = datetime.now()
@@ -366,19 +373,25 @@ class BaseAgent(ABC):
 
                 # Send heartbeat periodically
                 current_time = datetime.now()
-                if (current_time - last_heartbeat).total_seconds() >= heartbeat_interval:
+                if (
+                    current_time - last_heartbeat
+                ).total_seconds() >= heartbeat_interval:
                     await self._send_heartbeat()
                     last_heartbeat = current_time
 
                 # Check for agent health
                 if self.mcp_client and not self.mcp_client.is_connected:
-                    self.logger.warning(f"Agent {self.agent_id} lost connection to MCP server")
+                    self.logger.warning(
+                        f"Agent {self.agent_id} lost connection to MCP server"
+                    )
                     # Try to reconnect
                     await asyncio.sleep(5)
                     await self.mcp_client.connect()
                     if self.mcp_client.is_connected:
                         await self._register_with_mcp()
-                        self.mcp_client.add_message_handler("research_task", self._handle_incoming_task)
+                        self.mcp_client.add_message_handler(
+                            "research_task", self._handle_incoming_task
+                        )
 
             except Exception as e:
                 self.logger.error(f"Error in task processing loop: {e}")
@@ -411,14 +424,22 @@ class BaseAgent(ABC):
 
                 # Send response back to MCP server
                 if self.mcp_client:
-                    self.logger.info(f"Sending response for task {response.task_id} with status {response.status}")
+                    self.logger.info(
+                        f"Sending response for task {response.task_id} with status {response.status}"
+                    )
                     success = await self.mcp_client.send_response(response)
                     if success:
-                        self.logger.info(f"✓ Successfully sent response for task {response.task_id}")
+                        self.logger.info(
+                            f"✓ Successfully sent response for task {response.task_id}"
+                        )
                     else:
-                        self.logger.error(f"✗ Failed to send response for task {response.task_id}")
+                        self.logger.error(
+                            f"✗ Failed to send response for task {response.task_id}"
+                        )
                 else:
-                    self.logger.error(f"No MCP client available to send response for task {response.task_id}")
+                    self.logger.error(
+                        f"No MCP client available to send response for task {response.task_id}"
+                    )
 
         except Exception as e:
             self.logger.error(f"Error handling incoming task: {e}")
@@ -436,14 +457,17 @@ class BaseAgent(ABC):
     async def _cancel_task(self, task_id: str) -> None:
         """Cancel an active task."""
         if task_id in self.active_tasks:
-            task = self.active_tasks.pop(task_id)
+            self.active_tasks.pop(task_id)
             self.failed_tasks.append(task_id)
             self.logger.info(f"Cancelled task {task_id}")
 
             # Send cancellation response
             if self.mcp_client:
                 response = AgentResponse(
-                    task_id=task_id, context_id="unknown", agent_type=self.agent_type, status="cancelled"
+                    task_id=task_id,
+                    context_id="unknown",
+                    agent_type=self.agent_type,
+                    status="cancelled",
                 )
                 await self.mcp_client.send_response(response)
 

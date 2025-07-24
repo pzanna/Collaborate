@@ -53,7 +53,10 @@ class PerformanceMonitor:
                 if times:
                     operations[operation] = self.get_stats(operation)
 
-            return {"operations": operations, "total_operations": sum(len(times) for times in self.metrics.values())}
+            return {
+                "operations": operations,
+                "total_operations": sum(len(times) for times in self.metrics.values()),
+            }
 
     def get_slow_operations(self, threshold: float = 1.0) -> Dict[str, Any]:
         """Get operations that exceed the threshold."""
@@ -159,7 +162,9 @@ class BackgroundTaskManager:
             # Remove interval from kwargs if present (not supported in this basic implementation)
             kwargs.pop("interval", None)
 
-            thread = threading.Thread(target=target, args=args, kwargs=kwargs, daemon=True)
+            thread = threading.Thread(
+                target=target, args=args, kwargs=kwargs, daemon=True
+            )
             thread.start()
             self.tasks[name] = thread
 
@@ -209,7 +214,9 @@ def monitor_performance(operation: str) -> Callable:
     return decorator
 
 
-def cache_result(cache_manager_or_key_func=None, ttl: Optional[float] = None) -> Callable:
+def cache_result(
+    cache_manager_or_key_func=None, ttl: Optional[float] = None
+) -> Callable:
     """Decorator to cache function results."""
 
     def decorator(func: Callable) -> Callable:
@@ -219,7 +226,9 @@ def cache_result(cache_manager_or_key_func=None, ttl: Optional[float] = None) ->
         def wrapper(*args, **kwargs):
             """TODO: Add docstring for wrapper."""
             # Handle the case where cache_manager is passed
-            if hasattr(cache_manager_or_key_func, "get") and hasattr(cache_manager_or_key_func, "set"):
+            if hasattr(cache_manager_or_key_func, "get") and hasattr(
+                cache_manager_or_key_func, "set"
+            ):
                 cache_manager = cache_manager_or_key_func
                 cache_key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
             else:
@@ -249,7 +258,7 @@ def batch_process(items: list, batch_size: int = 100, delay: float = 0.0) -> lis
     """Process items in batches to avoid overwhelming resources."""
     results = []
     for i in range(0, len(items), batch_size):
-        batch = items[i : i + batch_size]
+        batch = items[i: i + batch_size]
         # For this simple implementation, just yield batches
         # In real use, you'd process each batch
         results.extend(batch)

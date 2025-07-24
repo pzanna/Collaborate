@@ -17,14 +17,12 @@ Date: July 2025
 import asyncio
 import json
 import logging
-import math
 import re
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -163,7 +161,9 @@ class DataIntegrityChecker:
             ),
         ]
 
-    async def check_data_integrity(self, records: List[Dict[str, Any]]) -> List[ValidationIssue]:
+    async def check_data_integrity(
+        self, records: List[Dict[str, Any]]
+    ) -> List[ValidationIssue]:
         """
         Check data integrity for a list of records
 
@@ -200,7 +200,9 @@ class DataIntegrityChecker:
 
         return issues
 
-    async def _apply_rule(self, rule: ValidationRule, record: Dict[str, Any], record_id: str) -> List[ValidationIssue]:
+    async def _apply_rule(
+        self, rule: ValidationRule, record: Dict[str, Any], record_id: str
+    ) -> List[ValidationIssue]:
         """Apply a single validation rule to a record"""
         method_name = rule.check_function
         if hasattr(self, method_name):
@@ -217,8 +219,12 @@ class DataIntegrityChecker:
         issues = []
         required_fields = rule.parameters.get("required_fields", [])
 
-        for field in required_fields:
-            if field not in record or not record[field] or str(record[field]).strip() == "":
+        for field_name in required_fields:
+            if (
+                field_name not in record
+                or not record[field_name]
+                or str(record[field_name]).strip() == ""
+            ):
                 issues.append(
                     ValidationIssue(
                         rule_id=rule.rule_id,
@@ -323,7 +329,10 @@ class DataIntegrityChecker:
                         record_id=record_id,
                         message=f"Invalid DOI format: {doi}",
                         suggested_fix="Provide DOI in format: 10.xxxx / yyyy",
-                        details={"provided_doi": doi, "expected_pattern": "10.xxxx / yyyy"},
+                        details={
+                            "provided_doi": doi,
+                            "expected_pattern": "10.xxxx / yyyy",
+                        },
                     )
                 )
 
@@ -351,7 +360,11 @@ class DataIntegrityChecker:
                             record_id=record_id,
                             message=f"Year {year} is outside reasonable range ({min_year}-{max_year})",
                             suggested_fix=f"Verify publication year is between {min_year} and {max_year}",
-                            details={"year": year, "min_year": min_year, "max_year": max_year},
+                            details={
+                                "year": year,
+                                "min_year": min_year,
+                                "max_year": max_year,
+                            },
                         )
                     )
             except (ValueError, TypeError):
@@ -384,7 +397,10 @@ class DataIntegrityChecker:
                                 message="Authors field appears to contain multiple authors as string",
                                 suggested_fix=f"Split authors by '{sep}' separator into list",
                                 auto_fixable=True,
-                                details={"separator_found": sep, "authors_string": authors},
+                                details={
+                                    "separator_found": sep,
+                                    "authors_string": authors,
+                                },
                             )
                         )
                         break
@@ -487,7 +503,9 @@ class ConsistencyValidator:
 
         return issues
 
-    async def _apply_consistency_rule(self, rule: ValidationRule, data: Dict[str, Any]) -> List[ValidationIssue]:
+    async def _apply_consistency_rule(
+        self, rule: ValidationRule, data: Dict[str, Any]
+    ) -> List[ValidationIssue]:
         """Apply a single consistency rule"""
         method_name = rule.check_function
         if hasattr(self, method_name):
@@ -497,7 +515,9 @@ class ConsistencyValidator:
             logger.warning(f"Consistency method {method_name} not found")
             return []
 
-    async def check_duplicates(self, rule: ValidationRule, data: Dict[str, Any]) -> List[ValidationIssue]:
+    async def check_duplicates(
+        self, rule: ValidationRule, data: Dict[str, Any]
+    ) -> List[ValidationIssue]:
         """Detect potential duplicate studies"""
         issues = []
         studies = data.get("studies", [])
@@ -588,7 +608,8 @@ class ConsistencyValidator:
 
                     # Check if overall effect is reasonable given individual effects
                     if (
-                        abs(overall_effect - mean_individual) > 2 * statistics.stdev(individual_effects)
+                        abs(overall_effect - mean_individual)
+                        > 2 * statistics.stdev(individual_effects)
                         if len(individual_effects) > 1
                         else 0
                     ):
@@ -611,7 +632,9 @@ class ConsistencyValidator:
 
         return issues
 
-    async def check_screening_consistency(self, rule: ValidationRule, data: Dict[str, Any]) -> List[ValidationIssue]:
+    async def check_screening_consistency(
+        self, rule: ValidationRule, data: Dict[str, Any]
+    ) -> List[ValidationIssue]:
         """Check consistency in screening decisions"""
         issues = []
 
@@ -638,7 +661,10 @@ class ConsistencyValidator:
 
                 for stage, stage_decisions in stages.items():
                     unique_decisions = set(stage_decisions)
-                    if len(unique_decisions) > 1 and "uncertain" not in unique_decisions:
+                    if (
+                        len(unique_decisions) > 1
+                        and "uncertain" not in unique_decisions
+                    ):
                         issues.append(
                             ValidationIssue(
                                 rule_id=rule.rule_id,
@@ -648,13 +674,18 @@ class ConsistencyValidator:
                                 record_id=study_id,
                                 message=f"Conflicting screening decisions at {stage} stage: {unique_decisions}",
                                 suggested_fix="Resolve screening conflicts through consensus",
-                                details={"stage": stage, "decisions": list(unique_decisions)},
+                                details={
+                                    "stage": stage,
+                                    "decisions": list(unique_decisions),
+                                },
                             )
                         )
 
         return issues
 
-    async def check_effect_size_outliers(self, rule: ValidationRule, data: Dict[str, Any]) -> List[ValidationIssue]:
+    async def check_effect_size_outliers(
+        self, rule: ValidationRule, data: Dict[str, Any]
+    ) -> List[ValidationIssue]:
         """Check for outlier effect sizes"""
         issues = []
 
@@ -759,14 +790,22 @@ class QualityValidationEngine:
             # Data integrity validation
             studies = data.get("studies", [])
             if studies:
-                integrity_issues = await self.integrity_checker.check_data_integrity(studies)
+                integrity_issues = await self.integrity_checker.check_data_integrity(
+                    studies
+                )
                 all_issues.extend(integrity_issues)
-                logger.info(f"Data integrity check completed: {len(integrity_issues)} issues found")
+                logger.info(
+                    f"Data integrity check completed: {len(integrity_issues)} issues found"
+                )
 
             # Consistency validation
-            consistency_issues = await self.consistency_validator.check_consistency(data)
+            consistency_issues = await self.consistency_validator.check_consistency(
+                data
+            )
             all_issues.extend(consistency_issues)
-            logger.info(f"Consistency check completed: {len(consistency_issues)} issues found")
+            logger.info(
+                f"Consistency check completed: {len(consistency_issues)} issues found"
+            )
 
             # Calculate summary statistics
             severity_counts = {severity: 0 for severity in ValidationSeverity}
@@ -782,7 +821,8 @@ class QualityValidationEngine:
                     [
                         issue
                         for issue in all_issues
-                        if issue.severity in [ValidationSeverity.LOW, ValidationSeverity.INFO]
+                        if issue.severity
+                        in [ValidationSeverity.LOW, ValidationSeverity.INFO]
                     ]
                 ),
                 failed_checks=len(
@@ -790,7 +830,11 @@ class QualityValidationEngine:
                         issue
                         for issue in all_issues
                         if issue.severity
-                        in [ValidationSeverity.CRITICAL, ValidationSeverity.HIGH, ValidationSeverity.MEDIUM]
+                        in [
+                            ValidationSeverity.CRITICAL,
+                            ValidationSeverity.HIGH,
+                            ValidationSeverity.MEDIUM,
+                        ]
                     ]
                 ),
                 critical_issues=severity_counts[ValidationSeverity.CRITICAL],
@@ -802,7 +846,9 @@ class QualityValidationEngine:
 
             self.validation_history.append(result)
 
-            logger.info(f"Validation completed in {validation_time:.2f}s: {result.total_issues} issues found")
+            logger.info(
+                f"Validation completed in {validation_time:.2f}s: {result.total_issues} issues found"
+            )
             return result
 
         except Exception as e:
@@ -833,7 +879,9 @@ class QualityValidationEngine:
 
             return error_result
 
-    async def auto_fix_issues(self, issues: List[ValidationIssue], data: Dict[str, Any]) -> Dict[str, Any]:
+    async def auto_fix_issues(
+        self, issues: List[ValidationIssue], data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Automatically fix issues that can be auto - fixed
 
@@ -871,8 +919,13 @@ class QualityValidationEngine:
                         for study in studies:
                             if study.get("id") == issue.record_id:
                                 if isinstance(study.get("authors"), str):
-                                    separator = issue.details.get("separator_found", ";")
-                                    study["authors"] = [a.strip() for a in study["authors"].split(separator)]
+                                    separator = issue.details.get(
+                                        "separator_found", ";"
+                                    )
+                                    study["authors"] = [
+                                        a.strip()
+                                        for a in study["authors"].split(separator)
+                                    ]
                                     fixed_count += 1
                                     break
 
@@ -900,7 +953,10 @@ class QualityValidationEngine:
         # Calculate aggregate statistics
         total_validations = len(relevant_results)
         total_issues = sum(result.total_issues for result in relevant_results)
-        avg_validation_time = sum(result.validation_time for result in relevant_results) / total_validations
+        avg_validation_time = (
+            sum(result.validation_time for result in relevant_results)
+            / total_validations
+        )
 
         # Issue severity distribution
         severity_totals = {severity.value: 0 for severity in ValidationSeverity}
@@ -935,7 +991,9 @@ class QualityValidationEngine:
             ],
         }
 
-    async def export_validation_report(self, result: ValidationResult, format_type: str = "json") -> str:
+    async def export_validation_report(
+        self, result: ValidationResult, format_type: str = "json"
+    ) -> str:
         """
         Export validation report in specified format
 
@@ -1024,7 +1082,11 @@ async def demo_validation_engine():
         "meta_analyses": [
             {
                 "id": "meta_1",
-                "included_studies": ["study_1", "study_2", "nonexistent_study"],  # Missing study - HIGH
+                "included_studies": [
+                    "study_1",
+                    "study_2",
+                    "nonexistent_study",
+                ],  # Missing study - HIGH
                 "overall_effect": 2.5,  # Inconsistent with individual effects - MEDIUM
             }
         ],
@@ -1033,7 +1095,7 @@ async def demo_validation_engine():
     # Perform validation
     result = await validator.validate_review_data(test_data)
 
-    print(f"✅ Validation completed:")
+    print("✅ Validation completed:")
     print(f"   Total records: {result.total_records}")
     print(f"   Issues found: {result.total_issues}")
     print(f"   Is valid: {result.is_valid}")
@@ -1044,7 +1106,7 @@ async def demo_validation_engine():
     print(f"   Validation time: {result.validation_time:.2f}s")
 
     # Show sample issues
-    print(f"\n📋 Sample Issues Found:")
+    print("\n📋 Sample Issues Found:")
     for issue in result.issues_found[:5]:  # Show first 5 issues
         print(f"   • {issue.severity.value.upper()}: {issue.message}")
         if issue.suggested_fix:
@@ -1052,7 +1114,7 @@ async def demo_validation_engine():
 
     # Get validation summary
     summary = validator.get_validation_summary()
-    print(f"\n📊 Validation Summary:")
+    print("\n📊 Validation Summary:")
     print(f"   Total validations performed: {summary['total_validations']}")
     print(f"   Average validation time: {summary['average_validation_time']}s")
 

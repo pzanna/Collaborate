@@ -32,7 +32,6 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from textwrap import dedent
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -42,15 +41,14 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 # Import dependencies
 try:
-    import jinja2
-    from jinja2 import Environment, FileSystemLoader
+    pass
 
     JINJA_AVAILABLE = True
 except ImportError:
     JINJA_AVAILABLE = False
 
 try:
-    from src.ai_clients.openai_client import AIProviderConfig, OpenAIClient
+    pass
 
     AI_AVAILABLE = True
 except ImportError:
@@ -144,7 +142,11 @@ class EnhancedThesisGenerator:
                 "temperature": 0.0,
                 "max_tokens": 4000,
             },
-            "output": {"formats": ["markdown", "latex", "html"], "directory": "thesis_output", "include_cache": True},
+            "output": {
+                "formats": ["markdown", "latex", "html"],
+                "directory": "thesis_output",
+                "include_cache": True,
+            },
             "processing": {
                 "use_cache": True,
                 "cache_version": "v1.0",
@@ -210,7 +212,10 @@ class EnhancedThesisGenerator:
                 return self.cache.get(key)
 
             def set(self, key, value):
-                self.cache[key] = {"value": value, "timestamp": datetime.now().isoformat()}
+                self.cache[key] = {
+                    "value": value,
+                    "timestamp": datetime.now().isoformat(),
+                }
                 self._save()
 
         return SimpleCache(cache_dir)
@@ -229,7 +234,11 @@ class EnhancedThesisGenerator:
         try:
             from jinja2 import Environment, FileSystemLoader
 
-            env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)
+            env = Environment(
+                loader=FileSystemLoader(template_dir),
+                trim_blocks=True,
+                lstrip_blocks=True,
+            )
         except ImportError:
             self.logger.warning("Jinja2 import failed")
             return None
@@ -250,7 +259,8 @@ class EnhancedThesisGenerator:
 
             try:
                 # Try Eunice client first
-                from src.ai_clients.openai_client import AIProviderConfig, OpenAIClient
+                from src.ai_clients.openai_client import (AIProviderConfig,
+                                                          OpenAIClient)
 
                 config = AIProviderConfig(
                     provider="openai",
@@ -274,7 +284,9 @@ class EnhancedThesisGenerator:
                     def get_response(self, user_message, system_prompt=None):
                         messages = []
                         if system_prompt:
-                            messages.append({"role": "system", "content": system_prompt})
+                            messages.append(
+                                {"role": "system", "content": system_prompt}
+                            )
                         messages.append({"role": "user", "content": user_message})
 
                         response = self.client.chat.completions.create(
@@ -298,7 +310,9 @@ class EnhancedThesisGenerator:
     def call_ai(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """Call AI model with caching."""
         # Generate cache key
-        cache_key = hashlib.sha256(f"{prompt}|{system_prompt or ''}".encode()).hexdigest()
+        cache_key = hashlib.sha256(
+            f"{prompt}|{system_prompt or ''}".encode()
+        ).hexdigest()
 
         # Check cache
         if self.cache:
@@ -341,7 +355,9 @@ class EnhancedThesisGenerator:
         self.logger.info("Extracting themes for thesis literature review...")
 
         # Prepare data
-        studies = prisma_data["data_extraction_tables"]["table_1_study_characteristics"]["data"]
+        studies = prisma_data["data_extraction_tables"][
+            "table_1_study_characteristics"
+        ]["data"]
         study_summaries = []
 
         for study in studies[:15]:  # Limit for prompt length
@@ -428,7 +444,9 @@ Focus on creating themes suitable for PhD - level literature review."""
             self.logger.error(f"Theme extraction failed: {e}")
             raise
 
-    def identify_gaps(self, themes: List[ThesisTheme], prisma_data: Dict) -> List[ResearchGap]:
+    def identify_gaps(
+        self, themes: List[ThesisTheme], prisma_data: Dict
+    ) -> List[ResearchGap]:
         """Identify research gaps for PhD research."""
         self.logger.info("Identifying research gaps for PhD thesis...")
 
@@ -518,12 +536,16 @@ while maintaining high academic standards and potential impact."""
             self.logger.error(f"Gap identification failed: {e}")
             raise
 
-    def create_framework(self, themes: List[ThesisTheme], gaps: List[ResearchGap]) -> ConceptualFramework:
+    def create_framework(
+        self, themes: List[ThesisTheme], gaps: List[ResearchGap]
+    ) -> ConceptualFramework:
         """Create conceptual framework."""
         self.logger.info("Creating conceptual framework...")
 
         theme_data = [{"name": t.name, "summary": t.summary[:150]} for t in themes]
-        gap_data = [{"title": g.title, "description": g.description[:150]} for g in gaps[:3]]
+        gap_data = [
+            {"title": g.title, "description": g.description[:150]} for g in gaps[:3]
+        ]
 
         prompt = f"""
 You are a theoretical framework expert creating a conceptual model for PhD research.
@@ -599,7 +621,13 @@ The framework should:
         top_gaps = gaps[:3]  # Focus on highest priority gaps
         gap_data = []
         for gap in top_gaps:
-            gap_data.append({"title": gap.title, "description": gap.description, "priority_score": gap.priority_score})
+            gap_data.append(
+                {
+                    "title": gap.title,
+                    "description": gap.description,
+                    "priority_score": gap.priority_score,
+                }
+            )
 
         constructs = [c["name"] for c in framework.constructs]
 
@@ -669,7 +697,9 @@ Each question / hypothesis should:
                 )
                 research_questions.append(rq)
 
-            self.logger.info(f"Generated {len(research_questions)} research questions / hypotheses")
+            self.logger.info(
+                f"Generated {len(research_questions)} research questions / hypotheses"
+            )
             return research_questions
 
         except Exception as e:
@@ -691,7 +721,12 @@ Each question / hypothesis should:
             if isinstance(data, list):
                 json.dump([asdict(item) for item in data], f, indent=2, default=str)
             else:
-                json.dump(asdict(data) if hasattr(data, "__dict__") else data, f, indent=2, default=str)
+                json.dump(
+                    asdict(data) if hasattr(data, "__dict__") else data,
+                    f,
+                    indent=2,
+                    default=str,
+                )
 
         print(f"\n{'='*60}")
         print(f"CHECKPOINT: {name.upper()}")
@@ -739,7 +774,9 @@ Each question / hypothesis should:
                         template = self.jinja_env.get_template("chapter.tex.j2")
                         outputs["latex"] = template.render(**template_data)
                     except Exception:
-                        self.logger.info("LaTeX template not found, generating programmatically")
+                        self.logger.info(
+                            "LaTeX template not found, generating programmatically"
+                        )
                         outputs["latex"] = self._generate_latex_fallback(template_data)
 
                 # HTML (if template exists)
@@ -748,9 +785,13 @@ Each question / hypothesis should:
                         template = self.jinja_env.get_template("chapter.html.j2")
                         outputs["html"] = template.render(**template_data)
                     except Exception:
-                        self.logger.info("HTML template not found, converting from markdown")
+                        self.logger.info(
+                            "HTML template not found, converting from markdown"
+                        )
                         if "markdown" in outputs:
-                            outputs["html"] = self._markdown_to_html(outputs["markdown"])
+                            outputs["html"] = self._markdown_to_html(
+                                outputs["markdown"]
+                            )
 
             except Exception as e:
                 self.logger.error(f"Template rendering failed: {e}")
@@ -767,7 +808,7 @@ Each question / hypothesis should:
         gaps = data.get("gaps", [])
         framework = data.get("framework", {})
 
-        md = f"""# Literature Review
+        md = """# Literature Review
 
 ## Abstract
 
@@ -784,9 +825,19 @@ Healthcare diagnosis remains a critical challenge where machine learning technol
 """
 
         for i, theme in enumerate(themes, 1):
-            theme_name = theme.get("name", f"Theme {i}") if isinstance(theme, dict) else theme.name
-            theme_summary = theme.get("summary", "") if isinstance(theme, dict) else theme.summary
-            theme_strength = theme.get("strength", "Moderate") if isinstance(theme, dict) else theme.strength
+            theme_name = (
+                theme.get("name", f"Theme {i}")
+                if isinstance(theme, dict)
+                else theme.name
+            )
+            theme_summary = (
+                theme.get("summary", "") if isinstance(theme, dict) else theme.summary
+            )
+            theme_strength = (
+                theme.get("strength", "Moderate")
+                if isinstance(theme, dict)
+                else theme.strength
+            )
 
             md += f"""### 2.{i} {theme_name}
 
@@ -799,9 +850,17 @@ Healthcare diagnosis remains a critical challenge where machine learning technol
         md += "## 3. Research Gaps\n\n"
 
         for i, gap in enumerate(gaps, 1):
-            gap_title = gap.get("title", f"Gap {i}") if isinstance(gap, dict) else gap.title
-            gap_description = gap.get("description", "") if isinstance(gap, dict) else gap.description
-            gap_score = gap.get("priority_score", 0.0) if isinstance(gap, dict) else gap.priority_score
+            gap_title = (
+                gap.get("title", f"Gap {i}") if isinstance(gap, dict) else gap.title
+            )
+            gap_description = (
+                gap.get("description", "") if isinstance(gap, dict) else gap.description
+            )
+            gap_score = (
+                gap.get("priority_score", 0.0)
+                if isinstance(gap, dict)
+                else gap.priority_score
+            )
 
             md += f"""### 3.{i} {gap_title}
 
@@ -813,10 +872,14 @@ Healthcare diagnosis remains a critical challenge where machine learning technol
 
         if framework:
             framework_description = (
-                framework.get("description", "") if isinstance(framework, dict) else framework.description
+                framework.get("description", "")
+                if isinstance(framework, dict)
+                else framework.description
             )
             framework_diagram = (
-                framework.get("diagram_mermaid", "") if isinstance(framework, dict) else framework.diagram_mermaid
+                framework.get("diagram_mermaid", "")
+                if isinstance(framework, dict)
+                else framework.diagram_mermaid
             )
 
             md += f"""## 4. Conceptual Framework
@@ -874,7 +937,9 @@ This literature review has identified {len(themes)} major themes and {len(gaps)}
             elif format_name == "html":
                 output_file = output_dir / f"enhanced_thesis_chapter_{timestamp}.html"
             else:
-                output_file = output_dir / f"enhanced_thesis_chapter_{timestamp}.{format_name}"
+                output_file = (
+                    output_dir / f"enhanced_thesis_chapter_{timestamp}.{format_name}"
+                )
 
             with open(output_file, "w", encoding="utf - 8") as f:
                 f.write(content)
@@ -886,7 +951,14 @@ This literature review has identified {len(themes)} major themes and {len(gaps)}
         metadata_file = output_dir / f"enhanced_metadata_{timestamp}.json"
         with open(metadata_file, "w") as f:
             json.dump(
-                {"metadata": metadata, "audit_log": self.audit_log, "config": self.config}, f, indent=2, default=str
+                {
+                    "metadata": metadata,
+                    "audit_log": self.audit_log,
+                    "config": self.config,
+                },
+                f,
+                indent=2,
+                default=str,
             )
 
         saved_files.append(metadata_file)
@@ -906,17 +978,25 @@ This literature review has identified {len(themes)} major themes and {len(gaps)}
             # PDF
             pdf_file = output_dir / f"enhanced_thesis_chapter_{timestamp}.pdf"
             subprocess.run(
-                ["pandoc", str(md_file), "-o", str(pdf_file), "--pdf - engine=xelatex"], check=True, capture_output=True
+                ["pandoc", str(md_file), "-o", str(pdf_file), "--pdf - engine=xelatex"],
+                check=True,
+                capture_output=True,
             )
             self.logger.info(f"Generated PDF: {pdf_file}")
 
             # DOCX
             docx_file = output_dir / f"enhanced_thesis_chapter_{timestamp}.docx"
-            subprocess.run(["pandoc", str(md_file), "-o", str(docx_file)], check=True, capture_output=True)
+            subprocess.run(
+                ["pandoc", str(md_file), "-o", str(docx_file)],
+                check=True,
+                capture_output=True,
+            )
             self.logger.info(f"Generated DOCX: {docx_file}")
 
         except (subprocess.CalledProcessError, FileNotFoundError):
-            self.logger.info("Pandoc not available - install for additional format conversions")
+            self.logger.info(
+                "Pandoc not available - install for additional format conversions"
+            )
 
     def generate_enhanced_thesis_chapter(self, input_file: str) -> Dict[str, Any]:
         """Main generation workflow."""
@@ -943,12 +1023,16 @@ This literature review has identified {len(themes)} major themes and {len(gaps)}
 
             # Generate research questions
             research_questions = self.generate_research_questions(gaps, framework)
-            research_questions = self.human_checkpoint("research_questions", research_questions)
+            research_questions = self.human_checkpoint(
+                "research_questions", research_questions
+            )
 
             # Prepare template data
             template_data = {
                 "metadata": {
-                    "title": prisma_data.get("metadata", {}).get("title", "Literature Review"),
+                    "title": prisma_data.get("metadata", {}).get(
+                        "title", "Literature Review"
+                    ),
                     "authors": prisma_data.get("metadata", {}).get("authors", []),
                     "generated_date": datetime.now().strftime("%Y-%m-%d"),
                 },
@@ -977,10 +1061,14 @@ This literature review has identified {len(themes)} major themes and {len(gaps)}
             outputs = self.render_outputs(template_data)
 
             # Save outputs
-            saved_files = self.save_outputs(outputs, template_data["generation_metadata"])
+            saved_files = self.save_outputs(
+                outputs, template_data["generation_metadata"]
+            )
 
             duration = time.time() - start_time
-            self.logger.info(f"Enhanced thesis chapter generation completed in {duration:.2f}s")
+            self.logger.info(
+                f"Enhanced thesis chapter generation completed in {duration:.2f}s"
+            )
 
             return {
                 "themes": themes,
@@ -999,13 +1087,22 @@ This literature review has identified {len(themes)} major themes and {len(gaps)}
 
 def main():
     """CLI interface for enhanced thesis generator."""
-    parser = argparse.ArgumentParser(description="Enhanced thesis literature review generator")
+    parser = argparse.ArgumentParser(
+        description="Enhanced thesis literature review generator"
+    )
 
     parser.add_argument("input", help="Input PRISMA JSON file")
     parser.add_argument("-c", "--config", help="Configuration YAML file")
     parser.add_argument("-o", "--output", help="Output directory")
-    parser.add_argument("--no - checkpoints", action="store_true", help="Skip human checkpoints")
-    parser.add_argument("--formats", nargs="+", choices=["markdown", "latex", "html"], help="Output formats")
+    parser.add_argument(
+        "--no - checkpoints", action="store_true", help="Skip human checkpoints"
+    )
+    parser.add_argument(
+        "--formats",
+        nargs="+",
+        choices=["markdown", "latex", "html"],
+        help="Output formats",
+    )
 
     args = parser.parse_args()
 
@@ -1023,7 +1120,7 @@ def main():
     # Generate
     result = generator.generate_enhanced_thesis_chapter(args.input)
 
-    print(f"\n✅ Enhanced thesis chapter generated successfully!")
+    print("\n✅ Enhanced thesis chapter generated successfully!")
     print(f"📁 Output: {generator.config['output']['directory']}")
     print(
         f"📊 {len(result['themes'])} themes, {len(result['gaps'])} gaps, {len(result['research_questions'])} research questions"

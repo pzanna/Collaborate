@@ -6,13 +6,12 @@ Handles task splitting, result aggregation, and parallel execution coordination.
 """
 
 import asyncio
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from src.mcp.protocols import AgentResponse, ResearchAction, TaskStatus
+from src.mcp.protocols import ResearchAction
 from src.mcp.structured_logger import LogEvent, LogLevel, get_mcp_logger
 
 
@@ -120,7 +119,9 @@ class TaskFanoutManager:
             if custom_splitter:
                 subtasks = await custom_splitter(research_action, parallelism)
             else:
-                subtasks = await self._default_task_splitter(research_action, parallelism, strategy)
+                subtasks = await self._default_task_splitter(
+                    research_action, parallelism, strategy
+                )
 
             # Register subtasks
             for subtask in subtasks:
@@ -151,7 +152,11 @@ class TaskFanoutManager:
         """Complete a subtask and return aggregated result if all subtasks are done"""
         async with self._lock:
             if subtask_id not in self.subtask_mapping:
-                self.logger.log_error(f"Unknown subtask {subtask_id}", task_id=subtask_id, error_code="UNKNOWN_SUBTASK")
+                self.logger.log_error(
+                    f"Unknown subtask {subtask_id}",
+                    task_id=subtask_id,
+                    error_code="UNKNOWN_SUBTASK",
+                )
                 return None
 
             parent_task_id = self.subtask_mapping[subtask_id]
@@ -163,8 +168,16 @@ class TaskFanoutManager:
 
                 self.logger.log_task_completion(
                     task_id=subtask_id,
-                    context_id=fanout_task.original_action.context_id if fanout_task.original_action else "unknown",
-                    agent_type=fanout_task.original_action.agent_type if fanout_task.original_action else "unknown",
+                    context_id=(
+                        fanout_task.original_action.context_id
+                        if fanout_task.original_action
+                        else "unknown"
+                    ),
+                    agent_type=(
+                        fanout_task.original_action.agent_type
+                        if fanout_task.original_action
+                        else "unknown"
+                    ),
                     duration=0,  # Would need tracking for actual duration
                     success=True,
                     parent_task_id=parent_task_id,
@@ -174,8 +187,16 @@ class TaskFanoutManager:
 
                 self.logger.log_task_completion(
                     task_id=subtask_id,
-                    context_id=fanout_task.original_action.context_id if fanout_task.original_action else "unknown",
-                    agent_type=fanout_task.original_action.agent_type if fanout_task.original_action else "unknown",
+                    context_id=(
+                        fanout_task.original_action.context_id
+                        if fanout_task.original_action
+                        else "unknown"
+                    ),
+                    agent_type=(
+                        fanout_task.original_action.agent_type
+                        if fanout_task.original_action
+                        else "unknown"
+                    ),
                     duration=0,
                     success=False,
                     parent_task_id=parent_task_id,
@@ -192,12 +213,18 @@ class TaskFanoutManager:
                     LogEvent.TASK_COMPLETION,
                     f"Fanout task {parent_task_id} completed with {fanout_task.success_rate:.2%} success rate",
                     task_id=parent_task_id,
-                    context_id=fanout_task.original_action.context_id if fanout_task.original_action else "unknown",
+                    context_id=(
+                        fanout_task.original_action.context_id
+                        if fanout_task.original_action
+                        else "unknown"
+                    ),
                     details={
                         "completed_subtasks": fanout_task.completed_subtasks,
                         "failed_subtasks": fanout_task.failed_subtasks,
                         "success_rate": fanout_task.success_rate,
-                        "aggregated_result_size": len(str(aggregated_result)) if aggregated_result else 0,
+                        "aggregated_result_size": (
+                            len(str(aggregated_result)) if aggregated_result else 0
+                        ),
                     },
                 )
 
@@ -206,7 +233,10 @@ class TaskFanoutManager:
             return None
 
     async def _default_task_splitter(
-        self, research_action: ResearchAction, parallelism: int, strategy: FanoutStrategy
+        self,
+        research_action: ResearchAction,
+        parallelism: int,
+        strategy: FanoutStrategy,
     ) -> List[ResearchAction]:
         """Default task splitting logic"""
         subtasks = []
@@ -226,17 +256,25 @@ class TaskFanoutManager:
                 subtask_payload["total_subtasks"] = parallelism
 
                 # If there's a query or data list, split it
-                if "queries" in base_payload and isinstance(base_payload["queries"], list):
+                if "queries" in base_payload and isinstance(
+                    base_payload["queries"], list
+                ):
                     queries = base_payload["queries"]
                     chunk_size = max(1, len(queries) // parallelism)
                     start_idx = i * chunk_size
-                    end_idx = start_idx + chunk_size if i < parallelism - 1 else len(queries)
+                    end_idx = (
+                        start_idx + chunk_size if i < parallelism - 1 else len(queries)
+                    )
                     subtask_payload["queries"] = queries[start_idx:end_idx]
-                elif "data_chunks" in base_payload and isinstance(base_payload["data_chunks"], list):
+                elif "data_chunks" in base_payload and isinstance(
+                    base_payload["data_chunks"], list
+                ):
                     chunks = base_payload["data_chunks"]
                     chunk_size = max(1, len(chunks) // parallelism)
                     start_idx = i * chunk_size
-                    end_idx = start_idx + chunk_size if i < parallelism - 1 else len(chunks)
+                    end_idx = (
+                        start_idx + chunk_size if i < parallelism - 1 else len(chunks)
+                    )
                     subtask_payload["data_chunks"] = chunks[start_idx:end_idx]
             else:
                 # Default: add subtask metadata
@@ -266,13 +304,19 @@ class TaskFanoutManager:
             return await fanout_task.aggregation_function(fanout_task)
 
         # Use default aggregation based on action type
-        action = fanout_task.original_action.action if fanout_task.original_action else "default"
+        action = (
+            fanout_task.original_action.action
+            if fanout_task.original_action
+            else "default"
+        )
         if action in self.aggregation_functions:
             return await self.aggregation_functions[action](fanout_task)
         else:
             return await self.aggregation_functions["default"](fanout_task)
 
-    async def _aggregate_search_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
+    async def _aggregate_search_results(
+        self, fanout_task: FanoutTask
+    ) -> Dict[str, Any]:
         """Aggregate search results"""
         return await self._aggregate_results_by_type(
             fanout_task,
@@ -284,13 +328,19 @@ class TaskFanoutManager:
             },
         )
 
-    async def _aggregate_analysis_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
+    async def _aggregate_analysis_results(
+        self, fanout_task: FanoutTask
+    ) -> Dict[str, Any]:
         """Aggregate analysis results"""
         return await self._aggregate_results_by_type(
-            fanout_task, "analyze", {"insights": list, "conclusions": list, "confidence": "avg"}
+            fanout_task,
+            "analyze",
+            {"insights": list, "conclusions": list, "confidence": "avg"},
         )
 
-    async def _aggregate_execution_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
+    async def _aggregate_execution_results(
+        self, fanout_task: FanoutTask
+    ) -> Dict[str, Any]:
         """Aggregate execution results"""
         successful_executions = []
         failed_executions = []
@@ -344,45 +394,51 @@ class TaskFanoutManager:
         collectors: Dict[str, Any] = {}
 
         # Initialize collectors based on field configs
-        for field, config in field_configs.items():
+        for field_name, config in field_configs.items():
             if config == list:
-                collectors[field] = []
+                collectors[field_name] = []
             elif config == set:
-                collectors[field] = set()
+                collectors[field_name] = set()
             elif config == "avg":
-                collectors[field] = []
+                collectors[field_name] = []
 
         # Collect data from all partial results
         for subtask_id, result in fanout_task.partial_results.items():
-            for field, config in field_configs.items():
-                if field in result:
-                    if config == list and isinstance(result[field], list):
-                        collectors[field].extend(result[field])
+            for field_name, config in field_configs.items():
+                if field_name in result:
+                    if config == list and isinstance(result[field_name], list):
+                        collectors[field_name].extend(result[field_name])
                     elif config == set:
-                        if isinstance(result[field], (list, set)):
-                            collectors[field].update(result[field])
+                        if isinstance(result[field_name], (list, set)):
+                            collectors[field_name].update(result[field_name])
                         else:
-                            collectors[field].add(result[field])
-                    elif config == "avg" and isinstance(result[field], (int, float)):
-                        collectors[field].append(result[field])
+                            collectors[field_name].add(result[field_name])
+                    elif config == "avg" and isinstance(
+                        result[field_name], (int, float)
+                    ):
+                        collectors[field_name].append(result[field_name])
 
         # Process collected data
-        for field, config in field_configs.items():
+        for field_name, config in field_configs.items():
             if config == list:
-                aggregated[field] = collectors[field]
+                aggregated[field_name] = collectors[field_name]
                 # Sort by relevance if available
                 if (
-                    field == "results"
-                    and collectors[field]
-                    and isinstance(collectors[field][0], dict)
-                    and "relevance" in collectors[field][0]
+                    field_name == "results"
+                    and collectors[field_name]
+                    and isinstance(collectors[field_name][0], dict)
+                    and "relevance" in collectors[field_name][0]
                 ):
-                    aggregated[field].sort(key=lambda x: x.get("relevance", 0), reverse=True)
+                    aggregated[field_name].sort(
+                        key=lambda x: x.get("relevance", 0), reverse=True
+                    )
             elif config == set:
-                aggregated[field] = list(collectors[field])
+                aggregated[field_name] = list(collectors[field_name])
             elif config == "avg":
-                values = collectors[field]
-                aggregated[f"average_{field}"] = sum(values) / max(len(values), 1) if values else 0.0
+                values = collectors[field_name]
+                aggregated[f"average_{field_name}"] = (
+                    sum(values) / max(len(values), 1) if values else 0.0
+                )
 
         # Add common metadata
         aggregated["subtask_count"] = len(fanout_task.partial_results)
@@ -394,10 +450,16 @@ class TaskFanoutManager:
 
         return aggregated
 
-    async def _aggregate_default_results(self, fanout_task: FanoutTask) -> Dict[str, Any]:
+    async def _aggregate_default_results(
+        self, fanout_task: FanoutTask
+    ) -> Dict[str, Any]:
         """Default result aggregation"""
         return {
-            "action": fanout_task.original_action.action if fanout_task.original_action else "unknown",
+            "action": (
+                fanout_task.original_action.action
+                if fanout_task.original_action
+                else "unknown"
+            ),
             "partial_results": fanout_task.partial_results,
             "subtask_count": len(fanout_task.partial_results),
             "success_rate": fanout_task.success_rate,
@@ -405,7 +467,9 @@ class TaskFanoutManager:
             "failed_subtasks": fanout_task.failed_subtasks,
         }
 
-    async def get_fanout_task_info(self, parent_task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_fanout_task_info(
+        self, parent_task_id: str
+    ) -> Optional[Dict[str, Any]]:
         """Get information about a fanout task"""
         async with self._lock:
             if parent_task_id not in self.fanout_tasks:
@@ -416,7 +480,9 @@ class TaskFanoutManager:
     async def get_all_fanout_tasks(self) -> Dict[str, Dict[str, Any]]:
         """Get information about all fanout tasks"""
         async with self._lock:
-            return {task_id: task.to_dict() for task_id, task in self.fanout_tasks.items()}
+            return {
+                task_id: task.to_dict() for task_id, task in self.fanout_tasks.items()
+            }
 
     async def cancel_fanout_task(self, parent_task_id: str) -> List[str]:
         """Cancel a fanout task and all its subtasks"""
@@ -447,8 +513,12 @@ class TaskFanoutManager:
     async def get_stats(self) -> Dict[str, Any]:
         """Get fanout manager statistics"""
         async with self._lock:
-            total_subtasks = sum(len(task.subtask_ids) for task in self.fanout_tasks.values())
-            completed_fanouts = sum(1 for task in self.fanout_tasks.values() if task.is_complete)
+            total_subtasks = sum(
+                len(task.subtask_ids) for task in self.fanout_tasks.values()
+            )
+            completed_fanouts = sum(
+                1 for task in self.fanout_tasks.values() if task.is_complete
+            )
 
             strategy_counts = {}
             for task in self.fanout_tasks.values():

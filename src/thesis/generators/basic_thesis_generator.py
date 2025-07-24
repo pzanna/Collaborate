@@ -29,15 +29,14 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from textwrap import dedent
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # Add Eunice modules to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 # Import dependencies
 try:
-    from src.ai_clients.openai_client import AIProviderConfig, OpenAIClient
+    pass
 
     AI_AVAILABLE = True
 except ImportError:
@@ -45,8 +44,7 @@ except ImportError:
 
 # Optional dependencies
 try:
-    import jinja2
-    from jinja2 import Environment, FileSystemLoader
+    pass
 
     JINJA_AVAILABLE = True
 except ImportError:
@@ -54,7 +52,7 @@ except ImportError:
     print("Warning: Jinja2 not available. Install with: pip install jinja2")
 
 try:
-    import yaml
+    pass
 
     YAML_AVAILABLE = True
 except ImportError:
@@ -216,7 +214,8 @@ class ThesisGenerator:
 
             try:
                 # Try to import and create client
-                from src.ai_clients.openai_client import AIProviderConfig, OpenAIClient
+                from src.ai_clients.openai_client import (AIProviderConfig,
+                                                          OpenAIClient)
 
                 config = AIProviderConfig(
                     provider="openai",
@@ -247,7 +246,9 @@ class ThesisGenerator:
                     self.model = model
                     self.deterministic = deterministic
 
-                def get_response(self, user_message: str, system_prompt: Optional[str] = None) -> str:
+                def get_response(
+                    self, user_message: str, system_prompt: Optional[str] = None
+                ) -> str:
                     """TODO: Add docstring for get_response."""
                     messages = []
                     if system_prompt:
@@ -267,7 +268,9 @@ class ThesisGenerator:
             return FallbackClient(api_key, self.ai_model, self.deterministic)
 
         except ImportError:
-            raise RuntimeError("OpenAI client not available. Install with: pip install openai")
+            raise RuntimeError(
+                "OpenAI client not available. Install with: pip install openai"
+            )
 
     def call_ai(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """Call AI model with caching."""
@@ -280,7 +283,9 @@ class ThesisGenerator:
 
         # Prepare system prompt for JSON output
         if not system_prompt:
-            system_prompt = "You are a research assistant. Respond with valid JSON only."
+            system_prompt = (
+                "You are a research assistant. Respond with valid JSON only."
+            )
 
         # Call AI
         start_time = time.time()
@@ -331,7 +336,9 @@ class ThesisGenerator:
         self.logger.info("Extracting themes...")
 
         # Prepare study data
-        studies_table = prisma_data["data_extraction_tables"]["table_1_study_characteristics"]
+        studies_table = prisma_data["data_extraction_tables"][
+            "table_1_study_characteristics"
+        ]
         study_summaries = []
 
         for study in studies_table["data"]:
@@ -405,7 +412,9 @@ Ensure themes are mutually exclusive and collectively exhaustive.
             self.logger.error(f"Theme extraction failed: {e}")
             raise
 
-    def identify_gaps(self, themes: List[ThemeResult], prisma_data: Dict[str, Any]) -> List[ResearchGap]:
+    def identify_gaps(
+        self, themes: List[ThemeResult], prisma_data: Dict[str, Any]
+    ) -> List[ResearchGap]:
         """Identify research gaps."""
         self.logger.info("Identifying research gaps...")
 
@@ -420,7 +429,11 @@ Ensure themes are mutually exclusive and collectively exhaustive.
                 }
             )
 
-        study_count = len(prisma_data["data_extraction_tables"]["table_1_study_characteristics"]["data"])
+        study_count = len(
+            prisma_data["data_extraction_tables"]["table_1_study_characteristics"][
+                "data"
+            ]
+        )
 
         prompt = f"""
 Identify 3 - 5 high - priority research gaps for PhD thesis research based on this thematic analysis.
@@ -485,12 +498,16 @@ Prioritize gaps that are:
             self.logger.error(f"Gap analysis failed: {e}")
             raise
 
-    def create_conceptual_framework(self, themes: List[ThemeResult], gaps: List[ResearchGap]) -> ConceptualFramework:
+    def create_conceptual_framework(
+        self, themes: List[ThemeResult], gaps: List[ResearchGap]
+    ) -> ConceptualFramework:
         """Create conceptual framework."""
         self.logger.info("Creating conceptual framework...")
 
         theme_data = [{"name": t.name, "summary": t.summary[:100]} for t in themes]
-        gap_data = [{"title": g.title, "description": g.description[:100]} for g in gaps[:3]]
+        gap_data = [
+            {"title": g.title, "description": g.description[:100]} for g in gaps[:3]
+        ]
 
         prompt = f"""
 Create a conceptual framework for PhD research that integrates these themes and addresses the research gaps.
@@ -556,7 +573,11 @@ Create:
         with open(checkpoint_file, "w") as f:
             if hasattr(data, "__dict__"):
                 json.dump(
-                    [asdict(item) for item in data] if isinstance(data, list) else asdict(data),
+                    (
+                        [asdict(item) for item in data]
+                        if isinstance(data, list)
+                        else asdict(data)
+                    ),
                     f,
                     indent=2,
                     default=str,
@@ -601,7 +622,7 @@ Create:
         """Generate markdown thesis chapter."""
         self.logger.info("Generating markdown...")
 
-        metadata = prisma_data.get("metadata", {})
+        prisma_data.get("metadata", {})
         abstract = prisma_data.get("abstract", {})
         intro = prisma_data.get("introduction", {})
 
@@ -639,7 +660,9 @@ Create:
 
 """
             if theme.contradictions:
-                markdown += f"**Contradictory Findings:** {'; '.join(theme.contradictions)}\n\n"
+                markdown += (
+                    f"**Contradictory Findings:** {'; '.join(theme.contradictions)}\n\n"
+                )
 
         markdown += """## 3. Research Gaps and Opportunities
 
@@ -698,7 +721,11 @@ which offers both high impact potential and feasible implementation within a PhD
         return markdown
 
     def save_outputs(
-        self, markdown: str, themes: List[ThemeResult], gaps: List[ResearchGap], framework: ConceptualFramework
+        self,
+        markdown: str,
+        themes: List[ThemeResult],
+        gaps: List[ResearchGap],
+        framework: ConceptualFramework,
     ):
         """Save all outputs."""
         timestamp = datetime.now().strftime("%Y % m%d_ % H%M % S")
@@ -731,7 +758,7 @@ which offers both high impact potential and feasible implementation within a PhD
         # Try Pandoc conversion
         self._try_pandoc_conversion(md_file, timestamp)
 
-        self.logger.info(f"Outputs saved:")
+        self.logger.info("Outputs saved:")
         self.logger.info(f"  Markdown: {md_file}")
         self.logger.info(f"  Data: {data_file}")
 
@@ -740,12 +767,20 @@ which offers both high impact potential and feasible implementation within a PhD
         try:
             # PDF
             pdf_file = self.output_dir / f"thesis_chapter_{timestamp}.pdf"
-            subprocess.run(["pandoc", str(md_file), "-o", str(pdf_file)], check=True, capture_output=True)
+            subprocess.run(
+                ["pandoc", str(md_file), "-o", str(pdf_file)],
+                check=True,
+                capture_output=True,
+            )
             self.logger.info(f"  PDF: {pdf_file}")
 
             # DOCX
             docx_file = self.output_dir / f"thesis_chapter_{timestamp}.docx"
-            subprocess.run(["pandoc", str(md_file), "-o", str(docx_file)], check=True, capture_output=True)
+            subprocess.run(
+                ["pandoc", str(md_file), "-o", str(docx_file)],
+                check=True,
+                capture_output=True,
+            )
             self.logger.info(f"  DOCX: {docx_file}")
 
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -781,7 +816,13 @@ which offers both high impact potential and feasible implementation within a PhD
             duration = time.time() - start_time
             self.logger.info(f"Generation completed in {duration:.2f}s")
 
-            return {"themes": themes, "gaps": gaps, "framework": framework, "markdown": markdown, "duration": duration}
+            return {
+                "themes": themes,
+                "gaps": gaps,
+                "framework": framework,
+                "markdown": markdown,
+                "duration": duration,
+            }
 
         except Exception as e:
             self.logger.error(f"Generation failed: {e}")
@@ -790,15 +831,25 @@ which offers both high impact potential and feasible implementation within a PhD
 
 def main():
     """CLI interface."""
-    parser = argparse.ArgumentParser(description="Generate thesis literature review from PRISMA data")
+    parser = argparse.ArgumentParser(
+        description="Generate thesis literature review from PRISMA data"
+    )
 
     parser.add_argument("input", help="Input PRISMA JSON file")
-    parser.add_argument("-o", "--output", default="thesis_output", help="Output directory")
-    parser.add_argument("-p", "--provider", default="openai", choices=["openai"], help="AI provider")
+    parser.add_argument(
+        "-o", "--output", default="thesis_output", help="Output directory"
+    )
+    parser.add_argument(
+        "-p", "--provider", default="openai", choices=["openai"], help="AI provider"
+    )
     parser.add_argument("-m", "--model", default="gpt - 4", help="AI model")
-    parser.add_argument("--no - deterministic", action="store_true", help="Disable deterministic mode")
+    parser.add_argument(
+        "--no - deterministic", action="store_true", help="Disable deterministic mode"
+    )
     parser.add_argument("--no - cache", action="store_true", help="Disable caching")
-    parser.add_argument("--no - checkpoints", action="store_true", help="Skip human checkpoints")
+    parser.add_argument(
+        "--no - checkpoints", action="store_true", help="Skip human checkpoints"
+    )
 
     args = parser.parse_args()
 
@@ -816,7 +867,7 @@ def main():
     # Generate
     result = generator.generate_thesis_chapter()
 
-    print(f"\n✅ Thesis chapter generated successfully!")
+    print("\n✅ Thesis chapter generated successfully!")
     print(f"📁 Output: {args.output}")
     print(f"📊 {len(result['themes'])} themes, {len(result['gaps'])} gaps")
     print(f"⏱️  Duration: {result['duration']:.1f}s")

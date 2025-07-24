@@ -7,13 +7,11 @@ Manages task queuing, scheduling, and execution coordination.
 import asyncio
 import heapq
 import logging
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from .protocols import AgentResponse, Priority, ResearchAction, TaskStatus
+from .protocols import Priority, ResearchAction, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,11 @@ class TaskQueue:
         self._task_callbacks: Dict[str, List[Callable]] = {}
 
         # Priority mapping
-        self._priority_scores = {Priority.LOW.value: 3.0, Priority.NORMAL.value: 2.0, Priority.HIGH.value: 1.0}
+        self._priority_scores = {
+            Priority.LOW.value: 3.0,
+            Priority.NORMAL.value: 2.0,
+            Priority.HIGH.value: 1.0,
+        }
 
     async def add_task(self, action: ResearchAction) -> bool:
         """Add a new task to the queue"""
@@ -61,16 +63,24 @@ class TaskQueue:
             priority_score = self._priority_scores.get(action.priority, 2.0)
 
             # Add time factor for aging (older tasks get slightly higher priority)
-            time_factor = 0.1 * (datetime.now() - action.created_at).total_seconds() / 3600
+            time_factor = (
+                0.1 * (datetime.now() - action.created_at).total_seconds() / 3600
+            )
             priority_score -= time_factor
 
             # Create queued task
-            queued_task = QueuedTask(action=action, priority_score=priority_score, retry_count=action.retry_count)
+            queued_task = QueuedTask(
+                action=action,
+                priority_score=priority_score,
+                retry_count=action.retry_count,
+            )
 
             # Add to priority queue
             heapq.heappush(self._queue, queued_task)
 
-            logger.info(f"Added task {action.task_id} to queue with priority {action.priority}")
+            logger.info(
+                f"Added task {action.task_id} to queue with priority {action.priority}"
+            )
             return True
 
     async def get_next_task(self) -> Optional[QueuedTask]:
@@ -89,7 +99,9 @@ class TaskQueue:
             logger.debug(f"Dequeued task {task.action.task_id}")
             return task
 
-    async def complete_task(self, task_id: str, result: Optional[Dict[str, Any]] = None) -> bool:
+    async def complete_task(
+        self, task_id: str, result: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """Mark a task as completed"""
         async with self._lock:
             if task_id not in self._active_tasks:
@@ -133,14 +145,18 @@ class TaskQueue:
                 # Add back to queue
                 heapq.heappush(self._queue, task)
 
-                await self._execute_callbacks(task_id, "retry", {"error": error, "retry_count": task.retry_count})
+                await self._execute_callbacks(
+                    task_id, "retry", {"error": error, "retry_count": task.retry_count}
+                )
                 return True
             else:
                 # Task failed permanently
                 task.action.status = TaskStatus.FAILED.value
                 self._failed_tasks[task_id] = task
 
-                logger.error(f"Task {task_id} failed permanently after {task.retry_count} attempts: {error}")
+                logger.error(
+                    f"Task {task_id} failed permanently after {task.retry_count} attempts: {error}"
+                )
 
                 await self._execute_callbacks(task_id, "failed", {"error": error})
                 return False
@@ -190,7 +206,9 @@ class TaskQueue:
                     "task_id": task_id,
                     "status": task.action.status,
                     "assigned_agent": task.assigned_agent,
-                    "started_at": task.started_at.isoformat() if task.started_at else None,
+                    "started_at": (
+                        task.started_at.isoformat() if task.started_at else None
+                    ),
                     "retry_count": task.retry_count,
                 }
 
@@ -201,7 +219,9 @@ class TaskQueue:
                     "task_id": task_id,
                     "status": TaskStatus.COMPLETED.value,
                     "assigned_agent": task.assigned_agent,
-                    "started_at": task.started_at.isoformat() if task.started_at else None,
+                    "started_at": (
+                        task.started_at.isoformat() if task.started_at else None
+                    ),
                     "retry_count": task.retry_count,
                 }
 
@@ -212,7 +232,9 @@ class TaskQueue:
                     "task_id": task_id,
                     "status": TaskStatus.FAILED.value,
                     "assigned_agent": task.assigned_agent,
-                    "started_at": task.started_at.isoformat() if task.started_at else None,
+                    "started_at": (
+                        task.started_at.isoformat() if task.started_at else None
+                    ),
                     "retry_count": task.retry_count,
                 }
 
@@ -229,7 +251,9 @@ class TaskQueue:
 
             return None
 
-    async def add_callback(self, task_id: str, callback: Callable[[str, str, Any], None]):
+    async def add_callback(
+        self, task_id: str, callback: Callable[[str, str, Any], None]
+    ):
         """Add a callback for task status changes"""
         async with self._lock:
             if task_id not in self._task_callbacks:
@@ -266,7 +290,10 @@ class TaskQueue:
                 "active_tasks": active_tasks,
                 "completed_tasks": completed_tasks,
                 "failed_tasks": failed_tasks,
-                "total_tasks": pending_tasks + active_tasks + completed_tasks + failed_tasks,
+                "total_tasks": pending_tasks
+                + active_tasks
+                + completed_tasks
+                + failed_tasks,
                 "priority_distribution": priority_dist,
                 "queue_utilization": pending_tasks / self.max_size,
             }
@@ -327,7 +354,9 @@ class TaskQueue:
                         "task_id": task.action.task_id,
                         "action": task.action.action,
                         "assigned_agent": task.assigned_agent,
-                        "started_at": task.started_at.isoformat() if task.started_at else None,
+                        "started_at": (
+                            task.started_at.isoformat() if task.started_at else None
+                        ),
                         "retry_count": task.retry_count,
                     }
                 )
@@ -339,7 +368,9 @@ class TaskQueue:
                         "task_id": task.action.task_id,
                         "action": task.action.action,
                         "assigned_agent": task.assigned_agent,
-                        "started_at": task.started_at.isoformat() if task.started_at else None,
+                        "started_at": (
+                            task.started_at.isoformat() if task.started_at else None
+                        ),
                         "retry_count": task.retry_count,
                     }
                 )
@@ -351,7 +382,9 @@ class TaskQueue:
                         "task_id": task.action.task_id,
                         "action": task.action.action,
                         "assigned_agent": task.assigned_agent,
-                        "started_at": task.started_at.isoformat() if task.started_at else None,
+                        "started_at": (
+                            task.started_at.isoformat() if task.started_at else None
+                        ),
                         "retry_count": task.retry_count,
                     }
                 )

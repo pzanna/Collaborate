@@ -27,10 +27,10 @@ import sqlite3
 import statistics
 import uuid
 from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -77,6 +77,9 @@ class ResolutionMethod(Enum):
     VOTING = "voting"
     CONSENSUS_BUILDING = "consensus_building"
     THIRD_REVIEWER = "third_reviewer"
+    MEDIATION = "mediation"
+    RE_EXTRACTION = "re_extraction"
+    EXPERT_REVIEW = "expert_review"
 
 
 @dataclass
@@ -330,15 +333,21 @@ class AdvancedConflictResolver:
                 reviewer_decisions[decision["user_id"]].append(decision)
 
             # Check for inclusion / exclusion conflicts
-            inclusion_conflicts = await self._detect_inclusion_conflicts(project_id, study_id, reviewer_decisions)
+            inclusion_conflicts = await self._detect_inclusion_conflicts(
+                project_id, study_id, reviewer_decisions
+            )
             conflicts.extend(inclusion_conflicts)
 
             # Check for criteria disagreements
-            criteria_conflicts = await self._detect_criteria_conflicts(project_id, study_id, reviewer_decisions)
+            criteria_conflicts = await self._detect_criteria_conflicts(
+                project_id, study_id, reviewer_decisions
+            )
             conflicts.extend(criteria_conflicts)
 
             # Check for quality assessment conflicts
-            quality_conflicts = await self._detect_quality_conflicts(project_id, study_id, reviewer_decisions)
+            quality_conflicts = await self._detect_quality_conflicts(
+                project_id, study_id, reviewer_decisions
+            )
             conflicts.extend(quality_conflicts)
 
             # Store detected conflicts
@@ -374,7 +383,9 @@ class AdvancedConflictResolver:
                 # Conflict if not all decisions are the same
                 if len(unique_decisions) > 1:
                     # Calculate conflict severity
-                    severity = self._calculate_inclusion_conflict_severity(decision_values)
+                    severity = self._calculate_inclusion_conflict_severity(
+                        decision_values
+                    )
 
                     conflict = ConflictDetection(
                         conflict_id=str(uuid.uuid4()),
@@ -421,7 +432,11 @@ class AdvancedConflictResolver:
                 # Calculate disagreement level
                 disagreement_score = 0
                 for criterion in all_criteria:
-                    reviewer_count = sum(1 for criteria_set in criteria_decisions.values() if criterion in criteria_set)
+                    reviewer_count = sum(
+                        1
+                        for criteria_set in criteria_decisions.values()
+                        if criterion in criteria_set
+                    )
                     total_reviewers = len(criteria_decisions)
                     agreement_ratio = reviewer_count / total_reviewers
                     disagreement_score += abs(0.5 - agreement_ratio)
@@ -431,7 +446,9 @@ class AdvancedConflictResolver:
                 # Create conflict if disagreement is significant
                 threshold = self.conflict_thresholds[ConflictType.CRITERIA_DISAGREEMENT]
                 if disagreement_score > threshold:
-                    severity = self._calculate_criteria_conflict_severity(disagreement_score)
+                    severity = self._calculate_criteria_conflict_severity(
+                        disagreement_score
+                    )
 
                     conflict = ConflictDetection(
                         conflict_id=str(uuid.uuid4()),
@@ -440,14 +457,20 @@ class AdvancedConflictResolver:
                         study_id=study_id,
                         project_id=project_id,
                         reviewers=list(criteria_decisions.keys()),
-                        conflicting_decisions={k: list(v) for k, v in criteria_decisions.items()},
+                        conflicting_decisions={
+                            k: list(v) for k, v in criteria_decisions.items()
+                        },
                         detection_timestamp=datetime.now(timezone.utc),
                         confidence_score=min(0.9, disagreement_score * 2),
                         metadata={
                             "disagreement_score": disagreement_score,
                             "conflicting_criteria": list(all_criteria),
                             "agreement_ratios": {
-                                criterion: sum(1 for cs in criteria_decisions.values() if criterion in cs)
+                                criterion: sum(
+                                    1
+                                    for cs in criteria_decisions.values()
+                                    if criterion in cs
+                                )
                                 / len(criteria_decisions)
                                 for criterion in all_criteria
                             },
@@ -484,11 +507,17 @@ class AdvancedConflictResolver:
                     mean_score = statistics.mean(scores)
 
                     # Normalize variance by mean to get relative disagreement
-                    relative_variance = score_variance / (mean_score + 0.1)  # Avoid division by zero
+                    relative_variance = score_variance / (
+                        mean_score + 0.1
+                    )  # Avoid division by zero
 
-                    threshold = self.conflict_thresholds[ConflictType.QUALITY_ASSESSMENT]
+                    threshold = self.conflict_thresholds[
+                        ConflictType.QUALITY_ASSESSMENT
+                    ]
                     if relative_variance > threshold:
-                        severity = self._calculate_quality_conflict_severity(relative_variance)
+                        severity = self._calculate_quality_conflict_severity(
+                            relative_variance
+                        )
 
                         conflict = ConflictDetection(
                             conflict_id=str(uuid.uuid4()),
@@ -514,7 +543,9 @@ class AdvancedConflictResolver:
 
         return conflicts
 
-    def _calculate_inclusion_conflict_severity(self, decisions: List[str]) -> ConflictSeverity:
+    def _calculate_inclusion_conflict_severity(
+        self, decisions: List[str]
+    ) -> ConflictSeverity:
         """Calculate severity for inclusion / exclusion conflicts"""
         decision_counts = Counter(decisions)
         total_decisions = len(decisions)
@@ -536,7 +567,9 @@ class AdvancedConflictResolver:
         else:
             return ConflictSeverity.LOW
 
-    def _calculate_criteria_conflict_severity(self, disagreement_score: float) -> ConflictSeverity:
+    def _calculate_criteria_conflict_severity(
+        self, disagreement_score: float
+    ) -> ConflictSeverity:
         """Calculate severity for criteria conflicts"""
         if disagreement_score >= 0.8:
             return ConflictSeverity.CRITICAL
@@ -547,7 +580,9 @@ class AdvancedConflictResolver:
         else:
             return ConflictSeverity.LOW
 
-    def _calculate_quality_conflict_severity(self, relative_variance: float) -> ConflictSeverity:
+    def _calculate_quality_conflict_severity(
+        self, relative_variance: float
+    ) -> ConflictSeverity:
         """Calculate severity for quality assessment conflicts"""
         if relative_variance >= 1.0:
             return ConflictSeverity.CRITICAL
@@ -558,7 +593,9 @@ class AdvancedConflictResolver:
         else:
             return ConflictSeverity.LOW
 
-    async def generate_resolution_suggestions(self, conflict: ConflictDetection) -> List[ResolutionSuggestion]:
+    async def generate_resolution_suggestions(
+        self, conflict: ConflictDetection
+    ) -> List[ResolutionSuggestion]:
         """
         Generate AI - powered resolution suggestions for conflicts
 
@@ -589,14 +626,18 @@ class AdvancedConflictResolver:
             for suggestion in suggestions:
                 await self._store_suggestion(suggestion)
 
-            logger.info(f"Generated {len(suggestions)} resolution suggestions for conflict {conflict.conflict_id}")
+            logger.info(
+                f"Generated {len(suggestions)} resolution suggestions for conflict {conflict.conflict_id}"
+            )
             return suggestions
 
         except Exception as e:
             logger.error(f"Resolution suggestion generation error: {str(e)}")
             return []
 
-    async def _suggest_inclusion_resolutions(self, conflict: ConflictDetection) -> List[ResolutionSuggestion]:
+    async def _suggest_inclusion_resolutions(
+        self, conflict: ConflictDetection
+    ) -> List[ResolutionSuggestion]:
         """Generate resolution suggestions for inclusion / exclusion conflicts"""
         suggestions = []
 
@@ -629,7 +670,11 @@ class AdvancedConflictResolver:
                     suggestion_text="Facilitate a structured discussion between conflicting reviewers",
                     rationale="Discussion can reveal underlying reasoning and lead to consensus",
                     confidence_score=0.75,
-                    evidence_support={"success_rate": 0.68, "average_resolution_time": 30, "learning_benefit": 0.85},
+                    evidence_support={
+                        "success_rate": 0.68,
+                        "average_resolution_time": 30,
+                        "learning_benefit": 0.85,
+                    },
                     estimated_resolution_time=30,
                     success_probability=0.68,
                 )
@@ -645,7 +690,11 @@ class AdvancedConflictResolver:
                         suggestion_text="Escalate to senior reviewer or domain expert",
                         rationale="Complex conflicts require expert judgment and domain knowledge",
                         confidence_score=0.90,
-                        evidence_support={"success_rate": 0.95, "average_resolution_time": 60, "final_quality": 0.92},
+                        evidence_support={
+                            "success_rate": 0.95,
+                            "average_resolution_time": 60,
+                            "final_quality": 0.92,
+                        },
                         estimated_resolution_time=60,
                         success_probability=0.95,
                     )
@@ -656,7 +705,9 @@ class AdvancedConflictResolver:
 
         return suggestions
 
-    async def _suggest_criteria_resolutions(self, conflict: ConflictDetection) -> List[ResolutionSuggestion]:
+    async def _suggest_criteria_resolutions(
+        self, conflict: ConflictDetection
+    ) -> List[ResolutionSuggestion]:
         """Generate resolution suggestions for criteria conflicts"""
         suggestions = []
 
@@ -667,8 +718,9 @@ class AdvancedConflictResolver:
                     suggestion_id=str(uuid.uuid4()),
                     conflict_id=conflict.conflict_id,
                     method=ResolutionMethod.CONSENSUS_BUILDING,
-                    suggestion_text="Conduct structured consensus - building session with criteria clarification",
-                    rationale="Criteria conflicts often stem from interpretation differences that can be resolved through discussion",
+                    suggestion_text="Conduct structured consensus-building session with criteria clarification",
+                    rationale="Criteria conflicts often stem from interpretation differences that can be resolved "
+                    "through discussion",
                     confidence_score=0.80,
                     evidence_support={
                         "success_rate": 0.75,
@@ -690,7 +742,11 @@ class AdvancedConflictResolver:
                         suggestion_text="Apply majority vote rule for criteria selection",
                         rationale="Low - severity criteria conflicts can be resolved automatically using majority rule",
                         confidence_score=0.70,
-                        evidence_support={"success_rate": 0.78, "average_resolution_time": 5, "efficiency_gain": 0.95},
+                        evidence_support={
+                            "success_rate": 0.78,
+                            "average_resolution_time": 5,
+                            "efficiency_gain": 0.95,
+                        },
                         estimated_resolution_time=5,
                         success_probability=0.78,
                     )
@@ -701,7 +757,9 @@ class AdvancedConflictResolver:
 
         return suggestions
 
-    async def _suggest_quality_resolutions(self, conflict: ConflictDetection) -> List[ResolutionSuggestion]:
+    async def _suggest_quality_resolutions(
+        self, conflict: ConflictDetection
+    ) -> List[ResolutionSuggestion]:
         """Generate resolution suggestions for quality assessment conflicts"""
         suggestions = []
 
@@ -725,6 +783,27 @@ class AdvancedConflictResolver:
                 )
             )
 
+            # Expert review for high severity conflicts
+            if conflict.severity in [ConflictSeverity.HIGH, ConflictSeverity.CRITICAL]:
+                suggestions.append(
+                    ResolutionSuggestion(
+                        suggestion_id=str(uuid.uuid4()),
+                        conflict_id=conflict.conflict_id,
+                        method=ResolutionMethod.EXPERT_REVIEW,
+                        suggestion_text="Assign senior quality assessment expert to review conflicting domains",
+                        rationale="Quality assessment disagreements often require deep methodological expertise to "
+                        "resolve",
+                        confidence_score=0.88,
+                        evidence_support={
+                            "success_rate": 0.85,
+                            "average_resolution_time": 50,
+                            "expertise_impact": 0.90,
+                        },
+                        estimated_resolution_time=50,
+                        success_probability=0.85,
+                    )
+                )
+
             # Average scoring for minor conflicts
             if conflict.severity in [ConflictSeverity.LOW, ConflictSeverity.MEDIUM]:
                 suggestions.append(
@@ -733,9 +812,14 @@ class AdvancedConflictResolver:
                         conflict_id=conflict.conflict_id,
                         method=ResolutionMethod.AUTOMATIC,
                         suggestion_text="Use weighted average of quality scores",
-                        rationale="Minor quality score differences can be resolved by averaging with reviewer experience weights",
+                        rationale="Minor quality score differences can be resolved by averaging with reviewer "
+                        "experience weights",
                         confidence_score=0.75,
-                        evidence_support={"success_rate": 0.85, "average_resolution_time": 2, "score_accuracy": 0.79},
+                        evidence_support={
+                            "success_rate": 0.85,
+                            "average_resolution_time": 2,
+                            "score_accuracy": 0.79,
+                        },
                         estimated_resolution_time=2,
                         success_probability=0.85,
                     )
@@ -746,7 +830,9 @@ class AdvancedConflictResolver:
 
         return suggestions
 
-    async def _suggest_general_resolutions(self, conflict: ConflictDetection) -> List[ResolutionSuggestion]:
+    async def _suggest_general_resolutions(
+        self, conflict: ConflictDetection
+    ) -> List[ResolutionSuggestion]:
         """Generate general resolution suggestions applicable to any conflict type"""
         suggestions = []
 
@@ -786,19 +872,26 @@ class AdvancedConflictResolver:
                 # Factors: success probability, time efficiency, confidence
                 time_efficiency = 1.0 / (suggestion.estimated_resolution_time + 1)
                 composite_score = (
-                    suggestion.success_probability * 0.5 + suggestion.confidence_score * 0.3 + time_efficiency * 0.2
+                    suggestion.success_probability * 0.5
+                    + suggestion.confidence_score * 0.3
+                    + time_efficiency * 0.2
                 )
                 suggestion.metadata = {"composite_score": composite_score}
 
             # Sort by composite score (descending)
-            suggestions.sort(key=lambda s: s.metadata.get("composite_score", 0) if s.metadata else 0, reverse=True)
+            suggestions.sort(
+                key=lambda s: s.metadata.get("composite_score", 0) if s.metadata else 0,
+                reverse=True,
+            )
 
         except Exception as e:
             logger.error(f"Suggestion ranking error: {str(e)}")
 
         return suggestions
 
-    async def assign_expert_reviewer(self, conflict: ConflictDetection) -> Optional[ExpertAssignment]:
+    async def assign_expert_reviewer(
+        self, conflict: ConflictDetection
+    ) -> Optional[ExpertAssignment]:
         """
         Assign an expert reviewer for conflict resolution
 
@@ -813,7 +906,9 @@ class AdvancedConflictResolver:
             experts = await self._get_available_experts(conflict)
 
             if not experts:
-                logger.warning(f"No available experts for conflict {conflict.conflict_id}")
+                logger.warning(
+                    f"No available experts for conflict {conflict.conflict_id}"
+                )
                 return None
 
             # Calculate assignment scores
@@ -840,7 +935,9 @@ class AdvancedConflictResolver:
                 )
 
                 await self._store_expert_assignment(assignment)
-                logger.info(f"Assigned expert {best_expert['reviewer_id']} to conflict {conflict.conflict_id}")
+                logger.info(
+                    f"Assigned expert {best_expert['reviewer_id']} to conflict {conflict.conflict_id}"
+                )
                 return assignment
 
         except Exception as e:
@@ -848,7 +945,83 @@ class AdvancedConflictResolver:
 
         return None
 
-    async def _get_available_experts(self, conflict: ConflictDetection) -> List[Dict[str, Any]]:
+    async def resolve_conflict(
+        self,
+        conflict_id: str,
+        resolution_method: ResolutionMethod,
+        resolved_by: str,
+        final_decision: Dict[str, Any],
+        resolution_notes: Optional[str] = None,
+    ) -> Optional[ConflictResolution]:
+        """
+        Resolve a conflict and store the resolution record.
+
+        Args:
+            conflict_id: The ID of the conflict to resolve.
+            resolution_method: The method used for resolution.
+            resolved_by: The ID of the user/system that resolved the conflict.
+            final_decision: The final decision that resolves the conflict.
+            resolution_notes: Optional notes about the resolution process.
+
+        Returns:
+            The conflict resolution record, or None if resolution failed.
+        """
+        try:
+            resolution = ConflictResolution(
+                resolution_id=str(uuid.uuid4()),
+                conflict_id=conflict_id,
+                method=resolution_method,
+                status=ResolutionStatus.RESOLVED,
+                resolved_by=resolved_by,
+                resolution_data=final_decision,
+                start_timestamp=datetime.now(
+                    timezone.utc
+                ),  # This should ideally be tracked from when resolution starts
+                end_timestamp=datetime.now(timezone.utc),
+                resolution_notes=resolution_notes,
+                effectiveness_score=None,  # To be calculated later
+            )
+
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO conflict_resolutions
+                    (resolution_id, conflict_id, method, status, resolved_by, resolution_data,
+                     start_timestamp, end_timestamp, resolution_notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        resolution.resolution_id,
+                        resolution.conflict_id,
+                        resolution.method.value,
+                        resolution.status.value,
+                        resolution.resolved_by,
+                        json.dumps(resolution.resolution_data),
+                        resolution.start_timestamp.isoformat(),
+                        (
+                            resolution.end_timestamp.isoformat()
+                            if resolution.end_timestamp
+                            else None
+                        ),
+                        resolution.resolution_notes,
+                    ),
+                )
+                cursor.execute(
+                    "UPDATE conflicts SET status = ? WHERE conflict_id = ?",
+                    (ResolutionStatus.RESOLVED.value, conflict_id),
+                )
+                conn.commit()
+
+            logger.info(f"Conflict {conflict_id} resolved successfully.")
+            return resolution
+        except Exception as e:
+            logger.error(f"Failed to resolve conflict {conflict_id}: {str(e)}")
+            return None
+
+    async def _get_available_experts(
+        self, conflict: ConflictDetection
+    ) -> List[Dict[str, Any]]:
         """Get list of available expert reviewers"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -881,7 +1054,9 @@ class AdvancedConflictResolver:
             logger.error(f"Expert retrieval error: {str(e)}")
             return []
 
-    async def _calculate_expert_score(self, expert: Dict[str, Any], conflict: ConflictDetection) -> float:
+    async def _calculate_expert_score(
+        self, expert: Dict[str, Any], conflict: ConflictDetection
+    ) -> float:
         """Calculate assignment score for expert reviewer"""
         try:
             # Expertise match score
@@ -998,6 +1173,27 @@ class AdvancedConflictResolver:
         except Exception as e:
             logger.error(f"Failed to store expert assignment: {str(e)}")
 
+    async def track_resolution_effectiveness(self, resolution: ConflictResolution):
+        """
+        Track and analyze the effectiveness of conflict resolution methods
+
+        Args:
+            resolution: Conflict resolution record
+        """
+        try:
+            # Placeholder for tracking logic
+            # In production, implement tracking of:
+            # - Resolution outcomes (success/failure)
+            # - Time to resolution
+            # - Reviewer satisfaction
+            # - Recurrence of conflicts
+            logger.info(
+                f"Tracking effectiveness for resolution {resolution.resolution_id} "
+                f"using method {resolution.method.value}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to track resolution effectiveness: {str(e)}")
+
     async def get_conflict_analytics(self, project_id: str) -> Dict[str, Any]:
         """Get comprehensive conflict analytics for project"""
         try:
@@ -1028,7 +1224,9 @@ class AdvancedConflictResolver:
                         r.method,
                         COUNT(*) as total_resolutions,
                         AVG(r.effectiveness_score) as avg_effectiveness,
-                        AVG((julianday(r.end_timestamp) - julianday(r.start_timestamp)) * 24 * 60) as avg_resolution_time_minutes
+                        AVG(
+                            (julianday(r.end_timestamp) - julianday(r.start_timestamp)) * 24 * 60
+                        ) as avg_resolution_time_minutes
                     FROM conflict_resolutions r
                     JOIN conflicts c ON r.conflict_id = c.conflict_id
                     WHERE c.project_id = ? AND r.status = 'resolved'
@@ -1050,31 +1248,139 @@ class AdvancedConflictResolver:
             return {}
 
 
+async def demonstrate_conflict_resolution():
+    """Demonstrates the advanced conflict resolution system."""
+    logger.info("🎬 Demonstrating Conflict Resolution System")
+
+    # Initialize system
+    db_path = ":memory:"
+    conflict_resolver = AdvancedConflictResolver(db_path)
+
+    # Simulate project and study setup
+    project_id = "proj_001"
+    study_id = "study_001"
+
+    # Simulate reviewer decisions leading to conflicts
+    decisions1 = [
+        {"user_id": "rev_01", "decision": "include", "criteria": ["A", "B"]},
+        {"user_id": "rev_02", "decision": "include", "criteria": ["A", "C"]},
+        {"user_id": "rev_03", "decision": "exclude", "criteria": ["B"]},
+    ]
+
+    decisions2 = [
+        {
+            "user_id": "rev_01",
+            "decision": "high",
+            "quality_score": 0.9,
+            "criteria": ["A"],
+        },
+        {
+            "user_id": "rev_02",
+            "decision": "medium",
+            "quality_score": 0.6,
+            "criteria": ["A"],
+        },
+        {
+            "user_id": "rev_03",
+            "decision": "low",
+            "quality_score": 0.3,
+            "criteria": ["B"],
+        },
+    ]
+
+    # Detect conflicts
+    logger.info("🔍 Detecting conflicts in reviewer decisions...")
+    conflicts1 = await conflict_resolver.detect_conflicts(
+        project_id, study_id, decisions1
+    )
+    conflicts2 = await conflict_resolver.detect_conflicts(
+        project_id, study_id, decisions2
+    )
+    all_conflicts = conflicts1 + conflicts2
+
+    for conflict in all_conflicts:
+        logger.info(
+            f"Detected conflict: {conflict.conflict_type.value} (ID: {conflict.conflict_id})"
+        )
+
+    # Generate resolution suggestions
+    logger.info("\n💡 Generating AI-powered resolution suggestions...")
+    for conflict in all_conflicts:
+        suggestions = await conflict_resolver.generate_resolution_suggestions(conflict)
+        logger.info(
+            f"   Suggestions for Conflict {conflict.conflict_id[:8]} ({conflict.conflict_type.value}):"
+        )
+        for suggestion in suggestions[:2]:  # Show top 2
+            logger.info(
+                f"     - {suggestion.suggestion_text} (Confidence: {suggestion.confidence_score:.2f})"
+            )
+
+    # Assign expert reviewer for a high severity conflict
+    quality_conflict = next(
+        (
+            c
+            for c in all_conflicts
+            if c.conflict_type == ConflictType.QUALITY_ASSESSMENT
+        ),
+        None,
+    )
+    if quality_conflict:
+        logger.info(
+            "\n🧑‍⚖️ Assigning expert reviewer for quality assessment conflict..."
+        )
+        # Add a dummy expert for demonstration
+        with sqlite3.connect(db_path) as conn:
+            conn.cursor().execute(
+                "INSERT INTO reviewer_profiles (reviewer_id, name, expertise_areas) VALUES (?, ?, ?)",
+                ("expert1", "Dr. Expert", '["quality_assessment"]'),
+            )
+            conn.commit()
+        assignment = await conflict_resolver.assign_expert_reviewer(quality_conflict)
+        if assignment:
+            logger.info(
+                f"   Assigned expert: {assignment.expert_id} to conflict {quality_conflict.conflict_id[:8]}"
+            )
+
+    # Resolve a conflict
+    inclusion_conflict = next(
+        (
+            c
+            for c in all_conflicts
+            if c.conflict_type == ConflictType.INCLUSION_EXCLUSION
+        ),
+        None,
+    )
+    if inclusion_conflict:
+        logger.info("\n✅ Resolving a conflict via mediation...")
+        resolution = await conflict_resolver.resolve_conflict(
+            conflict_id=inclusion_conflict.conflict_id,
+            resolution_method=ResolutionMethod.MEDIATION,
+            resolved_by="mediator_01",
+            final_decision={
+                "decision": "include",
+                "reason": "Consensus reached after discussion",
+            },
+        )
+        if resolution:
+            logger.info(f"   Conflict {resolution.conflict_id[:8]} resolved.")
+
+    # Generate analytics report
+    logger.info("\n📊 Generating conflict analytics report...")
+    analytics = await conflict_resolver.get_conflict_analytics(project_id)
+    logger.info("   Conflict Statistics:")
+    for stat_row in analytics.get("conflict_statistics", []):
+        logger.info(
+            f"     - Type: {stat_row[0]}, Severity: {stat_row[1]}, Count: {stat_row[2]}"
+        )
+
+    logger.info("   Resolution Effectiveness:")
+    for res_row in analytics.get("resolution_effectiveness", []):
+        logger.info(
+            f"     - Method: {res_row[0]}, Count: {res_row[1]}, Avg Time (min): {res_row[3]:.2f}"
+        )
+
+    logger.info("\n🎉 Conflict Resolution System demonstration completed!")
+
+
 if __name__ == "__main__":
-    # Example usage
-    async def test_conflict_resolver():
-        resolver = AdvancedConflictResolver()
-
-        # Simulate conflicting decisions
-        decisions = [
-            {"user_id": "reviewer1", "decision": "include", "criteria": ["population", "intervention"]},
-            {"user_id": "reviewer2", "decision": "exclude", "criteria": ["population", "outcome"]},
-        ]
-
-        # Detect conflicts
-        conflicts = await resolver.detect_conflicts("project1", "study1", decisions)
-
-        # Generate resolution suggestions
-        for conflict in conflicts:
-            suggestions = await resolver.generate_resolution_suggestions(conflict)
-            print(f"Conflict: {conflict.conflict_type.value}")
-            print(f"Suggestions: {len(suggestions)}")
-
-            # Assign expert if needed
-            if conflict.severity in [ConflictSeverity.HIGH, ConflictSeverity.CRITICAL]:
-                assignment = await resolver.assign_expert_reviewer(conflict)
-                if assignment:
-                    print(f"Expert assigned: {assignment.expert_id}")
-
-    # Run test
-    asyncio.run(test_conflict_resolver())
+    asyncio.run(demonstrate_conflict_resolution())

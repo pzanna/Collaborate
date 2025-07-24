@@ -18,12 +18,10 @@ Date: July 2025
 import asyncio
 import functools
 import logging
-import os
-import sys
 import threading
 import time
-from collections import defaultdict, deque
-from dataclasses import dataclass, field
+from collections import deque
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -128,12 +126,22 @@ class SystemResourceMonitor:
                     "memory_percent": memory.percent,
                     "memory_used_mb": memory.used / (1024 * 1024),
                     "memory_available_mb": memory.available / (1024 * 1024),
-                    "disk_read_mb": disk_io.read_bytes / (1024 * 1024) if disk_io else 0,
-                    "disk_write_mb": disk_io.write_bytes / (1024 * 1024) if disk_io else 0,
-                    "network_sent_mb": net_io.bytes_sent / (1024 * 1024) if net_io else 0,
-                    "network_recv_mb": net_io.bytes_recv / (1024 * 1024) if net_io else 0,
+                    "disk_read_mb": (
+                        disk_io.read_bytes / (1024 * 1024) if disk_io else 0
+                    ),
+                    "disk_write_mb": (
+                        disk_io.write_bytes / (1024 * 1024) if disk_io else 0
+                    ),
+                    "network_sent_mb": (
+                        net_io.bytes_sent / (1024 * 1024) if net_io else 0
+                    ),
+                    "network_recv_mb": (
+                        net_io.bytes_recv / (1024 * 1024) if net_io else 0
+                    ),
                     "process_count": len(psutil.pids()),
-                    "load_average": psutil.getloadavg()[0] if hasattr(psutil, "getloadavg") else 0.0,
+                    "load_average": (
+                        psutil.getloadavg()[0] if hasattr(psutil, "getloadavg") else 0.0
+                    ),
                 }
 
             return get_system_info
@@ -254,7 +262,12 @@ class SystemResourceMonitor:
                 "current": history[-1].memory_percent,
             },
             "alerts_triggered": len(
-                [m for m in history if m.cpu_percent > self.cpu_threshold or m.memory_percent > self.memory_threshold]
+                [
+                    m
+                    for m in history
+                    if m.cpu_percent > self.cpu_threshold
+                    or m.memory_percent > self.memory_threshold
+                ]
             ),
         }
 
@@ -339,7 +352,9 @@ class PerformanceProfiler:
         except ImportError:
             return 0.0
 
-    def _record_profile(self, func_name: str, execution_time_ms: float, memory_mb: float):
+    def _record_profile(
+        self, func_name: str, execution_time_ms: float, memory_mb: float
+    ):
         """Record performance profile data"""
         with self._lock:
             if func_name not in self.profiles:
@@ -357,11 +372,15 @@ class PerformanceProfiler:
 
     def get_slowest_functions(self, limit: int = 10) -> List[PerformanceProfile]:
         """Get slowest functions by average execution time"""
-        return sorted(self.profiles.values(), key=lambda p: p.average_time_ms, reverse=True)[:limit]
+        return sorted(
+            self.profiles.values(), key=lambda p: p.average_time_ms, reverse=True
+        )[:limit]
 
     def get_most_called_functions(self, limit: int = 10) -> List[PerformanceProfile]:
         """Get most frequently called functions"""
-        return sorted(self.profiles.values(), key=lambda p: p.call_count, reverse=True)[:limit]
+        return sorted(self.profiles.values(), key=lambda p: p.call_count, reverse=True)[
+            :limit
+        ]
 
     def reset_profiles(self):
         """Reset all performance profiles"""
@@ -416,7 +435,9 @@ class ResourceMonitor:
         """Get function profiling decorator"""
         return self.performance_profiler.profile(func_name)
 
-    async def monitor_operation(self, operation_name: str, operation_func: Callable, *args, **kwargs):
+    async def monitor_operation(
+        self, operation_name: str, operation_func: Callable, *args, **kwargs
+    ):
         """
         Monitor a specific operation
 
@@ -429,7 +450,9 @@ class ResourceMonitor:
             Operation result
         """
         # Apply profiling
-        profiled_func = self.performance_profiler.profile(operation_name)(operation_func)
+        profiled_func = self.performance_profiler.profile(operation_name)(
+            operation_func
+        )
 
         # Record system state before operation
         start_metrics = self.system_monitor.get_current_metrics()
@@ -449,7 +472,9 @@ class ResourceMonitor:
             memory_delta = end_metrics.memory_percent - start_metrics.memory_percent
 
             if abs(cpu_delta) > 10 or abs(memory_delta) > 5:
-                logger.info(f"Operation '{operation_name}' impact: CPU {cpu_delta:+.1f}%, Memory {memory_delta:+.1f}%")
+                logger.info(
+                    f"Operation '{operation_name}' impact: CPU {cpu_delta:+.1f}%, Memory {memory_delta:+.1f}%"
+                )
 
         return result
 
@@ -461,22 +486,30 @@ class ResourceMonitor:
         slow_functions = self.performance_profiler.get_slowest_functions(5)
         for func in slow_functions:
             if func.average_time_ms > 1000:  # Slower than 1 second
-                bottlenecks.append(f"Slow function: {func.function_name} ({func.average_time_ms:.0f}ms avg)")
+                bottlenecks.append(
+                    f"Slow function: {func.function_name} ({func.average_time_ms:.0f}ms avg)"
+                )
 
         # Check system resources
         current_metrics = self.system_monitor.get_current_metrics()
         if current_metrics:
             if current_metrics.cpu_percent > 80:
-                bottlenecks.append(f"High CPU usage: {current_metrics.cpu_percent:.1f}%")
+                bottlenecks.append(
+                    f"High CPU usage: {current_metrics.cpu_percent:.1f}%"
+                )
 
             if current_metrics.memory_percent > 85:
-                bottlenecks.append(f"High memory usage: {current_metrics.memory_percent:.1f}%")
+                bottlenecks.append(
+                    f"High memory usage: {current_metrics.memory_percent:.1f}%"
+                )
 
         # Check frequently called functions
         frequent_functions = self.performance_profiler.get_most_called_functions(3)
         for func in frequent_functions:
             if func.call_count > 1000 and func.average_time_ms > 100:
-                bottlenecks.append(f"Frequent slow function: {func.function_name} ({func.call_count} calls)")
+                bottlenecks.append(
+                    f"Frequent slow function: {func.function_name} ({func.call_count} calls)"
+                )
 
         return bottlenecks
 
@@ -491,10 +524,14 @@ class ResourceMonitor:
                 recommendations.append("Consider optimizing CPU - intensive operations")
 
             if metrics_summary["memory"]["average"] > 80:
-                recommendations.append("Implement memory optimization or increase available memory")
+                recommendations.append(
+                    "Implement memory optimization or increase available memory"
+                )
 
             if metrics_summary.get("alerts_triggered", 0) > 5:
-                recommendations.append("Frequent resource alerts - review system capacity")
+                recommendations.append(
+                    "Frequent resource alerts - review system capacity"
+                )
 
         # Function - level recommendations
         slow_functions = self.performance_profiler.get_slowest_functions(3)
@@ -539,7 +576,9 @@ class ResourceMonitor:
             if current_metrics.cpu_percent > 80:
                 resource_alerts.append(f"High CPU: {current_metrics.cpu_percent:.1f}%")
             if current_metrics.memory_percent > 85:
-                resource_alerts.append(f"High Memory: {current_metrics.memory_percent:.1f}%")
+                resource_alerts.append(
+                    f"High Memory: {current_metrics.memory_percent:.1f}%"
+                )
 
         return PerformanceReport(
             report_id=f"perf_report_{int(time.time())}",
@@ -561,16 +600,26 @@ class ResourceMonitor:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "system": {
                 "cpu_percent": current_metrics.cpu_percent if current_metrics else 0,
-                "memory_percent": current_metrics.memory_percent if current_metrics else 0,
-                "memory_used_mb": current_metrics.memory_used_mb if current_metrics else 0,
+                "memory_percent": (
+                    current_metrics.memory_percent if current_metrics else 0
+                ),
+                "memory_used_mb": (
+                    current_metrics.memory_used_mb if current_metrics else 0
+                ),
             },
             "performance": {
                 "total_functions_profiled": len(self.performance_profiler.profiles),
-                "slowest_function": recent_profiles[0].function_name if recent_profiles else None,
-                "slowest_time_ms": recent_profiles[0].average_time_ms if recent_profiles else 0,
+                "slowest_function": (
+                    recent_profiles[0].function_name if recent_profiles else None
+                ),
+                "slowest_time_ms": (
+                    recent_profiles[0].average_time_ms if recent_profiles else 0
+                ),
             },
             "monitoring_duration_seconds": (
-                (datetime.now(timezone.utc) - self.start_time).total_seconds() if self.start_time else 0
+                (datetime.now(timezone.utc) - self.start_time).total_seconds()
+                if self.start_time
+                else 0
             ),
         }
 
@@ -605,7 +654,7 @@ async def demo_resource_monitor():
         return f"IO completed after {delay}s"
 
     # Run operations
-    start_time = time.time()
+    time.time()
 
     # CPU intensive operations
     for _ in range(5):
@@ -616,39 +665,48 @@ async def demo_resource_monitor():
     await io_simulation(0.2)
 
     # Monitor a complex operation
-    result = await monitor.monitor_operation("complex_operation", lambda: time.sleep(0.1) or "Complex task done")
+    await monitor.monitor_operation(
+        "complex_operation", lambda: time.sleep(0.1) or "Complex task done"
+    )
 
     # Wait to collect some metrics
     await asyncio.sleep(2)
 
     # Get live metrics
     live_metrics = monitor.get_live_metrics()
-    print(f"\n📊 Live Metrics:")
+    print("\n📊 Live Metrics:")
     print(f"   CPU: {live_metrics['system']['cpu_percent']:.1f}%")
     print(f"   Memory: {live_metrics['system']['memory_percent']:.1f}%")
-    print(f"   Functions profiled: {live_metrics['performance']['total_functions_profiled']}")
+    print(
+        "   Functions profiled: "
+        f"{live_metrics['performance']['total_functions_profiled']}"
+    )
 
     # Get performance bottlenecks
     bottlenecks = monitor.get_performance_bottlenecks()
     if bottlenecks:
-        print(f"\n⚠️  Performance Bottlenecks:")
+        print("\n⚠️  Performance Bottlenecks:")
         for bottleneck in bottlenecks[:3]:
             print(f"   • {bottleneck}")
 
     # Generate comprehensive report
     report = monitor.generate_performance_report()
 
-    print(f"\n📋 Performance Report:")
+    print("\n📋 Performance Report:")
     print(f"   Monitoring duration: {report.duration_seconds:.1f}s")
     print(f"   Function profiles: {len(report.function_profiles)}")
     print(f"   Bottlenecks identified: {len(report.bottlenecks)}")
     print(f"   Recommendations: {len(report.recommendations)}")
 
     if report.function_profiles:
-        print(f"\n🏆 Top Function Performance:")
-        top_profiles = sorted(report.function_profiles, key=lambda p: p.average_time_ms, reverse=True)[:3]
+        print("\n🏆 Top Function Performance:")
+        top_profiles = sorted(
+            report.function_profiles, key=lambda p: p.average_time_ms, reverse=True
+        )[:3]
         for profile in top_profiles:
-            print(f"   • {profile.function_name}: {profile.average_time_ms:.2f}ms avg ({profile.call_count} calls)")
+            print(
+                f"   • {profile.function_name}: {profile.average_time_ms:.2f}ms avg ({profile.call_count} calls)"
+            )
 
     # Stop monitoring
     monitor.stop_monitoring()

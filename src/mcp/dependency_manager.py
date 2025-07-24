@@ -53,7 +53,9 @@ class TaskNode:
             "parent_task_id": self.research_action.parent_task_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "is_ready": self.is_ready,
         }
 
@@ -76,7 +78,9 @@ class TaskDependencyManager:
 
             if task_id in self.task_graph:
                 self.logger.log_error(
-                    f"Task {task_id} already exists in dependency graph", task_id=task_id, error_code="DUPLICATE_TASK"
+                    f"Task {task_id} already exists in dependency graph",
+                    task_id=task_id,
+                    error_code="DUPLICATE_TASK",
                 )
                 return False
 
@@ -158,7 +162,9 @@ class TaskDependencyManager:
         async with self._lock:
             if task_id not in self.task_graph:
                 self.logger.log_error(
-                    f"Cannot complete unknown task {task_id}", task_id=task_id, error_code="UNKNOWN_TASK"
+                    f"Cannot complete unknown task {task_id}",
+                    task_id=task_id,
+                    error_code="UNKNOWN_TASK",
                 )
                 return []
 
@@ -178,7 +184,10 @@ class TaskDependencyManager:
                         dependent_node.dependencies.discard(task_id)
 
                         # If dependent is now ready, add to queue
-                        if dependent_node.is_ready and dependent_node.status == TaskStatus.PENDING:
+                        if (
+                            dependent_node.is_ready
+                            and dependent_node.status == TaskStatus.PENDING
+                        ):
                             await self.ready_queue.put(dependent_id)
                             dependent_node.status = TaskStatus.WORKING
                             dependent_node.started_at = datetime.now()
@@ -189,7 +198,9 @@ class TaskDependencyManager:
                     context_id=task_node.research_action.context_id,
                     agent_type=task_node.research_action.agent_type,
                     duration=(
-                        (task_node.completed_at - task_node.started_at).total_seconds() if task_node.started_at else 0
+                        (task_node.completed_at - task_node.started_at).total_seconds()
+                        if task_node.started_at
+                        else 0
                     ),
                     success=True,
                     newly_ready_tasks=newly_ready,
@@ -213,7 +224,9 @@ class TaskDependencyManager:
                     context_id=task_node.research_action.context_id,
                     agent_type=task_node.research_action.agent_type,
                     duration=(
-                        (task_node.completed_at - task_node.started_at).total_seconds() if task_node.started_at else 0
+                        (task_node.completed_at - task_node.started_at).total_seconds()
+                        if task_node.started_at
+                        else 0
                     ),
                     success=False,
                     failed_dependents=failed_dependents,
@@ -242,7 +255,9 @@ class TaskDependencyManager:
         """Get the complete dependency graph"""
         async with self._lock:
             return {
-                "tasks": {task_id: node.to_dict() for task_id, node in self.task_graph.items()},
+                "tasks": {
+                    task_id: node.to_dict() for task_id, node in self.task_graph.items()
+                },
                 "completed_tasks": list(self.completed_tasks),
                 "failed_tasks": list(self.failed_tasks),
                 "ready_queue_size": self.ready_queue.qsize(),
@@ -320,8 +335,12 @@ class TaskDependencyManager:
                 "failed_tasks": len(self.failed_tasks),
                 "ready_queue_size": self.ready_queue.qsize(),
                 "status_distribution": status_counts,
-                "has_dependencies": sum(1 for node in self.task_graph.values() if node.dependencies),
-                "average_dependencies": sum(len(node.dependencies) for node in self.task_graph.values())
+                "has_dependencies": sum(
+                    1 for node in self.task_graph.values() if node.dependencies
+                ),
+                "average_dependencies": sum(
+                    len(node.dependencies) for node in self.task_graph.values()
+                )
                 / max(len(self.task_graph), 1),
             }
 

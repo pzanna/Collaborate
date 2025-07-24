@@ -9,12 +9,11 @@ This module provides improved screening capabilities with:
 - Conflict resolution workflows
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     from ..ai_clients.openai_client import OpenAIClient
@@ -116,7 +115,9 @@ class EnhancedScreeningWorkflow:
         self.confidence_threshold = config.get("confidence_threshold", 0.8)
         self.batch_size = config.get("batch_size", 10)
         self.require_human_review = config.get("require_human_review", True)
-        self.exclusion_reasons = [ExclusionReason(reason) for reason in config.get("exclusion_reasons", [])]
+        self.exclusion_reasons = [
+            ExclusionReason(reason) for reason in config.get("exclusion_reasons", [])
+        ]
 
     @handle_errors(context="title_abstract_screening")
     async def title_abstract_screening(
@@ -138,7 +139,7 @@ class EnhancedScreeningWorkflow:
 
         # Process in batches for efficiency
         for i in range(0, len(studies), self.batch_size):
-            batch_studies = studies[i : i + self.batch_size]
+            batch_studies = studies[: i + self.batch_size]
             batch_id = generate_timestamped_id("batch")
 
             batch = ScreeningBatch(
@@ -155,7 +156,10 @@ class EnhancedScreeningWorkflow:
 
             # Identify studies requiring human review
             for result in batch_results:
-                if result.human_review_required or result.confidence_score < self.confidence_threshold:
+                if (
+                    result.human_review_required
+                    or result.confidence_score < self.confidence_threshold
+                ):
                     human_review_queue.append(result)
 
         # Save screening decisions to database
@@ -164,7 +168,9 @@ class EnhancedScreeningWorkflow:
                 "record_id": result.study_id,
                 "stage": ScreeningStage.TITLE_ABSTRACT.value,
                 "decision": result.decision.value,
-                "reason_code": result.exclusion_reason.value if result.exclusion_reason else None,
+                "reason_code": (
+                    result.exclusion_reason.value if result.exclusion_reason else None
+                ),
                 "actor": "human_required" if result.human_review_required else "ai",
                 "confidence_score": result.confidence_score,
                 "rationale": result.rationale,
@@ -175,9 +181,27 @@ class EnhancedScreeningWorkflow:
 
         return {
             "total_screened": len(studies),
-            "included": len([r for r in screening_results if r.decision == ScreeningDecision.INCLUDE]),
-            "excluded": len([r for r in screening_results if r.decision == ScreeningDecision.EXCLUDE]),
-            "uncertain": len([r for r in screening_results if r.decision == ScreeningDecision.UNCERTAIN]),
+            "included": len(
+                [
+                    r
+                    for r in screening_results
+                    if r.decision == ScreeningDecision.INCLUDE
+                ]
+            ),
+            "excluded": len(
+                [
+                    r
+                    for r in screening_results
+                    if r.decision == ScreeningDecision.EXCLUDE
+                ]
+            ),
+            "uncertain": len(
+                [
+                    r
+                    for r in screening_results
+                    if r.decision == ScreeningDecision.UNCERTAIN
+                ]
+            ),
             "human_review_required": len(human_review_queue),
             "screening_results": screening_results,
             "human_review_queue": human_review_queue,
@@ -209,7 +233,9 @@ class EnhancedScreeningWorkflow:
                 "record_id": study["id"],
                 "stage": ScreeningStage.FULL_TEXT.value,
                 "decision": result.decision.value,
-                "reason_code": result.exclusion_reason.value if result.exclusion_reason else None,
+                "reason_code": (
+                    result.exclusion_reason.value if result.exclusion_reason else None
+                ),
                 "actor": "human_required" if result.human_review_required else "ai",
                 "confidence_score": result.confidence_score,
                 "rationale": result.rationale,
@@ -220,12 +246,26 @@ class EnhancedScreeningWorkflow:
 
         return {
             "total_screened": len(studies),
-            "included": len([r for r in screening_results if r.decision == ScreeningDecision.INCLUDE]),
-            "excluded": len([r for r in screening_results if r.decision == ScreeningDecision.EXCLUDE]),
+            "included": len(
+                [
+                    r
+                    for r in screening_results
+                    if r.decision == ScreeningDecision.INCLUDE
+                ]
+            ),
+            "excluded": len(
+                [
+                    r
+                    for r in screening_results
+                    if r.decision == ScreeningDecision.EXCLUDE
+                ]
+            ),
             "screening_results": screening_results,
         }
 
-    async def _process_screening_batch(self, batch: ScreeningBatch, task_id: str) -> List[ScreeningResult]:
+    async def _process_screening_batch(
+        self, batch: ScreeningBatch, task_id: str
+    ) -> List[ScreeningResult]:
         """
         Process a batch of studies for screening.
 
@@ -239,7 +279,9 @@ class EnhancedScreeningWorkflow:
         results = []
 
         for study in batch.studies:
-            result = await self._screen_title_abstract_study(study, batch.criteria, task_id)
+            result = await self._screen_title_abstract_study(
+                study, batch.criteria, task_id
+            )
             results.append(result)
 
         batch.results = results
@@ -335,7 +377,8 @@ class EnhancedScreeningWorkflow:
 
         try:
             response = self.ai_client.get_response(
-                user_message=prompt, system_prompt=self._get_full_text_screening_system_prompt()
+                user_message=prompt,
+                system_prompt=self._get_full_text_screening_system_prompt(),
             )
 
             # Parse AI response
@@ -372,7 +415,9 @@ class EnhancedScreeningWorkflow:
                 human_review_required=True,
             )
 
-    def _build_title_abstract_prompt(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> str:
+    def _build_title_abstract_prompt(
+        self, study: Dict[str, Any], criteria: Dict[str, Any]
+    ) -> str:
         """Build prompt for title / abstract screening."""
         return f"""
 Please screen this study for a systematic review based on the title and abstract.
@@ -402,7 +447,9 @@ Please provide your screening decision in JSON format:
 }}
 """
 
-    def _build_full_text_prompt(self, study: Dict[str, Any], criteria: Dict[str, Any]) -> str:
+    def _build_full_text_prompt(
+        self, study: Dict[str, Any], criteria: Dict[str, Any]
+    ) -> str:
         """Build prompt for full - text screening."""
         return f"""
 Please conduct detailed full - text screening for this study.
@@ -469,7 +516,11 @@ Response must be valid JSON format only.
         for key, value in exclusion_criteria.items():
             if value:
                 criteria_text.append(f"- {key.replace('_', ' ').title()}: {value}")
-        return "\n".join(criteria_text) if criteria_text else "No specific exclusion criteria"
+        return (
+            "\n".join(criteria_text)
+            if criteria_text
+            else "No specific exclusion criteria"
+        )
 
     def _format_detailed_criteria(self, criteria: Dict[str, Any]) -> str:
         """Format detailed criteria for full - text screening."""
@@ -546,7 +597,9 @@ class ScreeningConflictResolver:
         self.database = database
 
     @handle_errors(context="conflict_resolution")
-    def resolve_conflicts(self, task_id: str, resolution_strategy: str = "consensus") -> Dict[str, Any]:
+    def resolve_conflicts(
+        self, task_id: str, resolution_strategy: str = "consensus"
+    ) -> Dict[str, Any]:
         """
         Resolve screening conflicts for a task.
 
@@ -580,7 +633,9 @@ class ScreeningConflictResolver:
             "resolved_decisions": resolved,
         }
 
-    def _identify_conflicts(self, decisions: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    def _identify_conflicts(
+        self, decisions: List[Dict[str, Any]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """Identify conflicting decisions."""
         # Group decisions by study and stage
         grouped = {}
@@ -600,7 +655,9 @@ class ScreeningConflictResolver:
 
         return conflicts
 
-    def _resolve_by_consensus(self, conflicts: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    def _resolve_by_consensus(
+        self, conflicts: Dict[str, List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
         """Resolve conflicts by consensus (majority vote)."""
         resolved = []
         for key, decision_group in conflicts.items():
@@ -612,11 +669,15 @@ class ScreeningConflictResolver:
                 decision_counts[dec].append(decision)
 
             # Find majority decision
-            majority_decision = max(decision_counts.keys(), key=lambda k: len(decision_counts[k]))
+            majority_decision = max(
+                decision_counts.keys(), key=lambda k: len(decision_counts[k])
+            )
             majority_group = decision_counts[majority_decision]
 
             # Use highest confidence from majority group
-            best_decision = max(majority_group, key=lambda d: d.get("confidence_score", 0))
+            best_decision = max(
+                majority_group, key=lambda d: d.get("confidence_score", 0)
+            )
 
             resolved.append(
                 {
@@ -631,11 +692,15 @@ class ScreeningConflictResolver:
 
         return resolved
 
-    def _resolve_by_highest_confidence(self, conflicts: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    def _resolve_by_highest_confidence(
+        self, conflicts: Dict[str, List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
         """Resolve conflicts by selecting highest confidence decision."""
         resolved = []
         for key, decision_group in conflicts.items():
-            best_decision = max(decision_group, key=lambda d: d.get("confidence_score", 0))
+            best_decision = max(
+                decision_group, key=lambda d: d.get("confidence_score", 0)
+            )
 
             resolved.append(
                 {
@@ -650,7 +715,9 @@ class ScreeningConflictResolver:
 
         return resolved
 
-    def _resolve_by_most_inclusive(self, conflicts: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    def _resolve_by_most_inclusive(
+        self, conflicts: Dict[str, List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
         """Resolve conflicts by being most inclusive (prefer include over exclude)."""
         resolved = []
         for key, decision_group in conflicts.items():
@@ -659,13 +726,19 @@ class ScreeningConflictResolver:
             # Preference order: include > uncertain > exclude
             if "include" in decisions:
                 final_decision = "include"
-                best_decision = next(d for d in decision_group if d["decision"] == "include")
+                best_decision = next(
+                    d for d in decision_group if d["decision"] == "include"
+                )
             elif "uncertain" in decisions:
                 final_decision = "uncertain"
-                best_decision = next(d for d in decision_group if d["decision"] == "uncertain")
+                best_decision = next(
+                    d for d in decision_group if d["decision"] == "uncertain"
+                )
             else:
                 final_decision = "exclude"
-                best_decision = max(decision_group, key=lambda d: d.get("confidence_score", 0))
+                best_decision = max(
+                    decision_group, key=lambda d: d.get("confidence_score", 0)
+                )
 
             resolved.append(
                 {
@@ -674,7 +747,7 @@ class ScreeningConflictResolver:
                     "final_decision": final_decision,
                     "resolution_method": "most_inclusive",
                     "confidence": best_decision.get("confidence_score", 0),
-                    "rationale": f"Most inclusive decision from conflict resolution",
+                    "rationale": "Most inclusive decision from conflict resolution",
                 }
             )
 

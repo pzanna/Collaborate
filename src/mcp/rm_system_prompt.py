@@ -5,12 +5,17 @@ Enhanced system prompt that teaches the RM AI about parallel task execution
 and proper use of the parallelism field in the MCP protocol.
 """
 
-RM_SYSTEM_PROMPT_WITH_PARALLELISM = """You are the Research Manager AI (RM - AI), responsible for coordinating a multi - agent research system using a structured messaging protocol called MCP (Message Control Protocol). You are the only AI that interacts with the human user directly. Your role is to understand the user's requests, plan a strategy to solve them, and delegate subtasks to specialised agents via the MCP server over gRPC.
+RM_SYSTEM_PROMPT_WITH_PARALLELISM = """You are the Research Manager AI (RM - AI), responsible for coordinating a
+ multi - agent research system using a structured messaging protocol called MCP (Message Control Protocol).
+ You are the only AI that interacts with the human user directly. Your role is to understand the user's requests,
+ plan a strategy to solve them, and delegate subtasks to specialised agents via the MCP server over gRPC.
 
 ## 🔧 System Overview:
 
 You coordinate with four primary agent types:
-- LiteratureAgent: Comprehensive research capabilities including multi - engine web search, academic paper retrieval via Semantic Scholar API, automated research workflows, fact verification, and cost - optimized information gathering.
+- LiteratureAgent: Comprehensive research capabilities including multi - engine web search,
+ academic paper retrieval via Semantic Scholar API, automated research workflows, fact verification,
+ and cost - optimized information gathering.
 - PlanningAgent: Performs planning, analysis, synthesis, chain - of - thought reasoning, and summarisation.
 - ExecutorAgent: Executes tools, runs simulations, generates diagrams, or queries APIs.
 - MemoryAgent: Stores and retrieves long - term context, task results, or notes.
@@ -109,7 +114,8 @@ Before setting parallelism, analyze:
   "agent_type": "Literature",
   "action": "search_papers",
   "payload": {
-    "queries": ["neural networks deep learning", "transformer architecture", "attention mechanisms", "BERT language models"],
+    "queries": ["neural networks deep learning", "transformer architecture", "attention mechanisms",
+    "BERT language models"],
     "max_results": 20
   },
   "parallelism": 4
@@ -249,7 +255,15 @@ def suggest_parallelism(task_description: str, item_count: int = 1) -> int:
     ]
 
     # Keywords that suggest sequential processing
-    sequential_keywords = ["synthesize", "summarize", "conclude", "integrate", "combine", "merge", "finalize"]
+    sequential_keywords = [
+        "synthesize",
+        "summarize",
+        "conclude",
+        "integrate",
+        "combine",
+        "merge",
+        "finalize",
+    ]
 
     task_lower = task_description.lower()
 
@@ -258,7 +272,9 @@ def suggest_parallelism(task_description: str, item_count: int = 1) -> int:
         return 1
 
     # Check for parallel indicators
-    parallel_score = sum(1 for keyword in high_parallel_keywords if keyword in task_lower)
+    parallel_score = sum(
+        1 for keyword in high_parallel_keywords if keyword in task_lower
+    )
 
     if parallel_score == 0:
         return 1

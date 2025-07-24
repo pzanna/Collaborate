@@ -5,12 +5,11 @@ Manages agent registration, capabilities, and availability tracking.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 
-from .protocols import AgentRegistration, AgentType, RegisterCapabilities
+from .protocols import AgentRegistration, RegisterCapabilities
 from .structured_logger import get_mcp_logger
 
 
@@ -58,7 +57,9 @@ class AgentRegistry:
 
             # Check if agent already exists
             if agent_id in self.agents:
-                self.logger.logger.warning(f"Agent {agent_id} already registered, updating registration")
+                self.logger.logger.warning(
+                    f"Agent {agent_id} already registered, updating registration"
+                )
 
             # Create agent instance
             agent_instance = AgentInstance(registration=registration)
@@ -83,7 +84,9 @@ class AgentRegistry:
         """Unregister an agent instance"""
         async with self._lock:
             if agent_id not in self.agents:
-                self.logger.logger.warning(f"Agent {agent_id} not found for unregistration")
+                self.logger.logger.warning(
+                    f"Agent {agent_id} not found for unregistration"
+                )
                 return False
 
             agent_instance = self.agents[agent_id]
@@ -149,7 +152,9 @@ class AgentRegistry:
 
         return await self.register_agent(registration)
 
-    async def query_capabilities(self, capability: Optional[str] = None) -> Dict[str, Any]:
+    async def query_capabilities(
+        self, capability: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Query available capabilities and agents"""
         async with self._lock:
             if capability:
@@ -182,10 +187,16 @@ class AgentRegistry:
                 for cap, agent_ids in self.capabilities.items():
                     available_count = 0
                     for agent_id in agent_ids:
-                        if agent_id in self.agents and self.agents[agent_id].is_available:
+                        if (
+                            agent_id in self.agents
+                            and self.agents[agent_id].is_available
+                        ):
                             available_count += 1
 
-                    result[cap] = {"total_agents": len(agent_ids), "available_agents": available_count}
+                    result[cap] = {
+                        "total_agents": len(agent_ids),
+                        "available_agents": available_count,
+                    }
 
                 return {
                     "capabilities": result,
@@ -261,19 +272,28 @@ class AgentRegistry:
 
                 async with self._lock:
                     for agent_id, agent_instance in self.agents.items():
-                        time_since_heartbeat = current_time - agent_instance.last_heartbeat
-                        if time_since_heartbeat > timedelta(seconds=self.heartbeat_timeout):
+                        time_since_heartbeat = (
+                            current_time - agent_instance.last_heartbeat
+                        )
+                        if time_since_heartbeat > timedelta(
+                            seconds=self.heartbeat_timeout
+                        ):
                             agent_instance.is_healthy = False
                             unhealthy_agents.append(agent_id)
 
                 # Log unhealthy agents
                 if unhealthy_agents:
-                    self.logger.logger.warning(f"Marked agents as unhealthy: {unhealthy_agents}")
+                    self.logger.logger.warning(
+                        f"Marked agents as unhealthy: {unhealthy_agents}"
+                    )
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.log_error(f"Error in agent cleanup task: {e}", error_code="REGISTRY_CLEANUP_ERROR")
+                self.logger.log_error(
+                    f"Error in agent cleanup task: {e}",
+                    error_code="REGISTRY_CLEANUP_ERROR",
+                )
                 await asyncio.sleep(5)  # Wait before retrying
 
     async def get_stats(self) -> Dict[str, Any]:

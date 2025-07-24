@@ -26,7 +26,12 @@ def check_python_dependencies():
     }
 
     # Map display names for better user feedback
-    display_names = {"jinja2": "jinja2", "yaml": "pyyaml", "jsonschema": "jsonschema", "openai": "openai"}
+    display_names = {
+        "jinja2": "jinja2",
+        "yaml": "pyyaml",
+        "jsonschema": "jsonschema",
+        "openai": "openai",
+    }
 
     missing = []
     for package, install_cmd in dependencies.items():
@@ -64,7 +69,6 @@ def check_eunice_integration():
     """Check Eunice AI client availability."""
     try:
         sys.path.append(str(Path(__file__).parent.parent))
-        from src.ai_clients.openai_client import AIProviderConfig, OpenAIClient
 
         print("✅ Eunice AI clients - available")
         return True
@@ -175,7 +179,7 @@ def main():
     # Create configuration files
     print("\n📄 Configuration Files:")
     config_file = create_default_config()
-    req_file = create_requirements_file()
+    create_requirements_file()
 
     # Summary and recommendations
     print("\n" + "=" * 50)
@@ -187,7 +191,7 @@ def main():
         for package, cmd in missing_python:
             print(f"   {cmd}")
         print("\nOr install all at once:")
-        print(f"   pip install -r requirements.txt")
+        print("   pip install -r requirements.txt")
     else:
         print("\n✅ All Python dependencies satisfied")
 
@@ -210,7 +214,7 @@ def main():
         print("\n✅ Eunice AI integration available")
 
     print("\n🚀 READY TO USE:")
-    print(f"   python thesis_cli.py input.json")
+    print("   python thesis_cli.py input.json")
     print(f"   python thesis_cli.py input.json -c {config_file}")
 
     print("\n📚 DOCUMENTATION:")

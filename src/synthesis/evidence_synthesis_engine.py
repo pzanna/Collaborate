@@ -5,7 +5,6 @@ This module provides automated evidence synthesis capabilities for systematic re
 including evidence table generation, thematic synthesis, and confidence assessment.
 """
 
-import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -137,7 +136,10 @@ class EvidenceSynthesisEngine:
         self.logger = logging.getLogger(__name__)
 
     async def build_evidence_table(
-        self, included_studies: List[Dict[str, Any]], research_question: str, outcomes: List[str]
+        self,
+        included_studies: List[Dict[str, Any]],
+        research_question: str,
+        outcomes: List[str],
     ) -> List[EvidenceRow]:
         """
         Build evidence table from included studies.
@@ -150,7 +152,9 @@ class EvidenceSynthesisEngine:
         Returns:
             List of evidence rows extracted from studies
         """
-        self.logger.info(f"Building evidence table from {len(included_studies)} studies")
+        self.logger.info(
+            f"Building evidence table from {len(included_studies)} studies"
+        )
 
         evidence_rows = []
 
@@ -158,19 +162,27 @@ class EvidenceSynthesisEngine:
             try:
                 # Extract evidence for each outcome
                 for outcome in outcomes:
-                    evidence_row = await self._extract_evidence_row(study, research_question, outcome)
+                    evidence_row = await self._extract_evidence_row(
+                        study, research_question, outcome
+                    )
                     if evidence_row:
                         evidence_rows.append(evidence_row)
 
             except Exception as e:
-                self.logger.warning(f"Failed to extract evidence from study {study.get('id', 'unknown')}: {e}")
+                self.logger.warning(
+                    f"Failed to extract evidence from study {study.get('id', 'unknown')}: {e}"
+                )
                 continue
 
         self.logger.info(f"Extracted {len(evidence_rows)} evidence rows")
         return evidence_rows
 
     async def perform_synthesis(
-        self, evidence_rows: List[EvidenceRow], synthesis_method: SynthesisMethod, task_id: str, research_question: str
+        self,
+        evidence_rows: List[EvidenceRow],
+        synthesis_method: SynthesisMethod,
+        task_id: str,
+        research_question: str,
     ) -> SynthesisResult:
         """
         Perform evidence synthesis using specified method.
@@ -184,19 +196,29 @@ class EvidenceSynthesisEngine:
         Returns:
             Complete synthesis results
         """
-        self.logger.info(f"Performing {synthesis_method.value} synthesis on {len(evidence_rows)} evidence rows")
+        self.logger.info(
+            f"Performing {synthesis_method.value} synthesis on {len(evidence_rows)} evidence rows"
+        )
 
         synthesis_id = f"synthesis_{datetime.now().strftime('%Y % m%d_ % H%M % S')}_{hash(str(evidence_rows))%10000}"
 
         # Perform method - specific synthesis
         if synthesis_method == SynthesisMethod.NARRATIVE:
-            themes, narrative_summary = await self._narrative_synthesis(evidence_rows, research_question)
+            themes, narrative_summary = await self._narrative_synthesis(
+                evidence_rows, research_question
+            )
         elif synthesis_method == SynthesisMethod.THEMATIC:
-            themes, narrative_summary = await self._thematic_synthesis(evidence_rows, research_question)
+            themes, narrative_summary = await self._thematic_synthesis(
+                evidence_rows, research_question
+            )
         elif synthesis_method == SynthesisMethod.META_AGGREGATION:
-            themes, narrative_summary = await self._meta_aggregation_synthesis(evidence_rows, research_question)
+            themes, narrative_summary = await self._meta_aggregation_synthesis(
+                evidence_rows, research_question
+            )
         else:
-            themes, narrative_summary = await self._narrative_synthesis(evidence_rows, research_question)
+            themes, narrative_summary = await self._narrative_synthesis(
+                evidence_rows, research_question
+            )
 
         # Detect contradictions
         contradictions = await self.detect_contradictions(evidence_rows)
@@ -205,7 +227,9 @@ class EvidenceSynthesisEngine:
         confidence_assessment = await self.assess_confidence(evidence_rows, themes)
 
         # Generate recommendations and limitations
-        recommendations = await self._generate_recommendations(themes, confidence_assessment)
+        recommendations = await self._generate_recommendations(
+            themes, confidence_assessment
+        )
         limitations = await self._identify_limitations(evidence_rows, contradictions)
 
         synthesis_result = SynthesisResult(
@@ -228,7 +252,9 @@ class EvidenceSynthesisEngine:
         self.logger.info(f"Synthesis completed: {synthesis_id}")
         return synthesis_result
 
-    async def detect_contradictions(self, evidence_rows: List[EvidenceRow]) -> List[Dict[str, Any]]:
+    async def detect_contradictions(
+        self, evidence_rows: List[EvidenceRow]
+    ) -> List[Dict[str, Any]]:
         """
         Detect contradictory findings across studies.
 
@@ -257,7 +283,7 @@ class EvidenceSynthesisEngine:
 
             # Simple contradiction detection for demo purposes
             # In production, this would use AI analysis
-            effect_sizes = [row.effect_size for row in rows if row.effect_size]
+            [row.effect_size for row in rows if row.effect_size]
             significances = [row.significance for row in rows if row.significance]
 
             # Check for conflicting significances
@@ -269,14 +295,19 @@ class EvidenceSynthesisEngine:
                         "contradiction_type": "significance",
                         "description": f"Conflicting significance results for {outcome}",
                         "severity": "moderate",
-                        "potential_explanations": ["Different study populations", "Methodological differences"],
+                        "potential_explanations": [
+                            "Different study populations",
+                            "Methodological differences",
+                        ],
                     }
                 )
 
         self.logger.info(f"Found {len(contradictions)} contradictions")
         return contradictions
 
-    async def assess_confidence(self, evidence_rows: List[EvidenceRow], themes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def assess_confidence(
+        self, evidence_rows: List[EvidenceRow], themes: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Assess confidence in evidence using GRADE - inspired approach.
 
@@ -303,7 +334,11 @@ class EvidenceSynthesisEngine:
         for outcome, rows in outcomes_evidence.items():
             # Simple confidence assessment based on study count and design
             study_designs = [row.study_design.lower() for row in rows]
-            rct_count = sum(1 for design in study_designs if "rct" in design or "randomized" in design)
+            rct_count = sum(
+                1
+                for design in study_designs
+                if "rct" in design or "randomized" in design
+            )
             total_studies = len(rows)
 
             if total_studies >= 5 and rct_count >= 2:
@@ -323,16 +358,25 @@ class EvidenceSynthesisEngine:
                     "risk_of_bias": "Not assessed",
                     "consistency": "Requires detailed analysis",
                     "directness": "Direct evidence",
-                    "precision": "Adequate sample size" if total_studies >= 3 else "Limited sample size",
+                    "precision": (
+                        "Adequate sample size"
+                        if total_studies >= 3
+                        else "Limited sample size"
+                    ),
                 },
             }
 
         # Overall confidence assessment
-        individual_levels = [assessment["confidence_level"] for assessment in confidence_assessment.values()]
+        individual_levels = [
+            assessment["confidence_level"]
+            for assessment in confidence_assessment.values()
+        ]
         level_hierarchy = {"very_low": 0, "low": 1, "moderate": 2, "high": 3}
 
         if individual_levels:
-            avg_level = sum(level_hierarchy[level] for level in individual_levels) / len(individual_levels)
+            avg_level = sum(
+                level_hierarchy[level] for level in individual_levels
+            ) / len(individual_levels)
             overall_level = list(level_hierarchy.keys())[int(avg_level)]
         else:
             overall_level = "very_low"
@@ -341,7 +385,10 @@ class EvidenceSynthesisEngine:
             "overall_confidence": overall_level,
             "rationale": f"Based on {len(evidence_rows)} evidence rows across {len(outcomes_evidence)} outcomes",
             "key_strengths": ["Systematic methodology", "Multiple outcomes assessed"],
-            "key_limitations": ["Limited time for comprehensive assessment", "Simplified confidence grading"],
+            "key_limitations": [
+                "Limited time for comprehensive assessment",
+                "Simplified confidence grading",
+            ],
         }
 
         return confidence_assessment
@@ -377,7 +424,9 @@ class EvidenceSynthesisEngine:
             )
 
         except Exception as e:
-            self.logger.warning(f"Failed to extract evidence for outcome {outcome} from study {study.get('id')}: {e}")
+            self.logger.warning(
+                f"Failed to extract evidence for outcome {outcome} from study {study.get('id')}: {e}"
+            )
             return None
 
     async def _narrative_synthesis(
@@ -457,7 +506,9 @@ class EvidenceSynthesisEngine:
             }
         ]
 
-        narrative_summary = f"Meta - aggregation synthesis of {len(evidence_rows)} studies."
+        narrative_summary = (
+            f"Meta - aggregation synthesis of {len(evidence_rows)} studies."
+        )
 
         return themes, narrative_summary
 
@@ -483,12 +534,19 @@ class EvidenceSynthesisEngine:
 
         # Study design limitations
         study_designs = [row.study_design for row in evidence_rows]
-        if all(design.lower() in ["cross - sectional", "case study", "case series"] for design in study_designs):
-            limitations.append("Limited to cross - sectional and case studies; causal inferences cannot be made.")
+        if all(
+            design.lower() in ["cross - sectional", "case study", "case series"]
+            for design in study_designs
+        ):
+            limitations.append(
+                "Limited to cross - sectional and case studies; causal inferences cannot be made."
+            )
 
         # Sample size considerations
         if len(evidence_rows) < 10:
-            limitations.append(f"Small number of studies included (n={len(evidence_rows)}) may limit generalizability.")
+            limitations.append(
+                f"Small number of studies included (n={len(evidence_rows)}) may limit generalizability."
+            )
 
         # Contradiction considerations
         if len(contradictions) > 0:
@@ -619,7 +677,7 @@ async def demonstrate_evidence_synthesis():
         research_question="What is the effectiveness of AI - assisted diagnostic tools in healthcare?",
     )
 
-    print(f"\n🎯 Synthesis Results Summary")
+    print("\n🎯 Synthesis Results Summary")
     print(f"   Synthesis ID: {synthesis_result.synthesis_id}")
     print(f"   Method: {synthesis_result.synthesis_method.value}")
     print(f"   Themes identified: {len(synthesis_result.themes)}")
@@ -630,19 +688,21 @@ async def demonstrate_evidence_synthesis():
     print(f"   Recommendations: {len(synthesis_result.recommendations)}")
     print(f"   Limitations: {len(synthesis_result.limitations)}")
 
-    print(f"\n📝 Key Themes:")
+    print("\n📝 Key Themes:")
     for i, theme in enumerate(synthesis_result.themes, 1):
-        print(f"   {i}. {theme['theme']} (strength: {theme.get('strength', 'unknown')})")
+        print(
+            f"   {i}. {theme['theme']} (strength: {theme.get('strength', 'unknown')})"
+        )
 
-    print(f"\n💡 Recommendations:")
+    print("\n💡 Recommendations:")
     for i, rec in enumerate(synthesis_result.recommendations, 1):
         print(f"   {i}. {rec}")
 
-    print(f"\n⚠️  Key Limitations:")
+    print("\n⚠️  Key Limitations:")
     for i, limitation in enumerate(synthesis_result.limitations[:3], 1):  # Show first 3
         print(f"   {i}. {limitation}")
 
-    print(f"\n✅ Phase 3 Evidence Synthesis Engine demonstration completed!")
+    print("\n✅ Phase 3 Evidence Synthesis Engine demonstration completed!")
     return synthesis_result
 
 

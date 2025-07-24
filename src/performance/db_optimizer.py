@@ -22,7 +22,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -76,12 +76,16 @@ class ConnectionPool:
     def _initialize_pool(self):
         """Initialize connection pool"""
         for _ in range(self.max_connections):
-            conn = sqlite3.connect(self.database_path, check_same_thread=False, timeout=30.0)
+            conn = sqlite3.connect(
+                self.database_path, check_same_thread=False, timeout=30.0
+            )
             conn.row_factory = sqlite3.Row
             self._pool.append(conn)
 
         self.metrics.connection_pool_size = len(self._pool)
-        logger.info(f"Database connection pool initialized with {len(self._pool)} connections")
+        logger.info(
+            f"Database connection pool initialized with {len(self._pool)} connections"
+        )
 
     @contextmanager
     def get_connection(self):
@@ -95,9 +99,13 @@ class ConnectionPool:
                     self.metrics.active_connections = len(self._used_connections)
                 else:
                     # Create temporary connection if pool exhausted
-                    conn = sqlite3.connect(self.database_path, check_same_thread=False, timeout=30.0)
+                    conn = sqlite3.connect(
+                        self.database_path, check_same_thread=False, timeout=30.0
+                    )
                     conn.row_factory = sqlite3.Row
-                    logger.warning("Connection pool exhausted, creating temporary connection")
+                    logger.warning(
+                        "Connection pool exhausted, creating temporary connection"
+                    )
 
             yield conn
 
@@ -137,7 +145,9 @@ class QueryOptimizer:
         self.query_stats: List[QueryStats] = []
         self.slow_query_threshold_ms = 1000.0  # 1 second
 
-    async def execute_query(self, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
+    async def execute_query(
+        self, query: str, params: Optional[tuple] = None
+    ) -> List[Dict[str, Any]]:
         """
         Execute optimized query with performance tracking
 
@@ -180,11 +190,15 @@ class QueryOptimizer:
                 # Update metrics
                 metrics = self.connection_pool.metrics
                 metrics.total_queries += 1
-                metrics.average_query_time_ms = (metrics.average_query_time_ms + execution_time_ms) / 2
+                metrics.average_query_time_ms = (
+                    metrics.average_query_time_ms + execution_time_ms
+                ) / 2
 
                 if execution_time_ms > self.slow_query_threshold_ms:
                     metrics.slow_queries += 1
-                    logger.warning(f"Slow query detected: {execution_time_ms:.2f}ms - {query[:100]}...")
+                    logger.warning(
+                        f"Slow query detected: {execution_time_ms:.2f}ms - {query[:100]}..."
+                    )
 
                 return results
 
@@ -222,7 +236,9 @@ class QueryOptimizer:
                 # Add recommendations
                 recommendations = []
                 if analysis["has_table_scan"]:
-                    recommendations.append("Consider adding indexes to avoid table scans")
+                    recommendations.append(
+                        "Consider adding indexes to avoid table scans"
+                    )
 
                 if not analysis["uses_index"] and "WHERE" in query.upper():
                     recommendations.append("Add indexes on WHERE clause columns")
@@ -240,7 +256,9 @@ class QueryOptimizer:
 
     def get_slow_queries(self, limit: int = 10) -> List[QueryStats]:
         """Get slowest queries"""
-        sorted_queries = sorted(self.query_stats, key=lambda q: q.execution_time_ms, reverse=True)
+        sorted_queries = sorted(
+            self.query_stats, key=lambda q: q.execution_time_ms, reverse=True
+        )
         return sorted_queries[:limit]
 
     def get_query_statistics(self) -> Dict[str, Any]:
@@ -255,9 +273,19 @@ class QueryOptimizer:
             "average_time_ms": sum(execution_times) / len(execution_times),
             "min_time_ms": min(execution_times),
             "max_time_ms": max(execution_times),
-            "slow_queries": len([q for q in self.query_stats if q.execution_time_ms > self.slow_query_threshold_ms]),
+            "slow_queries": len(
+                [
+                    q
+                    for q in self.query_stats
+                    if q.execution_time_ms > self.slow_query_threshold_ms
+                ]
+            ),
             "recent_queries": len(
-                [q for q in self.query_stats if (datetime.now(timezone.utc) - q.timestamp).seconds < 300]
+                [
+                    q
+                    for q in self.query_stats
+                    if (datetime.now(timezone.utc) - q.timestamp).seconds < 300
+                ]
             ),
         }
 
@@ -281,10 +309,16 @@ class IndexManager:
                 cursor = conn.cursor()
 
                 # Get all indexes
-                cursor.execute("SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
+                cursor.execute(
+                    "SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL"
+                )
                 indexes = cursor.fetchall()
 
-                analysis = {"total_indexes": len(indexes), "indexes": [], "recommendations": []}
+                analysis = {
+                    "total_indexes": len(indexes),
+                    "indexes": [],
+                    "recommendations": [],
+                }
 
                 for index in indexes:
                     index_info = {
@@ -300,7 +334,9 @@ class IndexManager:
                         "No indexes found - consider adding indexes on frequently queried columns"
                     )
                 elif len(indexes) > 20:
-                    analysis["recommendations"].append("Large number of indexes - review for unused indexes")
+                    analysis["recommendations"].append(
+                        "Large number of indexes - review for unused indexes"
+                    )
 
                 return analysis
 
@@ -340,12 +376,18 @@ class IndexManager:
                 for column in columns:
                     if column not in existing_columns:
                         index_name = f"idx_{table_name}_{column}"
-                        index_sql = f"CREATE INDEX {index_name} ON {table_name} ({column})"
+                        index_sql = (
+                            f"CREATE INDEX {index_name} ON {table_name} ({column})"
+                        )
                         suggestions.append(index_sql)
 
                 # Suggest composite indexes for common combinations
                 if len(columns) >= 2:
-                    common_combinations = [("title", "year"), ("author", "year"), ("status", "created_at")]
+                    common_combinations = [
+                        ("title", "year"),
+                        ("author", "year"),
+                        ("status", "created_at"),
+                    ]
 
                     for combo in common_combinations:
                         if all(col in columns for col in combo):
@@ -437,18 +479,26 @@ class DatabaseOptimizer:
                 "average_query_time_ms": self.connection_pool.metrics.average_query_time_ms,
                 "slow_queries": self.connection_pool.metrics.slow_queries,
             }
-            optimization_results["performance_metrics"]["connection_pool"] = pool_metrics
+            optimization_results["performance_metrics"][
+                "connection_pool"
+            ] = pool_metrics
 
             # Run VACUUM to reclaim space
             await self._vacuum_database()
-            optimization_results["optimizations_applied"].append("VACUUM - database defragmentation")
+            optimization_results["optimizations_applied"].append(
+                "VACUUM - database defragmentation"
+            )
 
             # Update statistics
             await self._update_statistics()
-            optimization_results["optimizations_applied"].append("Updated table statistics")
+            optimization_results["optimizations_applied"].append(
+                "Updated table statistics"
+            )
 
             # Generate recommendations
-            recommendations = self._generate_recommendations(query_stats, index_analysis)
+            recommendations = self._generate_recommendations(
+                query_stats, index_analysis
+            )
             optimization_results["recommendations"] = recommendations
 
             logger.info("Database optimization completed")
@@ -479,23 +529,32 @@ class DatabaseOptimizer:
         except Exception as e:
             logger.error(f"Statistics update failed: {e}")
 
-    def _generate_recommendations(self, query_stats: Dict[str, Any], index_analysis: Dict[str, Any]) -> List[str]:
+    def _generate_recommendations(
+        self, query_stats: Dict[str, Any], index_analysis: Dict[str, Any]
+    ) -> List[str]:
         """Generate optimization recommendations"""
         recommendations = []
 
         # Query - based recommendations
         if query_stats.get("slow_queries", 0) > 0:
-            recommendations.append(f"Optimize {query_stats['slow_queries']} slow queries")
+            recommendations.append(
+                f"Optimize {query_stats['slow_queries']} slow queries"
+            )
 
         if query_stats.get("average_time_ms", 0) > 100:
-            recommendations.append("Consider adding indexes to improve average query time")
+            recommendations.append(
+                "Consider adding indexes to improve average query time"
+            )
 
         # Index - based recommendations
         if index_analysis.get("total_indexes", 0) == 0:
             recommendations.append("Add indexes on frequently queried columns")
 
         # Connection pool recommendations
-        if self.connection_pool.metrics.active_connections == self.connection_pool.max_connections:
+        if (
+            self.connection_pool.metrics.active_connections
+            == self.connection_pool.max_connections
+        ):
             recommendations.append("Consider increasing connection pool size")
 
         # General recommendations
@@ -504,7 +563,9 @@ class DatabaseOptimizer:
 
         return recommendations
 
-    async def execute_optimized_query(self, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
+    async def execute_optimized_query(
+        self, query: str, params: Optional[tuple] = None
+    ) -> List[Dict[str, Any]]:
         """Execute query with optimization"""
         return await self.query_optimizer.execute_query(query, params)
 
@@ -578,14 +639,18 @@ async def demo_database_optimizer():
             ),
         )
 
-    print(f"   Created table with 100 sample studies")
+    print("   Created table with 100 sample studies")
 
     # Run some queries to generate statistics
     print("\n📊 Running sample queries...")
 
     await optimizer.execute_optimized_query("SELECT * FROM studies WHERE year = 2023")
-    await optimizer.execute_optimized_query("SELECT * FROM studies WHERE author LIKE 'Author 5%'")
-    await optimizer.execute_optimized_query("SELECT COUNT(*) FROM studies GROUP BY status")
+    await optimizer.execute_optimized_query(
+        "SELECT * FROM studies WHERE author LIKE 'Author 5%'"
+    )
+    await optimizer.execute_optimized_query(
+        "SELECT COUNT(*) FROM studies GROUP BY status"
+    )
 
     # Analyze query performance
     query_stats = optimizer.query_optimizer.get_query_statistics()
@@ -596,20 +661,26 @@ async def demo_database_optimizer():
     print("\n🚀 Running database optimization...")
     optimization_results = await optimizer.optimize_database()
 
-    print(f"   Optimizations applied:")
+    print("   Optimizations applied:")
     for opt in optimization_results["optimizations_applied"]:
         print(f"     • {opt}")
 
-    print(f"   Recommendations:")
+    print("   Recommendations:")
     for rec in optimization_results["recommendations"][:3]:
         print(f"     • {rec}")
 
     # Generate performance report
     report = optimizer.get_performance_report()
-    print(f"\n📋 Performance Report:")
-    print(f"   Connection pool utilization: {report['connection_pool']['utilization']:.1%}")
-    print(f"   Total queries executed: {report['query_performance'].get('total_queries', 0)}")
-    print(f"   Average query time: {report['query_performance'].get('average_time_ms', 0):.2f}ms")
+    print("\n📋 Performance Report:")
+    print(
+        f"   Connection pool utilization: {report['connection_pool']['utilization']:.1%}"
+    )
+    print(
+        f"   Total queries executed: {report['query_performance'].get('total_queries', 0)}"
+    )
+    print(
+        f"   Average query time: {report['query_performance'].get('average_time_ms', 0):.2f}ms"
+    )
 
     # Cleanup
     optimizer.close()

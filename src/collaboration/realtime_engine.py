@@ -22,14 +22,12 @@ import asyncio
 import json
 import logging
 import sqlite3
-import threading
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import websockets
 
@@ -225,9 +223,13 @@ class RealtimeCollaborationEngine:
 
     def _register_default_handlers(self):
         """Register default event handlers"""
-        self.register_event_handler(EventType.SCREENING_UPDATE, self._handle_screening_update)
+        self.register_event_handler(
+            EventType.SCREENING_UPDATE, self._handle_screening_update
+        )
         self.register_event_handler(EventType.EVIDENCE_EDIT, self._handle_evidence_edit)
-        self.register_event_handler(EventType.PROGRESS_UPDATE, self._handle_progress_update)
+        self.register_event_handler(
+            EventType.PROGRESS_UPDATE, self._handle_progress_update
+        )
         self.register_event_handler(EventType.CHAT_MESSAGE, self._handle_chat_message)
         self.register_event_handler(EventType.USER_JOIN, self._handle_user_join)
         self.register_event_handler(EventType.USER_LEAVE, self._handle_user_leave)
@@ -235,7 +237,9 @@ class RealtimeCollaborationEngine:
     async def start_server(self):
         """Start the WebSocket server for real - time collaboration"""
         try:
-            self.server = await websockets.serve(self._handle_websocket_connection, "localhost", self.port)
+            self.server = await websockets.serve(
+                self._handle_websocket_connection, "localhost", self.port
+            )
             self.running = True
             logger.info(f"Real - time collaboration server started on port {self.port}")
 
@@ -269,7 +273,9 @@ class RealtimeCollaborationEngine:
             role = UserRole(auth_data.get("role", "reviewer"))
 
             if not all([user_id, project_id, username]):
-                await websocket.send(json.dumps({"type": "error", "message": "Authentication required"}))
+                await websocket.send(
+                    json.dumps({"type": "error", "message": "Authentication required"})
+                )
                 return
 
             # Create active user session
@@ -461,7 +467,9 @@ class RealtimeCollaborationEngine:
         """Send error message to specific user"""
         if user_id in self.active_users:
             try:
-                await self.active_users[user_id].websocket.send(json.dumps({"type": "error", "message": message}))
+                await self.active_users[user_id].websocket.send(
+                    json.dumps({"type": "error", "message": message})
+                )
             except Exception as e:
                 logger.error(f"Failed to send error to user {user_id}: {str(e)}")
 
@@ -516,20 +524,28 @@ class RealtimeCollaborationEngine:
         try:
             # Store chat message
             # Implement chat functionality
-            logger.info(f"Chat message from {event.user_id}: {event.data.get('message', '')}")
+            logger.info(
+                f"Chat message from {event.user_id}: {event.data.get('message', '')}"
+            )
 
         except Exception as e:
             logger.error(f"Chat message handling error: {str(e)}")
 
     async def _handle_user_join(self, event: CollaborationEvent):
         """Handle user join events"""
-        logger.info(f"User {event.data.get('username')} joined project {event.project_id}")
+        logger.info(
+            f"User {event.data.get('username')} joined project {event.project_id}"
+        )
 
     async def _handle_user_leave(self, event: CollaborationEvent):
         """Handle user leave events"""
-        logger.info(f"User {event.data.get('username')} left project {event.project_id}")
+        logger.info(
+            f"User {event.data.get('username')} left project {event.project_id}"
+        )
 
-    async def _store_screening_decision(self, decision: ScreeningDecision, project_id: str):
+    async def _store_screening_decision(
+        self, decision: ScreeningDecision, project_id: str
+    ):
         """Store screening decision in database"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -606,7 +622,9 @@ class RealtimeCollaborationEngine:
         except Exception as e:
             logger.error(f"Failed to update progress metrics: {str(e)}")
 
-    async def _check_screening_conflicts(self, decision: ScreeningDecision, project_id: str):
+    async def _check_screening_conflicts(
+        self, decision: ScreeningDecision, project_id: str
+    ):
         """Check for screening conflicts between reviewers"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -644,7 +662,10 @@ class RealtimeCollaborationEngine:
                             user_id=decision.user_id,
                             project_id=project_id,
                             timestamp=datetime.now(timezone.utc),
-                            data={"study_id": decision.study_id, "conflicts": conflicts},
+                            data={
+                                "study_id": decision.study_id,
+                                "conflicts": conflicts,
+                            },
                         )
                     )
 
@@ -695,7 +716,10 @@ class RealtimeCollaborationEngine:
                     # Estimate completion time (simplified)
                     screened = result[2] or 0
                     total = result[1] or 1
-                    completion_rate = screened / total if total > 0 else 0
+                    if total > 0:
+                        screened / total
+                    else:
+                        pass
 
                     # Calculate screening rate
                     cursor.execute(
@@ -710,8 +734,12 @@ class RealtimeCollaborationEngine:
 
                     # Estimate completion
                     remaining = total - screened
-                    hours_remaining = remaining / max(screening_rate, 1) if screening_rate > 0 else 0
-                    estimated_completion = datetime.now(timezone.utc) + timedelta(hours=hours_remaining)
+                    hours_remaining = (
+                        remaining / max(screening_rate, 1) if screening_rate > 0 else 0
+                    )
+                    estimated_completion = datetime.now(timezone.utc) + timedelta(
+                        hours=hours_remaining
+                    )
 
                     return ProgressMetrics(
                         project_id=project_id,
@@ -733,14 +761,23 @@ class RealtimeCollaborationEngine:
 
 # Utility functions for client integration
 async def create_collaboration_client(
-    user_id: str, username: str, project_id: str, role: str = "reviewer", server_url: str = "ws://localhost:8765"
+    user_id: str,
+    username: str,
+    project_id: str,
+    role: str = "reviewer",
+    server_url: str = "ws://localhost:8765",
 ):
     """Create a collaboration client connection"""
     try:
         websocket = await websockets.connect(server_url)
 
         # Send authentication
-        auth_data = {"user_id": user_id, "username": username, "project_id": project_id, "role": role}
+        auth_data = {
+            "user_id": user_id,
+            "username": username,
+            "project_id": project_id,
+            "role": role,
+        }
         await websocket.send(json.dumps(auth_data))
 
         # Wait for confirmation
@@ -748,10 +785,12 @@ async def create_collaboration_client(
         response_data = json.loads(response)
 
         if response_data.get("type") == "connected":
-            logger.info(f"Successfully connected to collaboration session")
+            logger.info("Successfully connected to collaboration session")
             return websocket
         else:
-            raise Exception(f"Connection failed: {response_data.get('message', 'Unknown error')}")
+            raise Exception(
+                f"Connection failed: {response_data.get('message', 'Unknown error')}"
+            )
 
     except Exception as e:
         logger.error(f"Failed to create collaboration client: {str(e)}")

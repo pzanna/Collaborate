@@ -11,7 +11,15 @@ ProjectStatus = Literal["active", "archived"]
 TopicStatus = Literal["active", "paused", "completed", "archived"]
 PlanStatus = Literal["draft", "active", "completed", "cancelled"]
 TaskStatus = Literal["pending", "running", "completed", "failed", "cancelled"]
-TaskStage = Literal["planning", "literature_review", "reasoning", "execution", "synthesis", "complete", "failed"]
+TaskStage = Literal[
+    "planning",
+    "literature_review",
+    "reasoning",
+    "execution",
+    "synthesis",
+    "complete",
+    "failed",
+]
 TaskType = Literal["research", "analysis", "synthesis", "validation"]
 PlanType = Literal["comprehensive", "quick", "deep", "custom"]
 
@@ -193,7 +201,9 @@ class Task(BaseModel):
         self.progress = new_progress
         self.update_timestamp()
 
-    def update_status(self, new_status: TaskStatus, new_stage: Optional[TaskStage] = None) -> None:
+    def update_status(
+        self, new_status: TaskStatus, new_stage: Optional[TaskStage] = None
+    ) -> None:
         """Update task status and optionally stage."""
         self.status = new_status
         if new_stage:

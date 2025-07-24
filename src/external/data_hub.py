@@ -22,16 +22,13 @@ import csv
 import io
 import json
 import logging
-import os
 import re
-import sqlite3
 import tempfile
 import xml.etree.ElementTree as ET
-from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -131,10 +128,12 @@ class DataValidator:
             "extracted_data": ["study_id", "variable", "value"],
         }
 
-    async def validate_data(self, data: Dict[str, Any], data_type: str) -> DataValidationResult:
+    async def validate_data(
+        self, data: Dict[str, Any], data_type: str
+    ) -> DataValidationResult:
         """Validate data based on type and validation level"""
 
-        start_time = datetime.now()
+        datetime.now()
         errors = []
         warnings = []
         corrected_data = None
@@ -145,9 +144,13 @@ class DataValidator:
             elif data_type == "screening_decisions":
                 errors, warnings, corrected_data = await self._validate_screening(data)
             elif data_type == "quality_assessments":
-                errors, warnings, corrected_data = await self._validate_quality_assessments(data)
+                errors, warnings, corrected_data = (
+                    await self._validate_quality_assessments(data)
+                )
             elif data_type == "extracted_data":
-                errors, warnings, corrected_data = await self._validate_extracted_data(data)
+                errors, warnings, corrected_data = await self._validate_extracted_data(
+                    data
+                )
             else:
                 warnings.append(f"Unknown data type: {data_type}")
 
@@ -212,9 +215,13 @@ class DataValidator:
                     year_int = int(year)
                     current_year = datetime.now().year
                     if year_int < 1800 or year_int > current_year + 1:
-                        warnings.append(f"Study {study_id}: Unusual publication year: {year}")
+                        warnings.append(
+                            f"Study {study_id}: Unusual publication year: {year}"
+                        )
                 except (ValueError, TypeError):
-                    errors.append(f"Study {study_id}: Invalid publication year format: {year}")
+                    errors.append(
+                        f"Study {study_id}: Invalid publication year format: {year}"
+                    )
 
             # Validate DOI format
             doi = study.get("doi")
@@ -222,9 +229,11 @@ class DataValidator:
                 warnings.append(f"Study {study_id}: DOI format may be invalid: {doi}")
 
             # Check for duplicate studies
-            for j, other_study in enumerate(studies[i + 1 :], i + 1):
+            for j, other_study in enumerate(studies[i + 1:], i + 1):
                 if study.get("title") == other_study.get("title"):
-                    warnings.append(f"Possible duplicate studies: {study_id} and study_{j}")
+                    warnings.append(
+                        f"Possible duplicate studies: {study_id} and study_{j}"
+                    )
 
         return errors, warnings, corrected_data
 
@@ -258,7 +267,9 @@ class DataValidator:
                 try:
                     datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                 except ValueError:
-                    warnings.append(f"{decision_id}: Invalid timestamp format: {timestamp}")
+                    warnings.append(
+                        f"{decision_id}: Invalid timestamp format: {timestamp}"
+                    )
 
         return errors, warnings, corrected_data
 
@@ -270,7 +281,14 @@ class DataValidator:
 
         assessments = data.get("quality_assessments", [])
 
-        valid_ratings = ["low", "high", "unclear", "low_risk", "high_risk", "unclear_risk"]
+        valid_ratings = [
+            "low",
+            "high",
+            "unclear",
+            "low_risk",
+            "high_risk",
+            "unclear_risk",
+        ]
 
         for i, assessment in enumerate(assessments):
             assessment_id = f"assessment_{i}"
@@ -310,7 +328,9 @@ class DataValidator:
                 try:
                     float(value)
                 except (ValueError, TypeError):
-                    warnings.append(f"{extraction_id}: Non - numeric value for numeric variable: {value}")
+                    warnings.append(
+                        f"{extraction_id}: Non - numeric value for numeric variable: {value}"
+                    )
 
         return errors, warnings, corrected_data
 
@@ -319,16 +339,24 @@ class FormatConverter:
     """Convert between different data formats"""
 
     @staticmethod
-    def csv_to_json(csv_data: str, headers: Optional[List[str]] = None) -> Dict[str, Any]:
+    def csv_to_json(
+        csv_data: str, headers: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """Convert CSV data to JSON format"""
 
         reader = csv.DictReader(io.StringIO(csv_data))
         rows = list(reader)
 
-        return {"data": rows, "headers": reader.fieldnames or headers or [], "row_count": len(rows)}
+        return {
+            "data": rows,
+            "headers": reader.fieldnames or headers or [],
+            "row_count": len(rows),
+        }
 
     @staticmethod
-    def json_to_csv(json_data: Dict[str, Any], fields: Optional[List[str]] = None) -> str:
+    def json_to_csv(
+        json_data: Dict[str, Any], fields: Optional[List[str]] = None
+    ) -> str:
         """Convert JSON data to CSV format"""
 
         data = json_data.get("data", [])
@@ -351,7 +379,10 @@ class FormatConverter:
                 writer.writerow(row)
             else:
                 # Handle list / tuple rows
-                row_dict = {fields[i]: row[i] if i < len(row) else "" for i in range(len(fields))}
+                row_dict = {
+                    fields[i]: row[i] if i < len(row) else ""
+                    for i in range(len(fields))
+                }
                 writer.writerow(row_dict)
 
         return output.getvalue()
@@ -449,7 +480,10 @@ class ImportEngine:
         self.converter = FormatConverter()
 
     async def import_data(
-        self, data_source: Union[str, Dict[str, Any]], format_type: DataFormat, exchange_format: ExchangeFormat
+        self,
+        data_source: Union[str, Dict[str, Any]],
+        format_type: DataFormat,
+        exchange_format: ExchangeFormat,
     ) -> ImportResult:
         """Import data from various sources and formats"""
 
@@ -472,11 +506,15 @@ class ImportEngine:
                 parsed_data = data_source
 
             # Transform to exchange format
-            transformed_data = await self._transform_to_exchange_format(parsed_data, exchange_format)
+            transformed_data = await self._transform_to_exchange_format(
+                parsed_data, exchange_format
+            )
 
             # Validate data
             data_type = self._get_data_type_from_exchange_format(exchange_format)
-            validation_result = await self.validator.validate_data(transformed_data, data_type)
+            validation_result = await self.validator.validate_data(
+                transformed_data, data_type
+            )
 
             # Count records
             records_imported = self._count_records(transformed_data)
@@ -582,7 +620,9 @@ class ImportEngine:
             # Return as - is for unknown formats
             return data
 
-    async def _transform_to_study_metadata(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _transform_to_study_metadata(
+        self, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Transform data to study metadata format"""
 
         # Handle different input structures
@@ -591,14 +631,22 @@ class ImportEngine:
             studies = []
             for row in data["data"]:
                 study = {
-                    "id": row.get("id") or row.get("study_id") or f"study_{len(studies)}",
+                    "id": row.get("id")
+                    or row.get("study_id")
+                    or f"study_{len(studies)}",
                     "title": row.get("title") or row.get("Title"),
-                    "authors": self._parse_authors(row.get("authors") or row.get("Authors", "")),
-                    "publication_year": self._parse_year(row.get("year") or row.get("publication_year")),
+                    "authors": self._parse_authors(
+                        row.get("authors") or row.get("Authors", "")
+                    ),
+                    "publication_year": self._parse_year(
+                        row.get("year") or row.get("publication_year")
+                    ),
                     "journal": row.get("journal") or row.get("Journal"),
                     "doi": row.get("doi") or row.get("DOI"),
                     "abstract": row.get("abstract") or row.get("Abstract"),
-                    "keywords": self._parse_keywords(row.get("keywords") or row.get("Keywords", "")),
+                    "keywords": self._parse_keywords(
+                        row.get("keywords") or row.get("Keywords", "")
+                    ),
                 }
                 studies.append(study)
 
@@ -612,7 +660,9 @@ class ImportEngine:
                     "id": f"study_{len(studies)}",
                     "title": ref.get("TI") or ref.get("title"),
                     "authors": self._parse_authors_from_list(ref.get("AU", [])),
-                    "publication_year": self._parse_year(ref.get("PY") or ref.get("year")),
+                    "publication_year": self._parse_year(
+                        ref.get("PY") or ref.get("year")
+                    ),
                     "journal": ref.get("JO") or ref.get("journal"),
                     "doi": ref.get("DO") or ref.get("doi"),
                     "abstract": ref.get("AB") or ref.get("abstract"),
@@ -626,7 +676,9 @@ class ImportEngine:
             # Return as - is
             return data
 
-    async def _transform_to_screening_decisions(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _transform_to_screening_decisions(
+        self, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Transform data to screening decisions format"""
 
         if "data" in data:
@@ -638,7 +690,8 @@ class ImportEngine:
                     "reviewer_id": row.get("reviewer_id") or row.get("reviewer"),
                     "stage": row.get("stage", "title_abstract"),
                     "notes": row.get("notes") or row.get("comments"),
-                    "timestamp": row.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+                    "timestamp": row.get("timestamp")
+                    or datetime.now(timezone.utc).isoformat(),
                 }
                 decisions.append(decision)
 
@@ -646,7 +699,9 @@ class ImportEngine:
 
         return data
 
-    async def _transform_to_reference_library(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _transform_to_reference_library(
+        self, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Transform data to reference library format"""
 
         if "references" in data:
@@ -668,7 +723,11 @@ class ImportEngine:
                 }
                 references.append(ref)
 
-            return {"references": references, "count": len(references), "format": "transformed"}
+            return {
+                "references": references,
+                "count": len(references),
+                "format": "transformed",
+            }
 
         return data
 
@@ -690,7 +749,9 @@ class ImportEngine:
         # Clean up
         return [author.strip() for author in authors if author.strip()]
 
-    def _parse_authors_from_list(self, authors_list: Union[List[str], str]) -> List[str]:
+    def _parse_authors_from_list(
+        self, authors_list: Union[List[str], str]
+    ) -> List[str]:
         """Parse authors from list or string"""
         if isinstance(authors_list, list):
             return authors_list
@@ -711,7 +772,9 @@ class ImportEngine:
 
         return [kw.strip() for kw in keywords if kw.strip()]
 
-    def _parse_keywords_from_list(self, keywords_list: Union[List[str], str]) -> List[str]:
+    def _parse_keywords_from_list(
+        self, keywords_list: Union[List[str], str]
+    ) -> List[str]:
         """Parse keywords from list or string"""
         if isinstance(keywords_list, list):
             return keywords_list
@@ -739,7 +802,9 @@ class ImportEngine:
 
         return None
 
-    def _get_data_type_from_exchange_format(self, exchange_format: ExchangeFormat) -> str:
+    def _get_data_type_from_exchange_format(
+        self, exchange_format: ExchangeFormat
+    ) -> str:
         """Map exchange format to data type for validation"""
         mapping = {
             ExchangeFormat.STUDY_METADATA: "studies",
@@ -754,7 +819,13 @@ class ImportEngine:
         """Count records in transformed data"""
 
         # Count based on main data arrays
-        for key in ["studies", "screening_decisions", "quality_assessments", "extracted_data", "references"]:
+        for key in [
+            "studies",
+            "screening_decisions",
+            "quality_assessments",
+            "extracted_data",
+            "references",
+        ]:
             if key in data and isinstance(data[key], list):
                 return len(data[key])
 
@@ -773,7 +844,10 @@ class ExportEngine:
         self.validator = DataValidator(ValidationLevel.LENIENT)
 
     async def export_data(
-        self, data: Dict[str, Any], format_type: DataFormat, output_file: Optional[str] = None
+        self,
+        data: Dict[str, Any],
+        format_type: DataFormat,
+        output_file: Optional[str] = None,
     ) -> ExportResult:
         """Export data to specified format"""
 
@@ -816,7 +890,10 @@ class ExportEngine:
                 format_type=format_type,
                 validation_result=validation_result,
                 processing_time=processing_time,
-                metadata={"data_type": data_type, "file_size": len(output_data.encode("utf - 8"))},
+                metadata={
+                    "data_type": data_type,
+                    "file_size": len(output_data.encode("utf - 8")),
+                },
             )
 
         except Exception as e:
@@ -848,7 +925,14 @@ class ExportEngine:
 
         # Determine main data array
         main_data = None
-        for key in ["studies", "screening_decisions", "quality_assessments", "extracted_data", "references", "data"]:
+        for key in [
+            "studies",
+            "screening_decisions",
+            "quality_assessments",
+            "extracted_data",
+            "references",
+            "data",
+        ]:
             if key in data and isinstance(data[key], list):
                 main_data = data[key]
                 break
@@ -892,7 +976,9 @@ class ExportEngine:
 
         # Add metadata
         metadata = ET.SubElement(root, "metadata")
-        ET.SubElement(metadata, "export_timestamp").text = datetime.now(timezone.utc).isoformat()
+        ET.SubElement(metadata, "export_timestamp").text = datetime.now(
+            timezone.utc
+        ).isoformat()
         ET.SubElement(metadata, "format").text = "xml"
 
         # Add main data
@@ -900,7 +986,9 @@ class ExportEngine:
             if isinstance(value, list):
                 list_elem = ET.SubElement(root, key)
                 for item in value:
-                    item_elem = ET.SubElement(list_elem, key[:-1] if key.endswith("s") else "item")
+                    item_elem = ET.SubElement(
+                        list_elem, key[:-1] if key.endswith("s") else "item"
+                    )
                     self._dict_to_xml(item, item_elem)
             elif isinstance(value, dict):
                 dict_elem = ET.SubElement(root, key)
@@ -970,7 +1058,14 @@ class ExportEngine:
     def _count_exported_records(self, data: Dict[str, Any]) -> int:
         """Count exported records"""
 
-        for key in ["studies", "screening_decisions", "quality_assessments", "extracted_data", "references", "data"]:
+        for key in [
+            "studies",
+            "screening_decisions",
+            "quality_assessments",
+            "extracted_data",
+            "references",
+            "data",
+        ]:
             if key in data and isinstance(data[key], list):
                 return len(data[key])
 
@@ -994,18 +1089,24 @@ class DataExchangeHub:
             with open(file_path, "r", encoding="utf - 8") as f:
                 data_content = f.read()
 
-            return await self.import_engine.import_data(data_content, format_type, exchange_format)
+            return await self.import_engine.import_data(
+                data_content, format_type, exchange_format
+            )
 
         except Exception as e:
             logger.error(f"File import failed: {e}")
             raise
 
-    async def export_to_file(self, data: Dict[str, Any], file_path: str, format_type: DataFormat) -> ExportResult:
+    async def export_to_file(
+        self, data: Dict[str, Any], file_path: str, format_type: DataFormat
+    ) -> ExportResult:
         """Export data to file"""
 
         return await self.export_engine.export_data(data, format_type, file_path)
 
-    async def convert_format(self, input_data: str, input_format: DataFormat, output_format: DataFormat) -> str:
+    async def convert_format(
+        self, input_data: str, input_format: DataFormat, output_format: DataFormat
+    ) -> str:
         """Convert data between formats"""
 
         # Import in input format
@@ -1017,7 +1118,9 @@ class DataExchangeHub:
             raise ValueError(f"Import failed: {import_result.error_log}")
 
         # Export in output format
-        export_result = await self.export_engine.export_data(import_result.imported_data, output_format)
+        export_result = await self.export_engine.export_data(
+            import_result.imported_data, output_format
+        )
 
         if not export_result.success:
             raise ValueError("Export failed")
@@ -1060,15 +1163,21 @@ study3,"Clinical Decision Support Systems","Brown C, Davis D",2024,Clinical Info
 
             print(f"✅ Import success: {import_result.success}")
             print(f"   Records imported: {import_result.records_imported}")
-            print(f"   Validation errors: {import_result.validation_result.error_count}")
-            print(f"   Validation warnings: {import_result.validation_result.warning_count}")
+            print(
+                f"   Validation errors: {import_result.validation_result.error_count}"
+            )
+            print(
+                f"   Validation warnings: {import_result.validation_result.warning_count}"
+            )
 
             if import_result.validation_result.warnings:
                 print(f"   Warnings: {import_result.validation_result.warnings[:2]}")
 
             # Test JSON export
             print("\n2. Testing JSON export...")
-            json_export = await hub.export_engine.export_data(import_result.imported_data, DataFormat.JSON)
+            json_export = await hub.export_engine.export_data(
+                import_result.imported_data, DataFormat.JSON
+            )
 
             print(f"✅ JSON export success: {json_export.success}")
             print(f"   Records exported: {json_export.records_exported}")
@@ -1076,7 +1185,9 @@ study3,"Clinical Decision Support Systems","Brown C, Davis D",2024,Clinical Info
 
             # Test RIS export
             print("\n3. Testing RIS export...")
-            ris_export = await hub.export_engine.export_data(import_result.imported_data, DataFormat.RIS)
+            ris_export = await hub.export_engine.export_data(
+                import_result.imported_data, DataFormat.RIS
+            )
 
             print(f"✅ RIS export success: {ris_export.success}")
             print(f"   Records exported: {ris_export.records_exported}")
@@ -1087,9 +1198,11 @@ study3,"Clinical Decision Support Systems","Brown C, Davis D",2024,Clinical Info
 
             # Test format conversion
             print("\n4. Testing format conversion...")
-            converted_ris = await hub.convert_format(sample_csv, DataFormat.CSV, DataFormat.RIS)
+            converted_ris = await hub.convert_format(
+                sample_csv, DataFormat.CSV, DataFormat.RIS
+            )
 
-            print(f"✅ CSV to RIS conversion completed")
+            print("✅ CSV to RIS conversion completed")
             print(f"   Output size: {len(converted_ris)} characters")
 
             # Test validation levels
@@ -1106,7 +1219,9 @@ study2,Good Title,Doe A,2023"""
                 bad_csv, DataFormat.CSV, ExchangeFormat.STUDY_METADATA
             )
 
-            print(f"   Strict validation errors: {strict_result.validation_result.error_count}")
+            print(
+                f"   Strict validation errors: {strict_result.validation_result.error_count}"
+            )
 
             # Lenient validation
             hub_lenient = DataExchangeHub(ValidationLevel.LENIENT)
@@ -1114,7 +1229,9 @@ study2,Good Title,Doe A,2023"""
                 bad_csv, DataFormat.CSV, ExchangeFormat.STUDY_METADATA
             )
 
-            print(f"   Lenient validation errors: {lenient_result.validation_result.error_count}")
+            print(
+                f"   Lenient validation errors: {lenient_result.validation_result.error_count}"
+            )
 
             print("\n✅ Data exchange tests completed successfully")
 

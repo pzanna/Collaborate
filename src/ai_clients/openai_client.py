@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import openai
 from pydantic import BaseModel, Field
@@ -31,7 +31,9 @@ class OpenAIClient:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-    def get_response(self, user_message: str, system_prompt: Optional[str] = None) -> str:
+    def get_response(
+        self, user_message: str, system_prompt: Optional[str] = None
+    ) -> str:
         """Get response from OpenAI."""
         start_time = time.time()
         estimated_tokens = self.estimate_tokens(user_message)
@@ -51,7 +53,9 @@ class OpenAIClient:
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             elif self.config.system_prompt:
-                messages.append({"role": "system", "content": self.config.system_prompt})
+                messages.append(
+                    {"role": "system", "content": self.config.system_prompt}
+                )
 
             # Add user message
             messages.append({"role": "user", "content": user_message})
@@ -75,10 +79,16 @@ class OpenAIClient:
             )
 
             # Log response content (truncated and sanitized for log format)
-            content_preview = response_content[:200] + "..." if len(response_content) > 200 else response_content
+            content_preview = (
+                response_content[:200] + "..."
+                if len(response_content) > 200
+                else response_content
+            )
             # Sanitize content for single - line log entry (replace newlines and multiple spaces)
             sanitized_preview = content_preview.replace("\n", " ").replace("\r", " ")
-            sanitized_preview = " ".join(sanitized_preview.split())  # Normalize whitespace
+            sanitized_preview = " ".join(
+                sanitized_preview.split()
+            )  # Normalize whitespace
             self.logger.debug(f"OpenAI Response content preview: {sanitized_preview}")
 
             return response_content

@@ -5,12 +5,10 @@ This module implements a specialized AI agent that embodies the expertise
 of a neurobiologist for expert consultation via the MCP server.
 """
 
-import asyncio
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ..agents.base_agent import AgentStatus, BaseAgent
+from ..agents.base_agent import BaseAgent
 from ..ai_clients.openai_client import AIProviderConfig, OpenAIClient
 from ..config.config_manager import ConfigManager
 from ..mcp.protocols import AgentResponse, ResearchAction
@@ -70,14 +68,14 @@ class NeurologistPersonaAgent(BaseAgent):
 - Extraction / derivation (primary tissue, iPSC - derived neurons, organoids)
 - Culture formulation, environmental control, viability / phenotyping assays
 - Electrophysiology (MEA / patch clamp), opto / chemogenetics, hybrid chemical–electrical interfaces
-- Mapping biological activity onto computational frameworks (ANNs,
-    reservoir computing,
-    neuromorphic models) and interpreting bidirectional signalling
+- Mapping biological activity onto computational frameworks (ANNs, reservoir computing, neuromorphic models)
+ and interpreting bidirectional signalling
 
 ## Core Objectives
 
 - Provide scientifically rigorous, reference - backed explanations of neuroanatomy, cell biology, electrophysiology, and plasticity
-- Propose step - by - step experimental protocols (materials, concentrations, timings, QC checkpoints, troubleshooting)
+- Propose step - by - step experimental protocols (materials, concentrations, timings, QC checkpoints,
+ troubleshooting)
 - Interpret supplied data (spike trains,
     calcium imaging traces,
     metabolic readouts) for patterns such as efficiency,
@@ -95,18 +93,16 @@ class NeurologistPersonaAgent(BaseAgent):
 
 - **Accuracy & Citations**: Ground claims in established literature. Cite primary or high - quality secondary sources. If uncertain, state so and suggest verification.
 - **Evidence - Based Hypothesising**: Separate speculation from consensus; justify novel mechanisms with analogous findings.
-- **Detail & Clarity**: Use British English,
-    SI units,
-    and clear formatting (tables for recipes,
-    bullet lists for steps). Include critical parameters (temperature,
-    CO₂ %,
-    osmolarity,
-    pH,
-    plating density).
-- **Computational Integration**: Recommend data structures and preprocessing for interfacing; suggest modelling paradigms aligned with observed biology; propose biological experiments for ANN analogues.
-- **Safety & Ethics**: Remind users about biosafety levels, ethical approvals, species - specific regulations, waste disposal, and use of human - derived materials.
-- **Reproducibility & Controls**: Always propose controls, replication numbers, statistical tests, and documentation practices.
-- **Constraint Sensitivity**: Adapt recommendations to limited budgets / equipment or restricted reagent availability; propose safe alternatives.
+- **Detail & Clarity**: Use British English, SI units, and clear formatting (tables for recipes, bullet lists for steps).
+ Include critical parameters (temperature, CO₂ %, osmolarity, pH, plating density).
+- **Computational Integration**: Recommend data structures and preprocessing for interfacing;
+ suggest modelling paradigms aligned with observed biology; propose biological experiments for ANN analogues.
+- **Safety & Ethics**: Remind users about biosafety levels, ethical approvals, species - specific regulations,
+ waste disposal, and use of human - derived materials.
+- **Reproducibility & Controls**: Always propose controls, replication numbers, statistical tests,
+ and documentation practices.
+- **Constraint Sensitivity**: Adapt recommendations to limited budgets / equipment or restricted reagent availability;
+ propose safe alternatives.
 - **Calibration & Validation**: Encourage calibration routines, media quality checks, and validation assays.
 
 ## Communication Style
@@ -149,7 +145,8 @@ class NeurologistPersonaAgent(BaseAgent):
 - Mark speculative sections clearly ("Hypothesis:" / "Speculative mechanism:")
 
 **Don't:**
-- Hand - wave critical steps, recommend unsafe shortcuts, or conflate in vivo and in vitro contexts without noting differences
+- Hand - wave critical steps, recommend unsafe shortcuts, or conflate in vivo and in vitro contexts
+ without noting differences
 - Oversell results—acknowledge biological variability and noise
 
 ## Error Handling & Limits
@@ -219,7 +216,9 @@ class NeurologistPersonaAgent(BaseAgent):
                 "data_interpretation",
                 "experimental_guidance",
             ]:
-                return self._create_error_response(action, f"Unsupported action type: {action.action}")
+                return self._create_error_response(
+                    action, f"Unsupported action type: {action.action}"
+                )
 
             # Extract consultation parameters
             query = action.payload.get("query", "")
@@ -227,10 +226,14 @@ class NeurologistPersonaAgent(BaseAgent):
             expertise_area = action.payload.get("expertise_area", "general")
 
             if not query:
-                return self._create_error_response(action, "Query parameter is required")
+                return self._create_error_response(
+                    action, "Query parameter is required"
+                )
 
             # Generate expert response
-            response = await self._generate_expert_response(query, context, expertise_area)
+            response = await self._generate_expert_response(
+                query, context, expertise_area
+            )
 
             return AgentResponse(
                 task_id=action.task_id,
@@ -251,7 +254,9 @@ class NeurologistPersonaAgent(BaseAgent):
             self.logger.error(f"Error processing neurobiologist consultation: {e}")
             return self._create_error_response(action, str(e))
 
-    async def _generate_expert_response(self, query: str, context: Dict[str, Any], expertise_area: str) -> str:
+    async def _generate_expert_response(
+        self, query: str, context: Dict[str, Any], expertise_area: str
+    ) -> str:
         """
         Generate expert response using AI client with neurobiologist persona.
 
@@ -268,10 +273,14 @@ class NeurologistPersonaAgent(BaseAgent):
                 raise RuntimeError("AI client not initialized")
 
             # Prepare enhanced prompt with context
-            enhanced_prompt = self._prepare_enhanced_prompt(query, context, expertise_area)
+            enhanced_prompt = self._prepare_enhanced_prompt(
+                query, context, expertise_area
+            )
 
             # Generate response using AI client
-            response = self.ai_client.get_response(user_message=enhanced_prompt, system_prompt=self.system_prompt)
+            response = self.ai_client.get_response(
+                user_message=enhanced_prompt, system_prompt=self.system_prompt
+            )
 
             return response
 
@@ -279,9 +288,13 @@ class NeurologistPersonaAgent(BaseAgent):
             self.logger.error(f"Error generating expert response: {e}")
             raise
 
-    def _prepare_enhanced_prompt(self, query: str, context: Dict[str, Any], expertise_area: str) -> str:
+    def _prepare_enhanced_prompt(
+        self, query: str, context: Dict[str, Any], expertise_area: str
+    ) -> str:
         """Prepare an enhanced prompt with context and expertise focus."""
-        prompt_parts = [f"## Expert Consultation Request\n\n**Expertise Area**: {expertise_area}\n"]
+        prompt_parts = [
+            f"## Expert Consultation Request\n\n**Expertise Area**: {expertise_area}\n"
+        ]
 
         if context:
             prompt_parts.append("**Context Information**:")
@@ -290,14 +303,20 @@ class NeurologistPersonaAgent(BaseAgent):
             prompt_parts.append("")
 
         prompt_parts.append(f"**Query**: {query}\n")
-        prompt_parts.append("Please provide a comprehensive expert response following your structured template.")
+        prompt_parts.append(
+            "Please provide a comprehensive expert response following your structured template."
+        )
 
         return "\n".join(prompt_parts)
 
     def _assess_confidence(self, expertise_area: str) -> float:
         """Assess confidence level for the given expertise area."""
         # High confidence for core neurobiologist areas
-        high_confidence_areas = ["neuron_preparation", "electrophysiology", "cell_culture"]
+        high_confidence_areas = [
+            "neuron_preparation",
+            "electrophysiology",
+            "cell_culture",
+        ]
         medium_confidence_areas = ["neural_interfacing", "bio_digital_systems"]
 
         if expertise_area in high_confidence_areas:
@@ -314,7 +333,10 @@ class NeurologistPersonaAgent(BaseAgent):
         lines = response.split("\n")
 
         for line in lines:
-            if any(keyword in line.lower() for keyword in ["recommend", "suggest", "advise"]):
+            if any(
+                keyword in line.lower()
+                for keyword in ["recommend", "suggest", "advise"]
+            ):
                 recommendations.append(line.strip())
 
         return recommendations[:5]  # Limit to top 5
@@ -325,12 +347,17 @@ class NeurologistPersonaAgent(BaseAgent):
         lines = response.split("\n")
 
         for line in lines:
-            if any(keyword in line.lower() for keyword in ["safety", "hazard", "caution", "warning", "biosafety"]):
+            if any(
+                keyword in line.lower()
+                for keyword in ["safety", "hazard", "caution", "warning", "biosafety"]
+            ):
                 safety_notes.append(line.strip())
 
         return safety_notes
 
-    def _create_error_response(self, action: ResearchAction, error_message: str) -> AgentResponse:
+    def _create_error_response(
+        self, action: ResearchAction, error_message: str
+    ) -> AgentResponse:
         """Create an error response for failed processing."""
         return AgentResponse(
             task_id=action.task_id,

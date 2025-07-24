@@ -291,7 +291,9 @@ class QueryMemoryRequest:
     tags: List[str] = field(default_factory=list)
     limit: int = 10
     min_importance: float = 0.0
-    time_range: Optional[Dict[str, str]] = None  # {"start": "2024 - 01 - 01", "end": "2024 - 01 - 02"}
+    time_range: Optional[Dict[str, str]] = (
+        None  # {"start": "2024 - 01 - 01", "end": "2024 - 01 - 02"}
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -395,9 +397,17 @@ MESSAGE_TYPES = {
 def serialize_message(message_type: str, message_data: Any) -> Dict[str, Any]:
     """Serialize message for transmission"""
     if hasattr(message_data, "to_dict"):
-        return {"type": message_type, "data": message_data.to_dict(), "timestamp": datetime.now().isoformat()}
+        return {
+            "type": message_type,
+            "data": message_data.to_dict(),
+            "timestamp": datetime.now().isoformat(),
+        }
     else:
-        return {"type": message_type, "data": message_data, "timestamp": datetime.now().isoformat()}
+        return {
+            "type": message_type,
+            "data": message_data,
+            "timestamp": datetime.now().isoformat(),
+        }
 
 
 def deserialize_message(message: Dict[str, Any]) -> Any:

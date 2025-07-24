@@ -6,19 +6,14 @@ and intelligent summarization capabilities for systematic reviews.
 """
 
 import asyncio
-import hashlib
-import json
 import logging
-import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
-import pandas as pd
 
 
 class SynthesisType(Enum):
@@ -131,7 +126,9 @@ class MetaAnalysisConfig:
     min_studies: int = 2
     subgroup_variables: List[str] = field(default_factory=list)
     sensitivity_variables: List[str] = field(default_factory=list)
-    publication_bias_tests: List[str] = field(default_factory=lambda: ["egger", "begg", "funnel"])
+    publication_bias_tests: List[str] = field(
+        default_factory=lambda: ["egger", "begg", "funnel"]
+    )
 
 
 class IntelligentSynthesisEngine:
@@ -147,12 +144,17 @@ class IntelligentSynthesisEngine:
         self.config = config
         self.synthesis_history = []
         self.quality_thresholds = config.get(
-            "quality_thresholds", {"min_studies": 2, "min_participants": 50, "min_quality_score": 0.6}
+            "quality_thresholds",
+            {"min_studies": 2, "min_participants": 50, "min_quality_score": 0.6},
         )
         self.logger = logging.getLogger(__name__)
 
     async def synthesize_evidence(
-        self, studies: List[StudyData], outcome: str, synthesis_type: SynthesisType, config: MetaAnalysisConfig
+        self,
+        studies: List[StudyData],
+        outcome: str,
+        synthesis_type: SynthesisType,
+        config: MetaAnalysisConfig,
     ) -> SynthesisResult:
         """
         Perform intelligent evidence synthesis.
@@ -166,7 +168,9 @@ class IntelligentSynthesisEngine:
         Returns:
             Comprehensive synthesis results
         """
-        self.logger.info(f"Starting {synthesis_type.value} synthesis for outcome: {outcome}")
+        self.logger.info(
+            f"Starting {synthesis_type.value} synthesis for outcome: {outcome}"
+        )
         self.logger.info(f"Analyzing {len(studies)} studies")
 
         # Filter studies with relevant outcome data
@@ -174,26 +178,38 @@ class IntelligentSynthesisEngine:
 
         if len(relevant_studies) < config.min_studies:
             raise ValueError(
-                f"Insufficient studies for synthesis. Found {len(relevant_studies)}, minimum required: {config.min_studies}"
+                f"Insufficient studies for synthesis. Found {len(relevant_studies)}, "
+                f"minimum required: {config.min_studies}"
             )
 
         # Perform synthesis based on type
         if synthesis_type == SynthesisType.META_ANALYSIS:
-            result = await self._perform_meta_analysis(relevant_studies, outcome, config)
+            result = await self._perform_meta_analysis(
+                relevant_studies, outcome, config
+            )
         elif synthesis_type == SynthesisType.NARRATIVE:
-            result = await self._perform_narrative_synthesis(relevant_studies, outcome, config)
+            result = await self._perform_narrative_synthesis(
+                relevant_studies, outcome, config
+            )
         elif synthesis_type == SynthesisType.QUALITATIVE:
-            result = await self._perform_qualitative_synthesis(relevant_studies, outcome, config)
+            result = await self._perform_qualitative_synthesis(
+                relevant_studies, outcome, config
+            )
         elif synthesis_type == SynthesisType.MIXED_METHODS:
-            result = await self._perform_mixed_methods_synthesis(relevant_studies, outcome, config)
+            result = await self._perform_mixed_methods_synthesis(
+                relevant_studies, outcome, config
+            )
         else:
-            raise ValueError(f"Synthesis type {synthesis_type.value} not yet implemented")
+            raise ValueError(
+                f"Synthesis type {synthesis_type.value} not yet implemented"
+            )
 
         # Store synthesis result
         self.synthesis_history.append(result)
 
         self.logger.info(
-            f"Synthesis completed. Included {len(result.studies_included)} studies, {result.total_participants} participants"
+            f"Synthesis completed. Included {len(result.studies_included)} studies, "
+            f"{result.total_participants} participants"
         )
 
         return result
@@ -224,7 +240,9 @@ class IntelligentSynthesisEngine:
 
         # Calculate pooled effect
         total_weight = sum(d["weight"] for d in effect_data)
-        pooled_effect_size = sum(d["effect_size"] * d["weight"] for d in effect_data) / total_weight
+        pooled_effect_size = (
+            sum(d["effect_size"] * d["weight"] for d in effect_data) / total_weight
+        )
         pooled_se = np.sqrt(1.0 / total_weight)
 
         # Calculate confidence interval
@@ -233,7 +251,10 @@ class IntelligentSynthesisEngine:
         ci_upper = pooled_effect_size + z_score * pooled_se
 
         # Calculate heterogeneity (I²)
-        q_statistic = sum((d["effect_size"] - pooled_effect_size) ** 2 * d["weight"] for d in effect_data)
+        q_statistic = sum(
+            (d["effect_size"] - pooled_effect_size) ** 2 * d["weight"]
+            for d in effect_data
+        )
         df = len(effect_data) - 1
         i_squared = max(0, (q_statistic - df) / q_statistic) if q_statistic > 0 else 0
 
@@ -241,13 +262,19 @@ class IntelligentSynthesisEngine:
         publication_bias = await self._assess_publication_bias(effect_data, config)
 
         # Perform subgroup analyses
-        subgroup_analyses = await self._perform_subgroup_analyses(studies, outcome, config)
+        subgroup_analyses = await self._perform_subgroup_analyses(
+            studies, outcome, config
+        )
 
         # Perform sensitivity analyses
-        sensitivity_analyses = await self._perform_sensitivity_analyses(studies, outcome, config)
+        sensitivity_analyses = await self._perform_sensitivity_analyses(
+            studies, outcome, config
+        )
 
         # Assess certainty of evidence (GRADE)
-        certainty = await self._assess_evidence_certainty(studies, effect_data, i_squared)
+        certainty = await self._assess_evidence_certainty(
+            studies, effect_data, i_squared
+        )
 
         # Generate narrative summary
         narrative = await self._generate_meta_analysis_narrative(
@@ -255,28 +282,37 @@ class IntelligentSynthesisEngine:
         )
 
         # Generate recommendations
-        recommendations = await self._generate_recommendations(pooled_effect_size, certainty, config.effect_measure)
+        recommendations = await self._generate_recommendations(
+            pooled_effect_size, certainty, config.effect_measure
+        )
 
         # Identify limitations
-        limitations = await self._identify_limitations(studies, i_squared, publication_bias)
+        limitations = await self._identify_limitations(
+            studies, i_squared, publication_bias
+        )
 
         return SynthesisResult(
             synthesis_id=f"meta_{datetime.now().strftime('%Y % m%d_ % H%M % S')}",
             synthesis_type=SynthesisType.META_ANALYSIS,
             outcome=outcome,
             studies_included=[s.study_id for s in studies],
-            total_participants=sum(s.extracted_data.get("sample_size", 0) for s in studies),
+            total_participants=sum(
+                s.extracted_data.get("sample_size", 0) for s in studies
+            ),
             pooled_effect={
                 "effect_size": pooled_effect_size,
                 "standard_error": pooled_se,
                 "confidence_interval": [ci_lower, ci_upper],
-                "p_value": 2 * (1 - self._norm_cdf(abs(pooled_effect_size / pooled_se))),
+                "p_value": 2
+                * (1 - self._norm_cdf(abs(pooled_effect_size / pooled_se))),
                 "effect_measure": config.effect_measure,
             },
             heterogeneity={
                 "i_squared": i_squared,
                 "q_statistic": q_statistic,
-                "tau_squared": max(0, (q_statistic - df) / total_weight) if df > 0 else 0,
+                "tau_squared": (
+                    max(0, (q_statistic - df) / total_weight) if df > 0 else 0
+                ),
                 "interpretation": self._interpret_heterogeneity(i_squared),
             },
             quality_assessment=await self._assess_overall_quality(studies),
@@ -305,16 +341,22 @@ class IntelligentSynthesisEngine:
         consistency = await self._assess_narrative_consistency(studies, outcome)
 
         # Generate comprehensive narrative
-        narrative = await self._generate_comprehensive_narrative(studies, outcome, themes, consistency, study_groups)
+        narrative = await self._generate_comprehensive_narrative(
+            studies, outcome, themes, consistency, study_groups
+        )
 
         # Assess overall quality
         quality_assessment = await self._assess_overall_quality(studies)
 
         # Assess certainty for narrative synthesis
-        certainty = await self._assess_narrative_certainty(studies, consistency, quality_assessment)
+        certainty = await self._assess_narrative_certainty(
+            studies, consistency, quality_assessment
+        )
 
         # Generate recommendations
-        recommendations = await self._generate_narrative_recommendations(themes, certainty)
+        recommendations = await self._generate_narrative_recommendations(
+            themes, certainty
+        )
 
         # Identify limitations
         limitations = await self._identify_narrative_limitations(studies, consistency)
@@ -324,21 +366,31 @@ class IntelligentSynthesisEngine:
             synthesis_type=SynthesisType.NARRATIVE,
             outcome=outcome,
             studies_included=[s.study_id for s in studies],
-            total_participants=sum(s.extracted_data.get("sample_size", 0) for s in studies),
+            total_participants=sum(
+                s.extracted_data.get("sample_size", 0) for s in studies
+            ),
             pooled_effect={
-                "narrative_direction": self._determine_overall_direction(studies, outcome),
+                "narrative_direction": self._determine_overall_direction(
+                    studies, outcome
+                ),
                 "consistency_score": consistency["overall_score"],
-                "strength_of_evidence": self._assess_narrative_strength(studies, themes),
+                "strength_of_evidence": self._assess_narrative_strength(
+                    studies, themes
+                ),
             },
             heterogeneity={
-                "methodological_diversity": self._assess_methodological_diversity(studies),
+                "methodological_diversity": self._assess_methodological_diversity(
+                    studies
+                ),
                 "population_diversity": self._assess_population_diversity(studies),
                 "intervention_diversity": self._assess_intervention_diversity(studies),
             },
             quality_assessment=quality_assessment,
             subgroup_analyses=[],  # Not applicable for narrative synthesis
             sensitivity_analyses=[],  # Not applicable for narrative synthesis
-            publication_bias={"assessment": "Cannot be statistically assessed in narrative synthesis"},
+            publication_bias={
+                "assessment": "Cannot be statistically assessed in narrative synthesis"
+            },
             certainty_assessment=certainty,
             narrative_summary=narrative,
             recommendations=recommendations,
@@ -365,7 +417,9 @@ class IntelligentSynthesisEngine:
         confidence_assessment = await self._assess_cerqual_confidence(studies, themes)
 
         # Generate qualitative synthesis narrative
-        narrative = await self._generate_qualitative_narrative(themes, confidence_assessment)
+        narrative = await self._generate_qualitative_narrative(
+            themes, confidence_assessment
+        )
 
         # Generate recommendations
         recommendations = await self._generate_qualitative_recommendations(themes)
@@ -375,13 +429,17 @@ class IntelligentSynthesisEngine:
             synthesis_type=SynthesisType.QUALITATIVE,
             outcome=outcome,
             studies_included=[s.study_id for s in studies],
-            total_participants=sum(s.extracted_data.get("sample_size", 0) for s in studies),
+            total_participants=sum(
+                s.extracted_data.get("sample_size", 0) for s in studies
+            ),
             pooled_effect={
                 "themes": [t["name"] for t in themes],
                 "theme_frequencies": {t["name"]: t["frequency"] for t in themes},
                 "conceptual_model": await self._develop_conceptual_model(themes),
             },
-            heterogeneity={"thematic_diversity": self._assess_thematic_diversity(themes)},
+            heterogeneity={
+                "thematic_diversity": self._assess_thematic_diversity(themes)
+            },
             quality_assessment=await self._assess_qualitative_quality(studies),
             subgroup_analyses=[],
             sensitivity_analyses=[],
@@ -399,58 +457,92 @@ class IntelligentSynthesisEngine:
         """Perform mixed - methods evidence synthesis."""
 
         # Separate quantitative and qualitative studies
-        quant_studies = [s for s in studies if s.study_design.lower() in ["rct", "cohort", "case - control"]]
-        qual_studies = [s for s in studies if s.study_design.lower() in ["qualitative", "mixed - methods"]]
+        quant_studies = [
+            s
+            for s in studies
+            if s.study_design.lower() in ["rct", "cohort", "case - control"]
+        ]
+        qual_studies = [
+            s
+            for s in studies
+            if s.study_design.lower() in ["qualitative", "mixed - methods"]
+        ]
 
         # Perform quantitative synthesis if sufficient studies
         quant_results = None
         if len(quant_studies) >= config.min_studies:
-            quant_results = await self._perform_meta_analysis(quant_studies, outcome, config)
+            quant_results = await self._perform_meta_analysis(
+                quant_studies, outcome, config
+            )
 
         # Perform qualitative synthesis
         qual_results = None
         if qual_studies:
-            qual_results = await self._perform_qualitative_synthesis(qual_studies, outcome, config)
+            qual_results = await self._perform_qualitative_synthesis(
+                qual_studies, outcome, config
+            )
 
         # Integrate findings
-        integrated_findings = await self._integrate_mixed_methods_findings(quant_results, qual_results, outcome)
+        integrated_findings = await self._integrate_mixed_methods_findings(
+            quant_results, qual_results, outcome
+        )
 
         # Generate integrated narrative
-        narrative = await self._generate_mixed_methods_narrative(quant_results, qual_results, integrated_findings)
+        narrative = await self._generate_mixed_methods_narrative(
+            quant_results, qual_results, integrated_findings
+        )
 
         # Assess overall certainty
-        certainty = await self._assess_mixed_methods_certainty(quant_results, qual_results)
+        certainty = await self._assess_mixed_methods_certainty(
+            quant_results, qual_results
+        )
 
         return SynthesisResult(
             synthesis_id=f"mixed_{datetime.now().strftime('%Y % m%d_ % H%M % S')}",
             synthesis_type=SynthesisType.MIXED_METHODS,
             outcome=outcome,
             studies_included=[s.study_id for s in studies],
-            total_participants=sum(s.extracted_data.get("sample_size", 0) for s in studies),
+            total_participants=sum(
+                s.extracted_data.get("sample_size", 0) for s in studies
+            ),
             pooled_effect=integrated_findings,
             heterogeneity={
-                "quantitative_heterogeneity": quant_results.heterogeneity if quant_results else {},
-                "qualitative_diversity": qual_results.heterogeneity if qual_results else {},
+                "quantitative_heterogeneity": (
+                    quant_results.heterogeneity if quant_results else {}
+                ),
+                "qualitative_diversity": (
+                    qual_results.heterogeneity if qual_results else {}
+                ),
             },
             quality_assessment=await self._assess_mixed_methods_quality(studies),
             subgroup_analyses=quant_results.subgroup_analyses if quant_results else [],
-            sensitivity_analyses=quant_results.sensitivity_analyses if quant_results else [],
+            sensitivity_analyses=(
+                quant_results.sensitivity_analyses if quant_results else []
+            ),
             publication_bias=quant_results.publication_bias if quant_results else {},
             certainty_assessment=certainty,
             narrative_summary=narrative,
-            recommendations=await self._generate_mixed_methods_recommendations(integrated_findings),
-            limitations=await self._identify_mixed_methods_limitations(quant_results, qual_results),
+            recommendations=await self._generate_mixed_methods_recommendations(
+                integrated_findings
+            ),
+            limitations=await self._identify_mixed_methods_limitations(
+                quant_results, qual_results
+            ),
             created_at=datetime.now().isoformat(),
         )
 
     # Helper methods for synthesis operations
 
-    async def _assess_publication_bias(self, effect_data: List[Dict], config: MetaAnalysisConfig) -> Dict[str, Any]:
+    async def _assess_publication_bias(
+        self, effect_data: List[Dict], config: MetaAnalysisConfig
+    ) -> Dict[str, Any]:
         """Assess publication bias using multiple tests."""
         results = {}
 
         if len(effect_data) < 10:
-            results["warning"] = "Insufficient studies for reliable publication bias assessment"
+            results["warning"] = (
+                "Insufficient studies for reliable publication bias assessment"
+            )
 
         # Simulate publication bias tests
         if "egger" in config.publication_bias_tests:
@@ -491,7 +583,11 @@ class IntelligentSynthesisEngine:
                 subgroups[str(value)].append(study)
 
             # Analyze each subgroup
-            subgroup_analysis = {"variable": variable, "subgroups": {}, "test_interaction": {}}
+            subgroup_analysis = {
+                "variable": variable,
+                "subgroups": {},
+                "test_interaction": {},
+            }
 
             for subgroup_name, subgroup_studies in subgroups.items():
                 if len(subgroup_studies) >= 2:  # Minimum for analysis
@@ -502,7 +598,10 @@ class IntelligentSynthesisEngine:
                     subgroup_analysis["subgroups"][subgroup_name] = {
                         "studies": len(subgroup_studies),
                         "effect_size": effect_size,
-                        "confidence_interval": [effect_size - 1.96 * se, effect_size + 1.96 * se],
+                        "confidence_interval": [
+                            effect_size - 1.96 * se,
+                            effect_size + 1.96 * se,
+                        ],
                         "p_value": 2 * (1 - self._norm_cdf(abs(effect_size / se))),
                     }
 
@@ -529,14 +628,18 @@ class IntelligentSynthesisEngine:
                 "type": "leave_one_out",
                 "description": "Effect of removing each study individually",
                 "results": {
-                    "range_effect_sizes": [np.random.uniform(-0.6, 0.6) for _ in studies],
+                    "range_effect_sizes": [
+                        np.random.uniform(-0.6, 0.6) for _ in studies
+                    ],
                     "stability_assessment": "Results stable across sensitivity analyses",
                 },
             }
         )
 
         # Quality - based sensitivity
-        high_quality_studies = [s for s in studies if s.quality_assessment.get("overall_score", 0) > 0.7]
+        high_quality_studies = [
+            s for s in studies if s.quality_assessment.get("overall_score", 0) > 0.7
+        ]
         if len(high_quality_studies) >= 2:
             sensitivity_results.append(
                 {
@@ -558,7 +661,9 @@ class IntelligentSynthesisEngine:
         """Assess certainty of evidence using GRADE approach."""
 
         # Start with study design (RCTs start high, observational start low)
-        rct_proportion = sum(1 for s in studies if s.study_design.lower() == "rct") / len(studies)
+        rct_proportion = sum(
+            1 for s in studies if s.study_design.lower() == "rct"
+        ) / len(studies)
 
         if rct_proportion > 0.5:
             certainty_score = 4  # High
@@ -566,7 +671,9 @@ class IntelligentSynthesisEngine:
             certainty_score = 2  # Low
 
         # Downgrade for risk of bias
-        avg_quality = np.mean([s.quality_assessment.get("overall_score", 0.5) for s in studies])
+        avg_quality = np.mean(
+            [s.quality_assessment.get("overall_score", 0.5) for s in studies]
+        )
         if avg_quality < 0.7:
             certainty_score -= 1
 
@@ -608,7 +715,9 @@ class IntelligentSynthesisEngine:
 
     # Additional helper methods for narrative synthesis
 
-    async def _assess_narrative_consistency(self, studies: List[StudyData], outcome: str) -> Dict[str, Any]:
+    async def _assess_narrative_consistency(
+        self, studies: List[StudyData], outcome: str
+    ) -> Dict[str, Any]:
         """Assess consistency of findings across narrative studies."""
         # Simulate consistency assessment
         return {
@@ -618,7 +727,12 @@ class IntelligentSynthesisEngine:
         }
 
     async def _generate_comprehensive_narrative(
-        self, studies: List[StudyData], outcome: str, themes: List[Dict], consistency: Dict, study_groups: Dict
+        self,
+        studies: List[StudyData],
+        outcome: str,
+        themes: List[Dict],
+        consistency: Dict,
+        study_groups: Dict,
     ) -> str:
         """Generate comprehensive narrative synthesis."""
         return f"Narrative synthesis of {len(studies)} studies shows consistent findings for {outcome}."
@@ -629,19 +743,27 @@ class IntelligentSynthesisEngine:
         """Assess certainty for narrative synthesis."""
         return EvidenceQuality.MODERATE
 
-    async def _generate_narrative_recommendations(self, themes: List[Dict], certainty: EvidenceQuality) -> List[str]:
+    async def _generate_narrative_recommendations(
+        self, themes: List[Dict], certainty: EvidenceQuality
+    ) -> List[str]:
         """Generate recommendations from narrative synthesis."""
         return ["Consider intervention based on narrative evidence"]
 
-    async def _identify_narrative_limitations(self, studies: List[StudyData], consistency: Dict) -> List[str]:
+    async def _identify_narrative_limitations(
+        self, studies: List[StudyData], consistency: Dict
+    ) -> List[str]:
         """Identify limitations of narrative synthesis."""
         return ["Heterogeneity in study designs", "Limited quantitative data"]
 
-    def _determine_overall_direction(self, studies: List[StudyData], outcome: str) -> str:
+    def _determine_overall_direction(
+        self, studies: List[StudyData], outcome: str
+    ) -> str:
         """Determine overall direction of effect from narrative synthesis."""
         return "positive"
 
-    def _assess_narrative_strength(self, studies: List[StudyData], themes: List[Dict]) -> str:
+    def _assess_narrative_strength(
+        self, studies: List[StudyData], themes: List[Dict]
+    ) -> str:
         """Assess strength of narrative evidence."""
         return "moderate"
 
@@ -657,14 +779,26 @@ class IntelligentSynthesisEngine:
         """Assess intervention diversity."""
         return 0.4
 
-    async def _perform_thematic_analysis(self, qualitative_findings: List[str]) -> List[Dict[str, Any]]:
+    async def _perform_thematic_analysis(
+        self, qualitative_findings: List[str]
+    ) -> List[Dict[str, Any]]:
         """Perform thematic analysis on qualitative findings."""
         return [
-            {"name": "Patient Experience", "frequency": 0.8, "description": "Positive patient experiences"},
-            {"name": "Clinical Effectiveness", "frequency": 0.6, "description": "Evidence of clinical benefit"},
+            {
+                "name": "Patient Experience",
+                "frequency": 0.8,
+                "description": "Positive patient experiences",
+            },
+            {
+                "name": "Clinical Effectiveness",
+                "frequency": 0.6,
+                "description": "Evidence of clinical benefit",
+            },
         ]
 
-    async def _assess_cerqual_confidence(self, studies: List[StudyData], themes: List[Dict]) -> Dict[str, Any]:
+    async def _assess_cerqual_confidence(
+        self, studies: List[StudyData], themes: List[Dict]
+    ) -> Dict[str, Any]:
         """Assess confidence using CERQual approach."""
         return {
             "overall": EvidenceQuality.MODERATE,
@@ -674,11 +808,15 @@ class IntelligentSynthesisEngine:
             "relevance": "high",
         }
 
-    async def _generate_qualitative_narrative(self, themes: List[Dict], confidence_assessment: Dict) -> str:
+    async def _generate_qualitative_narrative(
+        self, themes: List[Dict], confidence_assessment: Dict
+    ) -> str:
         """Generate qualitative synthesis narrative."""
         return f"Qualitative synthesis identified {len(themes)} key themes with moderate confidence."
 
-    async def _generate_qualitative_recommendations(self, themes: List[Dict]) -> List[str]:
+    async def _generate_qualitative_recommendations(
+        self, themes: List[Dict]
+    ) -> List[str]:
         """Generate recommendations from qualitative synthesis."""
         return [f"Consider {theme['name']} in intervention design" for theme in themes]
 
@@ -690,16 +828,23 @@ class IntelligentSynthesisEngine:
         """Assess diversity of themes."""
         return 0.7
 
-    async def _assess_qualitative_quality(self, studies: List[StudyData]) -> Dict[str, Any]:
+    async def _assess_qualitative_quality(
+        self, studies: List[StudyData]
+    ) -> Dict[str, Any]:
         """Assess quality of qualitative studies."""
         return {"overall_quality": "moderate", "methodological_rigor": "adequate"}
 
-    async def _identify_qualitative_limitations(self, studies: List[StudyData], themes: List[Dict]) -> List[str]:
+    async def _identify_qualitative_limitations(
+        self, studies: List[StudyData], themes: List[Dict]
+    ) -> List[str]:
         """Identify limitations of qualitative synthesis."""
         return ["Limited geographical diversity", "Potential selection bias"]
 
     async def _integrate_mixed_methods_findings(
-        self, quant_results: Optional[SynthesisResult], qual_results: Optional[SynthesisResult], outcome: str
+        self,
+        quant_results: Optional[SynthesisResult],
+        qual_results: Optional[SynthesisResult],
+        outcome: str,
     ) -> Dict[str, Any]:
         """Integrate quantitative and qualitative findings."""
         integration = {"integration_approach": "convergent"}
@@ -716,24 +861,36 @@ class IntelligentSynthesisEngine:
         integrated_findings: Dict,
     ) -> str:
         """Generate mixed - methods synthesis narrative."""
-        return "Mixed - methods synthesis combining quantitative and qualitative evidence."
+        return (
+            "Mixed - methods synthesis combining quantitative and qualitative evidence."
+        )
 
     async def _assess_mixed_methods_certainty(
-        self, quant_results: Optional[SynthesisResult], qual_results: Optional[SynthesisResult]
+        self,
+        quant_results: Optional[SynthesisResult],
+        qual_results: Optional[SynthesisResult],
     ) -> EvidenceQuality:
         """Assess overall certainty for mixed - methods synthesis."""
         return EvidenceQuality.MODERATE
 
-    async def _assess_mixed_methods_quality(self, studies: List[StudyData]) -> Dict[str, Any]:
+    async def _assess_mixed_methods_quality(
+        self, studies: List[StudyData]
+    ) -> Dict[str, Any]:
         """Assess quality across mixed - methods studies."""
         return {"overall_quality": "moderate", "integration_quality": "good"}
 
-    async def _generate_mixed_methods_recommendations(self, integrated_findings: Dict) -> List[str]:
+    async def _generate_mixed_methods_recommendations(
+        self, integrated_findings: Dict
+    ) -> List[str]:
         """Generate recommendations from mixed - methods synthesis."""
-        return ["Implement intervention with attention to both effectiveness and acceptability"]
+        return [
+            "Implement intervention with attention to both effectiveness and acceptability"
+        ]
 
     async def _identify_mixed_methods_limitations(
-        self, quant_results: Optional[SynthesisResult], qual_results: Optional[SynthesisResult]
+        self,
+        quant_results: Optional[SynthesisResult],
+        qual_results: Optional[SynthesisResult],
     ) -> List[str]:
         """Identify limitations of mixed - methods synthesis."""
         return ["Challenges in integrating different types of evidence"]
@@ -762,7 +919,9 @@ class IntelligentSynthesisEngine:
             "by_intervention": dict(groups["by_intervention"]),
         }
 
-    async def _extract_narrative_themes(self, studies: List[StudyData], outcome: str) -> List[Dict[str, Any]]:
+    async def _extract_narrative_themes(
+        self, studies: List[StudyData], outcome: str
+    ) -> List[Dict[str, Any]]:
         """Extract key themes from narrative synthesis."""
         # Simulate theme extraction
         themes = [
@@ -771,7 +930,11 @@ class IntelligentSynthesisEngine:
                 "frequency": 0.8,
                 "studies": [s.study_id for s in studies[: int(len(studies) * 0.8)]],
             },
-            {"name": "Safety", "frequency": 0.6, "studies": [s.study_id for s in studies[: int(len(studies) * 0.6)]]},
+            {
+                "name": "Safety",
+                "frequency": 0.6,
+                "studies": [s.study_id for s in studies[: int(len(studies) * 0.6)]],
+            },
             {
                 "name": "Patient satisfaction",
                 "frequency": 0.4,
@@ -791,8 +954,14 @@ class IntelligentSynthesisEngine:
     ) -> str:
         """Generate narrative summary for meta - analysis."""
 
-        direction = "beneficial" if effect_size > 0 else "harmful" if effect_size < 0 else "no"
-        magnitude = "large" if abs(effect_size) > 0.5 else "moderate" if abs(effect_size) > 0.2 else "small"
+        direction = (
+            "beneficial" if effect_size > 0 else "harmful" if effect_size < 0 else "no"
+        )
+        magnitude = (
+            "large"
+            if abs(effect_size) > 0.5
+            else "moderate" if abs(effect_size) > 0.2 else "small"
+        )
 
         narrative = f"""
         This meta - analysis of {n_studies} studies found a {magnitude} {direction} effect
@@ -814,13 +983,21 @@ class IntelligentSynthesisEngine:
 
         if certainty in [EvidenceQuality.HIGH, EvidenceQuality.MODERATE]:
             if abs(effect_size) > 0.2:
-                strength = "strong" if certainty == EvidenceQuality.HIGH else "conditional"
+                strength = (
+                    "strong" if certainty == EvidenceQuality.HIGH else "conditional"
+                )
                 direction = "for" if effect_size > 0 else "against"
-                recommendations.append(f"We make a {strength} recommendation {direction} the intervention")
+                recommendations.append(
+                    f"We make a {strength} recommendation {direction} the intervention"
+                )
             else:
-                recommendations.append("The evidence suggests no clinically meaningful difference")
+                recommendations.append(
+                    "The evidence suggests no clinically meaningful difference"
+                )
         else:
-            recommendations.append("More high - quality research is needed before making recommendations")
+            recommendations.append(
+                "More high - quality research is needed before making recommendations"
+            )
 
         return recommendations
 
@@ -831,32 +1008,44 @@ class IntelligentSynthesisEngine:
         limitations = []
 
         if len(studies) < 10:
-            limitations.append("Small number of included studies limits generalizability")
+            limitations.append(
+                "Small number of included studies limits generalizability"
+            )
 
         if i_squared > 0.5:
             limitations.append("Substantial heterogeneity between studies")
 
-        avg_quality = np.mean([s.quality_assessment.get("overall_score", 0.5) for s in studies])
+        avg_quality = np.mean(
+            [s.quality_assessment.get("overall_score", 0.5) for s in studies]
+        )
         if avg_quality < 0.7:
             limitations.append("Variable quality of included studies")
 
         if len(studies) < 10:
-            limitations.append("Limited ability to assess publication bias due to small number of studies")
+            limitations.append(
+                "Limited ability to assess publication bias due to small number of studies"
+            )
 
         return limitations
 
     async def _assess_overall_quality(self, studies: List[StudyData]) -> Dict[str, Any]:
         """Assess overall quality across studies."""
-        quality_scores = [s.quality_assessment.get("overall_score", 0.5) for s in studies]
+        quality_scores = [
+            s.quality_assessment.get("overall_score", 0.5) for s in studies
+        ]
 
         return {
             "mean_quality": np.mean(quality_scores),
             "quality_range": [min(quality_scores), max(quality_scores)],
             "high_quality_studies": sum(1 for q in quality_scores if q > 0.7),
-            "moderate_quality_studies": sum(1 for q in quality_scores if 0.5 <= q <= 0.7),
+            "moderate_quality_studies": sum(
+                1 for q in quality_scores if 0.5 <= q <= 0.7
+            ),
             "low_quality_studies": sum(1 for q in quality_scores if q < 0.5),
             "overall_assessment": (
-                "High" if np.mean(quality_scores) > 0.7 else "Moderate" if np.mean(quality_scores) > 0.5 else "Low"
+                "High"
+                if np.mean(quality_scores) > 0.7
+                else "Moderate" if np.mean(quality_scores) > 0.5 else "Low"
             ),
         }
 
@@ -869,7 +1058,13 @@ async def demonstrate_intelligent_synthesis():
     print("=" * 70)
 
     # Initialize synthesis engine
-    config = {"quality_thresholds": {"min_studies": 2, "min_participants": 50, "min_quality_score": 0.6}}
+    config = {
+        "quality_thresholds": {
+            "min_studies": 2,
+            "min_participants": 50,
+            "min_quality_score": 0.6,
+        }
+    }
     engine = IntelligentSynthesisEngine(config)
 
     print("🔧 Initializing Intelligent Synthesis Engine...")
@@ -888,7 +1083,12 @@ async def demonstrate_intelligent_synthesis():
             population={"type": "Adults", "size": 100 + i * 50, "age_range": [18, 65]},
             intervention={"type": "Intervention A", "duration": "12 weeks"},
             comparator={"type": "Placebo", "description": "Standard care"},
-            outcomes={"primary_outcome": {"name": "Efficacy Score", "measurement": "Continuous scale 0 - 100"}},
+            outcomes={
+                "primary_outcome": {
+                    "name": "Efficacy Score",
+                    "measurement": "Continuous scale 0 - 100",
+                }
+            },
             results={
                 "primary_outcome": {
                     "effect_size": {
@@ -932,16 +1132,19 @@ async def demonstrate_intelligent_synthesis():
     print(f"   Minimum studies: {meta_config.min_studies}")
 
     # Perform meta - analysis
-    print("\n📊 Performing quantitative meta - analysis...")
+    print("\n📊 Performing quantitative meta-analysis...")
 
-    meta_result = await engine.synthesize_evidence(studies, "primary_outcome", SynthesisType.META_ANALYSIS, meta_config)
+    meta_result = await engine.synthesize_evidence(
+        studies, "primary_outcome", SynthesisType.META_ANALYSIS, meta_config
+    )
 
-    print(f"   ✅ Meta - analysis completed")
+    print("   ✅ Meta-analysis completed")
     print(f"   Studies included: {len(meta_result.studies_included)}")
     print(f"   Total participants: {meta_result.total_participants}")
     print(f"   Pooled effect size: {meta_result.pooled_effect['effect_size']:.3f}")
     print(
-        f"   95% CI: [{meta_result.pooled_effect['confidence_interval'][0]:.3f}, {meta_result.pooled_effect['confidence_interval'][1]:.3f}]"
+        f"   95% CI: [{meta_result.pooled_effect['confidence_interval'][0]:.3f}, "
+        f"{meta_result.pooled_effect['confidence_interval'][1]:.3f}]"
     )
     print(f"   I² heterogeneity: {meta_result.heterogeneity['i_squared']*100:.1f}%")
     print(f"   Evidence certainty: {meta_result.certainty_assessment.value}")
@@ -953,10 +1156,16 @@ async def demonstrate_intelligent_synthesis():
         studies, "primary_outcome", SynthesisType.NARRATIVE, meta_config
     )
 
-    print(f"   ✅ Narrative synthesis completed")
-    print(f"   Overall direction: {narrative_result.pooled_effect['narrative_direction']}")
-    print(f"   Consistency score: {narrative_result.pooled_effect['consistency_score']:.2f}")
-    print(f"   Evidence strength: {narrative_result.pooled_effect['strength_of_evidence']}")
+    print("   ✅ Narrative synthesis completed")
+    print(
+        f"   Overall direction: {narrative_result.pooled_effect['narrative_direction']}"
+    )
+    print(
+        f"   Consistency score: {narrative_result.pooled_effect['consistency_score']:.2f}"
+    )
+    print(
+        f"   Evidence strength: {narrative_result.pooled_effect['strength_of_evidence']}"
+    )
 
     # Create qualitative studies
     print("\n🎯 Creating qualitative studies for thematic synthesis...")
@@ -970,9 +1179,13 @@ async def demonstrate_intelligent_synthesis():
             year=2022 + i % 2,
             study_design="Qualitative",
             population={"type": "Patients", "size": 20 + i * 5},
-            intervention={"type": "Interview", "method": "Semi - structured"},
-            comparator={"type": "N / A"},
-            outcomes={"patient_experience": {"themes": ["satisfaction", "challenges", "benefits"]}},
+            intervention={"type": "Interview", "method": "Semi-structured"},
+            comparator={"type": "N/A"},
+            outcomes={
+                "patient_experience": {
+                    "themes": ["satisfaction", "challenges", "benefits"]
+                }
+            },
             results={},
             quality_assessment={"overall_score": np.random.uniform(0.6, 0.9)},
             extracted_data={
@@ -993,60 +1206,62 @@ async def demonstrate_intelligent_synthesis():
         qual_studies, "patient_experience", SynthesisType.QUALITATIVE, meta_config
     )
 
-    print(f"   ✅ Qualitative synthesis completed")
+    print("   ✅ Qualitative synthesis completed")
     print(f"   Themes identified: {qual_result.pooled_effect['themes']}")
     print(f"   Theme frequencies: {qual_result.pooled_effect['theme_frequencies']}")
 
-    # Perform mixed - methods synthesis
-    print("\n🔀 Performing mixed - methods synthesis...")
+    # Perform mixed-methods synthesis
+    print("\n🔀 Performing mixed-methods synthesis...")
 
     all_studies = studies + qual_studies
     mixed_result = await engine.synthesize_evidence(
         all_studies, "primary_outcome", SynthesisType.MIXED_METHODS, meta_config
     )
 
-    print(f"   ✅ Mixed - methods synthesis completed")
+    print("   ✅ Mixed-methods synthesis completed")
     print(f"   Total studies: {len(mixed_result.studies_included)}")
-    print(f"   Quantitative + Qualitative integration achieved")
+    print("   Quantitative + Qualitative integration achieved")
 
     # Display synthesis summaries
-    print(f"\n📋 Synthesis Results Summary:")
-    print(f"   Meta - analysis:")
+    print("\n📋 Synthesis Results Summary:")
+    print("   Meta-analysis:")
     print(f"     Effect: {meta_result.pooled_effect['effect_size']:.3f}")
     print(f"     Certainty: {meta_result.certainty_assessment.value}")
     print(f"     Recommendations: {len(meta_result.recommendations)}")
 
-    print(f"   Narrative synthesis:")
+    print("   Narrative synthesis:")
     print(f"     Direction: {narrative_result.pooled_effect['narrative_direction']}")
-    print(f"     Consistency: {narrative_result.pooled_effect['consistency_score']:.2f}")
+    print(
+        f"     Consistency: {narrative_result.pooled_effect['consistency_score']:.2f}"
+    )
 
-    print(f"   Qualitative synthesis:")
+    print("   Qualitative synthesis:")
     print(f"     Themes: {len(qual_result.pooled_effect['themes'])}")
     print(f"     Certainty: {qual_result.certainty_assessment.value}")
 
-    print(f"   Mixed - methods synthesis:")
+    print("   Mixed-methods synthesis:")
     print(f"     Integrated findings: {len(mixed_result.pooled_effect)}")
     print(f"     Overall certainty: {mixed_result.certainty_assessment.value}")
 
     # Display recommendations
-    print(f"\n💡 Evidence - Based Recommendations:")
+    print("\n💡 Evidence-Based Recommendations:")
     for i, rec in enumerate(meta_result.recommendations, 1):
         print(f"   {i}. {rec}")
 
     # Display limitations
-    print(f"\n⚠️ Identified Limitations:")
+    print("\n⚠️ Identified Limitations:")
     for i, limitation in enumerate(meta_result.limitations, 1):
         print(f"   {i}. {limitation}")
 
-    print(f"\n✅ Phase 4A Intelligent Synthesis AI demonstration completed!")
-    print(f"   Synthesis types demonstrated: {len([meta_result, narrative_result, qual_result, mixed_result])}")
+    print("\n✅ Phase 4A Intelligent Synthesis AI demonstration completed!")
+    print(
+        f"   Synthesis types demonstrated: {len([meta_result, narrative_result, qual_result, mixed_result])}"
+    )
     print(f"   Total studies processed: {len(all_studies)}")
-    print(f"   Advanced AI synthesis capabilities validated!")
+    print("   Advanced AI synthesis capabilities validated!")
 
     return engine, [meta_result, narrative_result, qual_result, mixed_result]
 
 
 if __name__ == "__main__":
-    import asyncio
-
     asyncio.run(demonstrate_intelligent_synthesis())
