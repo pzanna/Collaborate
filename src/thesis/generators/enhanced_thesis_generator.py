@@ -375,7 +375,8 @@ class EnhancedThesisGenerator:
         prompt = f"""
 You are a PhD researcher conducting thematic synthesis for a literature review chapter.
 
-TASK: Extract {self.config['processing']['theme_count']} distinct, high - level themes suitable for a PhD thesis literature review.
+TASK: Extract {self.config['processing']['theme_count']} distinct, high -  level themes suitable for a PhD
+thesis literature review.
 
 STUDY DATA:
 {json.dumps(study_summaries, indent=2)}
@@ -550,7 +551,8 @@ while maintaining high academic standards and potential impact."""
         prompt = f"""
 You are a theoretical framework expert creating a conceptual model for PhD research.
 
-TASK: Develop a sophisticated conceptual framework that integrates the themes and provides foundation for addressing research gaps.
+TASK: Develop a sophisticated conceptual framework that integrates the themes and provides foundation for
+addressing research gaps.
 
 THEMES:
 {json.dumps(theme_data, indent=2)}
@@ -812,13 +814,15 @@ Each question / hypothesis should:
 
 ## Abstract
 
-This literature review synthesizes evidence from machine learning applications in healthcare diagnosis, identifying key themes and research opportunities for future investigation.
+This literature review synthesizes evidence from machine learning applications in healthcare diagnosis,
+identifying key themes and research opportunities for future investigation.
 
 ## 1. Introduction
 
 ### 1.1 Background
 
-Healthcare diagnosis remains a critical challenge where machine learning technologies show significant promise for improving accuracy and efficiency.
+Healthcare diagnosis remains a critical challenge where machine learning technologies show significant promise
+for improving accuracy and efficiency.
 
 ## 2. Thematic Synthesis
 
@@ -892,9 +896,28 @@ Healthcare diagnosis remains a critical challenge where machine learning technol
 
 """
 
-        md += f"""## 5. Conclusion
+        md += (
+            "## 5. Conclusion\n\n"
+            "This literature review provides a comprehensive analysis of machine "
+            "learning applications in healthcare diagnosis, highlighting key "
+            "research themes, identifying critical gaps, and proposing a "
+            "conceptual framework for future research. The findings offer a "
+            "solid foundation for PhD research aimed at advancing both "
+            "theoretical understanding and practical application in this "
+            "rapidly evolving field.\n"
+        )
 
-This literature review has identified {len(themes)} major themes and {len(gaps)} research gaps, providing a foundation for future PhD research in machine learning applications for healthcare diagnosis.
+        md += (
+            f"This literature review has identified {len(themes)} major "
+            f"themes and {len(gaps)} research gaps, providing a foundation for "
+            "future PhD research in machine learning applications for "
+            "healthcare diagnosis.\n"
+        )
+
+        md += f"""
+
+This literature review has identified {len(themes)} major themes and {len(gaps)} research gaps, providing a
+foundation for future PhD research in machine learning applications for healthcare diagnosis.
 
 ---
 *Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
@@ -1111,7 +1134,9 @@ def main():
 
     # Override config with CLI args
     if args.output:
-        generator.config["output"]["directory"] = args.output
+        generator.config["output"][
+            "directory"
+        ] = args.output
     if args.no_checkpoints:
         generator.config["processing"]["human_checkpoints"] = False
     if args.formats:
@@ -1123,7 +1148,8 @@ def main():
     print("\n✅ Enhanced thesis chapter generated successfully!")
     print(f"📁 Output: {generator.config['output']['directory']}")
     print(
-        f"📊 {len(result['themes'])} themes, {len(result['gaps'])} gaps, {len(result['research_questions'])} research questions"
+        f"📊 {len(result['themes'])} themes, {len(result['gaps'])} gaps, "
+        f"{len(result['research_questions'])} research questions"
     )
     print(f"📄 Formats: {list(result['outputs'].keys())}")
     print(f"⏱️  Duration: {result['duration']:.1f}s")

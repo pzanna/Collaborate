@@ -531,7 +531,11 @@ Comparison: {criteria.get('comparison', 'Not specified')}
 Outcomes: {', '.join(criteria.get('outcomes', []))}
 Study Design: {', '.join(criteria.get('inclusion_criteria', {}).get('study_types', []))}
 Language: {', '.join(criteria.get('inclusion_criteria', {}).get('languages', []))}
-Publication Type: {'Peer - reviewed only' if criteria.get('inclusion_criteria', {}).get('peer_reviewed') else 'All publication types'}
+Publication Type: {
+    'Peer - reviewed only'
+    if criteria.get('inclusion_criteria', {}).get('peer_reviewed')
+    else 'All publication types'
+}
 Time Frame: {criteria.get('timeframe', 'Not specified')}
 """
 

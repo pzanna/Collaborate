@@ -659,90 +659,125 @@ class PRISMAReportGenerator:
         )
 
         # Generate abstract based on ACTUAL data
-        abstract = f"""
-Background: This systematic review addresses the research question: "{research_question}". Understanding this topic is crucial for advancing knowledge in the field and informing evidence - based practice.
-
-Objective: To systematically review and analyze the available literature addressing: {research_question}
-
-Methods: We conducted a comprehensive literature search using AI - guided methodology across multiple academic databases. Studies were screened for relevance to the research question, and data extraction was performed using systematic review protocols.
-
-Results: From {prisma_numbers.identification_total} records identified through {len(search_results)} targeted searches, {prisma_numbers.studies_included_review} studies were included in the review and {prisma_numbers.studies_included_meta_analysis} in the analysis. The systematic review identified key themes and research areas relevant to the research question.
-
-Conclusions: The literature provides insights into {research_question.lower()} and highlights areas requiring further investigation. This systematic approach demonstrates the value of AI - guided literature analysis for comprehensive research synthesis.
-
-Registration: {review_data.get('protocol_registration', 'AI - generated systematic review')}
-        """.strip()
+        abstract = (
+            f'Background: This systematic review addresses the research question: "{research_question}". '
+            "Understanding this topic is crucial for advancing knowledge in the field and informing "
+            "evidence - based practice.\n\n"
+            f"Objective: To systematically review and analyze the available literature addressing: "
+            f"{research_question}\n\n"
+            "Methods: We conducted a comprehensive literature search using AI - guided methodology across multiple "
+            "academic databases. Studies were screened for relevance to the research question, and data extraction "
+            "was performed using systematic review protocols.\n\n"
+            f"Results: From {prisma_numbers.identification_total} records identified through {len(search_results)} "
+            f"targeted searches, {prisma_numbers.studies_included_review} studies were included in the review and "
+            f"{prisma_numbers.studies_included_meta_analysis} in the analysis. The systematic review identified "
+            "key themes and research areas relevant to the research question.\n\n"
+            f"Conclusions: The literature provides insights into {research_question.lower()} and highlights areas "
+            "requiring further investigation. This systematic approach demonstrates the value of AI - guided "
+            "literature analysis for comprehensive research synthesis.\n\n"
+            f"Registration: {review_data.get('protocol_registration', 'AI - generated systematic review')}"
+        ).strip()
 
         # Generate background based on research question context
         if (
             "neuron" in research_question.lower()
             or "cell culture" in research_question.lower()
         ):
-            background = f"""
-Cell culture techniques are fundamental to biological and medical research,
-enabling controlled investigation of cellular processes,
-development,
-and therapeutic applications. The specific focus on {research_question.lower()} addresses important practical considerations for researchers working in diverse laboratory settings.
-
-Accessible and cost - effective approaches to cell culture are particularly important for educational institutions, resource - limited laboratories, and emerging research programs. Traditional cell culture methods often require expensive specialized equipment and reagents that may not be available in all research environments.
-
-This systematic review examines the current state of knowledge regarding {research_question.lower()},
-synthesizing available evidence to provide practical guidance for researchers and educators. The analysis aims to identify proven methods,
-alternative approaches,
-and research gaps that could inform future investigations.
-            """.strip()
+            background = (
+                f"Cell culture techniques are fundamental to biological and medical research,\n"
+                f"enabling controlled investigation of cellular processes,\n"
+                f"development,\n"
+                f"and therapeutic applications. The specific focus on {research_question.lower()} "
+                f"addresses important practical considerations for researchers working in diverse "
+                f"laboratory settings.\n\n"
+                f"Accessible and cost - effective approaches to cell culture are particularly important "
+                f"for educational institutions, resource - limited laboratories, and emerging research programs. "
+                f"Traditional cell culture methods often require expensive specialized equipment and reagents "
+                f"that may not be available in all research environments.\n\n"
+                f"This systematic review examines the current state of knowledge regarding "
+                f"{research_question.lower()},\n"
+                f"synthesizing available evidence to provide practical guidance for researchers and educators. "
+                f"The analysis aims to identify proven methods,\n"
+                f"alternative approaches,\n"
+                f"and research gaps that could inform future investigations."
+            ).strip()
         else:
-            background = f"""
-This systematic review focuses on the research question: {research_question}. This area of investigation represents an important domain of scientific inquiry with implications for research methodology and practical applications.
-
-Understanding the current state of evidence regarding {research_question.lower()} is essential for advancing knowledge in this field. Systematic literature analysis provides a comprehensive approach to synthesizing existing research and identifying areas requiring further investigation.
-
-The integration of AI - guided search methodology with traditional systematic review approaches offers new opportunities for comprehensive literature analysis and evidence synthesis.
-            """.strip()
+            background = (
+                f"This systematic review focuses on the research question: {research_question}. "
+                f"This area of investigation represents an important domain of scientific inquiry with "
+                f"implications for research methodology and practical applications.\n\n"
+                f"Understanding the current state of evidence regarding {research_question.lower()} is "
+                f"essential for advancing knowledge in this field. Systematic literature analysis provides a "
+                f"comprehensive approach to synthesizing existing research and identifying areas requiring "
+                f"further investigation.\n\n"
+                f"The integration of AI - guided search methodology with traditional systematic review "
+                f"approaches offers new opportunities for comprehensive literature analysis and evidence synthesis."
+            ).strip()
 
         # Generate objectives based on research question
-        primary_objective = f"To systematically review and analyze the available literature addressing: {research_question}"
+        primary_objective = (
+            f"To systematically review and analyze the available literature addressing: {research_question}"
+        )
 
-        objectives = f"""
-The primary objective of this systematic review was {primary_objective.lower()}
-
-Secondary objectives included:
-1. Identifying key themes and research areas in the literature
-2. Analyzing methodological approaches used in relevant studies
-3. Synthesizing evidence to inform research and practice
-4. Identifying research gaps and future research directions
-5. Demonstrating AI - guided systematic review methodology
-        """.strip()
+        objectives = (
+            f"The primary objective of this systematic review was {primary_objective.lower()}\n\n"
+            "Secondary objectives included:\n"
+            "1. Identifying key themes and research areas in the literature\n"
+            "2. Analyzing methodological approaches used in relevant studies\n"
+            "3. Synthesizing evidence to inform research and practice\n"
+            "4. Identifying research gaps and future research directions\n"
+            "5. Demonstrating AI - guided systematic review methodology"
+        ).strip()
 
         return {
             "title": title,
             "abstract": abstract,
             "background": background,
             "objectives": objectives,
-            "selection_process": f"""
-Studies were systematically identified and screened using AI - guided methodology. All {prisma_numbers.records_screened} records were screened against eligibility criteria related to the research question: "{research_question}". {prisma_numbers.reports_sought} studies were assessed for full eligibility, with {prisma_numbers.studies_included_review} meeting inclusion criteria for the final review.
-            """.strip(),
-            "data_collection_process": f"""
-Data extraction was performed using AI - guided systematic review methodology. Extracted data included study characteristics, methodological approaches, key findings, and relevance to the research question: "{research_question}". The systematic approach ensured comprehensive coverage of relevant literature and standardized data collection across all included studies.
-            """.strip(),
-            "risk_of_bias_assessment": f"""
-Quality assessment was performed using appropriate criteria based on study design and methodology. All {prisma_numbers.studies_included_review} included studies were evaluated for methodological quality and relevance to the research question. The AI - guided approach ensured consistent application of quality assessment criteria.
-            """.strip(),
-            "synthesis_methods": f"""
-Data synthesis was performed using systematic review methodology adapted for AI - guided literature analysis. Findings were organized thematically based on relevance to the research question: "{research_question}". The synthesis approach emphasized identifying key patterns, research gaps, and practical implications from the included studies.
-            """.strip(),
-            "discussion": f"""
-This systematic review provides evidence addressing the research question: "{research_question}". The AI - guided literature search identified {prisma_numbers.identification_total} relevant records through {len(search_results)} targeted searches, demonstrating the effectiveness of computational approaches to literature discovery.
-
-From the {prisma_numbers.studies_included_review} studies included in the final review,
-    several key themes emerged relevant to the research question. The synthesis reveals important insights into current research approaches,
-    methodological considerations,
-    and practical applications related to {research_question.lower()}.
-
-The systematic approach utilized in this review demonstrates the value of AI - guided literature analysis for comprehensive evidence synthesis. The integration of computational search strategies with systematic review methodology enables efficient identification and analysis of relevant research.
-
-Key findings from the included studies provide practical insights for researchers and practitioners interested in {research_question.lower()}. The evidence synthesis highlights both established approaches and emerging innovations in this research area.
-            """.strip(),
+            "selection_process": (
+                f"Studies were systematically identified and screened using AI - guided methodology. "
+                f"All {prisma_numbers.records_screened} records were screened against eligibility criteria "
+                f'related to the research question: "{research_question}". '
+                f"{prisma_numbers.reports_sought} studies were assessed for full eligibility, with "
+                f"{prisma_numbers.studies_included_review} meeting inclusion criteria for the final review."
+            ).strip(),
+            "data_collection_process": (
+                f"Data extraction was performed using AI - guided systematic review methodology. "
+                f"Extracted data included study characteristics, methodological approaches, key findings, "
+                f'and relevance to the research question: "{research_question}". The systematic approach '
+                f"ensured comprehensive coverage of relevant literature and standardized data collection "
+                f"across all included studies."
+            ).strip(),
+            "risk_of_bias_assessment": (
+                f"Quality assessment was performed using appropriate criteria based on study design and methodology. "
+                f"All {prisma_numbers.studies_included_review} included studies were evaluated for methodological "
+                f"quality and relevance to the research question. The AI - guided approach ensured consistent "
+                f"application of quality assessment criteria."
+            ).strip(),
+            "synthesis_methods": (
+                f"Data synthesis was performed using systematic review methodology adapted for AI - guided "
+                f"literature analysis. Findings were organized thematically based on relevance to the research "
+                f'question: "{research_question}". The synthesis approach emphasized identifying key patterns, '
+                f"research gaps, and practical implications from the included studies."
+            ).strip(),
+            "discussion": (
+                f'This systematic review provides evidence addressing the research question: "{research_question}". '
+                f"The AI - guided literature search identified {prisma_numbers.identification_total} relevant "
+                f"records through {len(search_results)} targeted searches, demonstrating the effectiveness of "
+                f"computational approaches to literature discovery.\n\n"
+                f"From the {prisma_numbers.studies_included_review} studies included in the final review,\n"
+                f"    several key themes emerged relevant to the research question. The synthesis reveals "
+                f"important insights into current research approaches,\n"
+                f"    methodological considerations,\n"
+                f"    and practical applications related to {research_question.lower()}.\n\n"
+                f"The systematic approach utilized in this review demonstrates the value of AI - guided "
+                f"literature analysis for comprehensive evidence synthesis. The integration of computational "
+                f"search strategies with systematic review methodology enables efficient identification and "
+                f"analysis of relevant research.\n\n"
+                f"Key findings from the included studies provide practical insights for researchers and "
+                f"practitioners interested in {research_question.lower()}. The evidence synthesis highlights "
+                f"both established approaches and emerging innovations in this research area."
+            ).strip(),
             "limitations": [
                 "Limited to literature identified through AI - guided search methodology",
                 f"Search scope focused on addressing: {research_question}",
@@ -751,20 +786,27 @@ Key findings from the included studies provide practical insights for researcher
                 "Potential bias toward English - language publications",
                 "Time constraints limiting comprehensive full - text analysis",
             ],
-            "conclusions": f"""
-This systematic review provides valuable insights addressing the research question: "{research_question}". The AI - guided methodology successfully identified relevant literature and synthesized key findings from {prisma_numbers.studies_included_review} included studies.
-
-The evidence synthesis demonstrates the utility of computational approaches to literature analysis and highlights important research directions related to {research_question.lower()}. The systematic approach provides a foundation for evidence - based practice and future research in this area.
-
-Future investigations should build upon these findings to advance understanding and practical applications related to the research question.
-            """.strip(),
-            "implications": f"""
-For Practice: The findings provide evidence - based insights relevant to {research_question.lower()} that can inform practical decision - making and methodological approaches.
-
-For Policy: Research addressing {research_question.lower()} should be supported through appropriate funding mechanisms and institutional resources.
-
-For Research: Future studies should build upon the identified themes and address research gaps highlighted in this systematic review. The AI - guided methodology demonstrates promising approaches for literature analysis and evidence synthesis.
-            """.strip(),
+            "conclusions": (
+                f"This systematic review provides valuable insights addressing the research question: "
+                f'"{research_question}". '
+                f"The AI - guided methodology successfully identified relevant literature and synthesized key "
+                f"findings from {prisma_numbers.studies_included_review} included studies.\n\n"
+                f"The evidence synthesis demonstrates the utility of computational approaches to literature "
+                f"analysis and highlights important research directions related to {research_question.lower()}. "
+                f"The systematic approach provides a foundation for evidence - based practice and future research "
+                f"in this area.\n\n"
+                f"Future investigations should build upon these findings to advance understanding and practical "
+                f"applications related to the research question."
+            ).strip(),
+            "implications": (
+                f"For Practice: The findings provide evidence - based insights relevant to {research_question.lower()} "
+                f"that can inform practical decision - making and methodological approaches.\n\n"
+                f"For Policy: Research addressing {research_question.lower()} should be supported through "
+                f"appropriate funding mechanisms and institutional resources.\n\n"
+                f"For Research: Future studies should build upon the identified themes and address research gaps "
+                f"highlighted in this systematic review. The AI - guided methodology demonstrates promising "
+                f"approaches for literature analysis and evidence synthesis."
+            ).strip(),
         }
 
     async def _generate_risk_of_bias_summary(self, review_id: str) -> Dict[str, Any]:
@@ -813,7 +855,9 @@ For Research: Future studies should build upon the identified themes and address
   <text x="200" y="110" class="text">Records identified from databases</text>
   <text x="200" y="125" class="text number">(n = {numbers.identification_database})</text>
   <text x="600" y="110" class="text">Records identified from registers / other</text>
-  <text x="600" y="125" class="text number">(n = {numbers.identification_registers + numbers.identification_other})</text>
+  <text x="600" y="125" class="text number">
+    (n = {numbers.identification_registers + numbers.identification_other})
+  </text>
 
   <!-- Total identified -->
   <rect x="200" y="160" width="400" height="60" class="box"/>
@@ -936,7 +980,8 @@ For Research: Future studies should build upon the identified themes and address
         .study - table th {{ background - color: #f2f2f2; font - weight: bold; }}
         .meta - analysis {{ background - color: #fff3cd; padding: 15px; border - radius: 8px; }}
         .limitation {{ background - color: #f8d7da; padding: 10px; margin: 5px 0; border - radius: 4px; }}
-        .footer {{ margin - top: 40px; padding - top: 20px; border - top: 1px solid #ccc; font - size: 0.9em; color: #666; }}
+        .footer {{ margin - top: 40px; padding - top: 20px; border - top: 1px solid #ccc; font - size: 0.9em;
+        color: #666; }}
     </style>
 </head>
 <body>
@@ -984,10 +1029,16 @@ For Research: Future studies should build upon the identified themes and address
     <h3>Study Selection</h3>
     <div class="prisma - numbers">
         <p><strong>Records identified:</strong> {report.study_selection.identification_total}</p>
-        <p><strong>Records after duplicates removed:</strong> {report.study_selection.identification_total - report.study_selection.duplicates_removed}</p>
+        <p>
+            <strong>Records after duplicates removed:</strong>
+            {report.study_selection.identification_total - report.study_selection.duplicates_removed}
+        </p>
         <p><strong>Records screened:</strong> {report.study_selection.records_screened}</p>
         <p><strong>Studies included in review:</strong> {report.study_selection.studies_included_review}</p>
-        <p><strong>Studies included in meta - analysis:</strong> {report.study_selection.studies_included_meta_analysis}</p>
+        <p>
+            <strong>Studies included in meta - analysis:</strong>
+            {report.study_selection.studies_included_meta_analysis}
+        </p>
     </div>
 
     <h3>Study Characteristics</h3>
@@ -1122,7 +1173,9 @@ For Research: Future studies should build upon the identified themes and address
 ### Study Selection
 
 - **Records identified:** {report.study_selection.identification_total}
-- **Records after duplicates removed:** {report.study_selection.identification_total - report.study_selection.duplicates_removed}
+- **Records after duplicates removed:** {
+    report.study_selection.identification_total - report.study_selection.duplicates_removed
+}
 - **Records screened:** {report.study_selection.records_screened}
 - **Studies included in review:** {report.study_selection.studies_included_review}
 - **Studies included in meta - analysis:** {report.study_selection.studies_included_meta_analysis}
@@ -1172,11 +1225,17 @@ For Research: Future studies should build upon the identified themes and address
         if not studies:
             return "No studies to display."
 
-        header = "| Study | Design | Sample Size | Primary Outcome | Quality Score |\n|-------|--------|-------------|------------------|---------------|\n"
+        header = (
+            "| Study | Design | Sample Size | Primary Outcome | Quality Score |\n"
+            "|-------|--------|-------------|------------------|---------------|\n"
+        )
 
         rows = []
         for study in studies:
-            row = f"| {study.authors} ({study.year}) | {study.study_design} | {study.sample_size or 'NR'} | {study.primary_outcome} | {study.quality_score or 'NR'} |"
+            row = (
+                f"| {study.authors} ({study.year}) | {study.study_design} | "
+                f"{study.sample_size or 'NR'} | {study.primary_outcome} | {study.quality_score or 'NR'} |"
+            )
             rows.append(row)
 
         return header + "\n".join(rows)
@@ -1340,13 +1399,16 @@ async def demonstrate_prisma_report_generation():
     print("\n   Study Characteristics:")
     for i, study in enumerate(report.study_characteristics[:3], 1):
         print(f"     {i}. {study.authors} ({study.year}) - {study.study_design}")
-        print(f"        Sample: {study.sample_size}, Quality: {study.quality_score}")
+        print(
+            f"        Sample: {study.sample_size}, Quality: {study.quality_score}"
+        )
 
     print("\n   Synthesis Results:")
     if report.synthesis_results.meta_analysis_results:
         for outcome, results in report.synthesis_results.meta_analysis_results.items():
             print(
-                f"     {outcome}: OR {results.get('pooled_or')} (95% CI: {results.get('ci_lower')}-{results.get('ci_upper')})"
+                f"     {outcome}: OR {results.get('pooled_or')} "
+                f"(95% CI: {results.get('ci_lower')}-{results.get('ci_upper')})"
             )
 
     print("\n   Quality Assessment:")

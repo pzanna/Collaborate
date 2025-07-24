@@ -816,7 +816,8 @@ class EvidenceSynthesisEngine:
         # Contradiction considerations
         if len(contradictions) > 0:
             limitations.append(
-                f"Contradictory findings identified across studies (n={len(contradictions)}) suggest caution in interpretation."
+                f"Contradictory findings identified across studies (n={len(contradictions)}) "
+                f"suggest caution in interpretation."
             )
 
         # Publication bias
@@ -972,7 +973,8 @@ async def example_evidence_synthesis(
     print(f"Found {len(synthesis_result.themes)} themes")
     print(f"Detected {len(synthesis_result.contradictions)} contradictions")
     print(
-        f"Overall confidence: {synthesis_result.confidence_assessment.get('overall', {}).get('overall_confidence', 'unknown')}"
+        f"Overall confidence: "
+        f"{synthesis_result.confidence_assessment.get('overall', {}).get('overall_confidence', 'unknown')}"
     )
 
 

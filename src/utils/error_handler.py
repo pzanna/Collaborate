@@ -325,7 +325,8 @@ def format_error_for_user(error: EuniceError) -> str:
     """Format an error message for display to the user."""
     user_messages = {
         ErrorType.NETWORK_ERROR: "⚠️ Network connection issue. Please check your internet connection and try again.",
-        ErrorType.API_ERROR: f"⚠️ AI service error. The {error.details.get('provider', 'AI')} service is temporarily unavailable.",
+        ErrorType.API_ERROR: f"⚠️ AI service error. The {error.details.get('provider', 'AI')} service is temporarily "
+        "unavailable.",
         ErrorType.DATABASE_ERROR: "⚠️ Database error. Your data may not be saved properly.",
         ErrorType.CONFIGURATION_ERROR: "⚠️ Configuration error. Please check your settings and API keys.",
         ErrorType.VALIDATION_ERROR: "⚠️ Invalid input. Please check your data and try again.",

@@ -81,25 +81,34 @@ def generate_latex_document(thesis_data: Dict[str, Any]) -> str:
 
 \section{Abstract}
 
-Machine learning (ML) applications in healthcare diagnosis have rapidly expanded, but their clinical effectiveness requires systematic evaluation. This review synthesizes evidence on ML diagnostic tools' performance and clinical impact through a comprehensive thematic analysis and identification of research gaps.
+Machine learning (ML) applications in healthcare diagnosis have rapidly expanded, but their clinical
+effectiveness requires systematic evaluation. This review synthesizes evidence on ML diagnostic tools'
+performance and clinical impact through a comprehensive thematic analysis and identification of research gaps.
 
 \section{Introduction}
 
 \subsection{Background and Context}
 
-Healthcare diagnosis remains one of the most critical and challenging aspects of clinical practice. Diagnostic errors affect an estimated 12 million adults annually in the United States, with significant implications for patient safety and healthcare costs. The complexity of modern medicine, combined with increasing patient volumes and time constraints, has created a pressing need for diagnostic support tools.
+Healthcare diagnosis remains one of the most critical and challenging aspects of clinical practice.
+Diagnostic errors affect an estimated 12 million adults annually in the United States, with significant
+implications for patient safety and healthcare costs. The complexity of modern medicine, combined with
+increasing patient volumes and time constraints, has created a pressing need for diagnostic support tools.
 
 \subsection{Rationale}
 
 \textbf{Knowledge Gap:} """
         + escape_latex(
-            "While individual studies have demonstrated promising results for ML diagnostic tools, a comprehensive synthesis of evidence across medical domains is lacking. Previous reviews have focused on specific conditions or technologies, but a broad evaluation of ML diagnostic effectiveness remains needed."
+            "While individual studies have demonstrated promising results for ML diagnostic tools, a comprehensive "
+            "synthesis of evidence across medical domains is lacking. Previous reviews have focused on specific "
+            "conditions or technologies, but a broad evaluation of ML diagnostic effectiveness remains needed."
         )
         + r"""
 
 \textbf{Clinical Importance:} """
         + escape_latex(
-            "Understanding the overall performance and implementation challenges of ML diagnostic tools is crucial for healthcare systems considering adoption. Clinicians need evidence - based guidance on when and how to integrate these technologies into clinical workflows."
+            "Understanding the overall performance and implementation challenges of ML diagnostic tools is crucial "
+            "for healthcare systems considering adoption. Clinicians need evidence - based guidance on when and how "
+            "to integrate these technologies into clinical workflows."
         )
         + r"""
 
@@ -191,13 +200,17 @@ This literature review has identified """
         + str(len(themes))
         + r""" major themes and """
         + str(len(gaps))
-        + r""" significant research gaps. The proposed conceptual framework provides a foundation for addressing these gaps through systematic empirical research.
+        + r""" significant research gaps. The proposed conceptual framework provides a foundation for addressing
+        these gaps through systematic empirical research.
 
-The highest priority research opportunities focus on regulatory framework development for ML diagnostic tools, which offers both high impact potential and feasible implementation within a PhD research timeline.
+The highest priority research opportunities focus on regulatory framework development for ML diagnostic tools,
+ which offers both high impact potential and feasible implementation within a PhD research timeline.
 
 \section{Conclusion}
 
-The systematic analysis reveals significant opportunities for advancing machine learning applications in healthcare diagnosis. The identified research gaps provide clear directions for future PhD research that can contribute meaningfully to both theoretical understanding and clinical practice.
+The systematic analysis reveals significant opportunities for advancing machine learning applications in healthcare
+ diagnosis. The identified research gaps provide clear directions for future PhD research that can contribute
+ meaningfully to both theoretical understanding and clinical practice.
 
 \bibliographystyle{apa}
 \bibliography{references}

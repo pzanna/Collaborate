@@ -15,9 +15,6 @@ try:
     from ..utils.id_utils import generate_timestamped_id, generate_uuid_id
 except ImportError:
     # For direct execution or testing
-    import sys
-    from pathlib import Path
-
     # Add the parent directory to the path
     project_root = Path(__file__).parent.parent.parent
     sys.path.insert(0, str(project_root))
@@ -244,7 +241,8 @@ class HierarchicalDatabaseManager:
                            COALESCE(SUM(p.actual_cost), 0.0) as total_cost,
                            CASE
                                WHEN COUNT(DISTINCT p.id) = 0 THEN 0.0
-                               ELSE CAST(COUNT(DISTINCT CASE WHEN p.status = 'completed' THEN p.id END) AS FLOAT) / COUNT(DISTINCT p.id) * 100
+                               ELSE CAST(COUNT(DISTINCT CASE WHEN p.status = 'completed'
+                               THEN p.id END) AS FLOAT) / COUNT(DISTINCT p.id) * 100
                            END as completion_rate
                     FROM research_topics t
                     LEFT JOIN research_plans p ON t.id = p.topic_id

@@ -523,7 +523,7 @@ class LiteratureAgent(BaseAgent):
     async def comprehensive_academic_search(
         self,
         query: str,
-        max_results_per_source: int = 10,
+        max_results_per_source: int = 3,
         include_pubmed: bool = True,
         include_arxiv: bool = True,
         include_semantic_scholar: bool = True,

@@ -75,14 +75,27 @@ FULL TEXT (if available):
 {study.get('full_text', 'Full text not available - base assessment on available information')}
 
 INTERVENTION AND COMPARISON:
-Intervention: {criteria.get('interventions', ['Not specified'])[0] if criteria.get('interventions') else 'Not specified'}
-Comparator: {criteria.get('comparators', ['Not specified'])[0] if criteria.get('comparators') else 'Not specified'}
+Intervention: {
+    criteria.get('interventions', ['Not specified'])[0]
+    if criteria.get('interventions')
+    else 'Not specified'
+}
+Comparator: {
+    criteria.get('comparators', ['Not specified'])[0]
+    if criteria.get('comparators')
+    else 'Not specified'
+}
 Population: {criteria.get('population', 'Not specified')}
-Primary Outcome: {criteria.get('outcomes', ['Not specified'])[0] if criteria.get('outcomes') else 'Not specified'}
+Primary Outcome: {
+    criteria.get('outcomes', ['Not specified'])[0]
+    if criteria.get('outcomes')
+    else 'Not specified'
+}
 All Outcomes: {', '.join(criteria.get('outcomes', []))}
 
 ROB 2 ASSESSMENT DOMAINS:
-Please assess each domain for risk of bias. For each domain, consider the signaling questions and provide an overall judgment.
+Please assess each domain for risk of bias. For each domain, consider the signaling questions and provide an
+overall judgment.
 
 1. BIAS ARISING FROM THE RANDOMIZATION PROCESS
    Signaling questions:
@@ -194,15 +207,12 @@ Guidelines for assessment:
 2. Overall risk of bias is determined by the highest risk domain
 3. Use the three - level scale: Low risk, Some concerns (moderate), High risk (serious)
 4. Base assessments on reported information in the study
-5. Consider the specific outcome being assessed
-6. Provide specific evidence from the study text to support judgments
 
 Key principles:
 - Low risk: The study is judged to be at low risk of bias for all domains
 - Some concerns: The study raises some concerns in at least one domain, but not high risk
-- High risk: The study is judged to be at high risk of bias in at least one domain, 
+- High risk: The study is judged to be at high risk of bias in at least one domain,
 or has serious concerns across multiple domains
-
 Focus on:
 - Quality of randomization process and allocation concealment
 - Blinding and adherence to intended interventions
