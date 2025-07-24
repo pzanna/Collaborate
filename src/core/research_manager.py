@@ -247,10 +247,10 @@ class ResearchManager:
         single_agent_mode = options.get('single_agent_mode', False) if options else False
         
         if single_agent_mode:
-            agents_to_use = ["literature"]  # Use only literature in single agent mode
+            agents_to_use = ["Literature"]  # Use only literature in single agent mode
             parallel_execution = False
         else:
-            agents_to_use = ["literature", "planning", "executor", "memory"]
+            agents_to_use = ["Literature", "Planning", "Executor", "Memory"]
             parallel_execution = True
         
         # Get cost estimate
@@ -530,7 +530,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="planning",
+                agent_type="Planning",
                 action="plan_research",
                 payload={
                     "query": context.query,
@@ -541,7 +541,7 @@ class ResearchManager:
             )
             
             # Send to planning agent
-            response = await self._send_to_agent("planning", action)
+            response = await self._send_to_agent("Planning", action)
             
             if response and response.status == "completed":
                 # Update context with planning results
@@ -608,7 +608,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="literature",
+                agent_type="Literature",
                 action="search_information",
                 payload={
                     "query": context.query,
@@ -619,7 +619,7 @@ class ResearchManager:
             )
             
             # Send to literature agent
-            response = await self._send_to_agent("literature", action)
+            response = await self._send_to_agent("Literature", action)
             
             if response and response.status == "completed":
                 # Store search results
@@ -649,7 +649,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="planning",
+                agent_type="Planning",
                 action="analyze_information",
                 payload={
                     "query": context.query,
@@ -660,7 +660,7 @@ class ResearchManager:
             )
             
             # Send to planning agent
-            response = await self._send_to_agent("planning", action)
+            response = await self._send_to_agent("Planning", action)
             
             if response and response.status == "completed":
                 # Store reasoning output
@@ -690,7 +690,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="executor",
+                agent_type="Executor",
                 action="execute_research",
                 payload={
                     "query": context.query,
@@ -700,7 +700,7 @@ class ResearchManager:
             )
             
             # Send to execution agent
-            response = await self._send_to_agent("executor", action)
+            response = await self._send_to_agent("Executor", action)
             
             if response and response.status == "completed":
                 # Store execution results
@@ -730,7 +730,7 @@ class ResearchManager:
             action = ResearchAction(
                 task_id=context.task_id,
                 context_id=context.task_id,
-                agent_type="planning",
+                agent_type="Planning",
                 action="synthesize_results",
                 payload={
                     "query": context.query,
@@ -741,7 +741,7 @@ class ResearchManager:
             )
             
             # Send to planning agent for synthesis
-            response = await self._send_to_agent("planning", action)
+            response = await self._send_to_agent("Planning", action)
             
             if response and response.status == "completed":
                 # Store synthesis
@@ -1552,7 +1552,7 @@ class ResearchManager:
         Returns:
             Dict[str, Any]: Cost estimation details
         """
-        agents_to_use = ["literature"] if single_agent_mode else ["literature", "planning", "executor", "memory"]
+        agents_to_use = ["Literature"] if single_agent_mode else ["Literature", "Planning", "Executor", "Memory"]
         parallel_execution = not single_agent_mode
         
         estimate = self.cost_estimator.estimate_task_cost(

@@ -10,7 +10,7 @@ ProjectStatus = Literal["active", "archived"]
 TopicStatus = Literal["active", "paused", "completed", "archived"]
 PlanStatus = Literal["draft", "active", "completed", "cancelled"]
 TaskStatus = Literal["pending", "running", "completed", "failed", "cancelled"]
-TaskStage = Literal["planning", "retrieval", "reasoning", "execution", "synthesis", "complete", "failed"]
+TaskStage = Literal["planning", "literature_review", "reasoning", "execution", "synthesis", "complete", "failed"]
 TaskType = Literal["research", "analysis", "synthesis", "validation"]
 PlanType = Literal["comprehensive", "quick", "deep", "custom"]
 
