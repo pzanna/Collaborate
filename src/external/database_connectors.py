@@ -19,6 +19,7 @@ import asyncio
 import aiohttp
 import json
 import logging
+import ssl
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
 from dataclasses import dataclass, asdict
@@ -44,6 +45,7 @@ class DatabaseType(Enum):
     ARXIV = "arxiv"
     BIORXIV = "biorxiv"
     MEDLARS = "medlars"
+    SEMANTIC_SCHOLAR = "semantic_scholar"
 
 
 class SearchStatus(Enum):
@@ -119,9 +121,41 @@ class DatabaseConnector(ABC):
         self.session: Optional[aiohttp.ClientSession] = None
         self.rate_limiter = RateLimiter(connection_config.rate_limit)
         
+    def _create_ssl_context(self) -> Optional[ssl.SSLContext]:
+        """Create SSL context with appropriate settings."""
+        try:
+            # Create SSL context with default settings
+            ssl_context = ssl.create_default_context()
+            
+            # Check if we should disable SSL verification for environments with certificate issues
+            # This can be controlled via environment variable or configuration
+            import os
+            disable_ssl_verification = os.environ.get('DISABLE_SSL_VERIFICATION', '').lower() in ('true', '1', 'yes')
+            
+            if disable_ssl_verification:
+                logger.warning("SSL verification disabled via DISABLE_SSL_VERIFICATION environment variable")
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+            
+            return ssl_context
+        except Exception as e:
+            logger.warning(f"Failed to create SSL context: {e}")
+            return None
+        
     async def __aenter__(self):
+        ssl_context = self._create_ssl_context()
+        
+        # Create connector with SSL context (if available)
+        if ssl_context:
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+        else:
+            # Fallback: create connector without SSL verification (for environments with cert issues)
+            connector = aiohttp.TCPConnector(ssl=False)
+            logger.warning("SSL verification disabled due to certificate issues")
+        
         self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.config.timeout)
+            timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+            connector=connector
         )
         return self
     
@@ -717,6 +751,215 @@ class ArxivConnector(DatabaseConnector):
         return results[0] if results else None
 
 
+class SemanticScholarConnector(DatabaseConnector):
+    """Semantic Scholar database connector"""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        config = DatabaseConnection(
+            connection_id="semantic_scholar_default",
+            database_type=DatabaseType.SEMANTIC_SCHOLAR,
+            api_endpoint="https://api.semanticscholar.org/graph/v1/paper/search",
+            api_key=api_key,
+            rate_limit=100,  # Semantic Scholar API rate limit
+            timeout=30,
+            retry_attempts=3,
+            is_active=True,
+            last_used=None,
+            usage_stats={}
+        )
+        super().__init__(config)
+    
+    def translate_query(self, search_terms: str, search_fields: List[str]) -> str:
+        """Translate to Semantic Scholar search format"""
+        # Semantic Scholar supports simple text queries
+        # Field-specific searching is handled via API parameters rather than query string
+        return search_terms
+    
+    async def search(self, query: DatabaseSearchQuery) -> List[ExternalSearchResult]:
+        """Execute Semantic Scholar search"""
+        try:
+            await self.rate_limiter.acquire()
+            
+            search_params = {
+                'query': self.translate_query(query.search_terms, query.search_fields),
+                'limit': min(query.max_results, 100),  # API limit is 100
+                'offset': query.offset,
+                'fields': 'paperId,title,authors,year,journal,abstract,citationCount,url,venue,publicationDate,externalIds'
+            }
+            
+            # Add field-specific search if specified
+            if query.search_fields and 'title' in query.search_fields and len(query.search_fields) == 1:
+                # If only searching titles, we can be more specific
+                search_params['fieldsOfStudy'] = 'Computer Science,Medicine,Biology'
+            
+            headers = {}
+            if self.config.api_key:
+                headers['x-api-key'] = self.config.api_key
+            
+            async with self.session.get(
+                self.config.api_endpoint, 
+                params=search_params,
+                headers=headers
+            ) as response:
+                if response.status == 429:
+                    # Rate limited
+                    await asyncio.sleep(1)
+                    return []
+                elif response.status != 200:
+                    raise Exception(f"Semantic Scholar search failed: {response.status}")
+                
+                data = await response.json()
+                
+                if 'data' not in data:
+                    return []
+                
+                return self._parse_semantic_scholar_response(data['data'])
+        
+        except Exception as e:
+            logger.error(f"Semantic Scholar search error: {e}")
+            return []
+    
+    def _parse_semantic_scholar_response(self, papers: List[Dict[str, Any]]) -> List[ExternalSearchResult]:
+        """Parse Semantic Scholar API response"""
+        results = []
+        
+        for paper_data in papers:
+            try:
+                result = self._extract_semantic_scholar_paper(paper_data)
+                if result:
+                    results.append(result)
+            except Exception as e:
+                logger.error(f"Error parsing Semantic Scholar paper: {e}")
+                continue
+        
+        return results
+    
+    def _extract_semantic_scholar_paper(self, paper: Dict[str, Any]) -> Optional[ExternalSearchResult]:
+        """Extract paper data from Semantic Scholar API response"""
+        try:
+            # Paper ID
+            paper_id = paper.get('paperId')
+            if not paper_id:
+                return None
+            
+            # Title
+            title = paper.get('title', 'No title available')
+            
+            # Authors
+            authors = []
+            if paper.get('authors'):
+                for author in paper['authors']:
+                    if author.get('name'):
+                        authors.append(author['name'])
+            
+            # Journal/Venue
+            journal = paper.get('journal', {}).get('name') or paper.get('venue')
+            
+            # Publication date
+            pub_date = None
+            if paper.get('publicationDate'):
+                try:
+                    pub_date = datetime.fromisoformat(paper['publicationDate']).replace(tzinfo=timezone.utc)
+                except ValueError:
+                    # Try with just year if full date parsing fails
+                    year = paper.get('year')
+                    if year:
+                        try:
+                            pub_date = datetime(int(year), 1, 1, tzinfo=timezone.utc)
+                        except (ValueError, TypeError):
+                            pass
+            elif paper.get('year'):
+                try:
+                    pub_date = datetime(int(paper['year']), 1, 1, tzinfo=timezone.utc)
+                except (ValueError, TypeError):
+                    pass
+            
+            # Abstract
+            abstract = paper.get('abstract')
+            
+            # Keywords - Semantic Scholar doesn't provide explicit keywords
+            keywords = []
+            if paper.get('fieldsOfStudy'):
+                keywords = paper['fieldsOfStudy']
+            
+            # DOI and other IDs
+            doi = None
+            pmid = None
+            arxiv_id = None
+            
+            external_ids = paper.get('externalIds', {})
+            if external_ids:
+                doi = external_ids.get('DOI')
+                pmid = external_ids.get('PubMed')
+                arxiv_id = external_ids.get('ArXiv')
+            
+            # URL
+            url = paper.get('url') or f"https://www.semanticscholar.org/paper/{paper_id}"
+            
+            # Citation count
+            citation_count = paper.get('citationCount')
+            
+            return ExternalSearchResult(
+                result_id=f"s2_{paper_id}",
+                database_source=DatabaseType.SEMANTIC_SCHOLAR,
+                external_id=paper_id,
+                title=title,
+                authors=authors,
+                journal=journal,
+                publication_date=pub_date,
+                abstract=abstract,
+                keywords=keywords,
+                doi=doi,
+                pmid=pmid,
+                url=url,
+                study_type=None,  # Semantic Scholar doesn't classify study types
+                language='en',  # Semantic Scholar is primarily English
+                full_text_available=False,  # Would need additional checking
+                citation_count=citation_count,
+                metadata={
+                    'database': 'Semantic Scholar',
+                    'paper_id': paper_id,
+                    'arxiv_id': arxiv_id,
+                    'fields_of_study': keywords,
+                    'venue': paper.get('venue'),
+                    'year': paper.get('year')
+                },
+                retrieved_timestamp=datetime.now(timezone.utc),
+                confidence_score=None  # Semantic Scholar doesn't provide explicit relevance scores
+            )
+        
+        except Exception as e:
+            logger.error(f"Error extracting Semantic Scholar paper: {e}")
+            return None
+    
+    async def get_full_record(self, external_id: str) -> Optional[ExternalSearchResult]:
+        """Get full Semantic Scholar record by paper ID"""
+        try:
+            await self.rate_limiter.acquire()
+            
+            url = f"https://api.semanticscholar.org/graph/v1/paper/{external_id}"
+            params = {
+                'fields': 'paperId,title,authors,year,journal,abstract,citationCount,url,venue,publicationDate,externalIds,fieldsOfStudy'
+            }
+            
+            headers = {}
+            if self.config.api_key:
+                headers['x-api-key'] = self.config.api_key
+            
+            async with self.session.get(url, params=params, headers=headers) as response:
+                if response.status == 404:
+                    return None
+                elif response.status != 200:
+                    raise Exception(f"Semantic Scholar fetch failed: {response.status}")
+                
+                paper_data = await response.json()
+                return self._extract_semantic_scholar_paper(paper_data)
+        
+        except Exception as e:
+            logger.error(f"Error getting Semantic Scholar record: {e}")
+            return None
+
+
 class DatabaseManager:
     """Centralized management of database connectors"""
     
@@ -855,10 +1098,18 @@ if __name__ == "__main__":
         arxiv = ArxivConnector()
         db_manager.add_connector(arxiv)
         
+        # Add Semantic Scholar connector
+        semantic_scholar = SemanticScholarConnector()
+        db_manager.add_connector(semantic_scholar)
+        
         # Test connection
         print("Testing PubMed connection...")
         is_connected = await pubmed.test_connection()
         print(f"PubMed connection: {'✅ SUCCESS' if is_connected else '❌ FAILED'}")
+        
+        print("\nTesting Semantic Scholar connection...")
+        is_connected_s2 = await semantic_scholar.test_connection()
+        print(f"Semantic Scholar connection: {'✅ SUCCESS' if is_connected_s2 else '❌ FAILED'}")
         
         # Test search
         print("\nTesting PubMed search...")
@@ -893,7 +1144,7 @@ if __name__ == "__main__":
         
         multi_results = await db_manager.search_multiple_databases(
             search_query,
-            [DatabaseType.PUBMED, DatabaseType.ARXIV]
+            [DatabaseType.PUBMED, DatabaseType.ARXIV, DatabaseType.SEMANTIC_SCHOLAR]
         )
         
         for db_type, db_results in multi_results.items():

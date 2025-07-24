@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, AsyncGenerator, Any
 from contextlib import asynccontextmanager
 
+import sys
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -43,6 +44,7 @@ from src.mcp.client import MCPClient
 # V2 Hierarchical Research API
 from src.api.v2_hierarchical_api import v2_router, set_database_manager, set_research_manager
 from functools import wraps
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -201,9 +203,8 @@ async def lifespan(app: FastAPI):
         available_providers = ai_manager.get_available_providers()
         print(f"✓ AI providers available: {', '.join(available_providers)}")
     except Exception as e:
-        logging.error("⚠ Failed to initialize AIClientManager", exc_info=True)
         ai_manager = None
-        
+        streaming_coordinator = None
     
     print("✓ Eunice Web Server initialized successfully!")
     

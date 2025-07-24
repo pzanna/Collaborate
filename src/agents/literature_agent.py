@@ -6,22 +6,21 @@ and information retrieval tasks for the Eunice research platform.
 """
 
 import asyncio
-import aiohttp
-import json
 import logging
-import ssl
-import certifi
-import urllib.parse
 import os
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 from urllib.parse import quote_plus, urljoin
-from bs4 import BeautifulSoup
-import re
+from datetime import datetime, timedelta
 
 from .base_agent import BaseAgent, AgentStatus
 from ..mcp.protocols import ResearchAction
 from ..config.config_manager import ConfigManager
 from ..utils.error_handler import ErrorHandler
+from ..external.database_connectors import (
+    DatabaseConnector, PubMedConnector, ArxivConnector, SemanticScholarConnector, DatabaseSearchQuery,
+    DatabaseType, ExternalSearchResult, DatabaseManager
+)
+from ..external.academic_cache import AcademicCacheManager
 
 
 class LiteratureAgent(BaseAgent):
@@ -42,24 +41,33 @@ class LiteratureAgent(BaseAgent):
         """
         super().__init__("literature", config_manager)
         
-        # Search configuration
-        self.search_engines = {
-            'google': 'https://www.google.com/search',
-            'bing': 'https://www.bing.com/search',
-            'yahoo': 'https://search.yahoo.com/search',
-            'google_scholar': 'https://scholar.google.com/scholar',
-            'semantic_scholar': 'https://api.semanticscholar.org/graph/v1',
-            'pubmed': 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
-        }
+        # Initialize cache manager
+        self.cache_manager = AcademicCacheManager(config_manager)
         
-        # HTTP session for requests
-        self.session: Optional[aiohttp.ClientSession] = None
+        # Initialize database manager
+        self.db_manager = DatabaseManager()
         
-        # Search settings
+        # Initialize database connectors
+        self._init_database_connectors()
+        
+        # Academic search settings (no direct external connections)
         self.max_results_per_search = 10
         self.max_pages_per_result = 3
         self.request_timeout = 30
-        self.user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        
+        # Search and caching settings
+        self.enable_caching = True
+        self.cache_duration = timedelta(hours=24)
+        self.max_concurrent_searches = 3
+        
+        # SSL configuration for API connections
+        self.verify_ssl = True  # Can be set to False for development environments with cert issues
+        try:
+            # Check if SSL verification should be disabled via config
+            self.verify_ssl = config_manager.get('ssl_verification', True)
+        except (AttributeError, ValueError):
+            # Default to True if config doesn't specify
+            self.verify_ssl = True
         
         # Content filtering
         self.min_content_length = 100
@@ -100,70 +108,614 @@ class LiteratureAgent(BaseAgent):
         
         self.literature_logger.info("Literature Agent logging initialized")
 
-    def _log_content_extraction_error(self, url: str, error: Exception) -> None:
-        """Log content extraction errors with appropriate severity based on error type."""
-        error_msg = str(error)
+    def _init_database_connectors(self) -> None:
+        """Initialize database connectors with API keys from config."""
+        try:
+            # Initialize PubMed connector
+            try:
+                pubmed_api_key = self.config.get_api_key("pubmed") or self.config.get_api_key("ncbi")
+            except ValueError:
+                pubmed_api_key = None
+                self.logger.debug("PubMed/NCBI API key not configured")
+            
+            pubmed_connector = PubMedConnector(api_key=pubmed_api_key)
+            self.db_manager.add_connector(pubmed_connector)
+            
+            # Initialize arXiv connector
+            arxiv_connector = ArxivConnector()
+            self.db_manager.add_connector(arxiv_connector)
+            
+            # Initialize Semantic Scholar connector
+            try:
+                semantic_scholar_api_key = self.config.get_api_key("semantic_scholar")
+            except ValueError:
+                semantic_scholar_api_key = None
+                self.logger.debug("Semantic Scholar API key not configured")
+            
+            semantic_scholar_connector = SemanticScholarConnector(api_key=semantic_scholar_api_key)
+            self.db_manager.add_connector(semantic_scholar_connector)
+            
+            self.logger.info("Database connectors initialized")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize database connectors: {e}")
+
+    async def search_semantic_scholar_cached(
+        self, 
+        query: str, 
+        max_results: int = 10,
+        use_cache: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Search Semantic Scholar with caching support.
         
-        # Reduce log level for expected 202 errors from Semantic Scholar
-        if "status 202" in error_msg and "semanticscholar.org" in url:
-            self.logger.debug(f"Expected 202 status from Semantic Scholar: {url}")
-            self.literature_logger.debug(f"Expected 202 status from Semantic Scholar: {url}")
-        elif "status 202" in error_msg:
-            self.logger.info(f"Content not ready (202): {url}")
-            self.literature_logger.info(f"Content not ready (202): {url}")
-        else:
-            self.logger.error(f"Content extraction failed for {url}: {error}")
-            self.literature_logger.error(f"Content extraction failed for {url}: {error}")
+        Args:
+            query: Search query
+            max_results: Maximum number of results
+            use_cache: Whether to use cached results
+            
+        Returns:
+            List[Dict[str, Any]]: Search results in Literature Agent format
+        """
+        cache_key_params = {'max_results': max_results}
+        
+        # Check cache first
+        if use_cache and self.enable_caching:
+            cached_results = await self.cache_manager.get_cached_results(
+                query, 'semantic_scholar', **cache_key_params
+            )
+            if cached_results:
+                return cached_results
+        
+        try:
+            # Create structured database query
+            db_query = DatabaseSearchQuery(
+                query_id=f"semantic_scholar_{datetime.now().timestamp()}",
+                database_type=DatabaseType.SEMANTIC_SCHOLAR,
+                search_terms=query,
+                search_fields=['title', 'abstract'],
+                date_range=None,
+                study_types=None,
+                languages=None,
+                publication_status=None,
+                advanced_filters=None,
+                max_results=max_results,
+                offset=0
+            )
+            
+            # Execute search using database connector
+            semantic_scholar_results = await self.db_manager.search_multiple_databases(
+                db_query, [DatabaseType.SEMANTIC_SCHOLAR]
+            )
+            
+            # Convert to Literature Agent format
+            results = self._convert_external_results_to_literature_format(
+                semantic_scholar_results.get(DatabaseType.SEMANTIC_SCHOLAR, [])
+            )
+            
+            # Cache results if found
+            if results and use_cache and self.enable_caching:
+                await self.cache_manager.cache_results(
+                    query, 'semantic_scholar', results, 
+                    self.cache_duration, 'semantic_scholar',
+                    **cache_key_params
+                )
+            
+            self.logger.info(f"Semantic Scholar search found {len(results)} results")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Semantic Scholar search failed: {e}")
+            return []
+
+    async def search_pubmed_structured(
+        self, 
+        query: str, 
+        max_results: int = 10,
+        search_fields: Optional[List[str]] = None,
+        date_range: Optional[Dict[str, str]] = None,
+        use_cache: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Search PubMed using structured database connector with caching.
+        
+        Args:
+            query: Search query
+            max_results: Maximum number of results
+            search_fields: Fields to search in
+            date_range: Date range filter
+            use_cache: Whether to use cached results
+            
+        Returns:
+            List[Dict[str, Any]]: Search results in Literature Agent format
+        """
+        cache_key_params = {
+            'max_results': max_results,
+            'search_fields': search_fields or [],
+            'date_range': date_range or {}
+        }
+        
+        # Check cache first
+        if use_cache and self.enable_caching:
+            cached_results = await self.cache_manager.get_cached_results(
+                query, 'pubmed_structured', **cache_key_params
+            )
+            if cached_results:
+                return cached_results
+        
+        try:
+            # Create structured database query
+            db_query = DatabaseSearchQuery(
+                query_id=f"pubmed_{datetime.now().timestamp()}",
+                database_type=DatabaseType.PUBMED,
+                search_terms=query,
+                search_fields=search_fields or ['title', 'abstract'],
+                date_range=date_range,
+                study_types=None,
+                languages=None,
+                publication_status=None,
+                advanced_filters=None,
+                max_results=max_results,
+                offset=0
+            )
+            
+            # Execute search using database connector
+            pubmed_results = await self.db_manager.search_multiple_databases(
+                db_query, [DatabaseType.PUBMED]
+            )
+            
+            # Convert to Literature Agent format
+            results = self._convert_external_results_to_literature_format(
+                pubmed_results.get(DatabaseType.PUBMED, [])
+            )
+            
+            # Cache results
+            if results and use_cache and self.enable_caching:
+                await self.cache_manager.cache_results(
+                    query, 'pubmed_structured', results,
+                    self.cache_duration, 'pubmed',
+                    **cache_key_params
+                )
+            
+            self.logger.info(f"PubMed structured search found {len(results)} results")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"PubMed structured search failed: {e}")
+            return []
+
+    async def search_arxiv_structured(
+        self,
+        query: str,
+        max_results: int = 10,
+        search_fields: Optional[List[str]] = None,
+        use_cache: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Search arXiv using structured database connector with caching.
+        
+        Args:
+            query: Search query
+            max_results: Maximum number of results
+            search_fields: Fields to search in
+            use_cache: Whether to use cached results
+            
+        Returns:
+            List[Dict[str, Any]]: Search results in Literature Agent format
+        """
+        cache_key_params = {
+            'max_results': max_results,
+            'search_fields': search_fields or []
+        }
+        
+        # Check cache first
+        if use_cache and self.enable_caching:
+            cached_results = await self.cache_manager.get_cached_results(
+                query, 'arxiv_structured', **cache_key_params
+            )
+            if cached_results:
+                return cached_results
+        
+        try:
+            # Create structured database query
+            db_query = DatabaseSearchQuery(
+                query_id=f"arxiv_{datetime.now().timestamp()}",
+                database_type=DatabaseType.ARXIV,
+                search_terms=query,
+                search_fields=search_fields or ['title', 'abstract'],
+                date_range=None,
+                study_types=None,
+                languages=None,
+                publication_status=None,
+                advanced_filters=None,
+                max_results=max_results,
+                offset=0
+            )
+            
+            # Execute search using database connector
+            arxiv_results = await self.db_manager.search_multiple_databases(
+                db_query, [DatabaseType.ARXIV]
+            )
+            
+            # Convert to Literature Agent format
+            results = self._convert_external_results_to_literature_format(
+                arxiv_results.get(DatabaseType.ARXIV, [])
+            )
+            
+            # Cache results
+            if results and use_cache and self.enable_caching:
+                await self.cache_manager.cache_results(
+                    query, 'arxiv_structured', results,
+                    self.cache_duration, 'arxiv',
+                    **cache_key_params
+                )
+            
+            self.logger.info(f"arXiv structured search found {len(results)} results")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"arXiv structured search failed: {e}")
+            return []
+
+    async def comprehensive_academic_search(
+        self,
+        query: str,
+        max_results_per_source: int = 10,
+        include_pubmed: bool = True,
+        include_arxiv: bool = True,
+        include_semantic_scholar: bool = True,
+        use_cache: bool = True
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Perform comprehensive academic search across multiple databases.
+        
+        Args:
+            query: Search query
+            max_results_per_source: Max results from each source
+            include_pubmed: Whether to search PubMed
+            include_arxiv: Whether to search arXiv
+            include_semantic_scholar: Whether to search Semantic Scholar
+            use_cache: Whether to use cached results
+            
+        Returns:
+            Dict[str, List[Dict[str, Any]]]: Results from each source
+        """
+        self.logger.info(f"Starting comprehensive academic search for: {query}")
+        
+        # Prepare search tasks
+        search_tasks = []
+        
+        if include_pubmed:
+            search_tasks.append(
+                self.search_pubmed_structured(query, max_results_per_source, use_cache=use_cache)
+            )
+        
+        if include_arxiv:
+            search_tasks.append(
+                self.search_arxiv_structured(query, max_results_per_source, use_cache=use_cache)
+            )
+        
+        if include_semantic_scholar:
+            search_tasks.append(
+                self.search_semantic_scholar_cached(query, max_results_per_source, use_cache=use_cache)
+            )
+        
+        # Execute searches concurrently with semaphore to limit concurrent requests
+        semaphore = asyncio.Semaphore(self.max_concurrent_searches)
+        
+        async def limited_search(search_coro):
+            async with semaphore:
+                return await search_coro
+        
+        # Execute searches
+        results = await asyncio.gather(
+            *[limited_search(task) for task in search_tasks],
+            return_exceptions=True
+        )
+        
+        # Organize results by source
+        academic_results = {}
+        source_names = []
+        
+        if include_pubmed:
+            source_names.append('pubmed')
+        if include_arxiv:
+            source_names.append('arxiv')
+        if include_semantic_scholar:
+            source_names.append('semantic_scholar')
+        
+        for i, result in enumerate(results):
+            source_name = source_names[i] if i < len(source_names) else f'source_{i}'
+            
+            if isinstance(result, Exception):
+                self.logger.error(f"Search failed for {source_name}: {result}")
+                academic_results[source_name] = []
+            else:
+                academic_results[source_name] = result or []
+        
+        # Log summary
+        total_results = sum(len(results) for results in academic_results.values())
+        sources_used = [source for source, results in academic_results.items() if results]
+        
+        self.logger.info(
+            f"Comprehensive academic search completed: {total_results} results from {len(sources_used)} sources"
+        )
+        
+        return academic_results
+
+    def _convert_external_results_to_literature_format(
+        self, 
+        external_results: List[ExternalSearchResult]
+    ) -> List[Dict[str, Any]]:
+        """
+        Convert external database results to Literature Agent format.
+        
+        Args:
+            external_results: List of ExternalSearchResult objects
+            
+        Returns:
+            List[Dict[str, Any]]: Results in Literature Agent format
+        """
+        literature_results = []
+        
+        for i, result in enumerate(external_results):
+            # Build content description
+            content_parts = [f"Academic paper: {result.title}"]
+            
+            if result.authors:
+                author_str = ', '.join(result.authors[:3])
+                if len(result.authors) > 3:
+                    author_str += ' et al.'
+                content_parts.append(f"Authors: {author_str}")
+            
+            if result.journal:
+                content_parts.append(f"Journal: {result.journal}")
+            
+            if result.publication_date:
+                content_parts.append(f"Published: {result.publication_date.strftime('%Y-%m-%d')}")
+            
+            if result.citation_count:
+                content_parts.append(f"Citations: {result.citation_count}")
+            
+            if result.abstract:
+                # Add first 200 characters of abstract
+                abstract_preview = result.abstract[:200] + "..." if len(result.abstract) > 200 else result.abstract
+                content_parts.append(f"Abstract: {abstract_preview}")
+            
+            content = " | ".join(content_parts)
+            
+            # Determine link type and URL preference
+            final_url = result.url or ""
+            link_type = result.database_source.value
+            
+            # Prefer DOI URLs for better access
+            if result.doi:
+                final_url = f"https://doi.org/{result.doi}"
+                link_type = "doi"
+            
+            # Create Literature Agent compatible result
+            literature_result = {
+                'title': result.title,
+                'url': final_url,
+                'content': content,
+                'source': result.database_source.value,
+                'type': 'academic_paper',
+                'link_type': link_type,
+                'relevance_score': len(external_results) - i,  # Simple scoring
+                'metadata': {
+                    'external_id': result.external_id,
+                    'authors': result.authors,
+                    'journal': result.journal,
+                    'publication_date': result.publication_date.isoformat() if result.publication_date else None,
+                    'doi': result.doi,
+                    'pmid': result.pmid,
+                    'keywords': result.keywords,
+                    'citation_count': result.citation_count,
+                    'database_source': result.database_source.value,
+                    'abstract_length': len(result.abstract) if result.abstract else 0,
+                    'full_text_available': result.full_text_available,
+                    'confidence_score': result.confidence_score
+                }
+            }
+            
+            literature_results.append(literature_result)
+        
+        return literature_results
+
+    async def deduplicate_academic_results(
+        self, 
+        results_by_source: Dict[str, List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Deduplicate academic results across sources.
+        
+        Args:
+            results_by_source: Results organized by source
+            
+        Returns:
+            List[Dict[str, Any]]: Deduplicated results
+        """
+        # Flatten all results
+        all_results = []
+        for source, results in results_by_source.items():
+            for result in results:
+                result['_original_source'] = source  # Track original source
+                all_results.append(result)
+        
+        # Deduplicate by DOI, PMID, and title similarity
+        seen_dois = set()
+        seen_pmids = set()
+        seen_titles = set()
+        unique_results = []
+        
+        # Sort by relevance score to prefer higher quality results
+        all_results.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+        
+        for result in all_results:
+            is_duplicate = False
+            metadata = result.get('metadata', {})
+            
+            # Check DOI duplicates
+            doi = metadata.get('doi')
+            if doi and doi in seen_dois:
+                is_duplicate = True
+            
+            # Check PMID duplicates
+            pmid = metadata.get('pmid')
+            if pmid and pmid in seen_pmids:
+                is_duplicate = True
+            
+            # Check title similarity (simple approach)
+            title_normalized = result.get('title', '').lower().strip()
+            if title_normalized in seen_titles:
+                is_duplicate = True
+            
+            # Add if not duplicate
+            if not is_duplicate:
+                unique_results.append(result)
+                if doi:
+                    seen_dois.add(doi)
+                if pmid:
+                    seen_pmids.add(pmid)
+                seen_titles.add(title_normalized)
+        
+        self.logger.info(f"Deduplication: {len(all_results)} -> {len(unique_results)} unique results")
+        return unique_results
+
+    async def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive cache statistics.
+        
+        Returns:
+            Dict[str, Any]: Cache statistics
+        """
+        return await self.cache_manager.get_cache_stats()
+
+    async def cleanup_cache(self) -> int:
+        """
+        Clean up expired cache entries.
+        
+        Returns:
+            int: Number of entries removed
+        """
+        return await self.cache_manager.cleanup_expired_cache()
+
+    async def find_related_papers(self, title: str) -> List[Dict[str, Any]]:
+        """
+        Find related papers in cache.
+        
+        Args:
+            title: Paper title to find related papers for
+            
+        Returns:
+            List[Dict[str, Any]]: Related papers
+        """
+        return await self.cache_manager.find_similar_papers(title)
+
+    async def _search_academic_papers(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Search for academic papers using the integrated academic search capabilities.
+        
+        Args:
+            payload: Search parameters including query, filters, etc.
+            
+        Returns:
+            Dict[str, Any]: Search results and metadata
+        """
+        try:
+            # Extract search parameters from payload
+            query = payload.get('query', '')
+            max_results = payload.get('max_results', self.max_results_per_search)
+            include_pubmed = payload.get('include_pubmed', True)
+            include_arxiv = payload.get('include_arxiv', True)
+            include_semantic_scholar = payload.get('include_semantic_scholar', True)
+            use_cache = payload.get('use_cache', True)
+            deduplicate = payload.get('deduplicate', True)
+            
+            if not query:
+                return {
+                    'success': False,
+                    'error': 'No search query provided',
+                    'results': [],
+                    'total_results': 0,
+                    'sources_used': []
+                }
+            
+            self.literature_logger.info(f"Starting academic paper search for query: {query}")
+            
+            # Perform comprehensive search across databases
+            results_by_source = await self.comprehensive_academic_search(
+                query=query,
+                max_results_per_source=max_results,
+                include_pubmed=include_pubmed,
+                include_arxiv=include_arxiv,
+                include_semantic_scholar=include_semantic_scholar,
+                use_cache=use_cache
+            )
+            
+            # Deduplicate results if requested
+            if deduplicate:
+                final_results = await self.deduplicate_academic_results(results_by_source)
+            else:
+                # Flatten results without deduplication
+                final_results = []
+                for source_results in results_by_source.values():
+                    final_results.extend(source_results)
+            
+            # Sort by relevance score
+            final_results.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+            
+            # Limit total results
+            if max_results and len(final_results) > max_results:
+                final_results = final_results[:max_results]
+            
+            # Compile search metadata
+            sources_used = [source for source, results in results_by_source.items() if results]
+            total_results = len(final_results)
+            
+            self.literature_logger.info(
+                f"Academic paper search completed: {total_results} results from {len(sources_used)} sources"
+            )
+            
+            return {
+                'success': True,
+                'results': final_results,
+                'total_results': total_results,
+                'sources_used': sources_used,
+                'query': query,
+                'search_metadata': {
+                    'max_results_requested': max_results,
+                    'deduplicated': deduplicate,
+                    'cached': use_cache,
+                    'results_by_source': {
+                        source: len(results) for source, results in results_by_source.items()
+                    }
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Academic paper search failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'results': [],
+                'total_results': 0,
+                'sources_used': []
+            }
+
+
 
     def _get_capabilities(self) -> List[str]:
         """Get literature agent capabilities."""
         return [
-            'search_information',
-            'extract_web_content',
             'search_academic_papers',
-            'search_pubmed',
-            'retrieve_documents',
-            'filter_results',
-            'rank_relevance',
-            'academic_research_workflow',
-            'biomedical_research_workflow',
-            'multi_source_validation',
-            'cost_optimized_search',
-            'comprehensive_research_pipeline',
-            'fact_verification_workflow'
         ]
     
     async def _initialize_agent_specific(self) -> None:
         """Initialize literature-specific resources."""
-        import ssl
-        
-        # Use certifi SSL context (proven to work from diagnostics)
-        try:
-            import certifi
-            ssl_context = ssl.create_default_context(cafile=certifi.where())
-            self.logger.info("Using certifi certificate bundle for SSL")
-        except ImportError:
-            self.logger.warning("Certifi not available, using default SSL context")
-            ssl_context = ssl.create_default_context()
-        except Exception as ssl_error:
-            self.logger.error(f"SSL context creation failed: {ssl_error}")
-            ssl_context = ssl.create_default_context()
-        
-        # Create HTTP session with SSL context
-        connector = aiohttp.TCPConnector(
-            limit=10, 
-            limit_per_host=5,
-            ssl=ssl_context
-        )
-        timeout = aiohttp.ClientTimeout(total=self.request_timeout)
-        
-        self.session = aiohttp.ClientSession(
-            connector=connector,
-            timeout=timeout,
-            headers={'User-Agent': self.user_agent}
-        )
-        
-        self.logger.info("LiteratureAgent HTTP session initialized with SSL support")
+        # Literature Agent now only uses academic connector for external access
+        # No direct HTTP session needed
+        self.logger.info("LiteratureAgent initialized - using academic connector for external access")
 
     async def _initialize_agent(self) -> None:
         """Initialize literature agent resources."""
@@ -171,15 +723,17 @@ class LiteratureAgent(BaseAgent):
 
     async def _cleanup_agent_specific(self) -> None:
         """Clean up literature-specific resources."""
-        # No additional cleanup required for literature-specific resources.
-        # This method is implemented to avoid confusion and maintain clarity.
-        pass
-    async def _cleanup_agent(self) -> None:
-        """Clean up literature-specific resources."""
-        if self.session:
-            await self.session.close()
-            self.session = None
+        try:
+            # Clean up expired cache entries as part of cleanup
+            if hasattr(self.cache_manager, 'cleanup_expired_cache'):
+                await self.cache_manager.cleanup_expired_cache()
+                
+            self.logger.info("Literature-specific resources cleaned up")
+        except Exception as e:
+            self.logger.error(f"Error during literature-specific cleanup: {e}")
         
+    async def _cleanup_agent(self) -> None:
+        """Clean up literature-specific resources."""        
         self.logger.info("LiteratureAgent cleanup completed")
     
     async def _process_task_impl(self, task: ResearchAction) -> Dict[str, Any]:
@@ -195,1681 +749,10 @@ class LiteratureAgent(BaseAgent):
         action = task.action
         payload = task.payload
         
-        if action == 'search_information':
-            return await self._search_information(payload)
-        elif action == 'extract_web_content':
-            return await self._extract_web_content(payload)
-        elif action == 'search_academic_papers':
+        if action == 'search_academic_papers':
             return await self._search_academic_papers(payload)
-        elif action == 'search_pubmed':
-            return await self._search_pubmed_action(payload)
-        elif action == 'retrieve_documents':
-            return await self._retrieve_documents(payload)
-        elif action == 'filter_results':
-            return await self._filter_results(payload)
-        elif action == 'rank_relevance':
-            return await self._rank_relevance(payload)
-        elif action == 'academic_research_workflow':
-            return await self.academic_research_workflow(
-                payload.get('research_topic', ''),
-                payload.get('max_papers', 20)
-            )
-        elif action == 'biomedical_research_workflow':
-            return await self.biomedical_research_workflow(
-                payload.get('research_topic', ''),
-                payload.get('max_papers', 20)
-            )
-        elif action == 'multi_source_validation':
-            return await self.multi_source_validation(payload.get('claim', ''))
-        elif action == 'cost_optimized_search':
-            return await self.cost_optimized_search(
-                payload.get('query', ''),
-                payload.get('budget_level', 'medium')
-            )
-        elif action == 'comprehensive_research_pipeline':
-            return await self.comprehensive_research_pipeline(
-                payload.get('topic', ''),
-                payload.get('include_academic', True),
-                payload.get('include_news', True),
-                payload.get('include_pubmed', None),
-                payload.get('max_results', 10)
-            )
-        elif action == 'fact_verification_workflow':
-            return await self.fact_verification_workflow(
-                payload.get('claim', ''),
-                payload.get('require_academic', True)
-            )
+        
         else:
             raise ValueError(f"Unknown action: {action}")
     
-    async def _search_information(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Search for information using multiple search engines.
-        
-        Args:
-            payload: Search parameters
-            
-        Returns:
-            Dict[str, Any]: Search results
-        """
-        query = payload.get('query', '')
-        max_results = payload.get('max_results', self.max_results_per_search)
-        # Default search engines to use
-        search_engines = payload.get('search_engines', ['google', 'bing', 'yahoo'])
-        
-        if not query:
-            raise ValueError("Query is required for search")
-        
-        self.logger.info(f"Searching for: {query}")
-        self.literature_logger.info(f"🔍 Search Request: '{query}' | Engines: {search_engines} | Max Results: {max_results}")
-        
-        all_results = []
-        
-        # Search using each specified engine
-        for engine in search_engines:
-            try:
-                results = await self._search_engine(engine, query, max_results)
-                all_results.extend(results)
-                self.logger.info(f"Found {len(results)} results from {engine}")
-            except Exception as e:
-                self.logger.error(f"Search failed for {engine}: {e}")
-                continue
-        
-        # Remove duplicates and rank results
-        unique_results = self._remove_duplicates(all_results)
-        ranked_results = await self._rank_results(unique_results, query)
-        
-        # Log search summary
-        self.literature_logger.info(f"📊 Search Complete: Found {len(unique_results)} unique results from {len([e for e in search_engines if any(r.get('source') == e for r in all_results)])} engines")
-        
-        return {
-            'query': query,
-            'results': ranked_results[:max_results],
-            'total_found': len(unique_results),
-            'search_engines_used': search_engines,
-            'timestamp': asyncio.get_event_loop().time()
-        }
     
-    async def _search_engine(self, engine: str, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """
-        Search using a specific search engine.
-        
-        Args:
-            engine: Search engine name
-            query: Search query
-            max_results: Maximum number of results
-            
-        Returns:
-            List[Dict[str, Any]]: Search results
-        """
-        if engine == 'google':
-            return await self._search_google(query, max_results)
-        elif engine == 'bing':
-            return await self._search_bing(query, max_results)
-        elif engine == 'yahoo':
-            return await self._search_yahoo(query, max_results)
-        elif engine == 'google_scholar':
-            return await self._search_google_scholar(query, max_results)
-        elif engine == 'semantic_scholar':
-            return await self._search_semantic_scholar(query, max_results)
-        elif engine == 'pubmed':
-            return await self._search_pubmed(query, max_results)
-        else:
-            raise ValueError(f"Unknown search engine: {engine}")
-
-    async def _search_google(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Search Google with simplified parsing."""
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-                
-            url = f"https://www.google.com/search?q={quote_plus(query)}&num={max_results}"
-            
-            # Use custom headers to appear more like a browser
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'DNT': '1'
-            }
-            
-            async with self.session.get(url, headers=headers) as response:
-                if response.status != 200:
-                    self.logger.warning(f"Google returned status {response.status}")
-                    return []
-                
-                html = await response.text()
-                return self._parse_google_results(html, query, max_results)
-        
-        except Exception as e:
-            self.logger.error(f"Google search failed: {e}")
-            return []
-
-    async def _search_bing(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Search Bing with simplified parsing."""
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-                
-            url = f"https://www.bing.com/search?q={quote_plus(query)}&count={max_results}"
-            
-            async with self.session.get(url) as response:
-                if response.status != 200:
-                    self.logger.warning(f"Bing returned status {response.status}")
-                    return []
-                
-                html = await response.text()
-                return self._parse_bing_results(html, query, max_results)
-        
-        except Exception as e:
-            self.logger.error(f"Bing search failed: {e}")
-            return []
-
-    async def _search_yahoo(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Search Yahoo with simplified parsing."""
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-                
-            url = f"https://search.yahoo.com/search?p={quote_plus(query)}&n={max_results}"
-            
-            async with self.session.get(url) as response:
-                if response.status != 200:
-                    self.logger.warning(f"Yahoo returned status {response.status}")
-                    return []
-                
-                html = await response.text()
-                return self._parse_yahoo_results(html, query, max_results)
-        
-        except Exception as e:
-            self.logger.error(f"Yahoo search failed: {e}")
-            return []
-
-    def _parse_google_results(self, html: str, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Parse Google search results using regex and string parsing."""
-        results = []
-        
-        try:
-            # Multiple patterns to try for Google results
-            patterns = [
-                # Standard result pattern
-                r'<a[^>]+href="(/url\?q=|https?://[^"]+)"[^>]*>.*?<h3[^>]*>([^<]+)</h3>',
-                # Alternative pattern
-                r'<h3[^>]*><a[^>]+href="([^"]+)"[^>]*>([^<]+)</a></h3>',
-                # Simplified pattern  
-                r'href="(https?://[^"]+)"[^>]*>[^<]*<[^>]*>([^<]+)<',
-                # Basic link extraction
-                r'<a[^>]+href="(https?://[^"]+)"[^>]*>([^<]*(?:tutorial|guide|documentation|learn|python)[^<]*)</a>'
-            ]
-            
-            for pattern in patterns:
-                matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
-                
-                for i, match in enumerate(matches[:max_results]):
-                    if len(match) >= 2:
-                        url, title = match[0], match[1]
-                        
-                        # Clean up Google redirect URLs
-                        if url.startswith('/url?q='):
-                            import urllib.parse
-                            url = urllib.parse.unquote(url[7:].split('&')[0])
-                        
-                        # Filter out Google's own URLs and ensure valid URLs
-                        if (url.startswith('http') and 
-                            'google.com' not in url and 
-                            'youtube.com' not in url and  # Often not useful for technical searches
-                            len(title.strip()) > 5):
-                            
-                            title = re.sub(r'<[^>]+>', '', title).strip()
-                            
-                            results.append({
-                                'title': title,
-                                'url': url,
-                                'content': f'Google search result for "{query}": {title}',
-                                'source': 'google',
-                                'type': 'web_result',
-                                'relevance_score': max_results - i
-                            })
-                            
-                            if len(results) >= max_results:
-                                break
-                
-                if results:
-                    break  # Found results with this pattern
-            
-            # If no specific results found, create confirmation result
-            if not results and any(term in html.lower() for term in ['search', 'results', query.lower()]):
-                results = [{
-                    'title': f'Google search successful for "{query}"',
-                    'url': f'https://www.google.com/search?q={quote_plus(query)}',
-                    'content': 'Successfully connected to Google and received search results page. Search functionality is working.',
-                    'source': 'google',
-                    'type': 'search_confirmed',
-                    'relevance_score': 3
-                }]
-        
-        except Exception as e:
-            self.logger.debug(f"Error parsing Google results: {e}")
-        
-        return results
-
-    def _parse_bing_results(self, html: str, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Parse Bing search results using regex and string parsing."""
-        results = []
-        
-        try:
-            # Multiple patterns for Bing results
-            patterns = [
-                # Standard Bing pattern
-                r'<h2[^>]*><a[^>]+href="([^"]+)"[^>]*>([^<]+)</a></h2>',
-                # Alternative pattern
-                r'<a[^>]+href="([^"]+)"[^>]*><h2[^>]*>([^<]+)</h2></a>',
-                # Broader pattern
-                r'<a[^>]+href="(https?://[^"]+)"[^>]*>([^<]*(?:' + '|'.join(query.split()) + ')[^<]*)</a>',
-                # Generic link pattern with context
-                r'class="[^"]*result[^"]*"[^>]*>.*?<a[^>]+href="([^"]+)"[^>]*>([^<]+)</a>'
-            ]
-            
-            for pattern in patterns:
-                matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
-                
-                for i, match in enumerate(matches[:max_results]):
-                    if len(match) >= 2:
-                        url, title = match[0], match[1]
-                        
-                        # Filter valid results
-                        if (url.startswith('http') and 
-                            'bing.com' not in url and 
-                            'microsoft.com' not in url and
-                            len(title.strip()) > 3):
-                            
-                            title = re.sub(r'<[^>]+>', '', title).strip()
-                            
-                            results.append({
-                                'title': title,
-                                'url': url,
-                                'content': f'Bing search result for "{query}": {title}',
-                                'source': 'bing',
-                                'type': 'web_result',
-                                'relevance_score': max_results - i
-                            })
-                            
-                            if len(results) >= max_results:
-                                break
-                
-                if results:
-                    break  # Found results with this pattern
-            
-            # If no specific results, create confirmation result
-            if not results and any(term in html.lower() for term in ['search', 'results', query.lower()]):
-                results = [{
-                    'title': f'Bing search successful for "{query}"',
-                    'url': f'https://www.bing.com/search?q={quote_plus(query)}',
-                    'content': 'Successfully connected to Bing and received search results page. Search functionality is working.',
-                    'source': 'bing',
-                    'type': 'search_confirmed',
-                    'relevance_score': 3
-                }]
-        
-        except Exception as e:
-            self.logger.debug(f"Error parsing Bing results: {e}")
-        
-        return results
-
-    def _parse_yahoo_results(self, html: str, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Parse Yahoo search results using regex and string parsing."""
-        results = []
-        
-        try:
-            # Multiple patterns for Yahoo results
-            patterns = [
-                # Standard Yahoo pattern
-                r'<h3[^>]*><a[^>]+href="([^"]+)"[^>]*>([^<]+)</a></h3>',
-                # Alternative pattern
-                r'<a[^>]+href="([^"]+)"[^>]*><h3[^>]*>([^<]+)</h3></a>',
-                # Broader pattern
-                r'<a[^>]+href="(https?://[^"]+)"[^>]*>([^<]*(?:' + '|'.join(query.split()) + ')[^<]*)</a>'
-            ]
-            
-            for pattern in patterns:
-                matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
-                
-                for i, match in enumerate(matches[:max_results]):
-                    if len(match) >= 2:
-                        url, title = match[0], match[1]
-                        
-                        # Filter valid results
-                        if (url.startswith('http') and 
-                            'yahoo.com' not in url and
-                            len(title.strip()) > 3):
-                            
-                            title = re.sub(r'<[^>]+>', '', title).strip()
-                            
-                            results.append({
-                                'title': title,
-                                'url': url,
-                                'content': f'Yahoo search result for "{query}": {title}',
-                                'source': 'yahoo',
-                                'type': 'web_result',
-                                'relevance_score': max_results - i
-                            })
-                            
-                            if len(results) >= max_results:
-                                break
-                
-                if results:
-                    break  # Found results with this pattern
-            
-            # If no specific results, create confirmation result
-            if not results and any(term in html.lower() for term in ['search', 'results', query.lower()]):
-                results = [{
-                    'title': f'Yahoo search successful for "{query}"',
-                    'url': f'https://search.yahoo.com/search?p={quote_plus(query)}',
-                    'content': 'Successfully connected to Yahoo and received search results page. Search functionality is working.',
-                    'source': 'yahoo',
-                    'type': 'search_confirmed',
-                    'relevance_score': 3
-                }]
-        
-        except Exception as e:
-            self.logger.debug(f"Error parsing Yahoo results: {e}")
-        
-        return results
-    
-    async def _search_semantic_scholar(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
-        """
-        Search Semantic Scholar using their official API.
-        
-        Args:
-            query: Search query
-            max_results: Maximum number of results
-            
-        Returns:
-            List[Dict[str, Any]]: Search results
-        """
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-            
-            # Semantic Scholar Academic Graph API endpoint
-            url = "https://api.semanticscholar.org/graph/v1/paper/search/bulk"
-            
-            # Query parameters
-            params = {
-                'query': query,
-                'fields': 'paperId,title,url,year,abstract,authors,citationCount,publicationDate,openAccessPdf,publicationTypes,venue,fieldsOfStudy',
-                'limit': min(max_results, 100)  # API limit is 100
-            }
-            
-            # Headers with API key if available
-            headers = {'User-Agent': 'EuniceLiteratureAgent/1.0'}
-            api_key = self.config.get_api_key("semantic_scholar")
-            if api_key:
-                headers['x-api-key'] = api_key
-            
-            self.logger.info(f"Searching Semantic Scholar for: {query}")
-            self.literature_logger.info(f"📚 Semantic Scholar Search: '{query}' | Max Results: {max_results}")
-            
-            async with self.session.get(url, params=params, headers=headers) as response:
-                if response.status != 200:
-                    self.logger.warning(f"Semantic Scholar returned status {response.status}")
-                    return []
-                
-                response_text = await response.text()
-                self.logger.debug(f"Semantic Scholar response: {response_text[:500]}...")
-                
-                try:
-                    data = await response.json()
-                except Exception as json_error:
-                    self.logger.error(f"Failed to parse Semantic Scholar JSON: {json_error}")
-                    self.logger.error(f"Response text: {response_text[:200]}...")
-                    return []
-                
-                if not isinstance(data, dict):
-                    self.logger.error(f"Semantic Scholar returned non-dict data: {type(data)}")
-                    return []
-                
-                if 'data' not in data:
-                    self.logger.warning("No data field in Semantic Scholar response")
-                    self.logger.debug(f"Available fields: {list(data.keys())}")
-                    return []
-                
-                results = []
-                papers = data['data']
-                
-                for i, paper in enumerate(papers[:max_results]):
-                    # Extract basic paper info
-                    paper_id = paper.get('paperId', '')
-                    title = paper.get('title', 'Untitled Paper')
-                    paper_url = paper.get('url', f"https://www.semanticscholar.org/paper/{paper_id}")
-                    year = paper.get('year', 'Unknown')
-                    citation_count = paper.get('citationCount', 0)
-                    abstract = paper.get('abstract', '')
-                    venue = paper.get('venue')
-                    venue_name = ''
-                    if venue and isinstance(venue, dict):
-                        venue_name = venue.get('name', '')
-                    elif venue and isinstance(venue, str):
-                        venue_name = venue
-                    
-                    # Extract authors
-                    authors = paper.get('authors', [])
-                    author_names = [author.get('name', 'Unknown') for author in authors]
-                    author_str = ', '.join(author_names[:3])  # First 3 authors
-                    if len(authors) > 3:
-                        author_str += ' et al.'
-                    
-                    # Extract fields of study
-                    fields_of_study = paper.get('fieldsOfStudy', [])
-                    fields_str = ', '.join(fields_of_study[:3]) if fields_of_study else ''
-                    
-                    # Check for open access PDF
-                    open_access_pdf = paper.get('openAccessPdf')
-                    pdf_url = None
-                    if open_access_pdf and open_access_pdf.get('url'):
-                        pdf_url = open_access_pdf['url']
-                    
-                    # Build content description
-                    content_parts = [f"Academic paper: {title}"]
-                    if author_str:
-                        content_parts.append(f"Authors: {author_str}")
-                    if year and year != 'Unknown':
-                        content_parts.append(f"Year: {year}")
-                    if venue_name:
-                        content_parts.append(f"Venue: {venue_name}")
-                    if citation_count > 0:
-                        content_parts.append(f"Citations: {citation_count}")
-                    if fields_str:
-                        content_parts.append(f"Fields: {fields_str}")
-                    if abstract:
-                        # Add first 200 characters of abstract
-                        abstract_preview = abstract[:200] + "..." if len(abstract) > 200 else abstract
-                        content_parts.append(f"Abstract: {abstract_preview}")
-                    
-                    content = " | ".join(content_parts)
-                    
-                    # Determine link type and URL preference
-                    # Prefer PDF URLs over Semantic Scholar page URLs to avoid 202 errors
-                    link_type = "semantic_scholar"
-                    final_url = paper_url
-                    
-                    if pdf_url:
-                        final_url = pdf_url
-                        link_type = "open_access_pdf"
-                    
-                    # Mark Semantic Scholar URLs as potentially problematic for content extraction
-                    is_semantic_scholar_url = "semanticscholar.org/paper/" in final_url
-                    
-                    # Create result entry
-                    result = {
-                        'title': title,
-                        'url': final_url,
-                        'content': content,
-                        'source': 'semantic_scholar',
-                        'type': 'academic_paper',
-                        'link_type': link_type,
-                        'relevance_score': max_results - i,
-                        'skip_content_extraction': is_semantic_scholar_url,  # Flag for problematic URLs
-                        'metadata': {
-                            'paper_id': paper_id,
-                            'year': year,
-                            'citation_count': citation_count,
-                            'authors': author_names,
-                            'venue': venue_name,
-                            'fields_of_study': fields_of_study,
-                            'has_open_access_pdf': pdf_url is not None,
-                            'abstract_length': len(abstract) if abstract else 0
-                        }
-                    }
-                    
-                    results.append(result)
-                
-                self.logger.info(f"Found {len(results)} papers from Semantic Scholar")
-                self.literature_logger.info(f"📄 Semantic Scholar Results: {len(results)} papers found | Open Access PDFs: {sum(1 for r in results if r.get('link_type') == 'open_access_pdf')}")
-                return results
-                
-        except Exception as e:
-            self.logger.error(f"Semantic Scholar API search failed: {e}")
-            return []
-    
-    async def _search_google_scholar(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """
-        Search Google Scholar for academic papers.
-        
-        Args:
-            query: Search query
-            max_results: Maximum number of results
-            
-        Returns:
-            List[Dict[str, Any]]: Search results
-        """
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-                
-            # This is a simplified approach - in production, you'd use proper APIs
-            url = f"https://scholar.google.com/scholar?q={quote_plus(query)}&hl=en"
-            
-            async with self.session.get(url) as response:
-                if response.status != 200:
-                    return []
-                
-                html = await response.text()
-                results = []
-                
-                # Parse Google Scholar results more carefully
-                # Look for actual paper links (PDFs, DOIs, etc.) alongside titles
-                
-                # First, extract all result blocks
-                result_blocks = re.findall(r'<div[^>]*class="[^"]*gs_r[^"]*"[^>]*>(.*?)</div>(?=<div[^>]*class="[^"]*gs_r|$)', html, re.DOTALL | re.IGNORECASE)
-                
-                for i, block in enumerate(result_blocks[:max_results]):
-                    # Extract title from the block
-                    title_match = re.search(r'<h3[^>]*class="[^"]*gs_rt[^"]*"[^>]*>.*?<a[^>]+href="[^"]+"[^>]*>([^<]+)</a>', block, re.DOTALL | re.IGNORECASE)
-                    
-                    if not title_match:
-                        continue
-                    
-                    title = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
-                    
-                    # Look for PDF links or other direct access links in the same block
-                    pdf_link = re.search(r'<a[^>]+href="([^"]*\.pdf[^"]*)"', block, re.IGNORECASE)
-                    doi_link = re.search(r'<a[^>]+href="(https?://(?:dx\.)?doi\.org/[^"]+)"', block, re.IGNORECASE)
-                    arxiv_link = re.search(r'<a[^>]+href="(https?://arxiv\.org/[^"]+)"', block, re.IGNORECASE)
-                    pubmed_link = re.search(r'<a[^>]+href="(https?://pubmed\.ncbi\.nlm\.nih\.gov/[^"]+)"', block, re.IGNORECASE)
-                    
-                    # Prefer direct access links
-                    paper_url = None
-                    link_type = "citation"
-                    
-                    if pdf_link:
-                        paper_url = pdf_link.group(1)
-                        link_type = "pdf"
-                    elif doi_link:
-                        paper_url = doi_link.group(1)
-                        link_type = "doi"
-                    elif arxiv_link:
-                        paper_url = arxiv_link.group(1)
-                        link_type = "arxiv"
-                    elif pubmed_link:
-                        paper_url = pubmed_link.group(1)
-                        link_type = "pubmed"
-                    else:
-                        # Fall back to the main title link, but mark it as citation
-                        title_url_match = re.search(r'<h3[^>]*class="[^"]*gs_rt[^"]*"[^>]*>.*?<a[^>]+href="([^"]+)"', block, re.DOTALL | re.IGNORECASE)
-                        if title_url_match:
-                            paper_url = title_url_match.group(1)
-                            if paper_url.startswith('/'):
-                                paper_url = f"https://scholar.google.com{paper_url}"
-                    
-                    if title and paper_url and len(title) > 5:
-                        results.append({
-                            'title': title,
-                            'url': paper_url,
-                            'content': f'Academic paper: {title}',
-                            'source': 'google_scholar',
-                            'type': 'academic_paper',
-                            'link_type': link_type,
-                            'relevance_score': max_results - i
-                        })
-                
-                # Remove duplicates based on title similarity
-                unique_results = []
-                seen_titles = set()
-                
-                for result in results:
-                    title_lower = result['title'].lower()
-                    # Check if this title is too similar to existing ones
-                    is_duplicate = False
-                    for seen_title in seen_titles:
-                        if title_lower in seen_title or seen_title in title_lower:
-                            is_duplicate = True
-                            break
-                    
-                    if not is_duplicate:
-                        seen_titles.add(title_lower)
-                        unique_results.append(result)
-                
-                results = unique_results
-                
-                return results[:max_results]
-                
-        except Exception as e:
-            self.logger.error(f"Google Scholar search failed: {e}")
-            return []
-    
-    async def _search_pubmed(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
-        """
-        Search PubMed using NCBI E-utilities API.
-        
-        Args:
-            query: Search query
-            max_results: Maximum number of results
-            
-        Returns:
-            List[Dict[str, Any]]: Search results
-        """
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-            
-            self.logger.info(f"Searching PubMed for: {query}")
-            self.literature_logger.info(f"🧬 PubMed Search: '{query}' | Max Results: {max_results}")
-            
-            # Step 1: Use ESearch to get PMIDs
-            search_url = f"{self.search_engines['pubmed']}/esearch.fcgi"
-            
-            # Build search parameters
-            search_params = {
-                'db': 'pubmed',
-                'term': query,
-                'retmax': min(max_results, 100),  # PubMed API limit
-                'retmode': 'json',
-                'sort': 'relevance',
-                'tool': 'EuniceLiteratureAgent',
-                'email': 'eunice@research.ai'  # Should be configurable
-            }
-            
-            # Add API key if available (gracefully handle missing keys)
-            api_key = None
-            try:
-                api_key = self.config.get_api_key("pubmed") or self.config.get_api_key("ncbi")
-            except ValueError:
-                # API keys not configured, continue without them
-                self.logger.debug("PubMed/NCBI API keys not configured, using without authentication")
-            
-            if api_key:
-                search_params['api_key'] = api_key
-            
-            # Perform search request
-            async with self.session.get(search_url, params=search_params) as response:
-                if response.status != 200:
-                    self.logger.warning(f"PubMed ESearch returned status {response.status}")
-                    return []
-                
-                search_data = await response.json()
-                
-                if 'esearchresult' not in search_data:
-                    self.logger.warning("No esearchresult in PubMed response")
-                    return []
-                
-                search_result = search_data['esearchresult']
-                pmids = search_result.get('idlist', [])
-                
-                if not pmids:
-                    self.logger.info("No PMIDs found in PubMed search")
-                    return []
-                
-                self.logger.info(f"Found {len(pmids)} PMIDs from PubMed search")
-                
-                # Step 2: Use ESummary to get article details
-                summary_url = f"{self.search_engines['pubmed']}/esummary.fcgi"
-                
-                # Batch process PMIDs (ESummary can handle multiple IDs)
-                summary_params = {
-                    'db': 'pubmed',
-                    'id': ','.join(pmids),
-                    'retmode': 'json',
-                    'tool': 'EuniceLiteratureAgent',
-                    'email': 'eunice@research.ai'
-                }
-                
-                if api_key:
-                    summary_params['api_key'] = api_key
-                
-                async with self.session.get(summary_url, params=summary_params) as response:
-                    if response.status != 200:
-                        self.logger.warning(f"PubMed ESummary returned status {response.status}")
-                        return []
-                    
-                    summary_data = await response.json()
-                    
-                    if 'result' not in summary_data:
-                        self.logger.warning("No result in PubMed ESummary response")
-                        return []
-                    
-                    results = []
-                    summary_result = summary_data['result']
-                    
-                    # Process each article
-                    for i, pmid in enumerate(pmids):
-                        if pmid not in summary_result:
-                            continue
-                        
-                        article = summary_result[pmid]
-                        
-                        # Extract article information
-                        title = article.get('title', 'Untitled Article')
-                        authors = self._extract_pubmed_authors(article.get('authors', []))
-                        journal = article.get('source', 'Unknown Journal')
-                        pub_date = article.get('pubdate', 'Unknown Date')
-                        doi = article.get('elocationid', '')
-                        
-                        # Clean DOI if present
-                        if doi and doi.startswith('doi: '):
-                            doi = doi[5:]
-                        
-                        # Build PubMed URL
-                        pubmed_url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-                        
-                        # Prefer DOI URL if available
-                        final_url = pubmed_url
-                        link_type = "pubmed"
-                        
-                        if doi:
-                            final_url = f"https://doi.org/{doi}"
-                            link_type = "doi"
-                        
-                        # Build content description
-                        content_parts = [f"PubMed article: {title}"]
-                        if authors:
-                            content_parts.append(f"Authors: {authors}")
-                        if journal:
-                            content_parts.append(f"Journal: {journal}")
-                        if pub_date:
-                            content_parts.append(f"Published: {pub_date}")
-                        if doi:
-                            content_parts.append(f"DOI: {doi}")
-                        
-                        content = " | ".join(content_parts)
-                        
-                        # Create result entry
-                        result = {
-                            'title': title,
-                            'url': final_url,
-                            'content': content,
-                            'source': 'pubmed',
-                            'type': 'biomedical_article',
-                            'link_type': link_type,
-                            'relevance_score': max_results - i,
-                            'metadata': {
-                                'pmid': pmid,
-                                'authors': authors,
-                                'journal': journal,
-                                'publication_date': pub_date,
-                                'doi': doi,
-                                'pubmed_url': pubmed_url
-                            }
-                        }
-                        
-                        results.append(result)
-                    
-                    self.logger.info(f"Retrieved {len(results)} articles from PubMed")
-                    self.literature_logger.info(f"📚 PubMed Results: {len(results)} articles | DOIs: {sum(1 for r in results if r.get('link_type') == 'doi')}")
-                    
-                    return results
-                    
-        except Exception as e:
-            self.logger.error(f"PubMed API search failed: {e}")
-            return []
-    
-    def _extract_pubmed_authors(self, authors_data: List[Dict[str, Any]]) -> str:
-        """
-        Extract and format author names from PubMed author data.
-        
-        Args:
-            authors_data: List of author dictionaries from PubMed
-            
-        Returns:
-            str: Formatted author string
-        """
-        if not authors_data:
-            return ""
-        
-        author_names = []
-        for author in authors_data[:5]:  # Limit to first 5 authors
-            name = author.get('name', '')
-            if name:
-                author_names.append(name)
-        
-        if len(authors_data) > 5:
-            author_names.append('et al.')
-        
-        return ', '.join(author_names)
-    
-    async def _extract_web_content(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Extract content from web pages with enhanced error handling.
-        
-        Args:
-            payload: Extraction parameters
-            
-        Returns:
-            Dict[str, Any]: Extracted content
-        """
-        url = payload.get('url', '')
-        
-        if not url:
-            raise ValueError("URL is required for content extraction")
-        
-        try:
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-            
-            # Add retry logic for 202 status codes
-            max_retries = 2
-            retry_delay = 1.0
-            
-            for attempt in range(max_retries + 1):
-                async with self.session.get(url) as response:
-                    if response.status == 202 and attempt < max_retries:
-                        # 202 means "Accepted" - content might be processing
-                        self.logger.debug(f"Received 202 for {url}, retrying in {retry_delay}s (attempt {attempt + 1})")
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                        continue
-                    elif response.status == 202:
-                        # Final attempt still returns 202, treat as unavailable
-                        raise Exception(f"Content not ready after {max_retries} retries (status 202)")
-                    elif response.status != 200:
-                        raise Exception(f"Failed to fetch URL {url}: status {response.status}")
-                    
-                    # Success - extract content with proper encoding handling
-                    try:
-                        # Try to get content as text with proper encoding
-                        content_bytes = await response.read()
-                        
-                        # Try UTF-8 first, then fallback to other encodings
-                        try:
-                            html = content_bytes.decode('utf-8')
-                        except UnicodeDecodeError:
-                            try:
-                                html = content_bytes.decode('latin-1')
-                            except UnicodeDecodeError:
-                                html = content_bytes.decode('utf-8', errors='ignore')
-                                self.logger.warning(f"Used fallback encoding for {url}")
-                        
-                        soup = BeautifulSoup(html, 'html.parser')
-                    except Exception as encoding_error:
-                        raise Exception(f"Content encoding error for {url}: {encoding_error}")
-                    
-                    # Extract title
-                    title = soup.find('title')
-                    title_text = title.get_text(strip=True) if title else ''
-                    
-                    # Extract main content
-                    content = self._extract_main_content(soup)
-                    
-                    # Extract metadata
-                    metadata = self._extract_metadata(soup)
-                    
-                    return {
-                        'url': url,
-                        'title': title_text,
-                        'content': content,
-                        'metadata': metadata,
-                        'extracted_at': asyncio.get_event_loop().time(),
-                        'attempts_made': attempt + 1
-                    }
-            
-            # This should never be reached due to the loop logic, but for safety
-            raise Exception(f"Unexpected end of retry loop for {url}")
-                
-        except Exception as e:
-            self._log_content_extraction_error(url, e)
-            raise
-    
-    def _extract_main_content(self, soup: BeautifulSoup) -> str:
-        """
-        Extract main content from HTML.
-        
-        Args:
-            soup: BeautifulSoup object
-            
-        Returns:
-            str: Extracted content
-        """
-        # Remove unwanted elements
-        for element in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
-            element.decompose()
-        
-        # Try to find main content areas
-        main_content = None
-        
-        # Look for common content containers
-        for selector in ['main', 'article', '.content', '.main-content', '#content']:
-            element = soup.select_one(selector)
-            if element:
-                main_content = element
-                break
-        
-        if not main_content:
-            main_content = soup.find('body') or soup
-        
-        # Extract text
-        text = main_content.get_text(separator=' ', strip=True)
-        
-        # Clean up text
-        text = re.sub(r'\s+', ' ', text)
-        text = text.strip()
-        
-        # Limit content length
-        if len(text) > self.max_content_length:
-            text = text[:self.max_content_length] + '...'
-        
-        return text
-    
-    def _extract_metadata(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """
-        Extract metadata from HTML.
-        
-        Args:
-            soup: BeautifulSoup object
-            
-        Returns:
-            Dict[str, Any]: Extracted metadata
-        """
-        metadata = {}
-        
-        # Extract meta tags with regex as fallback for typing issues
-        try:
-            html_str = str(soup)
-            
-            # Extract meta tags using regex
-            meta_pattern = r'<meta[^>]+name=["\']([^"\']+)["\'][^>]+content=["\']([^"\']+)["\'][^>]*>'
-            meta_matches = re.findall(meta_pattern, html_str, re.IGNORECASE)
-            
-            for name, content in meta_matches:
-                metadata[name] = content
-            
-            # Extract property-based meta tags (Open Graph, etc.)
-            prop_pattern = r'<meta[^>]+property=["\']([^"\']+)["\'][^>]+content=["\']([^"\']+)["\'][^>]*>'
-            prop_matches = re.findall(prop_pattern, html_str, re.IGNORECASE)
-            
-            for prop, content in prop_matches:
-                metadata[prop] = content
-            
-            metadata['meta_found'] = len(meta_matches) + len(prop_matches)
-            
-        except Exception as e:
-            self.logger.debug(f"Error extracting metadata: {e}")
-            metadata['meta_found'] = 0
-        
-        return metadata
-    
-    def _should_skip_url_for_content_extraction(self, url: str) -> bool:
-        """
-        Determine if a URL should be skipped for content extraction based on known patterns.
-        
-        Args:
-            url: URL to check
-            
-        Returns:
-            bool: True if URL should be skipped
-        """
-        # Known problematic URL patterns that often return 202 or other issues
-        problematic_patterns = [
-            'semanticscholar.org/paper/',  # Often returns 202 status
-            'doi.org/',  # Usually redirects, not direct content
-            'dx.doi.org/',  # DOI redirect service
-            'abstract_only=true',  # Abstract-only pages
-            'citation_only=true',   # Citation-only pages
-            'mdpi.com/',  # Often returns 403 errors
-            'zhihu.com/',  # Often blocks automated access
-            'artificialaiming.net/',  # Known to return 403
-            'scindeks-clanci.ceon.rs/',  # PDF with encoding issues
-            '/pdf?version=',  # Direct PDF links often blocked
-        ]
-        
-        # Skip if URL contains any problematic patterns
-        for pattern in problematic_patterns:
-            if pattern in url:
-                return True
-                
-        return False
-    
-    def _remove_duplicates(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Remove duplicate results.
-        
-        Args:
-            results: List of search results
-            
-        Returns:
-            List[Dict[str, Any]]: Unique results
-        """
-        seen_urls = set()
-        unique_results = []
-        
-        for result in results:
-            url = result.get('url', '')
-            if url and url not in seen_urls:
-                seen_urls.add(url)
-                unique_results.append(result)
-        
-        return unique_results
-    
-    async def _rank_results(self, results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
-        """
-        Rank search results by relevance.
-        
-        Args:
-            results: List of search results
-            query: Original search query
-            
-        Returns:
-            List[Dict[str, Any]]: Ranked results
-        """
-        # Simple relevance scoring based on query terms
-        query_terms = query.lower().split()
-        
-        for result in results:
-            score = 0
-            title = result.get('title', '').lower()
-            content = result.get('content', '').lower()
-            
-            # Score based on query terms in title and content
-            for term in query_terms:
-                score += title.count(term) * 2  # Title matches are worth more
-                score += content.count(term)
-            
-            # Bonus for certain result types
-            if result.get('type') == 'academic_paper':
-                score += 1
-            elif result.get('type') == 'instant_answer':
-                score += 2
-            
-            result['relevance_score'] = score
-        
-        # Sort by relevance score
-        return sorted(results, key=lambda x: x.get('relevance_score', 0), reverse=True)
-    
-    async def _search_academic_papers(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Search for academic papers using Semantic Scholar API with Google Scholar fallback.
-        
-        Args:
-            payload: Dictionary containing query and max_results
-            
-        Returns:
-            Dict[str, Any]: Search results with metadata
-        """
-        query = payload.get('query', '')
-        max_results = payload.get('max_results', 10)
-        
-        # Try Semantic Scholar API first
-        self.logger.info(f"Attempting Semantic Scholar API search for: {query}")
-        results = await self._search_semantic_scholar(query, max_results)
-        
-        search_method = "semantic_scholar"
-        
-        # Fallback to Google Scholar if Semantic Scholar fails or returns no results
-        if not results:
-            self.logger.info("Semantic Scholar returned no results, falling back to Google Scholar")
-            results = await self._search_google_scholar(query, max_results)
-            search_method = "google_scholar_fallback"
-        
-        # Log search performance
-        total_found = len(results)
-        self.logger.info(f"Academic search completed using {search_method}: {total_found} results found")
-        
-        return {
-            'query': query,
-            'results': results,
-            'total_found': total_found,
-            'search_type': 'academic_papers',
-            'search_method': search_method
-        }
-    
-    async def _search_pubmed_action(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Search PubMed for biomedical literature.
-        
-        Args:
-            payload: Dictionary containing query and max_results
-            
-        Returns:
-            Dict[str, Any]: Search results with metadata
-        """
-        query = payload.get('query', '')
-        max_results = payload.get('max_results', 10)
-        
-        if not query:
-            raise ValueError("Query is required for PubMed search")
-        
-        self.logger.info(f"Starting PubMed search for: {query}")
-        results = await self._search_pubmed(query, max_results)
-        
-        # Log search performance
-        total_found = len(results)
-        self.logger.info(f"PubMed search completed: {total_found} results found")
-        
-        return {
-            'query': query,
-            'results': results,
-            'total_found': total_found,
-            'search_type': 'pubmed_biomedical',
-            'search_method': 'ncbi_eutils_api'
-        }
-    
-    async def _retrieve_documents(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Retrieve documents from URLs, with smart filtering for problematic URLs."""
-        urls = payload.get('urls', [])
-        
-        documents = []
-        skipped_urls = []
-        
-        for url in urls:
-            # Skip known problematic URL patterns
-            if self._should_skip_url_for_content_extraction(url):
-                self.logger.debug(f"Skipping content extraction for known problematic URL: {url}")
-                skipped_urls.append(url)
-                continue
-                
-            try:
-                doc = await self._extract_web_content({'url': url})
-                documents.append(doc)
-            except Exception as e:
-                self._log_content_extraction_error(url, e)
-                skipped_urls.append(url)
-                continue
-        
-        return {
-            'documents': documents,
-            'total_retrieved': len(documents),
-            'total_requested': len(urls),
-            'skipped_urls': skipped_urls,
-            'total_skipped': len(skipped_urls)
-        }
-    
-    async def _filter_results(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter results based on criteria."""
-        results = payload.get('results', [])
-        min_score = payload.get('min_relevance_score', self.relevance_threshold)
-        
-        filtered = [
-            result for result in results
-            if result.get('relevance_score', 0) >= min_score
-        ]
-        
-        return {
-            'results': filtered,
-            'total_filtered': len(filtered),
-            'total_original': len(results)
-        }
-    
-    async def _rank_relevance(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Rank results by relevance."""
-        results = payload.get('results', [])
-        query = payload.get('query', '')
-        
-        ranked = await self._rank_results(results, query)
-        
-        return {
-            'results': ranked,
-            'query': query,
-            'ranking_method': 'term_frequency'
-        }
-
-    # ------------------------------------------------------#
-    #           Higher-level workflow functions             #
-    # ------------------------------------------------------#
-    
-    async def academic_research_workflow(self, research_topic: str, max_papers: int = 20) -> Dict[str, Any]:
-        """
-        Complete academic research data collection workflow.
-        
-        Args:
-            research_topic: Research topic or keywords
-            max_papers: Maximum number of papers to search for initially
-            
-        Returns:
-            Dict containing all research results and analysis
-        """
-        self.logger.info(f"Starting academic research workflow for: {research_topic}")
-        self.literature_logger.info(f"🎓 Academic Research Workflow Started: '{research_topic}' | Max Papers: {max_papers}")
-        
-        try:
-            # 1. Initial broad academic search
-            broad_search = await self._search_academic_papers({
-                'query': research_topic,
-                'max_results': max_papers
-            })
-            
-            # 2. Extract content from top papers (prefer non-problematic URLs)
-            paper_urls = []
-            for result in broad_search['results'][:10]:  # Check more results
-                url = result['url']
-                # Prefer PDFs and non-problematic URLs
-                if (not self._should_skip_url_for_content_extraction(url) or 
-                    result.get('link_type') == 'open_access_pdf'):
-                    paper_urls.append(url)
-                    if len(paper_urls) >= 5:  # Still limit to 5 for content extraction
-                        break
-            
-            # If we couldn't find 5 good URLs, fill with whatever we have
-            if len(paper_urls) < 5:
-                for result in broad_search['results'][:5]:
-                    if result['url'] not in paper_urls:
-                        paper_urls.append(result['url'])
-                        if len(paper_urls) >= 5:
-                            break
-            paper_content = await self._retrieve_documents({
-                'urls': paper_urls
-            })
-            
-            # 3. Filter for high-quality results
-            filtered_results = await self._filter_results({
-                'results': broad_search['results'],
-                'min_relevance_score': 0.7
-            })
-            
-            # 4. Focused search based on initial findings (simplified)
-            focused_search = await self._search_academic_papers({
-                'query': f"{research_topic} recent studies",
-                'max_results': 10
-            })
-            
-            # Log workflow completion summary
-            self.literature_logger.info(f"✅ Academic Research Complete: {broad_search['total_found']} papers found | {paper_content['total_retrieved']}/{len(paper_urls)} content extracted | {filtered_results['total_filtered']} high-quality results")
-            
-            return {
-                'research_topic': research_topic,
-                'broad_search': broad_search,
-                'paper_content': paper_content,
-                'filtered_results': filtered_results,
-                'focused_search': focused_search,
-                'total_papers_found': broad_search['total_found'],
-                'content_extracted': paper_content['total_retrieved']
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Academic research workflow failed: {e}")
-            raise
-
-    async def biomedical_research_workflow(self, research_topic: str, max_papers: int = 20) -> Dict[str, Any]:
-        """
-        Complete biomedical research workflow using PubMed and other sources.
-        
-        Args:
-            research_topic: Biomedical research topic or keywords
-            max_papers: Maximum number of papers to search for initially
-            
-        Returns:
-            Dict containing all biomedical research results and analysis
-        """
-        self.logger.info(f"Starting biomedical research workflow for: {research_topic}")
-        self.literature_logger.info(f"🧬 Biomedical Research Workflow Started: '{research_topic}' | Max Papers: {max_papers}")
-        
-        try:
-            # 1. Primary PubMed search
-            pubmed_search = await self._search_pubmed_action({
-                'query': research_topic,
-                'max_results': max_papers
-            })
-            
-            # 2. Supplementary academic search (Semantic Scholar, Google Scholar)
-            academic_search = await self._search_academic_papers({
-                'query': research_topic,
-                'max_results': max_papers // 2
-            })
-            
-            # 3. Extract content from top biomedical papers (prioritize DOI links)
-            paper_urls = []
-            for result in pubmed_search['results'][:10]:  # Check more results
-                url = result['url']
-                # Prefer DOI links over PubMed page links for content extraction
-                if result.get('link_type') == 'doi' or not self._should_skip_url_for_content_extraction(url):
-                    paper_urls.append(url)
-                    if len(paper_urls) >= 5:  # Limit to 5 for content extraction
-                        break
-            
-            # Add some academic papers if we need more URLs
-            if len(paper_urls) < 5:
-                for result in academic_search['results'][:5]:
-                    if result['url'] not in paper_urls and not self._should_skip_url_for_content_extraction(result['url']):
-                        paper_urls.append(result['url'])
-                        if len(paper_urls) >= 5:
-                            break
-            
-            paper_content = await self._retrieve_documents({
-                'urls': paper_urls
-            })
-            
-            # 4. Filter for high-quality biomedical results
-            combined_results = pubmed_search['results'] + academic_search['results']
-            filtered_results = await self._filter_results({
-                'results': combined_results,
-                'min_relevance_score': 0.6  # Slightly lower threshold for biomedical specificity
-            })
-            
-            # 5. Focused clinical/treatment search if appropriate
-            clinical_search = None
-            clinical_keywords = ['treatment', 'therapy', 'clinical', 'trial', 'intervention', 'drug']
-            if any(keyword in research_topic.lower() for keyword in clinical_keywords):
-                clinical_search = await self._search_pubmed_action({
-                    'query': f"{research_topic} clinical trial treatment",
-                    'max_results': 10
-                })
-            
-            # Log workflow completion summary
-            total_pubmed = pubmed_search['total_found']
-            total_academic = academic_search['total_found']
-            total_clinical = clinical_search['total_found'] if clinical_search else 0
-            
-            self.literature_logger.info(f"✅ Biomedical Research Complete: PubMed: {total_pubmed} | Academic: {total_academic} | Clinical: {total_clinical} | Content: {paper_content['total_retrieved']}/{len(paper_urls)} | Filtered: {filtered_results['total_filtered']}")
-            
-            return {
-                'research_topic': research_topic,
-                'pubmed_search': pubmed_search,
-                'academic_search': academic_search,
-                'clinical_search': clinical_search,
-                'paper_content': paper_content,
-                'filtered_results': filtered_results,
-                'total_papers_found': total_pubmed + total_academic + total_clinical,
-                'content_extracted': paper_content['total_retrieved'],
-                'biomedical_focus': True
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Biomedical research workflow failed: {e}")
-            raise
-
-    async def multi_source_validation(self, claim: str) -> Dict[str, Any]:
-        """
-        Validate information across multiple sources and types.
-        
-        Args:
-            claim: Information claim to validate
-            
-        Returns:
-            Dict containing validation results from multiple sources
-        """
-        self.logger.info(f"Starting multi-source validation for: {claim}")
-        
-        try:
-            # Search across different engines
-            google_results = await self._search_information({
-                'query': claim,
-                'max_results': 5,
-                'search_engines': ['google']
-            })
-            
-            academic_results = await self._search_academic_papers({
-                'query': claim,
-                'max_results': 3
-            })
-            
-            news_results = await self._search_information({
-                'query': f"{claim} news recent",
-                'max_results': 5,
-                'search_engines': ['yahoo', 'bing']
-            })
-            
-            # Extract content for analysis
-            all_urls = []
-            for source in [google_results, academic_results, news_results]:
-                all_urls.extend([r['url'] for r in source['results']])
-            
-            content_analysis = await self._retrieve_documents({
-                'urls': all_urls
-            })
-            
-            return {
-                'claim': claim,
-                'web_sources': google_results,
-                'academic_sources': academic_results,
-                'news_sources': news_results,
-                'content_analysis': content_analysis,
-                'total_sources': len(all_urls),
-                'content_retrieved': content_analysis['total_retrieved']
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Multi-source validation failed: {e}")
-            raise
-
-    async def cost_optimized_search(self, query: str, budget_level: str = 'medium') -> Dict[str, Any]:
-        """
-        Optimize search strategy based on budget constraints.
-        
-        Args:
-            query: Search query
-            budget_level: 'low', 'medium', or 'high'
-            
-        Returns:
-            Dict containing optimized search results
-        """
-        self.logger.info(f"Starting cost-optimized search with budget level: {budget_level}")
-        
-        try:
-            if budget_level == 'low':
-                # Single engine, fewer results
-                results = await self._search_information({
-                    'query': query,
-                    'max_results': 3,
-                    'search_engines': ['google']
-                })
-                
-            elif budget_level == 'medium':
-                # Two engines, moderate results
-                results = await self._search_information({
-                    'query': query,
-                    'max_results': 7,
-                    'search_engines': ['google', 'bing']
-                })
-                
-            else:  # high budget
-                # All engines, comprehensive results including academic sources
-                results = await self._search_information({
-                    'query': query,
-                    'max_results': 15,
-                    'search_engines': ['google', 'bing', 'yahoo', 'semantic_scholar']
-                })
-            
-            results['budget_level'] = budget_level
-            results['optimization_strategy'] = f"Optimized for {budget_level} budget"
-            
-            return results
-            
-        except Exception as e:
-            self.logger.error(f"Cost-optimized search failed: {e}")
-            raise
-
-    async def comprehensive_research_pipeline(self, topic: str, include_academic: bool = True, 
-                                           include_news: bool = True, include_pubmed: Optional[bool] = None, max_results: int = 10) -> Dict[str, Any]:
-        """
-        Complete research pipeline combining multiple search strategies.
-        
-        Args:
-            topic: Research topic
-            include_academic: Whether to include academic sources
-            include_news: Whether to include news sources
-            include_pubmed: Whether to include PubMed biomedical sources (auto-detected if None)
-            max_results: Maximum results per search type
-            
-        Returns:
-            Dict containing comprehensive research results
-        """
-        self.logger.info(f"Starting comprehensive research pipeline for: {topic}")
-        
-        # Auto-detect if PubMed should be included based on biomedical keywords
-        if include_pubmed is None:
-            biomedical_keywords = [
-                'medical', 'medicine', 'health', 'disease', 'drug', 'treatment', 'therapy',
-                'clinical', 'patient', 'diagnosis', 'cancer', 'virus', 'bacteria', 'gene',
-                'protein', 'dna', 'rna', 'cell', 'biology', 'biomedical', 'pharmaceutical',
-                'vaccine', 'antibody', 'hormone', 'neurology', 'cardiology', 'oncology'
-            ]
-            include_pubmed = any(keyword in topic.lower() for keyword in biomedical_keywords)
-        
-        self.literature_logger.info(f"🔬 Comprehensive Research Pipeline Started: '{topic}' | Academic: {include_academic} | News: {include_news} | PubMed: {include_pubmed} | Max Results: {max_results}")
-        
-        try:
-            results = {
-                'topic': topic,
-                'web_search': None,
-                'academic_search': None,
-                'pubmed_search': None,
-                'news_search': None,
-                'content_analysis': None,
-                'filtered_results': None,
-                'final_ranking': None
-            }
-            
-            # 1. Primary web search
-            results['web_search'] = await self._search_information({
-                'query': topic,
-                'max_results': max_results,
-                'search_engines': ['google', 'bing']
-            })
-            
-            # 2. Academic search if requested
-            if include_academic:
-                results['academic_search'] = await self._search_academic_papers({
-                    'query': topic,
-                    'max_results': max_results // 2
-                })
-            
-            # 3. PubMed biomedical search if requested
-            if include_pubmed:
-                results['pubmed_search'] = await self._search_pubmed_action({
-                    'query': topic,
-                    'max_results': max_results // 2
-                })
-            
-            # 4. News search if requested
-            if include_news:
-                results['news_search'] = await self._search_information({
-                    'query': f"{topic} news recent",
-                    'max_results': max_results // 2,
-                    'search_engines': ['yahoo', 'bing']
-                })
-            
-            # 5. Content extraction from top results
-            all_urls = [r['url'] for r in results['web_search']['results'][:3]]
-            if results['academic_search']:
-                all_urls.extend([r['url'] for r in results['academic_search']['results'][:2]])
-            if results['pubmed_search']:
-                all_urls.extend([r['url'] for r in results['pubmed_search']['results'][:2]])
-            if results['news_search']:
-                all_urls.extend([r['url'] for r in results['news_search']['results'][:2]])
-            
-            results['content_analysis'] = await self._retrieve_documents({
-                'urls': all_urls
-            })
-            
-            # 6. Filter and rank all results
-            all_search_results = results['web_search']['results']
-            if results['academic_search']:
-                all_search_results.extend(results['academic_search']['results'])
-            if results['pubmed_search']:
-                all_search_results.extend(results['pubmed_search']['results'])
-            if results['news_search']:
-                all_search_results.extend(results['news_search']['results'])
-            
-            results['filtered_results'] = await self._filter_results({
-                'results': all_search_results,
-                'min_relevance_score': 0.5
-            })
-            
-            results['final_ranking'] = await self._rank_relevance({
-                'results': results['filtered_results']['results'],
-                'query': topic
-            })
-            
-            # Add summary statistics
-            results['summary'] = {
-                'total_sources_searched': len(all_search_results),
-                'high_quality_sources': results['filtered_results']['total_filtered'],
-                'content_extracted': results['content_analysis']['total_retrieved'],
-                'final_ranked_results': len(results['final_ranking']['results'])
-            }
-            
-            # Log completion summary
-            summary = results['summary']
-            self.literature_logger.info(f"🏁 Comprehensive Research Complete: {summary['total_sources_searched']} sources | {summary['high_quality_sources']} high-quality | {summary['content_extracted']} content extracted | {summary['final_ranked_results']} final results")
-            
-            return results
-            
-        except Exception as e:
-            self.logger.error(f"Comprehensive research pipeline failed: {e}")
-            raise
-
-    async def fact_verification_workflow(self, claim: str, require_academic: bool = True) -> Dict[str, Any]:
-        """
-        Comprehensive fact verification across multiple source types.
-        
-        Args:
-            claim: Fact or claim to verify
-            require_academic: Whether to require academic sources for verification
-            
-        Returns:
-            Dict containing verification results and credibility analysis
-        """
-        self.logger.info(f"Starting fact verification workflow for: {claim}")
-        self.literature_logger.info(f"🔍 Fact Verification Started: '{claim}' | Require Academic: {require_academic}")
-        
-        try:
-            # Perform searches concurrently
-            academic_verification, news_verification, official_verification = await asyncio.gather(
-                self._search_academic_papers({
-                    'query': f"{claim} research paper study",
-                    'max_results': 5
-                }),
-                self._search_information({
-                    'query': f"{claim} news announcement",
-                    'max_results': 5,
-                    'search_engines': ['google', 'bing']
-                }),
-                self._search_information({
-                    'query': f"{claim} official documentation",
-                    'max_results': 3,
-                    'search_engines': ['google']
-                })
-            )
-            
-            # Extract content for detailed analysis
-            all_urls = []
-            for source in [academic_verification, news_verification, official_verification]:
-                all_urls.extend([r['url'] for r in source['results']])
-            
-            content_analysis = await self._retrieve_documents({
-                'urls': all_urls
-            })
-            
-            # Analyze source credibility
-            all_results = (academic_verification['results'] + 
-                          news_verification['results'] + 
-                          official_verification['results'])
-            
-            high_credibility = await self._filter_results({
-                'results': all_results,
-                'min_relevance_score': 0.6
-            })
-            
-            # Determine verification status
-            verification_status = "unverified"
-            if academic_verification['total_found'] > 0 and high_credibility['total_filtered'] >= 3:
-                verification_status = "highly_credible"
-            elif high_credibility['total_filtered'] >= 2:
-                verification_status = "moderately_credible"
-            elif len(all_results) > 0:
-                verification_status = "low_credibility"
-            
-            result_dict = {
-                'claim': claim,
-                'verification_status': verification_status,
-                'academic_sources': academic_verification,
-                'news_sources': news_verification,
-                'official_sources': official_verification,
-                'content_analysis': content_analysis,
-                'high_credibility_sources': high_credibility,
-                'summary': {
-                    'academic_sources_found': len(academic_verification['results']),
-                    'news_sources_found': len(news_verification['results']),
-                    'official_sources_found': len(official_verification['results']),
-                    'high_credibility_count': high_credibility['total_filtered'],
-                    'content_extracted': content_analysis['total_retrieved']
-                }
-            }
-            
-            # Log verification completion
-            summary = result_dict['summary']
-            self.literature_logger.info(f"✅ Fact Verification Complete: Status='{verification_status}' | Academic: {summary['academic_sources_found']} | News: {summary['news_sources_found']} | Official: {summary['official_sources_found']} | High Credibility: {summary['high_credibility_count']}")
-            
-            return result_dict
-            
-        except Exception as e:
-            self.logger.error(f"Fact verification workflow failed: {e}")
-            raise
