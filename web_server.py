@@ -268,6 +268,7 @@ app = FastAPI(
     tags_metadata=[
         {"name": "health", "description": "System health and status"},
         {"name": "v2-hierarchical", "description": "V2 Hierarchical Research API"},
+        {"name": "v2-academic-search", "description": "V2 Academic Search API"},
         {"name": "websockets", "description": "Real-time WebSocket connections"}
     ]
 )
@@ -284,8 +285,10 @@ app.add_middleware(
 # Include V2 hierarchical research API router
 # Import ErrorResponse from V2 API for exception handlers
 from src.models.hierarchical_data_models import ErrorResponse
+from src.api.academic_search_api import v2_academic_router
 # Set the database manager for V2 API (will be set during startup)
 app.include_router(v2_router)
+app.include_router(v2_academic_router, tags=["v2-academic-search"])
 
 # Simple API middleware for consistent headers
 @app.middleware("http")
