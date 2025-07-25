@@ -834,7 +834,7 @@ def main():
 
     parser.add_argument("input", help="Input PRISMA JSON file")
     parser.add_argument(
-        "-o", "--output", default="thesis_output", help="Output directory"
+        "-o", "--output", default="exports", help="Output directory"
     )
     parser.add_argument(
         "-p", "--provider", default="openai", choices=["openai"], help="AI provider"

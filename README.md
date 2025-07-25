@@ -9,6 +9,7 @@ The platform specializes in hierarchical research organization, multi-agent coll
 ## 🚀 Key Features
 
 ### Multi-Agent Coordination - **Project Management**: Comprehensive project organization with hierarchical research topics
+
 - **Conversation Tracking**: Advanced conversation management with persistent storage
 - **Research Task Organization**: Structured task management with dependency tracking
 - **Hierarchical Data Models**: Complex research structures with nested relationships
@@ -16,6 +17,7 @@ The platform specializes in hierarchical research organization, multi-agent coll
 - **Persona Consultation System**: Real-time expert consultation through specialized AI personas
 
 ### Research Capabilities - **Enhanced Academic Search**: Semantic Scholar API integration for high-quality academic papers
+
 - **Multi-Source Research**: Web search across Google, Bing, Yahoo with academic source prioritization
 - **Systematic Literature Reviews**: PRISMA-compliant systematic review generation
 - **Thesis Generation**: Transform systematic reviews into PhD-quality literature review chapters
@@ -26,6 +28,7 @@ The platform specializes in hierarchical research organization, multi-agent coll
 - **Export Functionality**: Research data export in multiple formats (PDF, Markdown, LaTeX, HTML, DOCX)
 
 ### Thesis Generation System 🎓 - **AI-Powered Analysis**: GPT-4 integration for intelligent theme extraction and gap analysis
+
 - **Multiple Output Formats**: Markdown, LaTeX, HTML, PDF, DOCX
 - **Deterministic Generation**: Reproducible outputs with SHA-256 caching (temp=0, top_p=1)
 - **Academic Quality**: PhD-level literature reviews with proper citations and formatting
@@ -35,6 +38,7 @@ The platform specializes in hierarchical research organization, multi-agent coll
 - **Template System**: Jinja2 templates for consistent academic formatting
 
 ### Technical Features - **MCP (Model Context Protocol) Server**: Advanced microservices coordination with persona integration
+
 - **Real-time WebSocket Communication**: Live updates, collaboration, and expert consultations
 - **RESTful API**: Comprehensive backend API for all platform operations
 - **Modern React Frontend**: Responsive web interface with TypeScript
@@ -93,6 +97,7 @@ See [Persona Documentation](docs/Personas/README.md) for detailed role descripti
 ## 🛠️ Installation & Setup
 
 ### Prerequisites - **Python 3.11+** (recommended for optimal performance)
+
 - **Node.js 18+** (for frontend development)
 - **Git** (for version control)
 - **Virtual Environment** (strongly recommended)
@@ -207,8 +212,8 @@ python thesis_cli.py tests/literature/comprehensive_literature_review.json
 # Advanced usage with custom configuration
 python thesis_cli.py data/review.json -c src/thesis/config/thesis_config.yaml --formats latex pdf
 
-# Automated processing (skip human checkpoints)
-python thesis_cli.py data/review.json --no-checkpoints -o my_thesis_output
+# Automated processing (skip human checkpoints) - outputs to exports directory
+python thesis_cli.py data/review.json --no-checkpoints -o exports
 ```
 
 **What it generates:**
@@ -221,6 +226,7 @@ python thesis_cli.py data/review.json --no-checkpoints -o my_thesis_output
 - Interactive HTML and clean Markdown formats
 
 ### Alternative Setup Scripts - `./setup.sh` - Basic Python environment setup
+
 - `./setup_web.sh` - Web-specific setup with frontend build
 
 ## 📁 Project Structure
@@ -297,10 +303,12 @@ SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 - Get your free API key at: [https://www.semanticscholar.org/product/api#api-key](https://www.semanticscholar.org/product/api#api-key)
 
 ### Configuration Files - `.env` - API keys and environment variables
+
 - `config/default_config.json` - Default platform settings
 - `pytest.ini` - Test configuration
 
 ## 📚 Documentation - [Architecture Overview](docs/Architecture.md)
+
 - [Research Manager](docs/Research_Manager.md)
 - [MCP Persona System](docs/MCP_Persona_System.md)
 - [Persona Quick Start](docs/Persona_Quick_Start.md)

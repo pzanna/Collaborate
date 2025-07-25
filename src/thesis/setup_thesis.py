@@ -97,7 +97,7 @@ output:
     - markdown
     - latex
    -html
-  directory: thesis_output
+  directory: exports
   include_cache: true
   save_intermediate: true
 

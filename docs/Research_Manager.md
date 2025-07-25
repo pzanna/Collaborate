@@ -157,7 +157,7 @@ class ResearchContext:
     completed_stages: List[ResearchStage] = field(default_factory=list)
     failed_stages: List[ResearchStage] = field(default_factory=list)
     retry_count: int = 0
-    max_retries: int = 3
+    max_retries: int = 5
 
     # Cost management
     estimated_cost: float = 0.0

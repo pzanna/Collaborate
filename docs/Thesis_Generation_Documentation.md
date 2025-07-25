@@ -99,7 +99,7 @@ ai:
 # Output Configuration  
 output:
   formats: [markdown, latex, html]
-  directory: thesis_output
+  directory: exports
   include_cache: true
 
 # Processing Configuration

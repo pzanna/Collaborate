@@ -24,6 +24,7 @@ from ..external.database_connectors import (ArxivConnector, DatabaseManager,
                                             PubMedConnector,
                                             SemanticScholarConnector)
 from ..mcp.protocols import ResearchAction
+from ..storage.hierarchical_database import HierarchicalDatabaseManager
 from .base_agent import BaseAgent
 
 
@@ -51,11 +52,14 @@ class LiteratureAgent(BaseAgent):
         # Initialize database manager
         self.db_manager = DatabaseManager()
 
+        # Initialize hierarchical database manager for task updates
+        self.hierarchical_db = HierarchicalDatabaseManager()
+
         # Initialize database connectors
         self._init_database_connectors()
 
         # Academic search settings (no direct external connections)
-        self.max_results_per_search = 10
+        self.max_results_per_search = 3
         self.max_pages_per_result = 3
         self.request_timeout = 30
 
@@ -223,7 +227,7 @@ class LiteratureAgent(BaseAgent):
             self.logger.error(f"Failed to initialize database connectors: {e}")
 
     async def search_semantic_scholar_cached(
-        self, query: str, max_results: int = 10, use_cache: bool = True
+        self, query: str, max_results: int = 5, use_cache: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Search Semantic Scholar with caching support.
@@ -298,7 +302,7 @@ class LiteratureAgent(BaseAgent):
     async def search_pubmed_structured(
         self,
         query: str,
-        max_results: int = 10,
+        max_results: int = 5,
         search_fields: Optional[List[str]] = None,
         date_range: Optional[Dict[str, str]] = None,
         use_cache: bool = True,
@@ -382,7 +386,7 @@ class LiteratureAgent(BaseAgent):
     async def search_arxiv_structured(
         self,
         query: str,
-        max_results: int = 10,
+        max_results: int = 5,
         search_fields: Optional[List[str]] = None,
         use_cache: bool = True,
     ) -> List[Dict[str, Any]]:
@@ -461,14 +465,15 @@ class LiteratureAgent(BaseAgent):
             return []
 
     async def search_term_generator(
-        self, plan: Dict[str, Any], max_results_per_source: int = 10
+        self, plan: Dict[str, Any], max_results_per_source: int = 3, task_id: Optional[str] = None
     ):
         """
         Uses AI to generate search terms for comprehensive academic search.
 
         Args:
-            query: Research plan in json format
+            plan: Research plan in json format
             max_results_per_source: Max results to return
+            task_id: Task ID for storing reasoning output in database
 
         Returns:
             List[Dict[str, Any]]: Search results in Literature Agent format
@@ -486,10 +491,11 @@ class LiteratureAgent(BaseAgent):
             f"Plan: {plan}\n\n"
             "Format your response in JSON with the following structure:\n"
             "{\n"
-            '    "topic 1": ["Search String 1", "Search String 2", ...],\n'
-            '    "topic 2": ["Search String 1", "Search String 2", ...],\n'
-            '    "topic 3": ["Search String 1", "Search String 2", ...],\n'
-            "    ...\n"
+            '    "topic 1": ["Search String 1", "Search String 2", "Search String 3"],\n'
+            '    "topic 2": ["Search String 1", "Search String 2", "Search String 3"],\n'
+            '    "topic 3": ["Search String 1", "Search String 2", "Search String 3"],\n'
+            '    "topic 4": ["Search String 1", "Search String 2", "Search String 3"],\n'
+            '    "topic 5": ["Search String 1", "Search String 2", "Search String 3"]\n'
             "}\n"
             "Ensure the search strings are specific, relevant, and suitable for "
             "academic databases. Provide 5 topics, each with 3 search strings.\n"
@@ -497,14 +503,33 @@ class LiteratureAgent(BaseAgent):
 
         # Get AI response
         response = await self._get_ai_response(prompt)
+
+        # Store the AI reasoning output in the database if task_id is provided
+        if response and task_id:
+            try:
+                await self._store_search_term_generation(task_id, response)
+            except Exception as e:
+                self.logger.error(f"Failed to store search term generation for task {task_id}: {e}")
+
         # Prepare final results list
         final_results: List[Dict[str, Any]] = []
         if response:
             try:
                 # Parse the JSON response and call comprehensive_academic_search for each search string
                 search_terms = json.loads(response)
+                
+                # Limit to maximum of 15 search strings (5 topics x 3 strings per topic)
+                search_count = 0
+                max_search_strings = 15
+                
                 for topic, terms in search_terms.items():
+                    if search_count >= max_search_strings:
+                        break
+                        
                     for term in terms:
+                        if search_count >= max_search_strings:
+                            break
+                            
                         # The comprehensive_academic_search returns a dict of lists.
                         results_by_source = await self.comprehensive_academic_search(
                             term, max_results_per_source=max_results_per_source
@@ -522,11 +547,60 @@ class LiteratureAgent(BaseAgent):
                                 "results": all_results_for_term,
                             }
                         )
+                        
+                        search_count += 1
+
+                # Log how many search strings were processed
+                self.logger.info(f"Processed {search_count} search strings (limited to {max_search_strings})")
 
             except json.JSONDecodeError:
                 self.logger.error("Failed to parse AI response")
 
         return final_results
+
+    async def _store_search_term_generation(self, task_id: str, reasoning_output: str) -> None:
+        """
+        Update the search term generation output in the research_tasks metadata field.
+
+        Args:
+            task_id: The task ID to update
+            reasoning_output: The AI reasoning output to store (search terms generation)
+        """
+        try:
+            # Get current task to preserve existing metadata
+            current_task = self.hierarchical_db.get_research_task(task_id)
+            
+            # Parse existing metadata or create new
+            existing_metadata = {}
+            if current_task and current_task.get('metadata'):
+                try:
+                    existing_metadata = json.loads(current_task.get('metadata', '{}'))
+                except json.JSONDecodeError:
+                    existing_metadata = {}
+            
+            # Add search term generation output to metadata
+            existing_metadata['search_term_generation'] = {
+                'ai_response': reasoning_output,
+                'timestamp': datetime.now().isoformat(),
+                'agent': 'literature_agent'
+            }
+            
+            task_data = {
+                "id": task_id,
+                "metadata": json.dumps(existing_metadata)
+            }
+            
+            # Use run_in_executor to handle the synchronous database operation
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, lambda: self.hierarchical_db.update_research_task(task_data)
+            )
+            
+            self.logger.info(f"Updated search term generation output for task {task_id} in metadata")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to update search term generation output for task {task_id}: {e}")
+            raise
 
     async def comprehensive_academic_search(
         self,
@@ -813,7 +887,7 @@ class LiteratureAgent(BaseAgent):
         """
         return await self.cache_manager.find_similar_papers(title)
 
-    async def _search_academic_papers(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _search_academic_papers(self, payload: Dict[str, Any], task_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Search for academic papers using an AI-generated search plan.
 
@@ -844,7 +918,7 @@ class LiteratureAgent(BaseAgent):
 
             # Generate search terms and perform searches for each
             generated_results = await self.search_term_generator(
-                plan=research_plan, max_results_per_source=max_results_per_source
+                plan=research_plan, max_results_per_source=max_results_per_source, task_id=task_id
             )
 
             # The result is a list of dicts, each with a 'results' key containing papers.
@@ -940,7 +1014,7 @@ class LiteratureAgent(BaseAgent):
         payload = task.payload
 
         if action == "search_academic_papers":
-            return await self._search_academic_papers(payload)
+            return await self._search_academic_papers(payload, task.task_id)
 
         else:
             raise ValueError(f"Unknown action: {action}")

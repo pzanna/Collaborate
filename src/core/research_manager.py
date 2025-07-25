@@ -48,6 +48,7 @@ class ResearchStage(Enum):
     Attributes:
         PLANNING: Initial planning and setup of the research task.
         LITERATURE_REVIEW: Systematic literature review and information gathering.
+        SYSTEMATIC_REVIEW: Comprehensive systematic review following PRISMA guidelines.
         REASONING: Analysis and reasoning over gathered information.
         EXECUTION: Execution of research actions and experiments.
         SYNTHESIS: Synthesis and integration of results into final output.
@@ -57,6 +58,7 @@ class ResearchStage(Enum):
 
     PLANNING = "planning"
     LITERATURE_REVIEW = "literature_review"
+    SYSTEMATIC_REVIEW = "systematic_review"
     REASONING = "reasoning"
     EXECUTION = "execution"
     SYNTHESIS = "synthesis"
@@ -455,6 +457,11 @@ class ResearchManager:
                         ResearchStage.LITERATURE_REVIEW,
                         self._execute_literature_review_stage,
                     ),
+                    (ResearchStage.SYNTHESIS, self._execute_synthesis_stage),
+                    (
+                        ResearchStage.SYSTEMATIC_REVIEW,
+                        self._execute_systematic_review_stage,
+                    ),
                 ]
                 self.logger.info(
                     f"Running task {context.task_id} in single-agent mode (cost-optimized)"
@@ -470,6 +477,10 @@ class ResearchManager:
                     (ResearchStage.REASONING, self._execute_reasoning_stage),
                     (ResearchStage.EXECUTION, self._execute_execution_stage),
                     (ResearchStage.SYNTHESIS, self._execute_synthesis_stage),
+                    (
+                        ResearchStage.SYSTEMATIC_REVIEW,
+                        self._execute_systematic_review_stage,
+                    ),
                 ]
 
             for stage, executor in stages:
@@ -754,6 +765,50 @@ class ResearchManager:
             self.logger.error(f"Literature review stage failed: {e}")
             return False
 
+    async def _execute_systematic_review_stage(self, context: ResearchContext) -> bool:
+        """
+        Execute the systematic review stage following PRISMA guidelines.
+
+        Args:
+            context: Research context
+
+        Returns:
+            bool: True if successful
+        """
+        try:
+            # Initialize SystematicReviewAgent if not already done
+            if not hasattr(self, 'systematic_review_agent'):
+                self.systematic_review_agent = SystematicReviewAgent(
+                    config_manager=self.config
+                )
+
+            # Get research plan from context
+            research_plan = context.context_data.get("research_plan", {})
+
+            # Execute systematic review workflow
+            self.logger.info(f"Starting systematic review for task {context.task_id}")
+            
+            review_results = await self.systematic_review_agent.systematic_review_workflow(
+                research_plan=research_plan,
+                task_id=context.task_id,
+                user_id=context.user_id
+            )
+
+            if review_results:
+                # Store systematic review results
+                context.context_data["systematic_review"] = review_results
+                context.context_data["prisma_report"] = review_results.get("prisma_report")
+                context.context_data["quality_appraisal"] = review_results.get("quality_appraisal")
+                
+                self.logger.info(f"Systematic review completed for task {context.task_id}")
+                return True
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Systematic review stage failed: {e}")
+            return False
+
     async def _execute_reasoning_stage(self, context: ResearchContext) -> bool:
         """
         Execute the reasoning stage of research.
@@ -1010,10 +1065,16 @@ class ResearchManager:
             context: Research context
         """
         try:
+            # Calculate progress based on mode
+            if context.single_agent_mode:
+                total_stages = 4  # planning, literature review, synthesis, systematic review
+            else:
+                total_stages = 6  # planning, literature review, reasoning, execution, synthesis, systematic review
+            
             progress_data = {
                 "task_id": context.task_id,
                 "stage": context.stage.value,
-                "progress": len(context.completed_stages) / 5 * 100,  # 5 total stages
+                "progress": min(len(context.completed_stages) / total_stages * 100, 100.0),
                 "query": context.query,
                 "updated_at": context.updated_at.isoformat(),
             }
@@ -1121,10 +1182,17 @@ class ResearchManager:
             return None
 
         context = self.active_contexts[task_id]
+        
+        # Calculate progress based on mode
+        if context.single_agent_mode:
+            total_stages = 4  # planning, literature review, synthesis, systematic review
+        else:
+            total_stages = 6  # planning, literature review, reasoning, execution, synthesis, systematic review
+        
         return {
             "task_id": task_id,
             "stage": context.stage.value,
-            "progress": len(context.completed_stages) / 5 * 100,
+            "progress": min(len(context.completed_stages) / total_stages * 100, 100.0),
             "query": context.query,
             "completed_stages": [stage.value for stage in context.completed_stages],
             "failed_stages": [stage.value for stage in context.failed_stages],
@@ -1176,7 +1244,11 @@ class ResearchManager:
         if not context:
             return 0.0
 
-        total_stages = 5  # planning, literature review, reasoning, execution, synthesis
+        # Determine total stages based on mode
+        if context.single_agent_mode:
+            total_stages = 4  # planning, literature review, synthesis, systematic review
+        else:
+            total_stages = 6  # planning, literature review, reasoning, execution, synthesis, systematic review
         completed_stages = len(context.completed_stages)
 
         if context.stage == ResearchStage.COMPLETE:
@@ -1184,8 +1256,9 @@ class ResearchManager:
         elif context.stage == ResearchStage.FAILED:
             return (completed_stages / total_stages) * 100.0
         else:
-            # Add partial progress for current stage
-            return ((completed_stages + 0.5) / total_stages) * 100.0
+            # Add partial progress for current stage, but cap at 100%
+            progress = ((completed_stages + 0.5) / total_stages) * 100.0
+            return min(progress, 100.0)
 
     def add_progress_callback(self, task_id: str, callback: Callable) -> None:
         """
@@ -1461,7 +1534,7 @@ class ResearchManager:
             List[str]: List of stage names
         """
         if single_agent_mode:
-            return ["planning", "literature_review"]
+            return ["planning", "literature_review", "synthesis", "systematic_review"]
         else:
             return [
                 "planning",
@@ -1469,6 +1542,7 @@ class ResearchManager:
                 "reasoning",
                 "execution",
                 "synthesis",
+                "systematic_review",
             ]
 
     def _create_stage_task_in_database(self, context: ResearchContext) -> bool:
