@@ -13,9 +13,9 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiohttp
 
-from ..config.config_manager import ConfigManager
-from ..mcp.protocols import ResearchAction
-from .base_agent import BaseAgent
+from ...config.config_manager import ConfigManager
+from ...mcp.protocols import ResearchAction
+from ..base_agent import BaseAgent
 
 
 class ExecutorAgent(BaseAgent):

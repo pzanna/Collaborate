@@ -1,80 +1,246 @@
-# Eunice Research Platform - Solution Architecture
+# Eunice Research Platform - Extended Solution Architecture and Development Guidelines
 
 ## Architecture Overview
 
-The Eunice research platform, named after the AI from the William Gibson novel [Agency](<https://en.wikipedia.org/wiki/Agency_(novel)>), is designed to facilitate advanced research workflows by integrating various tools and services. Its architecture is based on a microservices approach, allowing for flexibility, scalability, and ease of maintenance.
+The Eunice research platform is designed as a distributed, modular system that integrates user-facing interfaces, research agents, AI models, personas, and data storage systems through a **microservices and agent-oriented architecture**. At its core, the platform leverages the **Model Context Protocol (MCP)** to coordinate communication and workflows between agents and tools.
 
-![Architecture Diagram](Logical_Design.jpeg)
+![Eunice](Logical_Design.jpeg)
 
-The Eunice platform organises research work in a hierarchical structure:
+The platform organises research work hierarchically:
 
 **Project → Research Topic → Plan → Tasks**
 
-This structure allows for better organisation, clearer separation of concerns, and more intuitive navigation.
+This structure enables intuitive navigation and clear separation of concerns.
 
-Refer to the [Hierarchical Research Structure](HIERARCHICAL_RESEARCH_STRUCTURE.md) for detailed information on how research is organised within the platform.
+### Updated System Flow
 
-## Key Components
+1. **User Interaction**
 
-### Web Interface
+   - Users interact via the **Web UI (React)**.
+   - UI requests go through **FastAPI endpoints**, acting as the gateway for all system calls.
 
-The web interface serves as the primary user interface for researchers, providing access to the platform's features and functionalities. It is built using React and provides a user-friendly experience for managing research projects, accessing data, and collaborating with the team.
+2. **API Gateway (FastAPI)**
 
-### API Gateway
+   - Single entry point for UI requests and external integrations.
+   - Routes read-only queries for high-frequency UI tasks directly to the database (with caching) for performance.
+   - Routes complex, write, or orchestration requests directly to the **MCP Server**.
 
-The API Gateway acts as a single entry point for all client requests, routing them to the appropriate microservices and handling authentication, authorisation, and rate limiting.
-It also implements security measures such as encryption, authentication, and authorisation to protect sensitive data and ensure secure communication between services.
+3. **Research Manager**
 
-### MCP Server
+   - Orchestrates workflows, plans, and task delegation as a specialized agent within the MCP ecosystem.
+   - Coordinates multi-agent workflows and manages task execution lifecycles.
+   - Logs and monitors task execution and ensures system consistency.
+   - Operates as an abstracted service, invoked by the MCP Server when orchestration is needed.
 
-The MCP (Microservices Control Plane) server is the core component of the Eunice platform, responsible for managing the microservices architecture and coordinating expert consultations. It provides the following functionalities:
+4. **MCP Server**
 
-- **Service Discovery**: Automatically detects and registers microservices, allowing them to communicate with each other seamlessly.
+   - Core control plane for agent registration, service discovery, and routing.
+   - Offers load balancing, monitoring, configuration management, and real-time WebSocket-based communication.
+   - Enforces structured message formats, error handling, and secure communication.
 
-- **Load Balancing**: Distributes incoming requests across multiple instances of microservices to ensure optimal performance and reliability.
+#### MCP Protocol Specifications
 
-- **Monitoring and Logging**: Collects metrics, logs, and traces from microservices to provide insights into system performance, health, and usage patterns.
+**Message Types:**
 
-- **Configuration Management**: Centralises configuration settings for microservices, allowing for dynamic updates without requiring service restarts.
+- `research_request`: Task initiation from Research Manager
+- `agent_response`: Results from specialized agents
+- `persona_consultation`: Expert domain queries
+- `resource_allocation`: Cost and usage tracking
+- `agent_registration`: New agent joining the system
+- `health_check`: Agent availability monitoring
 
-- **Real-time Communication**: Provides WebSocket-based communication for live updates and expert consultations.
+**Communication Patterns:**
 
-### Agents
+- Request-Response: Synchronous task execution
+- Publish-Subscribe: Real-time updates and notifications
+- Event Streaming: Audit logging and monitoring
 
-The platform features specialised agent personas that provide expert consultations through the MCP server:
+**Error Handling:**
 
-#### Researcher Manager
+- Circuit breaker patterns for agent failures
+- Retry mechanisms with exponential backoff
+- Graceful degradation when agents are unavailable
+- Dead letter queues for failed messages
 
-The [Researcher Manager](Research_Manager.md) oversees the operational aspects of the research projects, including agent coordination, resource management and usage costs. It also supports the user in strategic planning, project management, and ensuring a project's efficient execution while fostering interdisciplinary collaboration.
+**Security Features:**
 
-#### Memory Agent
+- Message encryption and authentication
+- Capability-based authorization
+- Rate limiting and abuse prevention
+- Audit logging for compliance
 
-Utilises a local knowledge base for storing research data, documents, and findings.
+5. **Database Agent**
 
-#### Literature Agent
+   - Encapsulates all database **write** operations.
+   - Exposes an API that shields other components from schema changes.
 
-Leverages multiple search engines and academic databases for comprehensive information gathering, including:
+6. **AI Agent**
 
-- Multi-engine web search (Google, Bing, Yahoo)
-- Semantic Scholar API integration for academic papers
-- Google Scholar fallback for scholarly content
-- Advanced content extraction and analysis
-- High-level research workflows for automated data collection
-- Multi-source fact verification capabilities
+   - Abstracts access to AI models (OpenAI, Anthropic, xAI, local LLMs).
+   - Supports NLP, reasoning, and data analysis with retry logic and model fallback.
 
-#### Executor Agent
+7. **Tools and Research Agents**
 
-Handles code execution, API calls, data processing, and file operations for the research system.
+   - Tools are deterministic functions (e.g., data extraction, scraping).
+   - Research Agents handle domain-specific reasoning, planning, and execution.
 
-#### Planning Agent
+8. **Data Storage**
 
-Handles planning, analysis, reasoning, and synthesis tasks for the research system.
+   - **SQLite** for structured project and task data.
+   - **Memory Cache** for high-speed data access.
+   - **File Storage** for unstructured research artefacts.
+   - **Literature Database** for metadata and content of academic articles.
 
-#### AI Agent
+### Example Data Flows
 
-The Eunice platform leverages various AI models to enhance its research capabilities including models from OpenAI, xAI, Anthopic, and other locally hosted models. These models are used for natural language processing, data analysis, and other AI-driven tasks to support the research process. LLMs (Large Language Models) are accessed by API calls to ensure scalability and flexibility in model version and cost.
+#### Literature Search Flow
 
-### Personas
+1. **User Query** → Web UI (React)
+2. **Web UI** → API Gateway (FastAPI endpoint)
+3. **API Gateway** → MCP Server (task routing)
+4. **MCP Server** → Research Manager (orchestration if needed) OR Literature Agent (direct routing)
+5. **Literature Agent** → External APIs (Semantic Scholar, Google Scholar)
+6. **Literature Agent** → Database Agent (persist results)
+7. **Results** flow back through the chain with real-time updates
+8. **UI Updates** via WebSocket for live progress indication
+
+#### Persona Consultation Flow
+
+1. **User Question** → Web UI consultation interface
+2. **API Gateway** → MCP Server (consultation routing)
+3. **MCP Server** → Appropriate Persona Agent (expert matching)
+4. **Persona Agent** → AI Agent (domain-specific reasoning)
+5. **Response** → Database Agent (consultation history)
+6. **Expert Advice** → User via real-time WebSocket connection
+
+#### Research Task Execution Flow
+
+1. **Research Plan** → API Gateway → MCP Server
+2. **MCP Server** → Research Manager (task breakdown and orchestration)
+3. **Research Manager** → MCP Server (multi-agent coordination)
+4. **MCP Server** → Planning Agent (task analysis)
+5. **Planning Agent** → Literature Agent (information gathering)
+6. **Planning Agent** → Executor Agent (data processing)
+7. **Planning Agent** → Memory Agent (knowledge synthesis)
+8. **Consolidated Results** → Database Agent (persistence)
+9. **Final Report** → User via API Gateway
+
+---
+
+## Implementation Roadmap
+
+### Phase 1: Foundation (Current)
+
+- Modular monolith with MCP coordination
+- Basic agent system in `src/agents/`
+- SQLite-based data storage
+- React-based web interface
+- Core MCP protocol implementation
+
+### Phase 2: Service Extraction
+
+- Extract Database Agent from `src/database/`
+- Implement AI Agent service abstraction
+- Enhanced MCP server capabilities with load balancing
+- API Gateway separation and enhancement
+- Task queue implementation (Celery/RQ)
+
+### Phase 3: Microservices Transition
+
+- Research Manager as separate orchestrator service
+- Distributed agent deployment
+- Enhanced security and authentication
+- Performance optimization and caching layers
+- Real-time collaboration features
+
+### Phase 4: Advanced Features
+
+- Vector database integration for semantic search
+- Event-driven architecture implementation
+- Multi-cloud deployment capabilities
+- Advanced monitoring and analytics
+- Edge AI integration
+
+---
+
+## Code Organization
+
+### Current Structure → Target Components
+
+The current `src/` directory structure maps to target architectural components as follows:
+
+- **`src/database/`** → **Database Agent Service**
+  - Centralized data access layer
+  - Schema abstraction and migration management
+  - Caching and performance optimization
+
+- **`src/mcp/`** → **MCP Server** (enhanced)
+  - Agent registration and service discovery
+  - Load balancing and failover
+  - Message routing and protocol enforcement
+  - Direct API Gateway integration and request handling
+
+- **`src/agents/research_manager/`** → **Research Manager Service**
+  - Workflow orchestration as a specialized MCP agent
+  - Task delegation and monitoring
+  - Resource allocation and cost tracking
+  - Abstracted service invoked by MCP Server for complex workflows
+
+- **`src/api/`** → **API Gateway** (expanded)
+  - Request routing directly to MCP Server
+  - Authentication and rate limiting
+  - API versioning and documentation
+  - Direct database access for read-only queries
+
+- **`src/core/ai_client_manager.py`** → **AI Agent Service**
+  - Multi-provider AI model abstraction
+  - Fallback and retry mechanisms
+  - Cost optimization and usage tracking
+
+- **`src/personas/`** → **Persona Consultation System**
+  - Expert domain routing
+  - Context-aware consultations
+  - Consultation history and analytics
+
+---
+
+## Agents
+
+### Researcher Manager
+
+Oversees project management, agent coordination, and resource usage. Supports strategic planning, cost tracking, and interdisciplinary collaboration.
+
+### Memory Agent
+
+Maintains a local knowledge base containing research documents, artefacts, and summaries.
+
+### Literature Agent
+
+Performs comprehensive literature searches and verification, leveraging APIs like Semantic Scholar and Google Scholar. Capabilities include:
+
+- Multi-engine web search.
+- Advanced content extraction.
+- Multi-source fact verification.
+
+### Executor Agent
+
+Executes code, API calls, data processing, and file operations.
+
+### Planning Agent
+
+Handles high-level reasoning, task synthesis, and research planning.
+
+### AI Agent
+
+Interfaces with AI models and ensures scalable access to LLMs for data analysis, summarisation, and inference.
+
+---
+
+## Personas
+
+### Overview
+
+Personas represent expert domains for consultation, providing context-aware advice during research workflows.
 
 - **Neurobiologist**: Leads biological aspects of neuron interfacing, including brain mapping, neuron extraction/isolation, viability assessments, and culture maintenance. Provides expert guidance on experimental design to ensure ethical and effective biological system integration. Refer to the [Neurobiologist Persona](Personas/01_Neurobiologist.md) for more details.
 
@@ -90,47 +256,197 @@ The Eunice platform leverages various AI models to enhance its research capabili
 
 - **Technical/Scientific Writer**: Documents research methodologies, findings, and comparisons between biological neurons and ANNs; prepares manuscripts for publication, grant proposals, and reports; ensures clear, accurate communication of complex technical concepts to diverse audiences. Refer to the [Technical/Scientific Writer Persona](Personas/07_Technical_Scientific_Writer.md) for more details.
 
-#### Persona Consultation System
+The **Persona Consultation System** provides:
 
-The persona system provides real-time expert consultations through the MCP protocol:
+- Expert routing to the correct persona.
+- Multi-modal queries.
+- AI-generated confidence scoring.
+- Persistent consultation history.
 
-- **Expert Routing**: Automatically routes consultation requests to appropriate domain experts
-- **Multi-Modal Queries**: Supports text-based queries with contextual information
-- **Confidence Scoring**: Provides AI-generated confidence metrics for consultation quality
-- **Persistent History**: Maintains consultation history for research continuity
-- **Real-time Responses**: WebSocket-based communication for immediate expert feedback
+---
 
-```python
-# Example consultation request
-consultation_response = await mcp_client.request_persona_consultation(
-    expertise_area="neuron_preparation",
-    query="What are optimal buffer conditions for hippocampal neuron isolation?",
-    context={
-        "experiment_type": "patch_clamp",
-        "animal_model": "rat",
-        "age": "P14-P21"
-    },
-    preferred_persona="neurobiologist"
-)
-```
+## Security Architecture
 
-#### Integration Architecture
+### Authentication Flow
 
-The persona system integrates with the MCP server through:
+- **JWT Tokens**: User session management with configurable expiration
+- **Service Authentication**: MCP-based secure inter-service communication
+- **API Key Management**: Secure storage and rotation for external services
+- **Multi-Factor Authentication**: Optional 2FA for enhanced security
 
-- **PersonaMCPIntegration**: Main integration layer managing persona lifecycle
-- **PersonaRegistry**: Manages persona agent registration and capabilities
-- **ConsultationHistory**: Persistent storage of all expert interactions
-- **CapabilityMapping**: Routes expertise areas to appropriate persona agents
+### Authorization Levels
 
-_Refer to the [Persona System Documentation](Personas/README.md) for more details._
+- **User Permissions**: Role-based access to research projects and data
+- **Agent Capabilities**: Restricted access to system resources and external APIs
+- **Data Classification**: Sensitive research data protection and access controls
+- **Audit Trail**: Comprehensive logging of all security-relevant actions
 
-### Data Storage
+### Security Controls
 
-The Eunice platform uses a combination of databases for structured and unstructured data storage:
+- **Input Validation**: Sanitization of all user inputs and API requests
+- **Rate Limiting**: Protection against abuse and DDoS attacks
+- **Encryption**: TLS for all communications, AES-256 for data at rest
+- **Network Security**: Firewall rules and network segmentation
+- **Secrets Management**: Secure vault for API keys and credentials
 
-- **SQLite**: For structured data, including user accounts, project metadata, and task management.
-- **Memory Cache**: For caching frequently accessed data to improve performance.
-- **File Storage**: For unstructured data such as documents, images, and other research artifacts.
-- **Knowledge Base**: A local knowledge base for storing research data, documents, and findings, which is utilised by the Memory Agent.
-- **Literature Database**: A specialised database for storing literature search results, including metadata and content from academic papers and articles.
+---
+
+## Performance Requirements
+
+### Response Time Targets
+
+- **UI Interactions**: < 200ms for navigation and simple queries
+- **Database Queries**: < 500ms for complex research data retrieval
+- **Literature Searches**: < 10s for comprehensive academic searches
+- **Research Tasks**: < 30s for planning and initial execution
+- **Persona Consultations**: < 5s for expert domain advice
+
+### Throughput Specifications
+
+- **Concurrent Users**: Support 50+ simultaneous active users
+- **Research Tasks**: Handle 20+ concurrent complex research operations
+- **MCP Messages**: Process 1000+ messages per second
+- **API Requests**: Handle 500+ requests per second per endpoint
+- **WebSocket Connections**: Maintain 200+ real-time connections
+
+### Resource Utilization
+
+- **Memory Usage**: Efficient caching with configurable limits
+- **CPU Optimization**: Multi-threading for I/O-bound operations  
+- **Storage Efficiency**: Compressed data storage and archival policies
+- **Network Bandwidth**: Optimized payload sizes and compression
+
+---
+
+## Error Handling Strategy
+
+### Agent Failure Management
+
+- **Automatic Retry**: Exponential backoff for transient failures
+- **Circuit Breaker**: Fast-fail mechanism for consistently failing agents
+- **Fallback Agents**: Alternative agents for critical functionality
+- **Graceful Degradation**: Reduced functionality when agents are unavailable
+- **Health Monitoring**: Continuous agent health checks and recovery
+
+### External Service Resilience
+
+- **API Failure Handling**: Retry logic with multiple provider fallbacks
+- **Cache Fallbacks**: Serve stale data when external services are unavailable
+- **Timeout Management**: Configurable timeouts with escalation policies
+- **Rate Limit Handling**: Adaptive throttling and queue management
+- **Service Discovery**: Automatic failover to alternative service endpoints
+
+### Data Consistency and Recovery
+
+- **Transaction Management**: ACID compliance for critical operations
+- **Backup and Recovery**: Automated backups with point-in-time recovery
+- **Data Validation**: Input sanitization and schema validation
+- **Conflict Resolution**: Merge strategies for concurrent data modifications
+- **Audit Logging**: Complete transaction history for debugging and compliance
+
+### User Experience Protection
+
+- **Progressive Loading**: Incremental data presentation during slow operations
+- **Offline Capabilities**: Local caching for basic functionality
+- **Error Messaging**: User-friendly error descriptions with suggested actions
+- **Recovery Guidance**: Clear instructions for resolving common issues
+- **Status Transparency**: Real-time system status and maintenance notifications
+
+---
+
+## Development Guidelines
+
+### 1. Separation of Concerns
+
+- **Web UI** is presentation-only.
+- **FastAPI** acts as a thin routing layer.
+- **Research Manager** handles orchestration.
+- **Agents** perform specialised tasks.
+
+### 2. Database Access
+
+- All writes via the **Database Agent**.
+- Use read replicas and caching for performance.
+
+### 3. Caching & Performance
+
+- Use Redis or in-memory caching.
+- WebSocket/SSE for real-time UI updates.
+
+### 4. Orchestration & Task Queues
+
+- Use **Celery/RQ** for long-running tasks.
+- **Research Manager** coordinates all workflows.
+
+### 5. MCP Communication Contracts
+
+- Pydantic schemas for requests/responses.
+- API versioning (`tool@v1`).
+- Capability tokens for security.
+
+### 6. AI Model Integration
+
+- Always access via AI Agent.
+- Implement fallback models and response validation.
+
+### 7. Error Handling & Resilience
+
+- Implement circuit breakers for external dependencies.
+- Use correlation IDs for distributed tracing.
+- Implement comprehensive logging with structured formats.
+- Design for graceful degradation and recovery.
+
+### 8. Monitoring & Observability
+
+- Use human-readable text logs with structured JSON for machine processing.
+- Implement health checks for all services and agents.
+- Track performance metrics and usage patterns.
+- Set up alerting for critical system failures.
+
+### 9. Documentation & Testing
+
+- Swagger/OpenAPI for all API endpoints.
+- Integration tests for MCP workflows.
+- Unit tests with >80% code coverage.
+- End-to-end testing for critical user journeys.
+
+### 10. Code Quality Standards
+
+- Follow PEP 8 for Python code formatting.
+- Use type hints and Pydantic for data validation.
+- Implement automated code quality checks.
+- Maintain comprehensive inline documentation.
+
+---
+
+## Architecture Guidelines for Developers
+
+- Each agent/microservice must expose a stable API.
+- Follow interface-driven design with Pydantic.
+- Implement retries, timeouts, and circuit breakers.
+- Trace tasks with correlation IDs.
+
+---
+
+## Future Enhancements
+
+- Migration  to Postgres.
+- Event-driven architecture using Kafka/NATS.
+- Integration of vector databases for semantic search.
+- Edge AI for low-latency inference.
+- **Knowledge Base** for research documents, literature results, and findings.
+- Introduction of a dedicated **Data Agent Service** with replication and failover.
+- Adoption of a **message bus/event streaming platform** (e.g., Apache Kafka or NATS JetStream).
+- Automated scaling with **Kubernetes Horizontal Pod Autoscaler (HPA)** for agents and services.
+- Integration of **vector embeddings search engines** for advanced semantic search (e.g., Weaviate, Milvus).
+- Deployment of **edge AI models** closer to the user interface for reduced latency.
+- Use Prometheus + Grafana for monitoring and reporting.
+- Structured JSON logging.
+- Implements **JWT-based authentication, authorisation, and rate limiting**.
+- Role-based access control (RBAC) with fine-grained permissions for user access.
+- Role-based access control (RBAC) with fine-grained permissions at the MCP server and API gateway levels.
+- Multi-cloud or hybrid-cloud support for improved resilience.
+
+---
+
+This extended documentation now includes all key components (agents, personas, MCP server) along with developer guidelines and future enhancements for building and maintaining the Eunice research platform.

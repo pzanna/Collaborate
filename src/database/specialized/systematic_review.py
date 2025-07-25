@@ -11,8 +11,8 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 
 try:
-    from ..utils.error_handler import handle_errors
-    from ..utils.id_utils import generate_timestamped_id
+    from ...utils.error_handler import handle_errors
+    from ...utils.id_utils import generate_timestamped_id
 except ImportError:
     # For testing or standalone use
     from utils.error_handler import handle_errors

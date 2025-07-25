@@ -17,25 +17,23 @@ def generate_uuid() -> str:
 
 # Import models and config
 try:
-    from ..ai_clients.openai_client import \
-        AIProviderConfig as OpenAIAIProviderConfig
-    from ..ai_clients.openai_client import OpenAIClient
-    from ..ai_clients.xai_client import AIProviderConfig as XAIAIProviderConfig
-    from ..ai_clients.xai_client import XAIClient
-    from ..config.config_manager import ConfigManager
-    from ..mcp.cost_estimator import CostEstimator
-    from ..utils.error_handler import APIError, NetworkError, handle_errors
-    from .simplified_coordinator import SimplifiedCoordinator
+    from .openai_client import AIProviderConfig as OpenAIAIProviderConfig
+    from .openai_client import OpenAIClient
+    from .xai_client import AIProviderConfig as XAIAIProviderConfig  
+    from .xai_client import XAIClient
+    from ...config.config_manager import ConfigManager
+    from ..planning.cost_estimator import CostEstimator
+    from ...utils.error_handler import APIError, NetworkError, handle_errors
+    from ...core.simplified_coordinator import SimplifiedCoordinator
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from ai_clients.openai_client import \
-        AIProviderConfig as OpenAIAIProviderConfig
-    from ai_clients.openai_client import OpenAIClient
-    from ai_clients.xai_client import AIProviderConfig as XAIAIProviderConfig
-    from ai_clients.xai_client import XAIClient
+    from openai_client import AIProviderConfig as OpenAIAIProviderConfig
+    from openai_client import OpenAIClient
+    from xai_client import AIProviderConfig as XAIAIProviderConfig
+    from xai_client import XAIClient
     from config.config_manager import ConfigManager
     from core.simplified_coordinator import SimplifiedCoordinator
-    from mcp.cost_estimator import CostEstimator
+    from agents.planning.cost_estimator import CostEstimator
     from utils.error_handler import APIError, NetworkError, handle_errors
 
 

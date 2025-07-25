@@ -1,4 +1,4 @@
-"""Enhanced database operations with hierarchical research support."""
+"""Core database manager with hierarchical research support."""
 
 import json
 import os
@@ -11,12 +11,12 @@ from typing import Any, Dict, List, Optional
 
 # Import existing models
 try:
-    from ..utils.error_handler import DatabaseError, handle_errors
-    from ..utils.id_utils import generate_timestamped_id, generate_uuid_id
+    from ...utils.error_handler import DatabaseError, handle_errors
+    from ...utils.id_utils import generate_timestamped_id, generate_uuid_id
 except ImportError:
     # For direct execution or testing
     # Add the parent directory to the path
-    project_root = Path(__file__).parent.parent.parent
+    project_root = Path(__file__).parent.parent.parent.parent
     sys.path.insert(0, str(project_root))
 
     from src.utils.error_handler import DatabaseError, handle_errors
@@ -24,7 +24,7 @@ except ImportError:
 
 # Import new hierarchical models
 try:
-    from ..models.hierarchical_data_models import (ResearchPlan, ResearchTopic,
+    from ...models.hierarchical_data_models import (ResearchPlan, ResearchTopic,
                                                    Task)
 except ImportError:
     try:

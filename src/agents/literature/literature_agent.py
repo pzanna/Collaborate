@@ -12,19 +12,19 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from ..ai_clients.openai_client import AIProviderConfig as OpenAIConfig
-from ..ai_clients.openai_client import OpenAIClient
-from ..ai_clients.xai_client import AIProviderConfig as XAIConfig
-from ..ai_clients.xai_client import XAIClient
-from ..config.config_manager import ConfigManager
-from ..external.academic_cache import AcademicCacheManager
-from ..external.database_connectors import (ArxivConnector, DatabaseManager,
+from ..artificial_intelligence.openai_client import AIProviderConfig as OpenAIConfig
+from ..artificial_intelligence.openai_client import OpenAIClient
+from ..artificial_intelligence.xai_client import AIProviderConfig as XAIConfig
+from ..artificial_intelligence.xai_client import XAIClient
+from ...config.config_manager import ConfigManager
+from ...database.cache.academic_cache import AcademicCacheManager
+from ...database.connectors.academic import (ArxivConnector, DatabaseManager,
                                             DatabaseSearchQuery, DatabaseType,
                                             ExternalSearchResult,
                                             PubMedConnector,
                                             SemanticScholarConnector)
-from ..mcp.protocols import ResearchAction
-from ..storage.hierarchical_database import HierarchicalDatabaseManager
+from ...mcp.protocols import ResearchAction
+from ...database.core.manager import HierarchicalDatabaseManager
 from .base_agent import BaseAgent
 
 

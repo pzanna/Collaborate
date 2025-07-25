@@ -1,0 +1,201 @@
+"""
+Simplified AI Agent implementation for Phase 2 testing
+
+This is a streamlined implementation that focuses on the core AI Agent
+functionality without complex dependencies. It demonstrates the Architecture.md
+Phase 2 specifications with a working AI service abstraction.
+"""
+
+import asyncio
+import logging
+import time
+from typing import Any, AsyncGenerator, Dict, List, Optional
+from uuid import uuid4
+
+from ...config.config_manager import ConfigManager
+from ...utils.error_handler import handle_errors
+from ..base_agent import BaseAgent
+
+
+class SimpleAIAgent(BaseAgent):
+    """
+    Simplified AI Agent for Phase 2 implementation.
+    
+    This version focuses on demonstrating the AI service abstraction
+    pattern without complex multi-provider coordination.
+    """
+
+    def __init__(self, config_manager: ConfigManager):
+        """Initialize the Simple AI Agent."""
+        super().__init__("simple_ai_agent", config_manager)
+        
+        # Service metadata
+        self.service_id = str(uuid4())
+        self.start_time = time.time()
+        self.request_count = 0
+        
+        # Initialize AI client (use existing pattern from other agents)
+        self.ai_clients = {}
+        self._initialize_ai_clients()
+        
+        self.logger.info(f"Simple AI Agent initialized (ID: {self.service_id})")
+
+    def _initialize_ai_clients(self):
+        """Initialize AI clients using a simplified approach."""
+        try:
+            # Use the same pattern as other agents to initialize AI clients
+            providers = self.config.config.ai_providers
+            
+            # For now, just check if providers are configured
+            if providers and ("openai" in providers or "xai" in providers):
+                # Simulate having AI clients available
+                self.ai_available = True
+                self.available_providers = list(providers.keys())
+                self.logger.info(f"AI providers configured: {self.available_providers}")
+            else:
+                self.ai_available = False
+                self.available_providers = []
+                self.logger.warning("No AI providers configured")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to check AI configuration: {e}")
+            self.ai_available = False
+            self.available_providers = []
+
+    # Abstract method implementations
+    
+    def _get_capabilities(self) -> List[str]:
+        """Get Simple AI Agent capabilities."""
+        return [
+            "text_generation",
+            "health_check",
+            "statistics"
+        ]
+
+    async def _initialize_agent(self) -> None:
+        """Initialize AI Agent-specific resources."""
+        self.logger.info("Simple AI Agent specific initialization completed")
+
+    async def _cleanup_agent(self) -> None:
+        """Clean up AI Agent-specific resources."""
+        self.logger.info("Simple AI Agent cleanup completed")
+
+    async def _process_task_impl(self, task) -> Dict[str, Any]:
+        """
+        Process AI-related tasks.
+        
+        Supported actions:
+        - generate_text: Generate text response
+        - health_check: Service health check
+        - get_stats: Service statistics
+        """
+        action = task.action
+        payload = task.payload
+        
+        self.request_count += 1
+        start_time = time.time()
+        
+        try:
+            if action == "generate_text":
+                result = await self._generate_text(payload)
+            elif action == "health_check":
+                result = await self._health_check(payload)
+            elif action == "get_stats":
+                result = await self._get_stats(payload)
+            else:
+                # For now, return a mock response for unsupported actions
+                result = {
+                    "status": "not_implemented",
+                    "message": f"Action '{action}' is not yet implemented in SimpleAIAgent",
+                    "supported_actions": self._get_capabilities()
+                }
+            
+            response_time = time.time() - start_time
+            result["response_time"] = response_time
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Simple AI Agent error processing {action}: {e}", exc_info=True)
+            raise
+
+    @handle_errors(context="generate_text", reraise=True)
+    async def _generate_text(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate text response."""
+        prompt = payload.get("prompt", "")
+        
+        if not prompt:
+            raise ValueError("Prompt is required for text generation")
+        
+        # For Phase 2 demonstration, use mock responses
+        # In a full implementation, this would interface with real AI clients
+        
+        mock_responses = [
+            f"This is a mock AI response to your prompt: '{prompt[:50]}...' Generated by SimpleAIAgent for testing the AI service abstraction pattern.",
+            f"SimpleAIAgent received your request about '{prompt[:30]}...' and this demonstrates the centralized AI service approach from Architecture.md Phase 2.",
+            f"Mock AI service response: Your prompt contained {len(prompt)} characters. This shows how all agents would access AI through this centralized service."
+        ]
+        
+        # Select response based on prompt hash for consistency
+        response_idx = hash(prompt) % len(mock_responses)
+        mock_response = mock_responses[response_idx]
+        
+        return {
+            "response": mock_response,
+            "provider": "mock_ai_service",
+            "method": "simplified_implementation",
+            "prompt_length": len(prompt),
+            "response_length": len(mock_response),
+            "ai_available": self.ai_available,
+            "providers_configured": self.available_providers
+        }
+
+    async def _health_check(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform health check of the Simple AI Agent service."""
+        return {
+            "status": "healthy",
+            "service_id": self.service_id,
+            "service_type": "simple_ai_agent",
+            "uptime": time.time() - self.start_time,
+            "requests_processed": self.request_count,
+            "capabilities": self._get_capabilities(),
+            "ai_clients_available": self.ai_available,
+            "available_providers": self.available_providers,
+            "timestamp": time.time()
+        }
+
+    async def _get_stats(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Get detailed statistics about the Simple AI Agent service."""
+        return {
+            "service_stats": {
+                "service_id": self.service_id,
+                "service_type": "simple_ai_agent",
+                "uptime": time.time() - self.start_time,
+                "requests_processed": self.request_count
+            },
+            "capabilities": self._get_capabilities(),
+            "ai_integration_status": {
+                "providers_configured": self.ai_available,
+                "available_providers": self.available_providers
+            },
+            "timestamp": time.time()
+        }
+
+    # Convenience methods for direct access
+    
+    async def generate_text_direct(self, prompt: str) -> str:
+        """Direct text generation bypassing MCP protocol."""
+        result = await self._generate_text({"prompt": prompt})
+        return result["response"]
+
+    def get_service_info(self) -> Dict[str, Any]:
+        """Get basic service information."""
+        return {
+            "service_id": self.service_id,
+            "service_type": "simple_ai_agent",
+            "version": "2.0.0-simple",
+            "description": "Simplified AI service abstraction for Phase 2",
+            "capabilities": self._get_capabilities(),
+            "uptime": time.time() - self.start_time,
+            "requests_processed": self.request_count
+        }
