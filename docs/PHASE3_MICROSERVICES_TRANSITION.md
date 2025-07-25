@@ -28,41 +28,42 @@
 
 ## 🚀 Phase 3 Objectives
 
-### 1. Research Manager as Separate Orchestrator Service
+### 1. MCP Server as Distributed Orchestrator Service
 
-**Goal**: Extract Research Manager from MCP ecosystem into independent service
+**Goal**: Containerize and scale the existing MCP Server as the central coordinator
 
 **Implementation Plan**:
 
-- Create dedicated `research-orchestrator` service
-- Implement REST API for workflow management
-- Add service discovery and health monitoring
-- Enable independent scaling and deployment
+- Containerize existing MCP Server with enhanced capabilities
+- Maintain Research Manager as an agent within MCP ecosystem
+- Add service discovery and health monitoring to MCP Server
+- Enable independent scaling of MCP Server and connected agents
 
 **Technical Requirements**:
 
-- FastAPI-based service with Pydantic models
-- Direct database access for workflow persistence
-- WebSocket support for real-time status updates
-- Integration with existing agent services
+- Enhanced MCP Server with WebSocket clustering support
+- Maintain existing MCP protocol for agent communication
+- Add REST API endpoints to MCP Server for external access
+- Keep Research Manager as specialized orchestration agent
 
-### 2. Distributed Agent Deployment  
+### 2. Containerized Agent Deployment  
 
-**Goal**: Deploy each agent as independent, containerized microservice
+**Goal**: Deploy each agent as independent, containerized service while maintaining MCP communication
 
 **Implementation Plan**:
 
-- Container-based architecture (Docker)
-- Service mesh for inter-agent communication
-- Independent agent APIs and databases
-- Horizontal scaling capabilities
+- Container-based architecture (Docker) for all agents
+- Agents maintain MCP Client connections to central MCP Server
+- Independent agent scaling and deployment
+- Preserve existing agent communication patterns
 
-**Agent Services to Extract**:
+**Agent Services to Containerize**:
 
-- **Literature Agent Service**: Academic search and verification
-- **Planning Agent Service**: Research planning and task synthesis
-- **Executor Agent Service**: Code execution and data processing
-- **Memory Agent Service**: Knowledge base and document management
+- **Literature Agent Service**: Academic search and verification (MCP Client)
+- **Planning Agent Service**: Research planning and task synthesis (MCP Client)
+- **Executor Agent Service**: Code execution and data processing (MCP Client)
+- **Memory Agent Service**: Knowledge base and document management (MCP Client)
+- **Research Manager Agent**: Workflow orchestration (MCP Client)
 
 ### 3. Enhanced Security and Authentication
 
@@ -118,7 +119,7 @@
 - Comment and annotation systems
 - Version control for research documents
 
-## 🏗️ Target Microservices Architecture
+## 🏗️ Target MCP-Based Microservices Architecture
 
 ### Core Services
 
@@ -131,56 +132,71 @@ Responsibilities:
   - Request routing and load balancing
   - Authentication and authorization
   - Rate limiting and security enforcement
-  - API versioning and documentation
-Dependencies: [auth-service, service-registry]
+  - Direct communication with MCP Server
+Dependencies: [auth-service, mcp-server]
 ```
 
-#### 2. Research Orchestrator Service
+#### 2. Enhanced MCP Server Service
 
 ```yaml
-Service: research-orchestrator  
+Service: mcp-server
+Port: 9000
+Responsibilities:
+  - Agent registration and service discovery
+  - WebSocket-based agent communication
+  - Task delegation and load balancing
+  - Research workflow coordination
+  - Real-time status updates and monitoring
+Dependencies: [database-service, redis-cluster]
+```
+
+#### 3. Research Manager Agent (MCP Client)
+
+```yaml
+Service: research-manager-agent
 Port: 8002
 Responsibilities:
-  - Workflow orchestration and management
-  - Task delegation and monitoring
-  - Resource allocation and cost tracking
-  - Inter-service coordination
-Dependencies: [database-service, message-broker]
+  - Complex workflow orchestration via MCP
+  - Multi-agent task coordination
+  - Cost tracking and approval workflows
+  - Research plan generation and execution
+Dependencies: [mcp-server]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-#### 3. Literature Agent Services (4 Specialized Agents)
+#### 4. Literature Agent Services (4 Specialized MCP Clients)
 
 ```yaml
-Service: literature-search
+Service: literature-search-agent
 Port: 8003
 Responsibilities:
   - Academic literature search and discovery
   - Multi-source bibliographic data collection
   - Search result deduplication and normalization
-  - Source metadata extraction and validation
-Dependencies: [database-service]
+Dependencies: [mcp-server, database-service]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
 ```yaml
-Service: screening-prisma
+Service: screening-prisma-agent
 Port: 8004
 Responsibilities:
   - Systematic review screening workflows
   - PRISMA-compliant audit trails and documentation
   - Inclusion/exclusion criteria application
-  - Study quality assessment and validation
-Dependencies: [ai-service, database-service]
+Dependencies: [mcp-server, ai-service, database-service]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
 ```yaml
-Service: synthesis-review
+Service: synthesis-review-agent
 Port: 8005
 Responsibilities:
   - Data extraction and evidence synthesis
   - Meta-analysis and statistical aggregation
   - Evidence table generation and management
-  - Narrative synthesis and reporting
-Dependencies: [ai-service, memory-service, database-service]
+Dependencies: [mcp-server, ai-service, memory-agent]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
 ```yaml
@@ -190,11 +206,11 @@ Responsibilities:
   - Manuscript generation and academic writing
   - Citation formatting and bibliography management
   - Document template processing and export
-  - PRISMA-to-thesis conversion workflows
-Dependencies: [database-service, storage-service]
+Dependencies: [mcp-server, database-service, storage-service]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-#### 4. Planning Agent Service
+#### 5. Planning Agent Service (MCP Client)
 
 ```yaml
 Service: planning-agent
@@ -203,11 +219,11 @@ Responsibilities:
   - Research planning and strategy
   - Task breakdown and synthesis
   - Resource requirement analysis
-  - Timeline and milestone management
-Dependencies: [ai-service, memory-service]
+Dependencies: [mcp-server, ai-service, memory-agent]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-#### 5. Executor Agent Service
+#### 6. Executor Agent Service (MCP Client)
 
 ```yaml
 Service: executor-agent
@@ -216,11 +232,11 @@ Responsibilities:
   - Code execution and automation
   - Data processing and analysis
   - File operations and transformations
-  - API integrations and external calls
-Dependencies: [security-service, storage-service]
+Dependencies: [mcp-server, security-service, storage-service]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-#### 6. Memory Agent Service
+#### 7. Memory Agent Service (MCP Client)
 
 ```yaml
 Service: memory-agent
@@ -230,7 +246,8 @@ Responsibilities:
   - Document storage and retrieval
   - Research artifact organization
   - Semantic search capabilities
-Dependencies: [vector-database, storage-service]
+Dependencies: [mcp-server, vector-database, storage-service]
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
 ### Supporting Services
@@ -343,35 +360,89 @@ eunice-microservices/
 ```yaml
 version: '3.8'
 services:
+  # API Gateway
   api-gateway:
     build: ./services/api-gateway
     ports: ["8001:8001"]
-    depends_on: [auth-service, service-registry]
+    depends_on: [auth-service, mcp-server]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
     
-  research-orchestrator:
-    build: ./services/research-orchestrator  
+  # Enhanced MCP Server (Central Coordinator)
+  mcp-server:
+    build: ./services/mcp-server
+    ports: ["9000:9000"]
+    depends_on: [database-service, redis]
+    environment:
+      - DATABASE_URL=postgresql://postgres:5432/eunice
+      - REDIS_URL=redis://redis:6379
+      
+  # Research Manager Agent (MCP Client)
+  research-manager-agent:
+    build: ./services/research-manager-agent
     ports: ["8002:8002"]
-    depends_on: [database-service]
+    depends_on: [mcp-server]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=research_manager
     
-  literature-search:
-    build: ./services/literature-search
+  # Literature Agents (MCP Clients)
+  literature-search-agent:
+    build: ./services/literature-search-agent
     ports: ["8003:8003"]
-    depends_on: [database-service]
-    
-  screening-prisma:
-    build: ./services/screening-prisma
-    ports: ["8004:8004"]
-    depends_on: [ai-service, database-service]
+    depends_on: [mcp-server, database-service]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=literature_search
 
-  synthesis-review:
-    build: ./services/synthesis-review
+  screening-prisma-agent:
+    build: ./services/screening-prisma-agent
+    ports: ["8004:8004"]
+    depends_on: [mcp-server, ai-service, database-service]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=screening_prisma
+
+  synthesis-review-agent:
+    build: ./services/synthesis-review-agent
     ports: ["8005:8005"]
-    depends_on: [ai-service, memory-agent, database-service]
+    depends_on: [mcp-server, ai-service, memory-agent]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=synthesis_review
 
   writer-agent:
     build: ./services/writer-agent
     ports: ["8006:8006"]
-    depends_on: [database-service, storage-service]
+    depends_on: [mcp-server, database-service, storage-service]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=writer
+      
+  # Core Agents (MCP Clients)
+  planning-agent:
+    build: ./services/planning-agent
+    ports: ["8007:8007"]
+    depends_on: [mcp-server, ai-service, memory-agent]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=planning
+
+  executor-agent:
+    build: ./services/executor-agent
+    ports: ["8008:8008"]
+    depends_on: [mcp-server, storage-service]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=executor
+
+  memory-agent:
+    build: ./services/memory-agent
+    ports: ["8009:8009"]
+    depends_on: [mcp-server, vector-database, storage-service]
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=memory
 ```
 
 #### Option 2: Kubernetes (Production)
@@ -464,76 +535,76 @@ async def health_check():
 
 ## 🚧 Implementation Roadmap
 
-### Phase 3.1: Service Extraction Foundation (Weeks 1-3)
+### Phase 3.1: MCP Server Enhancement and Agent Containerization (Weeks 1-3)
 
-#### Week 1: Research Orchestrator Service Extraction
+#### Week 1: Enhanced MCP Server Service
 
-**Days 1-2: Service Architecture Setup**
+##### Days 1-2: MCP Server Containerization
 
-- [ ] Create `services/research-orchestrator/` directory structure
-- [ ] Design FastAPI service architecture with Pydantic models
-- [ ] Extract orchestration logic from current MCP system
-- [ ] Implement basic REST API endpoints for workflow management
+- [ ] Create `services/mcp-server/` directory structure
+- [ ] Containerize existing MCP server with enhanced capabilities
+- [ ] Add Docker configuration for WebSocket clustering support
+- [ ] Implement REST API endpoints for external access alongside WebSocket
 
-**Days 3-4: Database Integration**
+##### Days 3-4: Database Integration and Performance
 
-- [ ] Implement database connection and ORM setup
-- [ ] Create workflow persistence models
-- [ ] Add transaction management for orchestration operations
-- [ ] Test database connectivity and basic CRUD operations
+- [ ] Enhance MCP server database connection pooling
+- [ ] Implement distributed agent registry with Redis backing
+- [ ] Add comprehensive health check endpoints for MCP server
+- [ ] Test MCP server connectivity and load balancing
 
-**Days 5-7: Service Registration and Health Checks**
+##### Days 5-7: Agent Discovery and Health Monitoring
 
-- [ ] Implement service discovery registration
-- [ ] Add comprehensive health check endpoints
-- [ ] Create service monitoring and metrics collection
-- [ ] Test service startup and shutdown procedures
+- [ ] Implement enhanced agent registration with health monitoring
+- [ ] Add agent failover and circuit breaker patterns
+- [ ] Create service discovery mechanism for containerized agents
+- [ ] Test MCP server with multiple agent connections
 
-#### Week 2: Literature Agent Service Containerization
+#### Week 2: Literature Agent Containerization (Maintain MCP Communication)
 
-**Days 1-2: Docker Container Setup**
+##### Days 1-2: Agent Container Setup
 
-- [ ] Create `services/literature-search/Dockerfile`
-- [ ] Extract literature search logic from current agent system
-- [ ] Implement FastAPI service wrapper for literature operations
-- [ ] Test container build and basic service functionality
+- [ ] Create `services/literature-search-agent/Dockerfile`
+- [ ] Extract literature search logic while preserving MCP Client integration
+- [ ] Implement agent startup with MCP server connection
+- [ ] Test basic agent registration and MCP communication
 
-**Days 3-4: Four Literature Agent Services**
+##### Days 3-4: Four Literature Agent Services (MCP Clients)
 
-- [ ] Extract and containerize Literature Search Agent (port 8003)
-- [ ] Extract and containerize Screening & PRISMA Agent (port 8004)
-- [ ] Extract and containerize Synthesis & Review Agent (port 8005)
-- [ ] Extract and containerize Writer Agent (port 8006)
+- [ ] Container Literature Search Agent (port 8003, MCP Client)
+- [ ] Container Screening & PRISMA Agent (port 8004, MCP Client)
+- [ ] Container Synthesis & Review Agent (port 8005, MCP Client)
+- [ ] Container Writer Agent (port 8006, MCP Client)
 
-**Days 5-7: Inter-Service Communication**
+##### Days 5-7: MCP Communication Validation
 
-- [ ] Implement service-to-service authentication
-- [ ] Create service discovery mechanism
-- [ ] Test communication between literature agents
-- [ ] Validate end-to-end literature review pipeline
+- [ ] Verify all agents connect to MCP server via WebSocket
+- [ ] Test task delegation through MCP protocol
+- [ ] Validate agent response handling and error recovery
+- [ ] End-to-end literature pipeline testing via MCP
 
-#### Week 3: Core Agent Services
+#### Week 3: Core Agent Services (MCP Clients)
 
-**Days 1-3: Planning Agent Service**
+##### Days 1-3: Planning Agent Service
 
-- [ ] Extract Planning Agent logic (port 8007)
-- [ ] Implement task synthesis and planning APIs
-- [ ] Create resource requirement analysis endpoints
-- [ ] Test planning workflows and dependencies
+- [ ] Container Planning Agent (port 8007, MCP Client)
+- [ ] Preserve task synthesis and planning workflows via MCP
+- [ ] Test resource requirement analysis through MCP communication
+- [ ] Validate planning workflows and agent dependencies
 
-**Days 4-5: Executor Agent Service**
+##### Days 4-5: Executor Agent Service
 
-- [ ] Extract Executor Agent logic (port 8008)
-- [ ] Implement secure code execution environment
-- [ ] Add file operations and data processing endpoints
+- [ ] Container Executor Agent (port 8008, MCP Client)
+- [ ] Implement secure code execution with MCP integration
+- [ ] Add file operations and data processing via MCP protocol
 - [ ] Test sandbox security and resource limits
 
-**Days 6-7: Memory Agent Service**
+##### Days 6-7: Memory Agent Service
 
-- [ ] Extract Memory Agent logic (port 8009)
-- [ ] Implement knowledge base management APIs
-- [ ] Create semantic search capabilities
-- [ ] Test document storage and retrieval
+- [ ] Container Memory Agent (port 8009, MCP Client)
+- [ ] Implement knowledge base management via MCP
+- [ ] Preserve semantic search capabilities with MCP communication
+- [ ] Test document storage, retrieval, and MCP integration
 
 ### Phase 3.2: Security Enhancement (Weeks 4-5)
 

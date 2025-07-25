@@ -24,8 +24,13 @@ graph TB
         RBAC[RBAC Engine]
     end
 
-    subgraph "Core Services"
-        Orchestrator[Research Orchestrator :8002]
+    subgraph "MCP Coordination Layer"
+        MCPServer[Enhanced MCP Server :9000]
+        TaskQueue[Task Queue & Registry]
+    end
+
+    subgraph "Research Agent Services (MCP Clients)"
+        ResearchMgr[Research Manager Agent :8002]
         LitSearch[Literature Search Agent :8003]
         Screening[Screening & PRISMA Agent :8004]
         Synthesis[Synthesis & Review Agent :8005]
@@ -54,24 +59,20 @@ graph TB
     API_Client --> Gateway
     
     Gateway --> Auth
-    Gateway --> LitSearch
-    Gateway --> Screening
-    Gateway --> Synthesis
-    Gateway --> Writer
-    Gateway --> Planning
-    Gateway --> Executor
-    Gateway --> Memory
+    Gateway --> MCPServer
     
     Auth --> RBAC
     Auth --> Database
     
-    Orchestrator --> LitSearch
-    Orchestrator --> Screening
-    Orchestrator --> Synthesis
-    Orchestrator --> Writer
-    Orchestrator --> Planning
-    Orchestrator --> Executor
-    Orchestrator --> Memory
+    MCPServer --> TaskQueue
+    MCPServer -.WebSocket.-> ResearchMgr
+    MCPServer -.WebSocket.-> LitSearch
+    MCPServer -.WebSocket.-> Screening
+    MCPServer -.WebSocket.-> Synthesis
+    MCPServer -.WebSocket.-> Writer
+    MCPServer -.WebSocket.-> Planning
+    MCPServer -.WebSocket.-> Executor
+    MCPServer -.WebSocket.-> Memory
     
     LitSearch --> AI
     LitSearch --> Database
@@ -89,6 +90,7 @@ graph TB
     Database --> Postgres
     AI --> Redis
     Notification --> Redis
+    MCPServer --> Redis
 
     All_Services --> Monitoring
 ```
@@ -122,118 +124,138 @@ Dependencies:
   - redis-cluster
 ```
 
-### 2. Research Orchestrator Service
+### 2. Enhanced MCP Server Service
 
-**Purpose**: Workflow coordination and task delegation across all research agents.
+**Purpose**: Central coordination hub for all research agents with WebSocket communication.
 
 ```yaml
-Service: research-orchestrator
-Port: 8002
-Image: eunice/research-orchestrator:latest
+Service: mcp-server
+Port: 9000
+Image: eunice/mcp-server:latest
 Resources:
   CPU: 1000m
   Memory: 2Gi
 Environment:
   - DATABASE_URL=postgresql://postgres:5432/eunice
-  - LITERATURE_SEARCH_URL=http://literature-search:8003
-  - SCREENING_PRISMA_URL=http://screening-prisma:8004
-  - SYNTHESIS_REVIEW_URL=http://synthesis-review:8005
-  - WRITER_AGENT_URL=http://writer-agent:8006
-  - PLANNING_AGENT_URL=http://planning-agent:8007
-  - EXECUTOR_AGENT_URL=http://executor-agent:8008
+  - REDIS_URL=redis://redis-cluster:6379
+  - AGENT_REGISTRY_TTL=300
+  - WEBSOCKET_MAX_CONNECTIONS=1000
 Endpoints:
-  - POST /workflows/create
-  - GET  /workflows/{id}/status
-  - POST /workflows/{id}/execute
-  - DELETE /workflows/{id}/cancel
+  - WebSocket /ws (agent connections)
+  - GET  /health
+  - GET  /agents/status
+  - GET  /tasks/queue
+  - POST /tasks/dispatch
 Dependencies:
   - database-service
-  - literature-search
-  - screening-prisma
-  - synthesis-review
-  - writer-agent
-  - planning-agent
-  - executor-agent
+  - redis-cluster
 ```
 
-### 3. Literature Search Agent Service
+### 3. Research Manager Agent Service
 
-**Purpose**: Discovery and collection of bibliographic records from multiple academic sources.
+**Purpose**: Complex workflow orchestration as specialized MCP client agent.
 
 ```yaml
-Service: literature-search
-Port: 8003
-Image: eunice/literature-search:latest
+Service: research-manager-agent
+Port: 8002
+Image: eunice/research-manager-agent:latest
 Resources:
   CPU: 800m
   Memory: 1.5Gi
 Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=research_manager
+  - DATABASE_URL=postgresql://postgres:5432/eunice
+Endpoints:
+  - GET  /health
+  - GET  /status
+Dependencies:
+  - mcp-server
+  - database-service
+MCP_Connection: WebSocket to mcp-server:9000
+```
+
+### 4. Literature Search Agent Service
+
+**Purpose**: Academic literature discovery as MCP client agent.
+
+```yaml
+Service: literature-search-agent
+Port: 8003
+Image: eunice/literature-search-agent:latest
+Resources:
+  CPU: 800m
+  Memory: 1.5Gi
+Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=literature_search
   - SEMANTIC_SCHOLAR_API_KEY=${SEMANTIC_SCHOLAR_KEY}
   - PUBMED_API_KEY=${PUBMED_KEY}
   - ARXIV_API_KEY=${ARXIV_KEY}
-  - DATABASE_URL=postgresql://postgres:5432/eunice
 Endpoints:
-  - POST /search/execute
-  - GET  /search/{id}/report
-  - POST /search/deduplicate
-  - GET  /sources/available
+  - GET  /health
+  - GET  /status
 Dependencies:
+  - mcp-server
   - database-service
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 4. Screening & PRISMA Agent Service
+### 5. Screening & PRISMA Agent Service
 
-**Purpose**: Systematic review screening and PRISMA-compliant audit trails.
+**Purpose**: Systematic review screening as MCP client agent.
 
 ```yaml
-Service: screening-prisma
+Service: screening-prisma-agent
 Port: 8004
-Image: eunice/screening-prisma:latest
+Image: eunice/screening-prisma-agent:latest
 Resources:
   CPU: 1000m
   Memory: 2Gi
 Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=screening_prisma
   - AI_SERVICE_URL=http://ai-service:8010
-  - DATABASE_URL=postgresql://postgres:5432/eunice
 Endpoints:
-  - POST /prisma/sessions/create
-  - POST /screening/batch
-  - GET  /prisma/{session_id}/flowchart
-  - GET  /screening/{session_id}/decisions
+  - GET  /health
+  - GET  /status
 Dependencies:
+  - mcp-server
   - ai-service
   - database-service
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 5. Synthesis & Review Agent Service
+### 6. Synthesis & Review Agent Service
 
-**Purpose**: Data extraction, meta-analysis, and evidence synthesis.
+**Purpose**: Evidence synthesis and meta-analysis as MCP client agent.
 
 ```yaml
-Service: synthesis-review
+Service: synthesis-review-agent
 Port: 8005
-Image: eunice/synthesis-review:latest
+Image: eunice/synthesis-review-agent:latest
 Resources:
   CPU: 1200m
   Memory: 3Gi
 Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=synthesis_review
   - AI_SERVICE_URL=http://ai-service:8010
   - MEMORY_SERVICE_URL=http://memory-agent:8009
-  - DATABASE_URL=postgresql://postgres:5432/eunice
 Endpoints:
-  - POST /outcomes/extract
-  - POST /meta-analysis/perform
-  - POST /evidence-tables/generate
-  - POST /synthesis/narrative
+  - GET  /health
+  - GET  /status
 Dependencies:
+  - mcp-server
   - ai-service
   - memory-agent
   - database-service
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 6. Writer Agent Service
+### 7. Writer Agent Service
 
-**Purpose**: Manuscript generation and formatting for scholarly publications.
+**Purpose**: Manuscript generation as MCP client agent.
 
 ```yaml
 Service: writer-agent
@@ -243,21 +265,22 @@ Resources:
   CPU: 800m
   Memory: 2Gi
 Environment:
-  - DATABASE_URL=postgresql://postgres:5432/eunice
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=writer
   - FILE_STORAGE_URL=http://file-storage:8013
 Endpoints:
-  - POST /manuscripts/draft
-  - PUT  /manuscripts/{id}/revise
-  - GET  /manuscripts/{id}/export
-  - POST /citations/validate
+  - GET  /health
+  - GET  /status
 Dependencies:
+  - mcp-server
   - database-service
   - file-storage-service
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 7. Planning Agent Service
+### 8. Planning Agent Service
 
-**Purpose**: Research planning, task synthesis, and resource requirement analysis.
+**Purpose**: Research planning and strategy as MCP client agent.
 
 ```yaml
 Service: planning-agent
@@ -267,23 +290,24 @@ Resources:
   CPU: 1000m
   Memory: 2Gi
 Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=planning
   - AI_SERVICE_URL=http://ai-service:8010
   - MEMORY_SERVICE_URL=http://memory-agent:8009
-  - DATABASE_URL=postgresql://postgres:5432/eunice
 Endpoints:
-  - POST /plans/create
-  - GET  /plans/{id}/details
-  - POST /plans/{id}/execute
-  - GET  /plans/{id}/progress
+  - GET  /health
+  - GET  /status
 Dependencies:
+  - mcp-server
   - ai-service
   - memory-agent
   - database-service
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 8. Executor Agent Service
+### 9. Executor Agent Service
 
-**Purpose**: Code execution, data processing, and automated task execution.
+**Purpose**: Code execution and data processing as MCP client agent.
 
 ```yaml
 Service: executor-agent
@@ -293,25 +317,26 @@ Resources:
   CPU: 2000m
   Memory: 4Gi
 Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=executor
   - SANDBOX_MODE=enabled
-  - FILE_STORAGE_URL=http://file-storage:8013
   - MAX_EXECUTION_TIME=300
 Security:
   - runAsNonRoot: true
   - readOnlyRootFilesystem: true
   - allowPrivilegeEscalation: false
 Endpoints:
-  - POST /execute/code
-  - GET  /execute/{id}/status
-  - GET  /execute/{id}/results
-  - DELETE /execute/{id}/cancel
+  - GET  /health
+  - GET  /status
 Dependencies:
+  - mcp-server
   - file-storage-service
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 9. Memory Agent Service
+### 10. Memory Agent Service
 
-**Purpose**: Knowledge base management, document storage, and semantic search.
+**Purpose**: Knowledge base management as MCP client agent.
 
 ```yaml
 Service: memory-agent
@@ -321,18 +346,19 @@ Resources:
   CPU: 800m
   Memory: 2Gi
 Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
+  - AGENT_TYPE=memory
   - VECTOR_DB_URL=http://vector-database:8080
   - FILE_STORAGE_URL=http://file-storage:8013
-  - DATABASE_URL=postgresql://postgres:5432/eunice
 Endpoints:
-  - POST /knowledge/store
-  - GET  /knowledge/search
-  - POST /documents/upload
-  - GET  /documents/{id}/content
+  - GET  /health
+  - GET  /status
 Dependencies:
+  - mcp-server
   - vector-database
   - file-storage-service
   - database-service
+MCP_Connection: WebSocket to mcp-server:9000
 ```
 
 ### 7. Authentication Service
@@ -439,63 +465,136 @@ Dependencies:
 
 ## 🔄 Service Communication Patterns
 
-### 1. Synchronous Communication (HTTP/REST)
+### 1. MCP-Based Agent Communication (WebSocket)
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant Gateway as API Gateway
     participant Auth as Auth Service
-    participant Orchestrator as Research Orchestrator
+    participant MCP as MCP Server
+    participant ResearchMgr as Research Manager Agent
     participant Literature as Literature Agent
 
     Client->>Gateway: POST /research/search
     Gateway->>Auth: Validate JWT token
     Auth-->>Gateway: Token valid + user permissions
-    Gateway->>Orchestrator: Route search request
-    Orchestrator->>Literature: Execute literature search
-    Literature-->>Orchestrator: Search results
-    Orchestrator-->>Gateway: Formatted response
+    Gateway->>MCP: Send research request
+    MCP->>ResearchMgr: Delegate to Research Manager Agent
+    ResearchMgr->>MCP: Request literature search task
+    MCP->>Literature: Route to Literature Agent
+    Literature-->>MCP: Search results
+    MCP-->>ResearchMgr: Forward results
+    ResearchMgr-->>MCP: Formatted response
+    MCP-->>Gateway: Complete response
     Gateway-->>Client: Search results
 ```
 
-### 2. Asynchronous Communication (Message Queue)
+### 2. Asynchronous Task Processing (MCP + Redis)
 
 ```mermaid
 sequenceDiagram
-    participant Orchestrator as Research Orchestrator
-    participant Queue as Redis Queue
+    participant MCP as MCP Server
+    participant Queue as Redis Task Queue
     participant Literature as Literature Agent
     participant Database as Database Service
 
-    Orchestrator->>Queue: Enqueue literature search task
-    Literature->>Queue: Dequeue task
+    MCP->>Queue: Enqueue literature search task
+    MCP->>Literature: Notify via WebSocket
+    Literature->>Queue: Dequeue task details
     Literature->>Literature: Process search
     Literature->>Database: Store results
-    Literature->>Queue: Publish completion event
-    Orchestrator->>Queue: Receive completion notification
+    Literature->>MCP: Send completion via WebSocket
+    MCP->>Queue: Update task status
 ```
 
-### 3. Real-time Communication (WebSocket)
+### 3. Real-time Status Updates (WebSocket)
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Notification as Notification Service
-    participant Orchestrator as Research Orchestrator
+    participant Gateway as API Gateway
+    participant MCP as MCP Server
     participant Literature as Literature Agent
 
-    Client->>Notification: Connect WebSocket
-    Orchestrator->>Literature: Start long-running search
-    Literature->>Notification: Progress update (25%)
-    Notification-->>Client: WebSocket: "Search 25% complete"
-    Literature->>Notification: Progress update (75%)
-    Notification-->>Client: WebSocket: "Search 75% complete"
-    Literature->>Notification: Task complete
-    Notification-->>Client: WebSocket: "Search complete"
+    Client->>Gateway: Connect WebSocket for updates
+    Gateway->>MCP: Subscribe to task updates
+    MCP->>Literature: Start long-running search task
+    Literature->>MCP: Progress update (25%) via WebSocket
+    MCP-->>Gateway: Forward progress update
+    Gateway-->>Client: WebSocket: "Search 25% complete"
+    Literature->>MCP: Progress update (75%) via WebSocket
+    MCP-->>Gateway: Forward progress update
+    Gateway-->>Client: WebSocket: "Search 75% complete"
+    Literature->>MCP: Task complete via WebSocket
+    MCP-->>Gateway: Forward completion
+    Gateway-->>Client: WebSocket: "Search complete"
 ```
 
-## 🐳 Docker Compose Configuration
+## � Inter-Service Communication Protocols
+
+### MCP Protocol (Model Context Protocol)
+
+- **Primary Channel**: WebSocket connections between MCP Server and Agent containers
+- **Protocol**: MCP JSON-RPC over WebSocket
+- **Message Format**: JSON-RPC 2.0 with MCP extensions
+- **Connection Management**: Persistent WebSocket with automatic reconnection
+- **Load Balancing**: Round-robin across agent instances
+- **Timeout**: 30 seconds for standard operations, 300 seconds for long-running tasks
+
+#### Example MCP Message Flow
+
+```json
+// Request from MCP Server to Literature Agent
+{
+  "jsonrpc": "2.0",
+  "id": "task_12345",
+  "method": "literature/search",
+  "params": {
+    "query": "neural networks attention mechanisms",
+    "max_results": 50,
+    "databases": ["arxiv", "pubmed", "google_scholar"]
+  }
+}
+
+// Response from Literature Agent to MCP Server
+{
+  "jsonrpc": "2.0",
+  "id": "task_12345",
+  "result": {
+    "status": "completed",
+    "results_count": 47,
+    "cache_key": "lit_search_abc123",
+    "next_action": "summary_generation"
+  }
+}
+```
+
+### HTTP/REST (External API Access)
+
+- **Purpose**: Client-facing API Gateway and external service integration
+- **Format**: JSON API with OpenAPI 3.0 specification
+- **Authentication**: JWT tokens with role-based access control
+- **Rate Limiting**: 1000 requests per hour per user
+- **Versioning**: URI versioning (/api/v1/, /api/v2/)
+
+### Redis Message Queue
+
+- **Purpose**: Asynchronous task coordination and status updates
+- **Pattern**: Pub/Sub for real-time updates, Task Queue for work distribution
+- **Serialization**: JSON with compression for large payloads
+- **Persistence**: Redis AOF for task durability
+- **Clustering**: Redis Sentinel for high availability
+
+### WebSocket (Real-time Updates)
+
+- **Client Communication**: Real-time progress updates and notifications
+- **Message Format**: JSON with event types and data payloads
+- **Connection Management**: Automatic reconnection with exponential backoff
+- **Authentication**: JWT token in connection header
+- **Heartbeat**: 30-second ping/pong for connection health
+
+## �🐳 Docker Compose Configuration
 
 ```yaml
 version: '3.8'
@@ -507,8 +606,8 @@ services:
     ports: ["8001:8001"]
     environment:
       - AUTH_SERVICE_URL=http://auth-service:8007
-      - ORCHESTRATOR_URL=http://research-orchestrator:8002
-    depends_on: [auth-service, research-orchestrator]
+      - MCP_SERVER_URL=ws://mcp-server:9000
+    depends_on: [auth-service, mcp-server]
     networks: [eunice-network]
 
   # Authentication
@@ -521,80 +620,85 @@ services:
     depends_on: [postgres, redis]
     networks: [eunice-network]
 
-  # Core Services
-  research-orchestrator:
-    build: ./services/research-orchestrator
-    ports: ["8002:8002"]
+  # Core MCP Server
+  mcp-server:
+    build: ./services/mcp-server
+    ports: ["9000:9000"]
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-      - LITERATURE_SEARCH_URL=http://literature-search:8003
-      - SCREENING_PRISMA_URL=http://screening-prisma:8004
-      - SYNTHESIS_REVIEW_URL=http://synthesis-review:8005
-      - WRITER_AGENT_URL=http://writer-agent:8006
-    depends_on: [postgres, literature-search, screening-prisma, synthesis-review, writer-agent]
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://auth-service:8007
+    depends_on: [postgres, redis, auth-service]
     networks: [eunice-network]
 
-  literature-search:
-    build: ./services/literature-search
-    ports: ["8003:8003"]
+  # Agent Services (MCP Clients)
+  literature-agent:
+    build: ./services/literature-agent
     environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-    depends_on: [postgres]
+    depends_on: [mcp-server, postgres]
     networks: [eunice-network]
 
-  screening-prisma:
-    build: ./services/screening-prisma
-    ports: ["8004:8004"]
+  screening-agent:
+    build: ./services/screening-agent
     environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - AI_SERVICE_URL=http://ai-service:8010
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-    depends_on: [ai-service, postgres]
+    depends_on: [mcp-server, ai-service, postgres]
     networks: [eunice-network]
 
-  synthesis-review:
-    build: ./services/synthesis-review
-    ports: ["8005:8005"]
+  synthesis-agent:
+    build: ./services/synthesis-agent
     environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - AI_SERVICE_URL=http://ai-service:8010
-      - MEMORY_SERVICE_URL=http://memory-agent:8009
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-    depends_on: [ai-service, memory-agent, postgres]
+    depends_on: [mcp-server, ai-service, postgres]
     networks: [eunice-network]
 
   writer-agent:
     build: ./services/writer-agent
-    ports: ["8006:8006"]
     environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - FILE_STORAGE_URL=http://file-storage:8013
-    depends_on: [postgres, file-storage]
+    depends_on: [mcp-server, postgres, file-storage]
     networks: [eunice-network]
 
   planning-agent:
     build: ./services/planning-agent
-    ports: ["8007:8007"]
     environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - AI_SERVICE_URL=http://ai-service:8010
-      - MEMORY_SERVICE_URL=http://memory-agent:8009
-    depends_on: [ai-service, memory-agent]
+    depends_on: [mcp-server, ai-service]
     networks: [eunice-network]
 
   executor-agent:
     build: ./services/executor-agent
-    ports: ["8008:8008"]
     environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - FILE_STORAGE_URL=http://file-storage:8013
       - SANDBOX_MODE=enabled
-    depends_on: [file-storage]
+    depends_on: [mcp-server, file-storage]
     networks: [eunice-network]
 
   memory-agent:
     build: ./services/memory-agent
-    ports: ["8009:8009"]
     environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - VECTOR_DB_URL=http://vector-database:8080
       - FILE_STORAGE_URL=http://file-storage:8013
-    depends_on: [vector-database, file-storage]
+    depends_on: [mcp-server, vector-database, file-storage]
+    networks: [eunice-network]
+
+  research-manager-agent:
+    build: ./services/research-manager-agent
+    environment:
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+    depends_on: [mcp-server, postgres]
     networks: [eunice-network]
 
   # Supporting Services
@@ -624,6 +728,16 @@ services:
     depends_on: [redis, auth-service]
     networks: [eunice-network]
 
+  file-storage:
+    build: ./services/file-storage
+    ports: ["8013:8013"]
+    environment:
+      - STORAGE_PATH=/app/storage
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+    volumes: ["file_storage:/app/storage"]
+    depends_on: [postgres]
+    networks: [eunice-network]
+
   # Infrastructure
   postgres:
     image: postgres:15-alpine
@@ -649,6 +763,7 @@ volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+  file_storage:
 
 networks:
   eunice-network:

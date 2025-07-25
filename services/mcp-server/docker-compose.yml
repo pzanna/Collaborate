@@ -1,0 +1,171 @@
+# Enhanced MCP Server - Phase 3.1 Docker Compose
+version: "3.8"
+
+services:
+  # Enhanced MCP Server
+  mcp-server:
+    build: .
+    ports:
+      - "9000:9000" # MCP WebSocket port
+      - "8080:8080" # Health check port
+      - "9090:9090" # Metrics port
+    environment:
+      # Core Configuration
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=9000
+      - MCP_MAX_CONNECTIONS=1000
+
+      # Database
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      - REDIS_MAX_CONNECTIONS=100
+
+      # Agent Configuration
+      - AGENT_REGISTRY_TTL=300
+      - HEARTBEAT_INTERVAL=30
+
+      # Task Management
+      - MCP_MAX_CONCURRENT_TASKS=100
+      - MCP_TASK_TIMEOUT=300
+      - MCP_RETRY_ATTEMPTS=3
+
+      # Load Balancing
+      - LOAD_BALANCE_STRATEGY=adaptive
+      - CIRCUIT_BREAKER_ENABLED=true
+
+      # Clustering
+      - CLUSTER_ENABLED=true
+      - CLUSTER_DISCOVERY=redis
+      - CLUSTER_NODE_ID=mcp-server-1
+
+      # Security
+      - AUTH_SERVICE_URL=http://auth-service:8007
+      - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
+
+      # Monitoring
+      - ENABLE_METRICS=true
+      - METRICS_PORT=9090
+      - ENABLE_TRACING=false
+
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - LOG_FILE=/app/logs/mcp_server.log
+
+      # Health Check
+      - HEALTH_CHECK_ENABLED=true
+      - HEALTH_CHECK_INTERVAL=30
+
+      # Resource Configuration
+      - MEMORY_LIMIT=2Gi
+      - CPU_LIMIT=1000m
+
+      # Allowed Agent Types
+      - ALLOWED_AGENT_TYPES=research_manager,literature_search,screening_prisma,synthesis_review,writer,planning,executor,memory
+
+    volumes:
+      - mcp_logs:/app/logs
+      - mcp_data:/app/data
+
+    depends_on:
+      - postgres
+      - redis
+
+    networks:
+      - eunice-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
+  # Supporting Infrastructure
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=eunice
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - eunice-network
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - eunice-network
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # Optional: Redis Commander for debugging
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - eunice-network
+    depends_on:
+      - redis
+    profiles:
+      - debug
+
+  # Optional: Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
+    networks:
+      - eunice-network
+    depends_on:
+      - mcp-server
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+  redis_data:
+  mcp_logs:
+  mcp_data:
+  prometheus_data:
+
+networks:
+  eunice-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
