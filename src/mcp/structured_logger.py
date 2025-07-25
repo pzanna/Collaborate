@@ -92,7 +92,7 @@ class MCPLogger:
     """Structured logger for MCP server components"""
 
     def __init__(
-        self, name: Optional[str] = None, log_level: str = "INFO", config_manager=None
+        self, name: Optional[str] = None, log_level: str = "INFO", config_manager=None, log_file: Optional[str] = None
     ):
         logger_name = name or "mcp.default"
         self.logger = logging.getLogger(logger_name)
@@ -102,7 +102,9 @@ class MCPLogger:
         self.logger.handlers.clear()
 
         # Determine log file path
-        if config_manager and hasattr(config_manager, 'config'):
+        if log_file:
+            log_path = log_file
+        elif config_manager and hasattr(config_manager, 'config'):
             try:
                 log_path = config_manager.config.logging.file.replace('eunice.log', 'mcp_server.log')
             except AttributeError:
@@ -290,9 +292,9 @@ class MCPLogger:
         self.log_event(LogLevel.INFO, event_type, message, details=details or {})
 
 
-def get_mcp_logger(component_name: str, log_level: str = "INFO", config_manager=None) -> MCPLogger:
+def get_mcp_logger(component_name: str, log_level: str = "INFO", config_manager=None, log_file: Optional[str] = None) -> MCPLogger:
     """Factory function to create MCP logger instances"""
-    return MCPLogger(f"mcp.{component_name}", log_level, config_manager)
+    return MCPLogger(f"mcp.{component_name}", log_level, config_manager, log_file)
 
 
 # Default logger instance for the MCP server
