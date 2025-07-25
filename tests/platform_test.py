@@ -133,7 +133,7 @@ def approve_research_plan(plan_id: str) -> bool:
     success, response_data, error_msg = make_request("POST", f"/plans/{plan_id}/approve")
 
     if success and response_data:
-
+        print(f"✅ Research plan approved: {response_data.get('id', plan_id)}")
         return True
     else:
         print(f"❌ Failed to approve research plan: {error_msg}")
@@ -265,6 +265,7 @@ def run_simple_research_test():
             plan_id = plan_details.get('id')
         else:
             print("⚠️  Could not retrieve detailed research plan")
+            plan_id = None
             
     else:
         print("❌ Failed to retrieve research results.")
@@ -273,8 +274,7 @@ def run_simple_research_test():
     # Step 6. Approve research plan
     print("\n✅ Approving research plan...")
     if plan_id:
-        # approved = approve_research_plan(plan_id)
-        approved = None
+        approved = approve_research_plan(plan_id)
     else:
         print("❌ No plan ID available to approve.")
         return

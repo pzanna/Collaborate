@@ -1,26 +1,30 @@
 import React, { useEffect, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card"
-import { ClockIcon, ChatBubbleLeftRightIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline"
+import {
+  ClockIcon,
+  ChatBubbleLeftRightIcon,
+  ClipboardDocumentListIcon,
+} from "@heroicons/react/24/outline"
 
 interface PendingItem {
-  id: string;
-  title: string;
-  type: 'task' | 'project' | 'topic';
-  status: string;
-  created_at: string;
+  id: string
+  title: string
+  type: "task" | "project" | "topic"
+  status: string
+  created_at: string
 }
 
 const academicQuotes = [
   "The important thing is not to stop questioning. - Albert Einstein",
   "Research is what I'm doing when I don't know what I'm doing. - Wernher von Braun",
-  "The only true wisdom is in knowing you know nothing. - Socrates", 
+  "The only true wisdom is in knowing you know nothing. - Socrates",
   "If I have seen further it is by standing on the shoulders of Giants. - Isaac Newton",
   "Science is a way of thinking much more than it is a body of knowledge. - Carl Sagan",
   "The good thing about science is that it's true whether or not you believe in it. - Neil deGrasse Tyson",
   "Research is formalized curiosity. It is poking and prying with a purpose. - Zora Neale Hurston",
   "The whole of science is nothing more than a refinement of everyday thinking. - Albert Einstein",
   "In science there is only physics; all the rest is stamp collecting. - Ernest Rutherford",
-  "The most exciting phrase to hear in science is not 'Eureka!' but 'That's funny...' - Isaac Asimov"
+  "The most exciting phrase to hear in science is not 'Eureka!' but 'That's funny...' - Isaac Asimov",
 ]
 
 const WelcomePage: React.FC = () => {
@@ -51,8 +55,8 @@ const WelcomePage: React.FC = () => {
   useEffect(() => {
     const loadPendingItems = async () => {
       // Simulate loading delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       // Use mock data for pending items
       const mockPendingItems: PendingItem[] = [
         {
@@ -60,22 +64,22 @@ const WelcomePage: React.FC = () => {
           title: "Complete literature review for AI research project",
           type: "task",
           status: "pending",
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
         },
         {
-          id: "2", 
+          id: "2",
           title: "Review draft for Neural Networks topic",
           type: "topic",
           status: "active",
-          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
         },
         {
           id: "3",
           title: "Machine Learning Research Project",
-          type: "project", 
+          type: "project",
           status: "active",
-          created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-        }
+          created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+        },
       ]
       setPendingItems(mockPendingItems)
       setLoading(false)
@@ -113,41 +117,29 @@ const WelcomePage: React.FC = () => {
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    )
+
     if (diffInHours < 1) return "Less than an hour ago"
-    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`
-    
+    if (diffInHours < 24)
+      return `${diffInHours} hour${diffInHours > 1 ? "s" : ""} ago`
+
     const diffInDays = Math.floor(diffInHours / 24)
-    return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`
+    return `${diffInDays} day${diffInDays > 1 ? "s" : ""} ago`
   }
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Welcome Header */}
       <div className="text-center py-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">
-          {greeting}!
-        </h1>
-        <p className="text-lg text-gray-600">
+        <h1 className="text-4xl font-bold text-gray-900 mb-1">{greeting}!</h1>
+        <p className="text-lg text-gray-600 mb-4">
           Welcome back to your research workspace
         </p>
+        {/* Academic Quote */}
+        <p className="text-sm italic text-gray-600">"{quote}"</p>
       </div>
-
-      {/* Academic Quote */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ChatBubbleLeftRightIcon className="h-5 w-5" />
-            Daily Inspiration
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <blockquote className="text-lg italic text-gray-700 border-l-4 border-blue-500 pl-4">
-            "{quote}"
-          </blockquote>
-        </CardContent>
-      </Card>
 
       {/* Pending Items */}
       <Card>
@@ -165,12 +157,16 @@ const WelcomePage: React.FC = () => {
           ) : pendingItems.length > 0 ? (
             <div className="space-y-3">
               {pendingItems.map((item) => (
-                <div 
+                <div
                   key={item.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full ${getItemTypeColor(item.type)}`}>
+                    <div
+                      className={`p-2 rounded-full ${getItemTypeColor(
+                        item.type
+                      )}`}
+                    >
                       {getItemTypeIcon(item.type)}
                     </div>
                     <div>
@@ -202,23 +198,29 @@ const WelcomePage: React.FC = () => {
           <CardContent className="text-center py-6">
             <ClockIcon className="h-8 w-8 mx-auto mb-2 text-blue-600" />
             <h3 className="font-semibold text-gray-900">Start Research</h3>
-            <p className="text-sm text-gray-600">Begin a new research session</p>
+            <p className="text-sm text-gray-600">
+              Begin a new research session
+            </p>
           </CardContent>
         </Card>
-        
+
         <Card className="cursor-pointer hover:shadow-md transition-shadow">
           <CardContent className="text-center py-6">
             <ClipboardDocumentListIcon className="h-8 w-8 mx-auto mb-2 text-green-600" />
             <h3 className="font-semibold text-gray-900">View Projects</h3>
-            <p className="text-sm text-gray-600">Browse your research projects</p>
+            <p className="text-sm text-gray-600">
+              Browse your research projects
+            </p>
           </CardContent>
         </Card>
-        
+
         <Card className="cursor-pointer hover:shadow-md transition-shadow">
           <CardContent className="text-center py-6">
             <ChatBubbleLeftRightIcon className="h-8 w-8 mx-auto mb-2 text-purple-600" />
             <h3 className="font-semibold text-gray-900">Review Tasks</h3>
-            <p className="text-sm text-gray-600">Check task progress and results</p>
+            <p className="text-sm text-gray-600">
+              Check task progress and results
+            </p>
           </CardContent>
         </Card>
       </div>

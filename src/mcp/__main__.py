@@ -6,6 +6,7 @@ python -m src.mcp
 """
 
 import asyncio
+
 from .server import main
 
 if __name__ == "__main__":

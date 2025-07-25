@@ -2,34 +2,43 @@
 
 ## Overview
 
-Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](<https://en.wikipedia.org/wiki/Agency_(novel)>). It's designed to facilitate sophisticated research workflows through an integrated microservices architecture that supports collaborative research, project management, and intelligent agent coordination.
+Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](https://en.wikipedia.org/wiki/Agency_(novel)). It is designed to facilitate sophisticated research workflows through an integrated microservices architecture supporting collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
 
-The platform specializes in hierarchical research organization, multi-agent collaboration, and provides comprehensive tools for managing complex research projects across multiple domains.
+The platform specializes in hierarchical research organization, multi-agent collaboration, systematic literature reviews, and provides comprehensive tools for managing complex research projects across multiple domains.
 
 ## 🚀 Key Features
 
-### Multi-Agent Coordination
+### Multi-Agent Coordination - **Project Management**: Comprehensive project organization with hierarchical research topics
 
-- **Project Management**: Comprehensive project organization with hierarchical research topics
 - **Conversation Tracking**: Advanced conversation management with persistent storage
 - **Research Task Organization**: Structured task management with dependency tracking
 - **Hierarchical Data Models**: Complex research structures with nested relationships
 - **Multi-Agent Coordination**: Intelligent agent personas for specialized research domains
 - **Persona Consultation System**: Real-time expert consultation through specialized AI personas
 
-### Research Capabilities
+### Research Capabilities - **Enhanced Academic Search**: Semantic Scholar API integration for high-quality academic papers
 
-- **Enhanced Academic Search**: Semantic Scholar API integration for high-quality academic papers
 - **Multi-Source Research**: Web search across Google, Bing, Yahoo with academic source prioritization
+- **Systematic Literature Reviews**: PRISMA-compliant systematic review generation
+- **Thesis Generation**: Transform systematic reviews into PhD-quality literature review chapters
 - **Cost Estimation System**: Budget tracking and resource management
 - **Dependency Management**: Automatic task dependency resolution
 - **Parallelism Coordination**: Efficient multi-threaded research execution
 - **Memory Management**: Persistent storage for research artifacts and conversations
-- **Export Functionality**: Research data export in multiple formats (PDF, Markdown)
+- **Export Functionality**: Research data export in multiple formats (PDF, Markdown, LaTeX, HTML, DOCX)
 
-### Technical Features
+### Thesis Generation System 🎓 - **AI-Powered Analysis**: GPT-4 integration for intelligent theme extraction and gap analysis
 
-- **MCP (Model Context Protocol) Server**: Advanced microservices coordination with persona integration
+- **Multiple Output Formats**: Markdown, LaTeX, HTML, PDF, DOCX
+- **Deterministic Generation**: Reproducible outputs with SHA-256 caching (temp=0, top_p=1)
+- **Academic Quality**: PhD-level literature reviews with proper citations and formatting
+- **Research Questions**: Automatic generation of testable hypotheses and research questions
+- **Conceptual Frameworks**: Visual diagrams and theoretical models with Mermaid integration
+- **Human Checkpoints**: Interactive review points for quality control
+- **Template System**: Jinja2 templates for consistent academic formatting
+
+### Technical Features - **MCP (Model Context Protocol) Server**: Advanced microservices coordination with persona integration
+
 - **Real-time WebSocket Communication**: Live updates, collaboration, and expert consultations
 - **RESTful API**: Comprehensive backend API for all platform operations
 - **Modern React Frontend**: Responsive web interface with TypeScript
@@ -48,7 +57,7 @@ Eunice follows a microservices architecture with the following key components:
 - **Persona System**: Expert consultation agents with domain-specific knowledge
 - **Storage Layer**: SQLite databases for conversations, memory, and collaboration data
 
-For detailed architecture information, see [Architecture Documentation](docs/Architecture.md).
+For detailed architecture information, see [Architecture Overview](docs/Architecture.md).
 
 ## 🧬 Research Agent Personas
 
@@ -87,58 +96,137 @@ See [Persona Documentation](docs/Personas/README.md) for detailed role descripti
 
 ## 🛠️ Installation & Setup
 
-### Prerequisites
+### Prerequisites - **Python 3.11+** (recommended for optimal performance)
 
-- Python 3.8+
-- Node.js 16+
-- Git
+- **Node.js 18+** (for frontend development)
+- **Git** (for version control)
+- **Virtual Environment** (strongly recommended)
 
-### Quick Start
+### 🚀 Quick Start (Optimized Setup)
 
-1. **Clone the repository**
+#### 1. **Clone and Setup Virtual Environment**
 
-   ```bash
-   git clone https://github.com/pzanna/Eunice.git
-   cd Eunice
-   ```
+```bash
+git clone https://github.com/pzanna/Eunice.git
+cd Eunice
 
-2. **Backend Setup**
+# Create and activate virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
 
-   ```bash
-   # Install Python dependencies
-   pip install -r requirements.txt
+#### 2. **Install Dependencies (ARM64/Apple Silicon Compatible)**
 
-   # Set up environment
-   python setup.py
+```bash
+# Upgrade pip first
+pip install --upgrade pip
 
-   # Configure API keys in .env file
-   # Add your OpenAI and xAI API keys
-   ```
+# Install Python dependencies
+pip install -r requirements.txt
 
-3. **Frontend Setup**
+# For Apple Silicon users, if you encounter architecture errors:
+python -m pip install --upgrade --force-reinstall black isort autoflake
+```
 
-   ```bash
-   cd frontend
-   npm install
-   npm run build
-   cd ..
-   ```
+#### 3. **Environment Configuration**
 
-4. **Start the Platform**
+```bash
+# Set up environment
+python setup.py
 
-   ```bash
-   # Start all services
-   ./start_eunice.sh
+# Configure API keys in .env file
+# Add your OpenAI and xAI API keys:
+# OPENAI_API_KEY=your_openai_key_here  
+# XAI_API_KEY=your_xai_key_here
+```
 
-   # Or start individually:
-   # Backend: python web_server.py
-   # MCP Server: python mcp_server.py
-   # Frontend: cd frontend && npm start
-   ```
+#### 4. **Frontend Setup**
 
-### Alternative Setup Scripts
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
 
-- `./setup.sh` - Basic Python environment setup
+#### 5. **Verify Installation (Optional)**
+
+```bash
+# Run code quality check to verify setup
+python -m flake8 src/ --count --statistics --max-line-length=120
+
+# Should show ~515 issues (93.7% improvement from original 8,212)
+# This confirms the optimized codebase is working correctly
+```
+
+#### 6. **Start the Platform**
+
+```bash
+# Start all services (recommended)
+./start_eunice.sh
+
+# Or start services individually:
+# Backend API: python web_server.py
+# MCP Server: python mcp_server.py  
+# Frontend Dev: cd frontend && npm start
+```
+
+### 🔧 Code Quality Tools (For Developers)
+
+The platform includes professional code optimization tools:
+
+```bash
+# Apply automatic code fixes (8,212 fixes applied)
+python fix_code_quality.py
+
+# Advanced optimization for remaining issues  
+python advanced_optimizer.py
+
+# Professional formatting (use python -m for compatibility)
+python -m black src/ --line-length 120
+python -m isort src/ --profile black
+python -m autoflake --remove-all-unused-imports --recursive src/
+```
+
+### ⚠️ Troubleshooting
+
+**Common Issues:**
+
+- **ARM64 Architecture Errors**: Use `python -m <command>` instead of global commands
+- **Virtual Environment Issues**: Delete `.venv` and recreate: `python -m venv .venv`-**Import Errors**: Ensure you're in the activated virtual environment
+- **API Errors**: Check your `.env` file has valid API keys
+
+**For detailed troubleshooting**: See `docs/Troubleshooting.md` (coming soon)
+
+### Thesis Generation Quick Start 🎓
+
+Generate PhD-quality literature review chapters from PRISMA systematic reviews:
+
+```bash
+# Setup thesis generation dependencies
+python thesis_cli.py --setup
+
+# Generate thesis chapter from systematic review
+python thesis_cli.py tests/literature/comprehensive_literature_review.json
+
+# Advanced usage with custom configuration
+python thesis_cli.py data/review.json -c src/thesis/config/thesis_config.yaml --formats latex pdf
+
+# Automated processing (skip human checkpoints) - outputs to exports directory
+python thesis_cli.py data/review.json --no-checkpoints -o exports
+```
+
+**What it generates:**
+
+- 5 academic themes with evidence synthesis
+- Research gaps with priority scoring (impact, feasibility, novelty)
+- Conceptual framework with theoretical relationships
+- Testable research questions and hypotheses
+- Publication-ready LaTeX documents
+- Interactive HTML and clean Markdown formats
+
+### Alternative Setup Scripts - `./setup.sh` - Basic Python environment setup
+
 - `./setup_web.sh` - Web-specific setup with frontend build
 
 ## 📁 Project Structure
@@ -149,20 +237,20 @@ Eunice/
 │   ├── agents/            # AI agent implementations
 │   ├── ai_clients/        # AI service integrations
 │   ├── core/              # Core platform logic
-│   ├── mcp/              # Model Context Protocol server with persona integration
-│   ├── models/           # Data models
-│   ├── personas/         # Expert consultation persona agents
-│   ├── storage/          # Database and storage
-│   └── utils/            # Utility functions
-├── frontend/             # React TypeScript frontend
-│   ├── src/components/   # UI components
-│   ├── src/services/     # API services
-│   └── src/store/        # Redux store
-├── docs/                # Documentation
-├── tests/               # Test suites
-├── config/              # Configuration files
-├── logs/                # Application logs
-└── exports/             # Research exports
+│   ├── mcp/               # Model Context Protocol server with persona integration
+│   ├── models/            # Data models
+│   ├── personas/          # Expert consultation persona agents
+│   ├── storage/           # Database and storage
+│   └── utils/             # Utility functions
+├── frontend/               # React TypeScript frontend
+│   ├── src/components/     # UI components
+│   ├── src/services/       # API services
+│   └── src/store/          # Redux store
+├── docs/                   # Documentation
+├── tests/                  # Test suites
+├── config/                 # Configuration files
+├── logs/                   # Application logs
+└── exports/                # Research exports
 ```
 
 ## 🧪 Testing
@@ -214,21 +302,18 @@ SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 - Priority access during high traffic
 - Get your free API key at: [https://www.semanticscholar.org/product/api#api-key](https://www.semanticscholar.org/product/api#api-key)
 
-### Configuration Files
+### Configuration Files - `.env` - API keys and environment variables
 
-- `.env` - API keys and environment variables
 - `config/default_config.json` - Default platform settings
 - `pytest.ini` - Test configuration
 
-## 📚 Documentation
+## 📚 Documentation - [Architecture Overview](docs/Architecture.md)
 
-- [Architecture Overview](docs/Architecture.md)
 - [Research Manager](docs/Research_Manager.md)
 - [MCP Persona System](docs/MCP_Persona_System.md)
 - [Persona Quick Start](docs/Persona_Quick_Start.md)
 - [Persona Roles](docs/Personas/README.md)
-- [Cost Estimation System](docs/Cost_Estimation_System.md)
-- [Hierarchical Research Structure](docs/Hierarchical_Research_Structure.md)
+- [Cost Estimation System](docs/Cost_Estimation_System.md)-[Hierarchical Research Structure](docs/Hierarchical_Research_Structure.md)
 
 ## 🤝 Contributing
 
@@ -245,4 +330,4 @@ This project is part of ongoing research and development. Please refer to the pr
 
 ## 🙏 Acknowledgments
 
-Named after Eunice, the AI character from William Gibson's "Agency" - a novel that explores themes of artificial intelligence, research collaboration, and the intersection of technology with human endeavor.
+Named after Eunice, the AI character from William Gibson's "Agency"—a novel that explores themes of artificial intelligence, research collaboration, and the intersection of technology with human endeavor.
