@@ -116,11 +116,24 @@ This structure enables intuitive navigation and clear separation of concerns.
 1. **User Query** → Web UI (React)
 2. **Web UI** → API Gateway (FastAPI endpoint)
 3. **API Gateway** → MCP Server (task routing)
-4. **MCP Server** → Research Manager (orchestration if needed) OR Literature Agent (direct routing)
-5. **Literature Agent** → External APIs (Semantic Scholar, Google Scholar)
-6. **Literature Agent** → Database Agent (persist results)
+4. **MCP Server** → Research Manager (orchestration) → Literature Search Agent (LSA)
+5. **Literature Search Agent** → External APIs (Semantic Scholar, Google Scholar, PubMed, arXiv)
+6. **Literature Search Agent** → Database Agent (persist normalized results)
 7. **Results** flow back through the chain with real-time updates
 8. **UI Updates** via WebSocket for live progress indication
+
+#### Systematic Review Flow
+
+1. **Review Request** → API Gateway → MCP Server → Research Manager
+2. **Research Manager** → Literature Search Agent (discovery phase)
+3. **Literature Search Agent** → Multiple databases → Database Agent (store results)
+4. **Research Manager** → Screening & PRISMA Agent (screening phase)
+5. **Screening & PRISMA Agent** → AI Agent (classification) → Database Agent (store decisions)
+6. **Research Manager** → Synthesis & Review Agent (analysis phase)
+7. **Synthesis & Review Agent** → AI Agent (data extraction) → Database Agent (store outcomes)
+8. **Research Manager** → Writer Agent (manuscript generation)
+9. **Writer Agent** → Database Agent (retrieve all data) → Generate manuscript
+10. **Final PRISMA Report** → User via API Gateway
 
 #### Persona Consultation Flow
 
@@ -137,7 +150,7 @@ This structure enables intuitive navigation and clear separation of concerns.
 2. **MCP Server** → Research Manager (task breakdown and orchestration)
 3. **Research Manager** → MCP Server (multi-agent coordination)
 4. **MCP Server** → Planning Agent (task analysis)
-5. **Planning Agent** → Literature Agent (information gathering)
+5. **Planning Agent** → Literature Search Agent (information gathering)
 6. **Planning Agent** → Executor Agent (data processing)
 7. **Planning Agent** → Memory Agent (knowledge synthesis)
 8. **Consolidated Results** → Database Agent (persistence)
@@ -163,13 +176,20 @@ This structure enables intuitive navigation and clear separation of concerns.
 - ✅ API Gateway separation and enhancement
 - ✅ Task queue implementation (Celery/RQ)
 
-### Phase 3: Microservices Transition
+### Phase 3: Microservices Transition (🎯 READY TO START)
 
 - Research Manager as separate orchestrator service
 - Distributed agent deployment
 - Enhanced security and authentication
 - Performance optimization and caching layers
 - Real-time collaboration features
+
+**📚 Comprehensive Phase 3 Documentation Available:**
+
+- **[Phase 3 Overview](../PHASE3_OVERVIEW.md)**: Complete documentation suite overview
+- **[Microservices Transition Plan](../PHASE3_MICROSERVICES_TRANSITION.md)**: Architectural strategy and roadmap
+- **[Implementation Checklist](../PHASE3_IMPLEMENTATION_CHECKLIST.md)**: Day-by-day implementation tasks
+- **[Service Architecture](../PHASE3_SERVICE_ARCHITECTURE.md)**: Technical specifications and deployment configs
 
 ### Phase 4: Advanced Features
 
@@ -232,13 +252,45 @@ Oversees project management, agent coordination, and resource usage. Supports st
 
 Maintains a local knowledge base containing research documents, artefacts, and summaries.
 
-### Literature Agent
+### Literature Review Agents
 
-Performs comprehensive literature searches and verification, leveraging APIs like Semantic Scholar and Google Scholar. Capabilities include:
+The literature review functionality has been restructured into four specialized agents that work together to produce high-quality PRISMA reports and PhD-level literature reviews:
 
-- Multi-engine web search.
-- Advanced content extraction.
-- Multi-source fact verification.
+#### Literature Search Agent (LSA)
+
+Discovers and collects bibliographic records from multiple academic sources. Capabilities include:
+
+- Query multiple data sources (PubMed, CrossRef, Semantic Scholar, arXiv)
+- Apply advanced filters (year, publication type, keywords)
+- Deduplicate results using DOI, PMID, or heuristics
+- Store normalized records in the Literature Database
+
+#### Screening & PRISMA Agent (SPA)
+
+Manages systematic review screening with PRISMA compliance. Capabilities include:
+
+- Perform title/abstract and full-text screening
+- Apply inclusion/exclusion criteria with AI assistance
+- Track PRISMA flowchart counts and audit trails
+- Support human-in-the-loop decision overrides
+
+#### Synthesis & Review Agent (SRA)
+
+Analyzes included studies and synthesizes findings. Capabilities include:
+
+- Extract structured data from full-text documents
+- Perform meta-analysis with statistical computations
+- Generate evidence tables and GRADE quality assessments
+- Create visual outputs (forest plots, summary tables)
+
+#### Writer Agent (WA)
+
+Transforms synthesized data into scholarly manuscripts. Capabilities include:
+
+- Draft PRISMA-compliant manuscript sections
+- Integrate flowcharts, tables, and visualizations
+- Ensure proper citation formatting (APA, Vancouver, etc.)
+- Support iterative revision and export to multiple formats
 
 ### Executor Agent
 
