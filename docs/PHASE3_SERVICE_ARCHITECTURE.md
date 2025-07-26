@@ -29,7 +29,7 @@ graph TB
         TaskQueue[Task Queue & Registry]
     end
 
-    subgraph "Research Agent Services (MCP Clients)"
+    subgraph "Research Agents (Containerized MCP Clients)"
         ResearchMgr[Research Manager Agent :8002]
         LitSearch[Literature Search Agent :8003]
         Screening[Screening & PRISMA Agent :8004]
@@ -151,12 +151,12 @@ Dependencies:
   - redis-cluster
 ```
 
-### 3. Research Manager Agent Service
+### 3. Research Manager Agent
 
-**Purpose**: Complex workflow orchestration as specialized MCP client agent.
+**Purpose**: Complex workflow orchestration as containerized MCP client agent.
 
 ```yaml
-Service: research-manager-agent
+Container: research-manager-agent
 Port: 8002
 Image: eunice/research-manager-agent:latest
 Resources:
@@ -175,12 +175,12 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 4. Literature Search Agent Service
+### 4. Literature Search Agent
 
-**Purpose**: Academic literature discovery as MCP client agent.
+**Purpose**: Academic literature discovery as containerized MCP client agent.
 
 ```yaml
-Service: literature-search-agent
+Container: literature-search-agent
 Port: 8003
 Image: eunice/literature-search-agent:latest
 Resources:
@@ -201,12 +201,12 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 5. Screening & PRISMA Agent Service
+### 5. Screening & PRISMA Agent
 
-**Purpose**: Systematic review screening as MCP client agent.
+**Purpose**: Systematic review screening as containerized MCP client agent.
 
 ```yaml
-Service: screening-prisma-agent
+Container: screening-prisma-agent
 Port: 8004
 Image: eunice/screening-prisma-agent:latest
 Resources:
@@ -226,12 +226,12 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 6. Synthesis & Review Agent Service
+### 6. Synthesis & Review Agent
 
-**Purpose**: Evidence synthesis and meta-analysis as MCP client agent.
+**Purpose**: Evidence synthesis and meta-analysis as containerized MCP client agent.
 
 ```yaml
-Service: synthesis-review-agent
+Container: synthesis-review-agent
 Port: 8005
 Image: eunice/synthesis-review-agent:latest
 Resources:
@@ -253,12 +253,12 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 7. Writer Agent Service
+### 7. Writer Agent
 
-**Purpose**: Manuscript generation as MCP client agent.
+**Purpose**: Manuscript generation as containerized MCP client agent.
 
 ```yaml
-Service: writer-agent
+Container: writer-agent
 Port: 8006
 Image: eunice/writer-agent:latest
 Resources:
@@ -278,12 +278,12 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 8. Planning Agent Service
+### 8. Planning Agent
 
-**Purpose**: Research planning and strategy as MCP client agent.
+**Purpose**: Research planning and strategy as containerized MCP client agent.
 
 ```yaml
-Service: planning-agent
+Container: planning-agent
 Port: 8007
 Image: eunice/planning-agent:latest
 Resources:
@@ -305,12 +305,12 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 9. Executor Agent Service
+### 9. Executor Agent
 
-**Purpose**: Code execution and data processing as MCP client agent.
+**Purpose**: Code execution and data processing as containerized MCP client agent.
 
 ```yaml
-Service: executor-agent
+Container: executor-agent
 Port: 8008
 Image: eunice/executor-agent:latest
 Resources:
@@ -334,12 +334,12 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 10. Memory Agent Service
+### 10. Memory Agent
 
-**Purpose**: Knowledge base management as MCP client agent.
+**Purpose**: Knowledge base management as containerized MCP client agent.
 
 ```yaml
-Service: memory-agent
+Container: memory-agent
 Port: 8009
 Image: eunice/memory-agent:latest
 Resources:
@@ -361,7 +361,7 @@ Dependencies:
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 7. Authentication Service
+### 11. Authentication Service
 
 **Purpose**: User authentication, authorization, and session management.
 

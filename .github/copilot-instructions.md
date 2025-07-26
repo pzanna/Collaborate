@@ -6,6 +6,7 @@ This file contains guidelines and best practices for development in this project
 
 - Do not EVER use mock / simulated data, always use real data or properly mocked objects.
 - Do not EVER hardcode data into code, always use configuration files or environment variables.
+- Do not make any changes without reviewing the Architecture (docs/Architecture/Architecture.md) first. Also, acknowledge that you have done so before starting the change.
 
 ## Documentation Standards
 

@@ -20,7 +20,9 @@ The Eunice rese## Implementation Roadmap
 - ✅ API Gateway separation and enhancement
 - ✅ Task queue implementation (Celery/RQ)
 
-### Phase 3: Microservices Transition (🎯 READY TO START)signed as a distributed, modular system that integrates user-facing interfaces, research agents, AI models, personas, and data storage systems through a **microservices and agent-oriented architecture**. At its core, the platform leverages the **Model Context Protocol (MCP)** to coordinate communication and workflows between agents and tools
+### Phase 3
+
+Microservices Transition (🎯 READY TO START)signed as a distributed, modular system that integrates user-facing interfaces, research agents, AI models, personas, and data storage systems through a **microservices and agent-oriented architecture**. At its core, the platform leverages the **Model Context Protocol (MCP)** to coordinate communication and workflows between agents and tools
 
 ![Eunice](Logical_Design.jpeg)
 
