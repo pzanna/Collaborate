@@ -29,9 +29,9 @@ from typing import Any, Dict, Optional
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config.config_manager import ConfigManager
-from src.agents.artificial_intelligence.ai_agent import AIAgent
-from src.mcp.protocols import ResearchAction
+from old_src.config.config_manager import ConfigManager
+from old_src.agents.artificial_intelligence.ai_agent import AIAgent
+from old_src.mcp.protocols import ResearchAction
 
 # Configure logging
 logging.basicConfig(

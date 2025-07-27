@@ -30,7 +30,7 @@ if __name__ == "__main__":
     )
     # Import and run the MCP server
     try:
-        from src.mcp.server import main
+        from old_src.mcp.server import main
         print("🔧 Starting MCP Server...")
         asyncio.run(main())
     except KeyboardInterrupt:

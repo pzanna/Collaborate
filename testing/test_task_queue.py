@@ -22,8 +22,8 @@ sys.path.insert(0, str(project_root))
 
 import aiohttp
 import redis
-from src.queue.manager import queue_manager
-from src.queue.config import redis_conn
+from old_src.queue.manager import queue_manager
+from old_src.queue.config import redis_conn
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

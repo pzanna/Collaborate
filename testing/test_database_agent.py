@@ -13,9 +13,9 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from src.config.config_manager import ConfigManager
-from src.agents.database import DatabaseAgent
-from src.mcp.protocols import ResearchAction, TaskStatus
+from old_src.config.config_manager import ConfigManager
+from old_src.agents.database import DatabaseAgent
+from old_src.mcp.protocols import ResearchAction, TaskStatus
 
 
 async def test_database_agent():

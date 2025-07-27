@@ -15,8 +15,8 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from rq import Worker
-from src.queue.config import redis_conn, get_all_queues
-from src.queue.tasks import (
+from old_src.queue.config import redis_conn, get_all_queues
+from old_src.queue.tasks import (
     literature_search_task,
     research_planning_task,
     data_analysis_task
@@ -36,7 +36,7 @@ def main():
     # Get queue names from command line args or use all queues
     if len(sys.argv) > 1:
         queue_names = sys.argv[1:]
-        from src.queue.config import get_queue
+        from old_src.queue.config import get_queue
         queues = [get_queue(name) for name in queue_names if name in ['high_priority', 'literature', 'analysis', 'planning', 'memory', 'default']]
     else:
         queues = get_all_queues()

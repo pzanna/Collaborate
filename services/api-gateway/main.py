@@ -44,7 +44,7 @@ from models import (
 )
 
 # Import database service client for direct read access
-from database_client import DatabaseServiceClient
+from native_database_client import get_native_database, initialize_native_database, close_native_database
 
 # Import hierarchical data models for v2 endpoints
 from src.data_models.hierarchical_data_models import (
@@ -74,23 +74,20 @@ logger = logging.getLogger(__name__)
 mcp_client = None
 
 # Global database client for direct read access
-database_client = None
+native_database_client = None
 
 
 def get_database():
-    """Get database client for direct read operations."""
-    global database_client
-    if database_client is None:
+    """Get database client for direct read operations using native PostgreSQL."""
+    global native_database_client
+    if native_database_client is None:
         try:
-            # Use localhost when running outside containers, container hostname inside
-            import os
-            database_url = os.getenv("DATABASE_SERVICE_URL", "http://localhost:8011")
-            # Initialize database service client for read operations
-            database_client = DatabaseServiceClient(base_url=database_url)
+            # Initialize native PostgreSQL client for read operations
+            native_database_client = get_native_database()
         except Exception as e:
-            logger.error(f"Failed to initialize database client: {e}")
+            logger.error(f"Failed to initialize native database client: {e}")
             raise HTTPException(status_code=503, detail="Database service not available")
-    return database_client
+    return native_database_client
 
 
 class APIGateway:
@@ -326,20 +323,35 @@ gateway = APIGateway()
 async def lifespan(app: FastAPI):
     """Manage application lifespan (startup and shutdown)."""
     # Startup
-    logger.info("Starting API Gateway service...")
-    success = await gateway.initialize()
-    if not success:
-        logger.error("Failed to initialize API Gateway")
-        # Continue anyway for health checks
+    logger.info("Starting API Gateway...")
+    
+    try:
+        # Initialize native database connection
+        if not await initialize_native_database():
+            logger.error("Failed to initialize native database connection")
+            raise Exception("Database initialization failed")
+        
+        # Initialize gateway
+        if not await gateway.initialize():
+            logger.error("Failed to initialize API Gateway")
+            raise Exception("Gateway initialization failed")
+        
+        logger.info("API Gateway startup completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Startup failed: {e}")
+        # Don't raise here to allow graceful degradation
     
     yield
     
     # Shutdown
-    await gateway.shutdown()
-    # Close database client connections
-    db_client = get_database()
-    if hasattr(db_client, 'close'):
-        await db_client.close()
+    logger.info("Shutting down API Gateway...")
+    try:
+        await gateway.shutdown()
+        await close_native_database()
+        logger.info("API Gateway shutdown completed")
+    except Exception as e:
+        logger.error(f"Shutdown error: {e}")
 
 
 # Create FastAPI application
@@ -686,7 +698,7 @@ async def list_projects(
     status: Optional[str] = Query(None, description="Filter by project status"),
     limit: Optional[int] = Query(None, description="Limit number of results")
 ):
-    """List all projects via direct database access (READ operation)."""
+    """List all projects via direct native PostgreSQL connection (READ operation)."""
     try:
         db = get_database()
         projects = await db.get_projects(status_filter=status, limit=limit)
@@ -699,7 +711,7 @@ async def list_projects(
 
 @app.get("/projects/{project_id}", response_model=ProjectResponse) 
 async def get_project(project_id: str):
-    """Get a specific project via direct database access (READ operation)."""
+    """Get a specific project via direct native PostgreSQL connection (READ operation)."""
     try:
         db = get_database()
         project = await db.get_project(project_id)
@@ -820,28 +832,17 @@ async def list_research_topics(
     status: Optional[str] = Query(None, description="Filter by topic status"),
     limit: Optional[int] = Query(None, description="Limit number of results")
 ):
-    """List research topics for a project via MCP server (READ operation)."""
+    """List research topics for a project via native PostgreSQL connection (READ operation)."""
     try:
-        # For now, use MCP server for topics until database service supports them
-        research_request = ResearchRequest(
-            agent_type="database_agent",
-            action="list_research_topics",
-            payload={
-                "project_id": project_id,
-                "status_filter": status,
-                "limit": limit
-            },
-            priority="normal",
-            timeout=300
-        )
+        # Use native database client for direct PostgreSQL connection (per architecture)
+        db_client = get_database()
+        topics = await db_client.get_research_topics(project_id)
         
-        mcp_response = await gateway.handle_research_task(research_request)
-        
-        if mcp_response.success and mcp_response.data:
-            topics = mcp_response.data if isinstance(mcp_response.data, list) else []
-            return [ResearchTopicResponse(**topic) for topic in topics]
-        else:
-            return []  # Return empty list if no topics found
+        # Apply limit if specified  
+        if limit and limit > 0:
+            topics = topics[:limit]
+            
+        return [ResearchTopicResponse(**topic) for topic in topics]
         
     except Exception as e:
         logger.error(f"Topic listing error: {e}")
@@ -850,20 +851,14 @@ async def list_research_topics(
 
 @app.get("/topics/{topic_id}", response_model=ResearchTopicResponse)
 async def get_research_topic(topic_id: str = Path(..., description="Topic ID")):
-    """Get a specific research topic via MCP server (READ operation)."""
+    """Get a specific research topic via native PostgreSQL connection (READ operation)."""
     try:
-        research_request = ResearchRequest(
-            agent_type="database_agent",
-            action="get_research_topic",
-            payload={"topic_id": topic_id},
-            priority="normal", 
-            timeout=300
-        )
+        # Use native database client for direct PostgreSQL connection (per architecture)
+        db_client = get_database()
+        topic = await db_client.get_research_topic(topic_id)
         
-        mcp_response = await gateway.handle_research_task(research_request)
-        
-        if mcp_response.success and mcp_response.data:
-            return ResearchTopicResponse(**mcp_response.data)
+        if topic:
+            return ResearchTopicResponse(**topic)
         else:
             raise HTTPException(status_code=404, detail="Topic not found")
         
@@ -970,27 +965,17 @@ async def list_research_plans(
     status: Optional[str] = Query(None, description="Filter by plan status"),
     limit: Optional[int] = Query(None, description="Limit number of results")
 ):
-    """List research plans for a topic via MCP server (READ operation).""" 
+    """List research plans for a topic via native PostgreSQL connection (READ operation).""" 
     try:
-        research_request = ResearchRequest(
-            agent_type="database_agent",
-            action="list_research_plans",
-            payload={
-                "topic_id": topic_id,
-                "status_filter": status,
-                "limit": limit
-            },
-            priority="normal",
-            timeout=300
-        )
+        # Use native database client for direct PostgreSQL connection (per architecture)
+        db_client = get_database()
+        plans = await db_client.get_research_plans(topic_id, status_filter=status)
         
-        mcp_response = await gateway.handle_research_task(research_request)
-        
-        if mcp_response.success and mcp_response.data:
-            plans = mcp_response.data if isinstance(mcp_response.data, list) else []
-            return [ResearchPlanResponse(**plan) for plan in plans]
-        else:
-            return []
+        # Apply limit if specified
+        if limit and limit > 0:
+            plans = plans[:limit]
+            
+        return [ResearchPlanResponse(**plan) for plan in plans]
         
     except Exception as e:
         logger.error(f"Plan listing error: {e}")
@@ -999,20 +984,14 @@ async def list_research_plans(
 
 @app.get("/plans/{plan_id}", response_model=ResearchPlanResponse)
 async def get_research_plan(plan_id: str = Path(..., description="Plan ID")):
-    """Get a specific research plan via MCP server (READ operation)."""
+    """Get a specific research plan via native PostgreSQL connection (READ operation)."""
     try:
-        research_request = ResearchRequest(
-            agent_type="database_agent",
-            action="get_research_plan",
-            payload={"plan_id": plan_id},
-            priority="normal",
-            timeout=300
-        )
+        # Use native database client for direct PostgreSQL connection (per architecture)
+        db_client = get_database()
+        plan = await db_client.get_research_plan(plan_id)
         
-        mcp_response = await gateway.handle_research_task(research_request)
-        
-        if mcp_response.success and mcp_response.data:
-            return ResearchPlanResponse(**mcp_response.data)
+        if plan:
+            return ResearchPlanResponse(**plan)
         else:
             raise HTTPException(status_code=404, detail="Plan not found")
         
@@ -1140,27 +1119,17 @@ async def list_tasks(
     status: Optional[str] = Query(None, description="Filter by task status"),
     limit: Optional[int] = Query(None, description="Limit number of results")
 ):
-    """List tasks for a plan via MCP server (READ operation)."""
+    """List tasks for a plan via native PostgreSQL connection (READ operation)."""
     try:
-        research_request = ResearchRequest(
-            agent_type="database_agent",
-            action="list_tasks",
-            payload={
-                "plan_id": plan_id,
-                "status_filter": status,
-                "limit": limit
-            },
-            priority="normal",
-            timeout=300
-        )
+        # Use native database client for direct PostgreSQL connection (per architecture)
+        db_client = get_database()
+        tasks = await db_client.get_tasks(plan_id, status_filter=status)
         
-        mcp_response = await gateway.handle_research_task(research_request)
-        
-        if mcp_response.success and mcp_response.data:
-            tasks = mcp_response.data if isinstance(mcp_response.data, list) else []
-            return [TaskResponse(**task) for task in tasks]
-        else:
-            return []
+        # Apply limit if specified
+        if limit and limit > 0:
+            tasks = tasks[:limit]
+            
+        return [TaskResponse(**task) for task in tasks]
         
     except Exception as e:
         logger.error(f"Task listing error: {e}")
@@ -1169,20 +1138,14 @@ async def list_tasks(
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(task_id: str = Path(..., description="Task ID")):
-    """Get a specific task via MCP server (READ operation)."""
+    """Get a specific task via native PostgreSQL connection (READ operation)."""
     try:
-        research_request = ResearchRequest(
-            agent_type="database_agent",
-            action="get_task",
-            payload={"task_id": task_id},
-            priority="normal",
-            timeout=300
-        )
+        # Use native database client for direct PostgreSQL connection (per architecture)
+        db_client = get_database()
+        task = await db_client.get_task(task_id)
         
-        mcp_response = await gateway.handle_research_task(research_request)
-        
-        if mcp_response.success and mcp_response.data:
-            return TaskResponse(**mcp_response.data)
+        if task:
+            return TaskResponse(**task)
         else:
             raise HTTPException(status_code=404, detail="Task not found")
         

@@ -24,9 +24,9 @@ print("🚀 Starting Comprehensive Database Agent Test")
 print("=" * 60)
 
 try:
-    from src.agents.database.database_agent import DatabaseAgent
-    from src.config.config_manager import ConfigManager
-    from src.mcp.protocols import ResearchAction, AgentResponse, TaskStatus
+    from old_src.agents.database.database_agent import DatabaseAgent
+    from old_src.config.config_manager import ConfigManager
+    from old_src.mcp.protocols import ResearchAction, AgentResponse, TaskStatus
     print("✅ All imports successful")
 except ImportError as e:
     print(f"❌ Import error: {e}")

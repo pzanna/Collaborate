@@ -270,33 +270,225 @@ class PlanningAgentService:
             }
     
     async def _plan_research(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Plan research based on query"""
+        """Plan research based on query using AI"""
+        query = payload.get("query", "")
+        scope = payload.get("scope", "comprehensive")
+        context = payload.get("context", {})
+        
+        if not query:
+            raise ValueError("Query is required for research planning")
+        
+        # Create research planning prompt for AI
+        prompt = f"""
+        Please create a comprehensive research plan for the following query:
+        
+        Query: {query}
+        Scope: {scope}
+        Context: {json.dumps(context, indent=2)}
+        
+        Please provide a detailed research plan with:
+        1. Clear research objectives (3-5 specific goals)
+        2. Key areas to investigate (4-6 major research domains)
+        3. Specific questions to answer (5-8 focused research questions)
+        4. Information sources to consult (academic databases, repositories, etc.)
+        5. Expected outcomes and deliverables
+        6. Realistic timeline with phases
+        
+        Format your response as a JSON object with this exact structure:
+        {{
+            "objectives": ["Objective 1", "Objective 2", "Objective 3"],
+            "key_areas": ["Area 1", "Area 2", "Area 3", "Area 4"],
+            "questions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
+            "sources": ["PubMed", "ArXiv", "Semantic Scholar", "Google Scholar", "IEEE Xplore"],
+            "timeline": {{
+                "total_days": 14,
+                "phases": {{
+                    "literature_search": 3,
+                    "data_collection": 5,
+                    "analysis": 4,
+                    "synthesis": 2
+                }}
+            }},
+            "outcomes": ["Literature review", "Data analysis", "Research synthesis", "Final report"]
+        }}
+        
+        Please be thorough and consider all relevant aspects of the research topic.
+        Ensure the plan is realistic and executable within the given timeframe.
+        """
+        
+        # Get AI response
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for research planning: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            plan = self._parse_research_plan(ai_response)
+            
+            return {
+                "status": "completed",
+                "result": {
+                    "query": query,
+                    "scope": scope,
+                    "plan": plan,
+                    "agent_id": self.agent_id,
+                    "processing_time": 2.1,
+                    "ai_generated": True
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based research plan: {e}")
+            # Fallback to basic structure if AI fails
+            return await self._fallback_research_plan(payload)
+    
+    async def _get_ai_response(self, prompt: str) -> str:
+        """Get response from AI service"""
+        try:
+            # Try to use AI service if available
+            ai_service_url = os.getenv("AI_SERVICE_URL")
+            if ai_service_url:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{ai_service_url}/ai/chat/completions",
+                        json={
+                            "model": "gpt-4o-mini",
+                            "messages": [
+                                {"role": "system", "content": "You are a research planning assistant. Provide detailed, structured responses in JSON format."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            "temperature": 0.7,
+                            "max_tokens": 2000
+                        },
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        return result.get("content", "")
+                    else:
+                        logger.error(f"AI service error: {response.status_code}")
+                        raise Exception(f"AI service error: {response.status_code}")
+            else:
+                # Direct OpenAI call as fallback
+                return await self._direct_openai_call(prompt)
+                
+        except Exception as e:
+            logger.error(f"Error getting AI response: {e}")
+            raise
+    
+    async def _direct_openai_call(self, prompt: str) -> str:
+        """Direct OpenAI API call as fallback"""
+        try:
+            import openai
+            
+            # Get API key from environment or config
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                api_key = config.get("ai_settings", {}).get("openai_api_key")
+            
+            if not api_key:
+                raise Exception("No OpenAI API key available")
+            
+            client = openai.AsyncOpenAI(api_key=api_key)
+            
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a research planning assistant. Provide detailed, structured responses in JSON format."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                timeout=30
+            )
+            
+            content = response.choices[0].message.content
+            return content if content else "No content received from AI"
+            
+        except Exception as e:
+            logger.error(f"Direct OpenAI call failed: {e}")
+            raise
+    
+    def _parse_research_plan(self, ai_response: str) -> Dict[str, Any]:
+        """Parse AI response into structured research plan"""
+        try:
+            # Try to extract JSON from the response
+            import re
+            
+            # Look for JSON block in the response
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                plan = json.loads(json_str)
+                
+                # Validate required fields
+                required_fields = ["objectives", "key_areas", "questions", "sources"]
+                for field in required_fields:
+                    if field not in plan:
+                        raise ValueError(f"Missing required field: {field}")
+                
+                # Ensure timeline exists
+                if "timeline" not in plan:
+                    plan["timeline"] = {
+                        "total_days": 14,
+                        "phases": {
+                            "literature_search": 3,
+                            "data_collection": 5,
+                            "analysis": 4,
+                            "synthesis": 2
+                        }
+                    }
+                
+                # Ensure outcomes exist
+                if "outcomes" not in plan:
+                    plan["outcomes"] = [
+                        "Literature review",
+                        "Data analysis report",
+                        "Research synthesis"
+                    ]
+                
+                return plan
+            else:
+                raise ValueError("No JSON found in AI response")
+                
+        except Exception as e:
+            logger.error(f"Error parsing AI response: {e}")
+            logger.debug(f"AI response was: {ai_response}")
+            raise
+    
+    async def _fallback_research_plan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback research plan if AI fails"""
         query = payload.get("query", "")
         scope = payload.get("scope", "comprehensive")
         
-        # Mock research planning logic
         plan = {
             "objectives": [
                 f"Investigate {query}",
                 "Identify key research areas",
-                "Synthesize findings"
+                "Synthesize findings",
+                "Generate actionable insights"
             ],
             "key_areas": [
                 "Background research",
                 "Current literature",
                 "Data analysis",
-                "Methodology review"
+                "Methodology review",
+                "Gap analysis"
             ],
             "questions": [
                 f"What are the current findings about {query}?",
                 "What gaps exist in the research?",
-                "What methodologies are most effective?"
+                "What methodologies are most effective?",
+                "What are the practical applications?",
+                "What future research is needed?"
             ],
             "sources": [
-                "Peer-reviewed academic papers",
-                "Industry reports",
-                "Government databases",
-                "Expert interviews"
+                "PubMed",
+                "ArXiv",
+                "Semantic Scholar",
+                "Google Scholar",
+                "IEEE Xplore",
+                "ResearchGate"
             ],
             "timeline": {
                 "total_days": 14,
@@ -308,10 +500,10 @@ class PlanningAgentService:
                 }
             },
             "outcomes": [
-                "Comprehensive research plan",
-                "Literature review",
+                "Comprehensive literature review",
                 "Data analysis report",
-                "Research synthesis"
+                "Research synthesis",
+                "Recommendations report"
             ]
         }
         
@@ -322,7 +514,9 @@ class PlanningAgentService:
                 "scope": scope,
                 "plan": plan,
                 "agent_id": self.agent_id,
-                "processing_time": 2.1
+                "processing_time": 1.5,
+                "ai_generated": False,
+                "note": "Used fallback plan due to AI service unavailability"
             }
         }
     

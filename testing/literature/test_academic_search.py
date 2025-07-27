@@ -41,8 +41,8 @@ def main():
         
         try:
             # Import required modules
-            from src.config.config_manager import ConfigManager
-            from src.agents.literature_agent import LiteratureAgent
+            from old_src.config.config_manager import ConfigManager
+            from old_src.agents.literature_agent import LiteratureAgent
             
             print("✓ Successfully imported required modules")
             print("✓ Initializing Literature Agent...")

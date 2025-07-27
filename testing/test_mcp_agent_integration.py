@@ -20,11 +20,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from src.agents.research_manager.research_manager import ResearchManager
-    from src.config.config_manager import ConfigManager
-    from src.mcp.client import MCPClient
-    from src.mcp.protocols import ResearchAction, AgentType
-    from src.utils.id_utils import generate_timestamped_id
+    from old_src.agents.research_manager.research_manager import ResearchManager
+    from old_src.config.config_manager import ConfigManager
+    from old_src.mcp.client import MCPClient
+    from old_src.mcp.protocols import ResearchAction, AgentType
+    from old_src.utils.id_utils import generate_timestamped_id
 except ImportError as e:
     print(f"Import error: {e}")
     print("Please ensure you're running from the Eunice project root")

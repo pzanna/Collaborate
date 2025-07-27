@@ -23,17 +23,17 @@ from pydantic import BaseModel
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.api.academic_search_api import v2_academic_router
-from src.api.v2_hierarchical_api import (set_database_manager,
+from old_src.api.academic_search_api import v2_academic_router
+from old_src.api.v2_hierarchical_api import (set_database_manager,
                                          set_research_manager, v2_router)
-from src.config.config_manager import ConfigManager
-from src.core.ai_client_manager import AIClientManager
-from src.core.context_manager import ContextManager
-from src.core.research_manager import ResearchManager
-from src.mcp.client import MCPClient
-from src.models.hierarchical_data_models import ErrorResponse
-from src.storage.hierarchical_database import HierarchicalDatabaseManager
-from src.utils.error_handler import EuniceError, format_error_for_user
+from old_src.config.config_manager import ConfigManager
+from old_src.core.ai_client_manager import AIClientManager
+from old_src.core.context_manager import ContextManager
+from old_src.core.research_manager import ResearchManager
+from old_src.mcp.client import MCPClient
+from old_src.models.hierarchical_data_models import ErrorResponse
+from old_src.storage.hierarchical_database import HierarchicalDatabaseManager
+from old_src.utils.error_handler import EuniceError, format_error_for_user
 
 logger = logging.getLogger(__name__)
 

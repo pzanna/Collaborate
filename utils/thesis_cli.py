@@ -23,7 +23,7 @@ def main_cli():
     # Add source directory to path
     sys.path.append(str(Path(__file__).parent / 'src'))
 
-    from src.thesis.generators.enhanced_thesis_generator import EnhancedThesisGenerator
+    from old_src.thesis.generators.enhanced_thesis_generator import EnhancedThesisGenerator
 
     parser = argparse.ArgumentParser(
         description="Eunice Thesis Generator - Transform PRISMA reviews into thesis chapters",
@@ -91,7 +91,7 @@ Examples:
 
     # Handle setup mode
     if args.setup:
-        from src.thesis.setup_thesis import main as setup_main
+        from old_src.thesis.setup_thesis import main as setup_main
         setup_main()
         return
 
@@ -114,7 +114,7 @@ Examples:
     try:
         if args.basic:
             # Use basic generator
-            from src.thesis.generators.basic_thesis_generator import ThesisGenerator
+            from old_src.thesis.generators.basic_thesis_generator import ThesisGenerator
             generator = ThesisGenerator()
             print("🔧 Using basic thesis generator...")
             # Note: Basic generator has different interface - would need adaptation

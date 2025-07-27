@@ -14,8 +14,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.api.gateway import create_app
-from src.config.config_manager import ConfigManager
+from old_src.api.gateway import create_app
+from old_src.config.config_manager import ConfigManager
 
 # Configure logging
 logging.basicConfig(

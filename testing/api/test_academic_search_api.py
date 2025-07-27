@@ -42,8 +42,8 @@ def main():
         add_project_to_path()
         
         try:
-            from src.api.academic_search_api import comprehensive_academic_search, get_literature_agent
-            from src.models.academic_search_models import AcademicSearchRequest
+            from old_src.api.academic_search_api import comprehensive_academic_search, get_literature_agent
+            from old_src.models.academic_search_models import AcademicSearchRequest
             
             print("✓ Successfully imported API modules")
             print("✓ Initializing Literature Agent...")
