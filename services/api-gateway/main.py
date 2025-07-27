@@ -43,8 +43,8 @@ from models import (
     AcademicPaper, DataAnalysisRequest, ProjectCreateRequest, ProjectResponse
 )
 
-# Import database manager for direct read access
-from src.database.core.manager import HierarchicalDatabaseManager
+# Import database service client for direct read access
+from database_client import DatabaseServiceClient
 
 # Configure logging
 logging.basicConfig(
@@ -60,21 +60,24 @@ logger = logging.getLogger(__name__)
 # Global MCP client instance
 mcp_client = None
 
-# Global database manager for direct read access
-database_manager = None
+# Global database client for direct read access
+database_client = None
 
 
 def get_database():
-    """Get database manager for direct read operations."""
-    global database_manager
-    if database_manager is None:
+    """Get database client for direct read operations."""
+    global database_client
+    if database_client is None:
         try:
-            # Initialize database manager for read operations
-            database_manager = HierarchicalDatabaseManager()
+            # Use localhost when running outside containers, container hostname inside
+            import os
+            database_url = os.getenv("DATABASE_SERVICE_URL", "http://localhost:8011")
+            # Initialize database service client for read operations
+            database_client = DatabaseServiceClient(base_url=database_url)
         except Exception as e:
-            logger.error(f"Failed to initialize database manager: {e}")
-            raise HTTPException(status_code=503, detail="Database not available")
-    return database_manager
+            logger.error(f"Failed to initialize database client: {e}")
+            raise HTTPException(status_code=503, detail="Database service not available")
+    return database_client
 
 
 class APIGateway:
@@ -320,6 +323,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     await gateway.shutdown()
+    # Close database client connections
+    db_client = get_database()
+    if hasattr(db_client, 'close'):
+        await db_client.close()
 
 
 # Create FastAPI application
@@ -648,7 +655,7 @@ async def list_projects(
     """List all projects via direct database access (READ operation)."""
     try:
         db = get_database()
-        projects = db.get_projects(status_filter=status, limit=limit)
+        projects = await db.get_projects(status_filter=status, limit=limit)
         return [ProjectResponse(**project) for project in projects]
         
     except Exception as e:
@@ -661,7 +668,7 @@ async def get_project(project_id: str):
     """Get a specific project via direct database access (READ operation)."""
     try:
         db = get_database()
-        project = db.get_project(project_id)
+        project = await db.get_project(project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
@@ -697,7 +704,7 @@ async def update_project(project_id: str, request: ProjectCreateRequest):
         if mcp_response.success:
             # Return updated project from database
             db = get_database()
-            project = db.get_project(project_id)
+            project = await db.get_project(project_id)
             if not project:
                 raise HTTPException(status_code=404, detail="Project not found")
             return ProjectResponse(**project)
