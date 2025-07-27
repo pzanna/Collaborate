@@ -22,7 +22,6 @@ class PersonaType(Enum):
     BIOMEDICAL_SYSTEMS_ENGINEER = "biomedical_systems_engineer"
     AI_ML_ENGINEER = "ai_ml_engineer"
     ANIMAL_BIOLOGIST = "animal_biologist"
-    TECHNICAL_WRITER = "technical_writer"
     RESEARCH_MANAGER = "research_manager"
 
 

@@ -164,7 +164,7 @@ Dependencies: [mcp-server]
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-#### 4. Literature Agent Services (4 Specialized MCP Clients)
+#### 4. Literature Agent Services (43 Specialized MCP Clients)
 
 ```yaml
 Service: literature-search-agent
@@ -198,6 +198,8 @@ Responsibilities:
 Dependencies: [mcp-server, ai-service, memory-agent]
 MCP_Connection: WebSocket to mcp-server:9000
 ```
+
+#### 5. Writer Agent Service (MCP Client)
 
 ```yaml
 Service: writer-agent
@@ -256,7 +258,7 @@ MCP_Connection: WebSocket to mcp-server:9000
 
 ```yaml
 Service: auth-service
-Port: 8007
+Port: 8013
 Responsibilities:
   - User authentication and authorization
   - JWT token management
@@ -535,6 +537,34 @@ async def health_check():
 
 ## 🚧 Implementation Roadmap
 
+### Phase 3.0: Documentation and Architecture Alignment ✅ **COMPLETE**
+
+#### Document Standardization and Consistency
+
+- [x] **Service Port Alignment**: Resolved all port conflicts between PHASE3_SERVICE_ARCHITECTURE.md and PHASE3_MICROSERVICES_TRANSITION.md
+- [x] **Authentication Service Port**: Moved from 8007 to 8013 (resolved conflict with Planning Agent)
+- [x] **Database Service Port**: Standardized to 8011 across both documents  
+- [x] **Notification Service Port**: Standardized to 8012 across both documents
+- [x] **File Storage Service Port**: Moved to 8014 to avoid conflicts
+
+#### Architecture Documentation Corrections
+
+- [x] **AI Service Specification**: Standardized AI Service on port 8010 across both documents
+- [x] **Service Name Consistency**: Ensured all agent and service names match between documents
+- [x] **Docker Compose Alignment**: Updated all service configurations and dependencies
+- [x] **Removed Erroneous Services**: Eliminated "Artification Intelligence Agent Service" that conflicted with Memory Agent
+
+#### Implementation Readiness
+
+- [x] **NEXT_STEPS_RECOMMENDATIONS.md**: Updated with complete agent architecture and correct containerization order
+- [x] **Service Dependencies**: Validated and corrected all inter-service relationships
+- [x] **Port Allocation Strategy**: Established clear, conflict-free port assignments (8001-8014, 9000)
+- [x] **MCP Client Patterns**: Documented consistent MCP client integration for all agents
+
+**Status**: ✅ **Documentation aligned, architecture validated, ready for implementation**
+
+---
+
 ### Phase 3.1: MCP Server Enhancement and Agent Containerization
 
 #### Enhanced MCP Server Service
@@ -560,6 +590,15 @@ async def health_check():
 - [ ] Create service discovery mechanism for containerized agents
 - [ ] Test MCP server with multiple agent connections
 
+#### Core Agent Services (MCP Clients)
+
+##### Planning Agent Service
+
+- [ ] Container Planning Agent (port 8007, MCP Client)
+- [ ] Preserve task synthesis and planning workflows via MCP
+- [ ] Test resource requirement analysis through MCP communication
+- [ ] Validate planning workflows and agent dependencies
+
 #### Literature Agent Containerization (Maintain MCP Communication)
 
 ##### Agent Container Setup
@@ -569,12 +608,11 @@ async def health_check():
 - [ ] Implement agent startup with MCP server connection
 - [ ] Test basic agent registration and MCP communication
 
-##### Four Literature Agent Services (MCP Clients)
+##### Three Literature Agent Services (MCP Clients)
 
 - [ ] Container Literature Search Agent (port 8003, MCP Client)
 - [ ] Container Screening & PRISMA Agent (port 8004, MCP Client)
 - [ ] Container Synthesis & Review Agent (port 8005, MCP Client)
-- [ ] Container Writer Agent (port 8006, MCP Client)
 
 ##### MCP Communication Validation
 
@@ -583,14 +621,14 @@ async def health_check():
 - [ ] Validate agent response handling and error recovery
 - [ ] End-to-end literature pipeline testing via MCP
 
-#### Core Agent Services (MCP Clients)
+#### Remaining Core Agent Services (MCP Clients)
 
-##### Planning Agent Service
+##### Writer Agent Service
 
-- [ ] Container Planning Agent (port 8007, MCP Client)
-- [ ] Preserve task synthesis and planning workflows via MCP
-- [ ] Test resource requirement analysis through MCP communication
-- [ ] Validate planning workflows and agent dependencies
+- [ ] Container Writer Agent (port 8006, MCP Client)
+- [ ] Implement manuscript generation and academic writing via MCP
+- [ ] Add citation formatting and bibliography management via MCP
+- [ ] Test document template processing and export via MCP
 
 ##### Executor Agent Service
 
@@ -647,7 +685,13 @@ async def health_check():
 - [ ] Create incident response procedures
 - [ ] Document security architecture and procedures
 
-### Phase 3.3: Performance Optimization (Weeks 6-7)
+### Phase 3.3: Personas
+
+#### Neurobiologist
+
+#### Microbiologist
+
+### Phase 3.4: Performance Optimization (Weeks 6-7)
 
 #### Caching and Database Optimization
 
@@ -665,7 +709,7 @@ async def health_check():
 - [ ] Create database monitoring and performance tuning
 - [ ] Test database scalability and failover
 
-#### WPerformance Testing and Tuning
+#### Performance Testing and Tuning
 
 **Load Testing**
 
@@ -681,7 +725,7 @@ async def health_check():
 - [ ] Verify literature search performance (< 5s)
 - [ ] Document performance characteristics and limits
 
-### Phase 3.4: Collaboration Features (Weeks 8-9)
+### Phase 3.5: Collaboration Features (Weeks 8-9)
 
 #### Real-time Infrastructure
 
@@ -715,7 +759,7 @@ async def health_check():
 - [ ] Verify notification delivery and accuracy
 - [ ] Document collaboration features and limitations
 
-### Phase 3.5: Production Deployment (Weeks 10-11)
+### Phase 3.6: Production Deployment (Weeks 10-11)
 
 #### Infrastructure and DevOps
 
@@ -800,9 +844,10 @@ async def health_check():
 
 ---
 
-**Phase 3 Status**: 🔄 Ready to Begin Implementation  
+**Phase 3 Status**: 🔄 Phase 3.0 Complete - Ready for Phase 3.1 Implementation  
 **Prerequisites**: ✅ Phase 2 Complete (Enhanced MCP, API Gateway, Task Queue)  
-**Target Completion**: 11 weeks from start date  
+**Documentation**: ✅ Architecture aligned, port conflicts resolved, implementation ready  
+**Target Completion**: 11 weeks from Phase 3.1 start date  
 **Expected Benefits**: Enterprise scalability, enhanced security, real-time collaboration
 
 ---

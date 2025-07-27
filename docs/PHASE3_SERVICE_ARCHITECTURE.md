@@ -20,7 +20,7 @@ graph TB
     end
 
     subgraph "Authentication & Security"
-        Auth[Auth Service :8007]
+        Auth[Auth Service :8013]
         RBAC[RBAC Engine]
     end
 
@@ -44,7 +44,7 @@ graph TB
         Database[Database Service :8011]
         AI[AI Service :8010]
         Notification[Notification Service :8012]
-        FileStorage[File Storage Service :8013]
+        FileStorage[File Storage Service :8014]
     end
 
     subgraph "Infrastructure"
@@ -267,7 +267,7 @@ Resources:
 Environment:
   - MCP_SERVER_URL=ws://mcp-server:9000
   - AGENT_TYPE=writer
-  - FILE_STORAGE_URL=http://file-storage:8013
+  - FILE_STORAGE_URL=http://file-storage:8014
 Endpoints:
   - GET  /health
   - GET  /status
@@ -349,7 +349,7 @@ Environment:
   - MCP_SERVER_URL=ws://mcp-server:9000
   - AGENT_TYPE=memory
   - VECTOR_DB_URL=http://vector-database:8080
-  - FILE_STORAGE_URL=http://file-storage:8013
+  - FILE_STORAGE_URL=http://file-storage:8014
 Endpoints:
   - GET  /health
   - GET  /status
@@ -367,7 +367,7 @@ MCP_Connection: WebSocket to mcp-server:9000
 
 ```yaml
 Service: auth-service
-Port: 8007
+Port: 8013
 Image: eunice/auth-service:latest
 Resources:
   CPU: 500m
@@ -388,13 +388,13 @@ Dependencies:
   - redis-cluster
 ```
 
-### 8. Database Service
+### 12. Database Service
 
 **Purpose**: Centralized data access layer with transaction management.
 
 ```yaml
 Service: database-service
-Port: 8008
+Port: 8011
 Image: eunice/database-service:latest
 Resources:
   CPU: 1000m
@@ -438,13 +438,13 @@ Dependencies:
   - redis-cluster
 ```
 
-### 10. Notification Service
+### 13. Notification Service
 
 **Purpose**: Real-time notifications, WebSocket management, and team collaboration.
 
 ```yaml
 Service: notification-service
-Port: 8010
+Port: 8012
 Image: eunice/notification-service:latest
 Resources:
   CPU: 500m
@@ -605,7 +605,7 @@ services:
     build: ./services/api-gateway
     ports: ["8001:8001"]
     environment:
-      - AUTH_SERVICE_URL=http://auth-service:8007
+      - AUTH_SERVICE_URL=http://auth-service:8013
       - MCP_SERVER_URL=ws://mcp-server:9000
     depends_on: [auth-service, mcp-server]
     networks: [eunice-network]
@@ -613,7 +613,7 @@ services:
   # Authentication
   auth-service:
     build: ./services/auth-service
-    ports: ["8007:8007"]
+    ports: ["8013:8013"]
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - REDIS_URL=redis://redis:6379
@@ -627,7 +627,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - REDIS_URL=redis://redis:6379
-      - AUTH_SERVICE_URL=http://auth-service:8007
+      - AUTH_SERVICE_URL=http://auth-service:8013
     depends_on: [postgres, redis, auth-service]
     networks: [eunice-network]
 
@@ -663,7 +663,7 @@ services:
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-      - FILE_STORAGE_URL=http://file-storage:8013
+      - FILE_STORAGE_URL=http://file-storage:8014
     depends_on: [mcp-server, postgres, file-storage]
     networks: [eunice-network]
 
@@ -679,7 +679,7 @@ services:
     build: ./services/executor-agent
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - FILE_STORAGE_URL=http://file-storage:8013
+      - FILE_STORAGE_URL=http://file-storage:8014
       - SANDBOX_MODE=enabled
     depends_on: [mcp-server, file-storage]
     networks: [eunice-network]
@@ -689,7 +689,7 @@ services:
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - VECTOR_DB_URL=http://vector-database:8080
-      - FILE_STORAGE_URL=http://file-storage:8013
+      - FILE_STORAGE_URL=http://file-storage:8014
     depends_on: [mcp-server, vector-database, file-storage]
     networks: [eunice-network]
 
@@ -724,13 +724,13 @@ services:
     ports: ["8012:8012"]
     environment:
       - REDIS_URL=redis://redis:6379
-      - AUTH_SERVICE_URL=http://auth-service:8007
+      - AUTH_SERVICE_URL=http://auth-service:8013
     depends_on: [redis, auth-service]
     networks: [eunice-network]
 
   file-storage:
     build: ./services/file-storage
-    ports: ["8013:8013"]
+    ports: ["8014:8014"]
     environment:
       - STORAGE_PATH=/app/storage
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
