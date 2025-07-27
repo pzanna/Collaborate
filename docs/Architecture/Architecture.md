@@ -60,10 +60,16 @@ This structure enables intuitive navigation and clear separation of concerns.
 
 #### MCP Protocol Specifications
 
+**Core Communication Principle:**
+
+🚨 **CRITICAL ARCHITECTURAL RULE**: All agents must communicate with AI providers EXCLUSIVELY through the MCP Server. Direct AI provider access by agents is strictly prohibited. This ensures centralized AI usage monitoring, cost control, security, and consistent error handling.
+
 **Message Types:**
 
 - `research_request`: Task initiation from Research Manager
 - `agent_response`: Results from specialized agents
+- `ai_request`: AI provider requests routed through MCP Server only
+- `ai_response`: AI provider responses delivered via MCP Server
 - `persona_consultation`: Expert domain queries
 - `resource_allocation`: Cost and usage tracking
 - `agent_registration`: New agent joining the system
@@ -72,8 +78,31 @@ This structure enables intuitive navigation and clear separation of concerns.
 **Communication Patterns:**
 
 - Request-Response: Synchronous task execution
+- AI Communication: All AI requests flow through MCP Server → AI Service → AI Provider
 - Publish-Subscribe: Real-time updates and notifications
 - Event Streaming: Audit logging and monitoring
+
+**AI Communication Restrictions:**
+
+- ❌ **FORBIDDEN**: Direct API calls from agents to OpenAI, Anthropic, or any AI provider
+- ❌ **FORBIDDEN**: Agent-level API key configuration or storage
+- ❌ **FORBIDDEN**: Fallback mechanisms that bypass MCP for AI access
+- ❌ **FORBIDDEN**: Mock data or hardcoded responses in agent capabilities
+- ❌ **FORBIDDEN**: Direct HTTP endpoints that bypass MCP protocol
+- ✅ **REQUIRED**: All AI requests via MCP `ai_request` message type
+- ✅ **REQUIRED**: Centralized AI service handles all provider communication
+- ✅ **REQUIRED**: MCP Server routes and monitors all AI traffic
+- ✅ **REQUIRED**: Real AI-generated responses for all agent capabilities
+
+**Mock Data and Testing Restrictions:**
+
+- ❌ **FORBIDDEN**: Production agents returning mock, placeholder, or hardcoded data
+- ❌ **FORBIDDEN**: Fallback to mock responses when AI services are unavailable
+- ❌ **FORBIDDEN**: Cost estimation using static hardcoded values
+- ❌ **FORBIDDEN**: Information analysis with predetermined responses
+- ✅ **REQUIRED**: All agent responses must be AI-generated via MCP
+- ✅ **REQUIRED**: Graceful error handling when AI services unavailable (return errors, not mock data)
+- ✅ **REQUIRED**: Mock data only permitted in dedicated test environments with clear labeling
 
 **Error Handling:**
 
@@ -428,40 +457,55 @@ The **Persona Consultation System** provides:
 
 ## Development Guidelines
 
-### 1. Separation of Concerns
+### 🚨 1. CRITICAL: AI Communication Policy
+
+**MANDATORY RULE FOR ALL AGENTS:**
+
+- **❌ FORBIDDEN**: Direct API calls to AI providers (OpenAI, Anthropic, xAI, etc.)
+- **❌ FORBIDDEN**: Agent-level API key storage or configuration  
+- **❌ FORBIDDEN**: Any fallback mechanisms that bypass MCP for AI access
+- **✅ REQUIRED**: All AI requests must use MCP `ai_request` message type
+- **✅ REQUIRED**: Only the dedicated AI Service may communicate with AI providers
+- **✅ REQUIRED**: All agents must fail gracefully if MCP AI service is unavailable
+- **✅ REQUIRED**: No exceptions - this rule applies to ALL agents without exception
+
+### 2. Separation of Concerns
 
 - **Web UI** is presentation-only.
 - **FastAPI** acts as a thin routing layer.
 - **Research Manager** handles orchestration.
 - **Agents** perform specialised tasks.
 
-### 2. Database Access
+### 3. Database Access
 
 - All writes via the **Database Agent**.
 - Use read replicas and caching for performance.
 
-### 3. Caching & Performance
+### 4. Caching & Performance
 
 - Use Redis or in-memory caching.
 - WebSocket/SSE for real-time UI updates.
 
-### 4. Orchestration & Task Queues
+### 5. Orchestration & Task Queues
 
 - Use **Celery/RQ** for long-running tasks.
 - **Research Manager** coordinates all workflows.
 
-### 5. MCP Communication Contracts
+### 6. MCP Communication Contracts
 
 - Pydantic schemas for requests/responses.
 - API versioning (`tool@v1`).
 - Capability tokens for security.
 
-### 6. AI Model Integration
+### 7. AI Model Integration
 
-- Always access via AI Agent.
-- Implement fallback models and response validation.
+- **ONLY** access AI providers through MCP Server → AI Service
+- **NEVER** implement direct API calls to AI providers in agents
+- Implement response validation and error handling for MCP AI requests
+- Use structured prompts and consistent message formats
+- Handle AI service unavailability gracefully with proper error messages
 
-### 7. Error Handling & Resilience
+### 8. Error Handling & Resilience
 
 - Implement circuit breakers for external dependencies.
 - Use correlation IDs for distributed tracing.

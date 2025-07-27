@@ -1,9 +1,7 @@
 """
 API Models for Containerized API Gateway
 
-"""
 Data models for request/response handling in the Version 0.3 containerized API Gateway.
-"""
 These models ensure type safety and proper serialization for REST API operations.
 """
 

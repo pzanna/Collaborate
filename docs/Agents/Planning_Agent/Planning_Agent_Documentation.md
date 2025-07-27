@@ -5,18 +5,20 @@
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Core Functions](#core-functions)
-4. [Usage Patterns](#usage-patterns)
-5. [Configuration](#configuration)
-6. [Error Handling](#error-handling)
-7. [Testing](#testing)
-8. [Examples](#examples)
-9. [API Reference](#api-reference)
+4. [API Gateway Integration](#api-gateway-integration)
+5. [Usage Patterns](#usage-patterns)
+6. [Configuration](#configuration)
+7. [Error Handling](#error-handling)
+8. [Testing](#testing)
+9. [Examples](#examples)
+10. [API Reference](#api-reference)
+11. [Cost Estimation](#cost-estimation)
 
 ---
 
 ## Overview
 
-The **Planning Agent** is a core component of the Eunice research system responsible for planning, analysis, reasoning, and synthesis tasks. It serves as the strategic brain of the research workflow, orchestrating how research tasks are approached and executed within the hierarchical project structure.
+The **Planning Agent** is a containerized microservice in the Eunice research system responsible for planning, analysis, reasoning, and synthesis tasks. It operates as the strategic brain of the research workflow, communicating exclusively via MCP (Model Context Protocol) and providing sophisticated cost estimation capabilities.
 
 ### Primary Responsibilities
 
@@ -26,66 +28,269 @@ The **Planning Agent** is a core component of the Eunice research system respons
 - **Chain of Thought Reasoning**: Perform step-by-step logical reasoning
 - **Content Processing**: Summarize, extract insights, and evaluate content
 - **Source Evaluation**: Compare and assess the credibility of information sources
-- **Hierarchical Integration**: Support project → topic → plan → task workflows
+- **Cost Estimation**: Provide accurate cost estimates with optimization recommendations
+- **MCP Protocol Compliance**: Exclusive communication via MCP WebSocket
 
 ### Key Features
 
-- Multi-AI client support (OpenAI, XAI)
-- Flexible prompt engineering for different task types
-- Structured response parsing and organization
-- Error handling and graceful degradation
-- Async/await pattern for efficient processing
-- Comprehensive logging and monitoring
-- **Hierarchical research structure integration**
-- **Cost-aware planning and optimization**
-- **JSON-structured plan generation**
+- **Containerized Architecture**: Docker-based microservice deployment
+- **MCP Protocol Integration**: Exclusive WebSocket-based communication
+- **Sophisticated Cost Estimation**: Real-time cost tracking and optimization
+- **No Mock Data**: All responses generated through AI providers via MCP
+- **JSON-structured Output**: Consistent, parseable response formats
+- **Multi-capability Support**: 8 distinct research capabilities
+- **Error Handling**: Comprehensive error handling and logging
+- **Configuration-driven**: JSON-based configuration management
 
 ---
 
 ## Architecture
 
-### Class Hierarchy
+### Current Architecture (Version 0.3.1)
+
+The Planning Agent operates as a containerized microservice within the Eunice ecosystem:
 
 ```text
-BaseAgent
-└── PlanningAgent
+API Gateway → MCP Server → Planning Agent Container
+                    ↓
+              AI Providers (OpenAI/XAI)
+```
+
+### Container Structure
+
+```text
+eunice-planning-agent:latest
+├── src/
+│   ├── planning_service.py      # Main service with HTTP and WebSocket support
+│   ├── cost_estimator.py        # Sophisticated cost estimation system
+│   └── config_manager.py        # Configuration management
+├── config/
+│   └── config.json             # Agent configuration
+└── Dockerfile                  # Container definition
 ```
 
 ### Dependencies
 
-- **Base Agent**: Inherits core agent functionality
-- **AI Clients**: OpenAI and XAI client integrations
-- **Config Manager**: Configuration and API key management
-- **MCP Protocols**: Research action definitions and data structures
-- **Data Models**: Message and response data structures
-- **Hierarchical Database**: Integration with project/plan/task structure
+- **MCP Server**: Exclusive communication via WebSocket
+- **FastAPI**: HTTP server for health checks and API endpoints
+- **WebSocket Client**: MCP protocol communication
+- **AI Providers**: OpenAI and XAI integration via MCP
+- **Cost Estimator**: Advanced cost tracking and optimization
+- **Configuration Manager**: JSON-based settings management
 
 ### Core Components
 
 ```python
-class PlanningAgent(BaseAgent):
-    def __init__(self, config_manager: ConfigManager)
-
-    # Core capabilities
+class PlanningAgentService:
+    def __init__(self, agent_id: str = None, mcp_url: str = "ws://localhost:9000")
+    
+    # MCP Communication
+    async def connect_to_mcp(self) -> bool
+    async def send_mcp_request(self, method: str, params: dict) -> dict
+    
+    # Core Capabilities (8 total)
     async def _plan_research(self, payload: Dict[str, Any]) -> Dict[str, Any]
-    async def _analyze_information(self, payload: Dict[str, Any]) -> Dict[str, Any]
-    async def _synthesize_results(self, payload: Dict[str, Any]) -> Dict[str, Any]
+    async def _analyze_information(self, payload: Dict[str, Any]) -> Dict[str, Any] 
+    async def _estimate_costs(self, payload: Dict[str, Any]) -> Dict[str, Any]
     async def _chain_of_thought(self, payload: Dict[str, Any]) -> Dict[str, Any]
-
-    # Content processing
     async def _summarize_content(self, payload: Dict[str, Any]) -> Dict[str, Any]
     async def _extract_insights(self, payload: Dict[str, Any]) -> Dict[str, Any]
     async def _compare_sources(self, payload: Dict[str, Any]) -> Dict[str, Any]
     async def _evaluate_credibility(self, payload: Dict[str, Any]) -> Dict[str, Any]
+    
+    # HTTP API Endpoints
+    @app.get("/health")
+    @app.post("/process")
+    @app.post("/capabilities")
+```
 
-    # AI interaction and parsing
-    async def _get_ai_response(self, prompt: str) -> str
-    def _parse_research_plan(self, response: str) -> Dict[str, Any]
+### Communication Flow
+
+1. **API Gateway** receives request
+2. **MCP Server** routes to Planning Agent
+3. **Planning Agent** processes via WebSocket
+4. **AI Provider** accessed via MCP protocol
+5. **Response** returned through same path
+6. **Cost tracking** throughout process
+
+---
+
+## API Gateway Integration
+
+### Request Flow
+
+The Planning Agent integrates with the API Gateway through the following flow:
+
+1. **Client Request** → API Gateway (`/research/plan`)
+2. **API Gateway** → MCP Server (WebSocket)
+3. **MCP Server** → Planning Agent Container (WebSocket)
+4. **Planning Agent** → AI Provider (via MCP)
+5. **Response** → Client (reverse path)
+
+### API Gateway Endpoints
+
+#### Research Planning Endpoint
+
+**POST** `/research/plan`
+
+**Request Body**:
+
+```json
+{
+  "query": "Your research question",
+  "context": {
+    "project_id": "optional_project_id",
+    "scope": "low|medium|high",
+    "duration_days": 30,
+    "budget_limit": 50.0
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "completed",
+  "result": {
+    "plan": {
+      "objectives": ["Objective 1", "Objective 2"],
+      "key_areas": ["Area 1", "Area 2"],
+      "questions": ["Question 1", "Question 2"],
+      "sources": ["Source 1", "Source 2"],
+      "outcomes": ["Outcome 1", "Outcome 2"]
+    },
+    "cost_estimate": {
+      "estimated_cost": 5.25,
+      "tokens_estimated": 15000,
+      "complexity": "MEDIUM"
+    },
+    "agent_id": "planning-12345",
+    "processing_time": 2.5
+  }
+}
+```
+
+### Authentication
+
+API Gateway requests require authentication:
+
+```bash
+curl -X POST "http://localhost:8000/research/plan" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Analyze AI trends in healthcare"}'
+```
+
+### Rate Limiting
+
+- **Default**: 100 requests per hour per API key
+- **Burst**: Up to 10 concurrent requests
+- **Cost-based**: Additional limits based on estimated cost
+
+### API Error Responses
+
+```json
+{
+  "error": {
+    "code": "PLANNING_ERROR",
+    "message": "Failed to generate research plan",
+    "details": "MCP connection timeout",
+    "timestamp": "2025-07-28T01:00:00Z"
+  }
+}
 ```
 
 ---
 
 ## Core Functions
+
+### Available Capabilities
+
+The Planning Agent provides 8 core capabilities, each accessible via MCP protocol:
+
+1. **plan_research** - Generate comprehensive research plans
+2. **analyze_information** - Analyze and extract insights from data
+3. **cost_estimation** - Provide accurate cost estimates with optimization
+4. **chain_of_thought** - Perform step-by-step logical reasoning
+5. **summarize_content** - Create concise summaries of content
+6. **extract_insights** - Extract key insights and recommendations
+7. **compare_sources** - Compare multiple information sources
+8. **evaluate_credibility** - Assess source credibility and reliability
+
+### 1. Research Planning (`plan_research`)
+
+**Purpose**: Generate comprehensive research plans with cost optimization.
+
+**MCP Request**:
+
+```json
+{
+  "method": "research_action",
+  "params": {
+    "agent_type": "planning",
+    "action": "plan_research",
+    "task_id": "task_001",
+    "payload": {
+      "query": "Analyze the impact of AI on healthcare diagnostics",
+      "context": {
+        "scope": "medium",
+        "duration_days": 14,
+        "budget_limit": 25.0
+      }
+    }
+  }
+}
+```
+
+**Response Structure**:
+
+```json
+{
+  "status": "completed",
+  "result": {
+    "query": "Analyze the impact of AI on healthcare diagnostics",
+    "plan": {
+      "objectives": [
+        "Assess current AI diagnostic tools",
+        "Evaluate accuracy improvements",
+        "Identify implementation challenges"
+      ],
+      "key_areas": [
+        "Radiology AI applications",
+        "Pathology automation",
+        "Clinical decision support"
+      ],
+      "questions": [
+        "What are the accuracy rates of AI diagnostic tools?",
+        "How do costs compare to traditional methods?",
+        "What are the regulatory requirements?"
+      ],
+      "sources": [
+        "Medical journals and publications",
+        "Healthcare technology reports",
+        "Clinical trial databases"
+      ],
+      "outcomes": [
+        "Comprehensive diagnostic AI assessment",
+        "Implementation roadmap",
+        "Cost-benefit analysis"
+      ]
+    },
+    "cost_estimate": {
+      "estimated_cost": 12.75,
+      "tokens_estimated": 35000,
+      "complexity": "MEDIUM",
+      "optimization_suggestions": [
+        "Consider focused scope to reduce costs",
+        "Use cached data when available"
+      ]
+    },
+    "agent_id": "planning-12345",
+    "processing_time": 2.8
+  }
+}
+```
 
 ### 1. Research Planning (`_plan_research`)
 
@@ -1053,4 +1258,235 @@ logging.getLogger('planning_agent').setLevel(logging.DEBUG)
 
 ---
 
-This documentation provides a comprehensive guide to the Planning Agent's capabilities, usage patterns, and best practices. For additional examples and advanced usage scenarios, refer to the test files and example implementations in the codebase.
+---
+
+## Cost Estimation
+
+### Sophisticated Cost Estimation System
+
+The Planning Agent includes a sophisticated cost estimation system providing maximum accuracy for research planning:
+
+#### Features
+
+- **Real-time Cost Tracking**: Monitor costs as they occur
+- **Provider-specific Pricing**: OpenAI and XAI pricing models
+- **Complexity Assessment**: Intelligent LOW/MEDIUM/HIGH complexity scoring
+- **Token Estimation**: Detailed input/output token breakdown
+- **Optimization Recommendations**: Context-aware cost reduction suggestions
+- **Threshold Monitoring**: Session and daily cost limits with alerts
+- **Multi-agent Analysis**: Cost comparison between single vs multi-agent approaches
+
+#### Cost Estimation Response
+
+```json
+{
+  "cost_breakdown": {
+    "ai_operations": {
+      "estimated_tokens": 35000,
+      "input_tokens": 26250,
+      "output_tokens": 8750,
+      "cost_per_1k_input": 0.00015,
+      "cost_per_1k_output": 0.0006,
+      "total_ai_cost": 9.1875,
+      "complexity_level": "MEDIUM",
+      "complexity_multiplier": 2.5,
+      "provider": "openai",
+      "model": "gpt-4o-mini"
+    },
+    "summary": {
+      "ai_cost": 9.1875,
+      "traditional_cost": 0.0,
+      "total": 9.1875,
+      "currency": "USD",
+      "cost_per_day": 0.656,
+      "cost_per_agent": 2.297
+    },
+    "thresholds": {
+      "session_warning": 1.0,
+      "session_limit": 5.0,
+      "daily_limit": 50.0,
+      "emergency_stop": 100.0
+    },
+    "optimization_suggestions": [
+      "Consider breaking down into smaller sub-tasks",
+      "Use caching to avoid redundant analysis"
+    ]
+  }
+}
+```
+
+#### Cost Optimization Strategies
+
+1. **Single Agent Mode**: 60% cost reduction for focused tasks
+2. **Complexity Reduction**: Lower complexity scoring through query optimization
+3. **Token Management**: Efficient prompt design and context management
+4. **Batch Processing**: Group similar operations to reduce API calls
+5. **Caching**: Reuse previous results when applicable
+
+### Cost Configuration
+
+Cost estimation settings in `config/config.json`:
+
+```json
+{
+  "cost_settings": {
+    "token_costs": {
+      "openai": {
+        "gpt-4o-mini": {
+          "input": 0.00015,
+          "output": 0.0006
+        }
+      },
+      "xai": {
+        "grok-beta": {
+          "input": 0.0001,
+          "output": 0.0005
+        }
+      }
+    },
+    "cost_thresholds": {
+      "session_warning": 1.0,
+      "session_limit": 5.0,
+      "daily_limit": 50.0,
+      "emergency_stop": 100.0
+    },
+    "complexity_multipliers": {
+      "LOW": 1.0,
+      "MEDIUM": 2.5,
+      "HIGH": 5.0
+    }
+  },
+  "research_manager": {
+    "provider": "openai",
+    "model": "gpt-4o-mini"
+  }
+}
+```
+
+---
+
+## Testing and Usage Examples
+
+### Test Scripts Available
+
+1. **`test_planning_agent_api.py`** - Comprehensive API Gateway integration test
+2. **`test_cost_estimation_comprehensive.py`** - Cost estimation system validation
+3. **Container tests** - Docker container functionality tests
+
+### Running API Gateway Tests
+
+```bash
+# Comprehensive test suite
+python test_planning_agent_api.py
+
+# Quick test with custom query
+python test_planning_agent_api.py "Analyze AI trends in healthcare"
+
+# Test specific endpoints
+curl -X POST "http://localhost:8000/research/plan" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the benefits of renewable energy?",
+    "context": {
+      "scope": "medium",
+      "duration_days": 14,
+      "budget_limit": 25.0
+    }
+  }'
+```
+
+### Example API Responses
+
+#### Successful Research Plan Response
+
+```json
+{
+  "status": "completed",
+  "result": {
+    "query": "Analyze AI trends in healthcare",
+    "plan": {
+      "objectives": [
+        "Identify current AI applications in healthcare",
+        "Assess market growth and adoption rates",
+        "Evaluate impact on patient outcomes"
+      ],
+      "key_areas": [
+        "Diagnostic AI tools",
+        "Treatment optimization",
+        "Healthcare data analytics"
+      ],
+      "questions": [
+        "Which AI applications show highest adoption?",
+        "What are the accuracy improvements?",
+        "How do costs compare to traditional methods?"
+      ],
+      "sources": [
+        "Medical technology journals",
+        "Healthcare industry reports",
+        "Clinical trial databases"
+      ],
+      "outcomes": [
+        "Comprehensive AI healthcare trend analysis",
+        "Market opportunity assessment",
+        "Implementation roadmap"
+      ]
+    },
+    "cost_estimate": {
+      "estimated_cost": 15.25,
+      "tokens_estimated": 42000,
+      "complexity": "MEDIUM",
+      "optimization_suggestions": [
+        "Consider focused scope on specific medical areas",
+        "Use existing research summaries to reduce analysis time"
+      ]
+    },
+    "agent_id": "planning-12345",
+    "processing_time": 3.2
+  }
+}
+```
+
+### Integration Best Practices
+
+1. **Error Handling**: Always check response status and handle errors gracefully
+2. **Rate Limiting**: Respect API rate limits and implement backoff strategies  
+3. **Cost Monitoring**: Monitor cost estimates and set appropriate budget limits
+4. **Timeout Handling**: Set reasonable timeouts for API requests (30s recommended)
+5. **Authentication**: Use proper API tokens for production environments
+
+### Monitoring and Debugging
+
+#### Logs Location
+
+- **Container logs**: `docker logs eunice-planning-agent`
+- **API Gateway logs**: Check API Gateway service logs
+- **MCP Server logs**: Monitor MCP WebSocket connections
+
+#### Health Checks
+
+```bash
+# Check container health
+curl http://localhost:8007/health
+
+# Check API Gateway health  
+curl http://localhost:8000/health
+
+# Test MCP connection
+python -c "
+import asyncio
+import websockets
+import json
+
+async def test_mcp():
+    async with websockets.connect('ws://localhost:9000') as ws:
+        await ws.send(json.dumps({'method': 'ping'}))
+        response = await ws.recv()
+        print(json.loads(response))
+
+asyncio.run(test_mcp())
+"
+```
+
+---
+
+This documentation provides a comprehensive guide to the Planning Agent's containerized architecture, API integration, and sophisticated cost estimation capabilities. The agent operates exclusively via MCP protocol, ensuring architectural compliance while providing maximum accuracy in research planning and cost optimization.

@@ -15,13 +15,13 @@ services:
       - PORT=8001
       - MCP_SERVER_HOST=mcp-server
       - MCP_SERVER_PORT=9000
-      - DATABASE_SERVICE_URL=http://database-service:8011
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice # Direct connection
       - LOG_LEVEL=INFO
     networks:
       - eunice-microservices
     depends_on:
       - mcp-server
-      - database-service
+      - postgres # Direct dependency on postgres, not database-service
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -92,25 +92,24 @@ services:
       timeout: 10s
       retries: 3
 
-  # 8. Database Service (Port 8011)
+  # 8. Database Service (Pure Database Management)
   database-service:
     build: ./services/database
     container_name: eunice-database-service
-    ports:
-      - "8011:8011"
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+      - REDIS_URL=redis://redis:6379
       - LOG_LEVEL=INFO
+      - HEALTH_CHECK_INTERVAL=30
+      - MAINTENANCE_INTERVAL=3600
     networks:
       - eunice-microservices
     depends_on:
       - postgres
+      - redis
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # Note: No port exposure - this is a pure database management service
+    # API operations are handled by the API Gateway with direct DB connections
 
   # Supporting Infrastructure
 

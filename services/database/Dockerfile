@@ -16,18 +16,17 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Make scripts executable
+RUN chmod +x init_db.py startup.sh database_service.py
+
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash dbservice && \
     chown -R dbservice:dbservice /app
 
 USER dbservice
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8011/health || exit 1
+# Health check - removed since no API endpoints
+# Database service health is monitored internally
 
-# Expose port
-EXPOSE 8011
-
-# Start the service
-CMD ["python", "main.py"]
+# Start the pure database service
+CMD ["./startup.sh"]

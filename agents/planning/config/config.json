@@ -68,6 +68,10 @@
       "CRITICAL": 10.0
     }
   },
+  "research_manager": {
+    "provider": "openai",
+    "model": "gpt-4o-mini"
+  },
   "logging": {
     "level": "INFO",
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

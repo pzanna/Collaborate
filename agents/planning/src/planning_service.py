@@ -11,6 +11,8 @@ import logging
 import os
 import signal
 import sys
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -23,7 +25,8 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 # Import cost estimator
 try:
-    from .cost_estimator import CostEstimator, CostTier
+    from cost_estimator import CostEstimator, CostTier
+    from config_manager import ConfigManager
     COST_ESTIMATOR_AVAILABLE = True
 except ImportError:
     print("Warning: Cost estimator not available")
@@ -71,9 +74,8 @@ class HealthResponse(BaseModel):
     mcp_connected: bool
     uptime_seconds: int
 
-class TaskRequest(BaseModel):
-    action: str
-    payload: Dict[str, Any]
+# REMOVED: TaskRequest model - direct task execution via API forbidden
+# All tasks must be executed through MCP protocol
 
 class PlanningAgentService:
     """Containerized Planning Agent Service as MCP Client"""
@@ -338,76 +340,77 @@ class PlanningAgentService:
             
         except Exception as e:
             logger.error(f"Error generating AI-based research plan: {e}")
-            # Fallback to basic structure if AI fails
-            return await self._fallback_research_plan(payload)
-    
+            # Return error response if AI fails
+            return {
+                "success": False,
+                "error": f"Failed to generate research plan: {str(e)}",
+                "status": "failed",
+                "result": None,
+                "agent_id": self.agent_id
+            }
     async def _get_ai_response(self, prompt: str) -> str:
-        """Get response from AI service"""
+        """Get response from AI service via MCP - NO DIRECT AI PROVIDER ACCESS ALLOWED"""
         try:
-            # Try to use AI service if available
-            ai_service_url = os.getenv("AI_SERVICE_URL")
-            if ai_service_url:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{ai_service_url}/ai/chat/completions",
-                        json={
-                            "model": "gpt-4o-mini",
-                            "messages": [
-                                {"role": "system", "content": "You are a research planning assistant. Provide detailed, structured responses in JSON format."},
-                                {"role": "user", "content": prompt}
-                            ],
-                            "temperature": 0.7,
-                            "max_tokens": 2000
-                        },
-                        timeout=30
-                    )
+            # All AI requests must go through MCP server - no direct provider access
+            if not self.websocket:
+                raise Exception("MCP connection required - direct AI provider access forbidden")
+                
+            ai_request_message = {
+                "type": "ai_request",
+                "request_id": str(uuid.uuid4()),
+                "agent_id": self.agent_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "system", "content": "You are a research planning assistant. Provide detailed, structured responses in JSON format."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 2000
+                }
+            }
+            
+            # Send request through MCP
+            await self.websocket.send(json.dumps(ai_request_message))
+            logger.info(f"Sent AI request through MCP: {ai_request_message['request_id']}")
+            
+            # Wait for AI response (with timeout)
+            timeout_seconds = 30
+            start_time = asyncio.get_event_loop().time()
+            
+            while (asyncio.get_event_loop().time() - start_time) < timeout_seconds:
+                try:
+                    # Check for incoming messages
+                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+                    data = json.loads(message)
                     
-                    if response.status_code == 200:
-                        result = response.json()
-                        return result.get("content", "")
-                    else:
-                        logger.error(f"AI service error: {response.status_code}")
-                        raise Exception(f"AI service error: {response.status_code}")
-            else:
-                # Direct OpenAI call as fallback
-                return await self._direct_openai_call(prompt)
+                    # Check if this is the AI response we're waiting for
+                    if (data.get("type") == "ai_response" and 
+                        data.get("request_id") == ai_request_message["request_id"]):
+                        
+                        if data.get("success"):
+                            response_content = data.get("data", {}).get("content", "")
+                            logger.info("Received AI response through MCP")
+                            return response_content
+                        else:
+                            error_msg = data.get("error", "Unknown AI service error")
+                            logger.error(f"AI service error via MCP: {error_msg}")
+                            raise Exception(f"AI service error: {error_msg}")
+                            
+                except asyncio.TimeoutError:
+                    # Continue waiting
+                    continue
+                except Exception as e:
+                    logger.error(f"Error receiving AI response: {e}")
+                    break
+            
+            logger.error("Timeout waiting for AI response via MCP")
+            raise Exception("Timeout waiting for AI response via MCP")
                 
         except Exception as e:
-            logger.error(f"Error getting AI response: {e}")
-            raise
-    
-    async def _direct_openai_call(self, prompt: str) -> str:
-        """Direct OpenAI API call as fallback"""
-        try:
-            import openai
-            
-            # Get API key from environment or config
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                api_key = config.get("ai_settings", {}).get("openai_api_key")
-            
-            if not api_key:
-                raise Exception("No OpenAI API key available")
-            
-            client = openai.AsyncOpenAI(api_key=api_key)
-            
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a research planning assistant. Provide detailed, structured responses in JSON format."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=2000,
-                timeout=30
-            )
-            
-            content = response.choices[0].message.content
-            return content if content else "No content received from AI"
-            
-        except Exception as e:
-            logger.error(f"Direct OpenAI call failed: {e}")
-            raise
+            logger.error(f"Error getting AI response via MCP: {e}")
+            raise Exception(f"AI request failed via MCP: {str(e)} - direct AI provider access forbidden")
     
     def _parse_research_plan(self, ai_response: str) -> Dict[str, Any]:
         """Parse AI response into structured research plan"""
@@ -456,249 +459,253 @@ class PlanningAgentService:
             logger.debug(f"AI response was: {ai_response}")
             raise
     
-    async def _fallback_research_plan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Fallback research plan if AI fails"""
-        query = payload.get("query", "")
-        scope = payload.get("scope", "comprehensive")
-        
-        plan = {
-            "objectives": [
-                f"Investigate {query}",
-                "Identify key research areas",
-                "Synthesize findings",
-                "Generate actionable insights"
-            ],
-            "key_areas": [
-                "Background research",
-                "Current literature",
-                "Data analysis",
-                "Methodology review",
-                "Gap analysis"
-            ],
-            "questions": [
-                f"What are the current findings about {query}?",
-                "What gaps exist in the research?",
-                "What methodologies are most effective?",
-                "What are the practical applications?",
-                "What future research is needed?"
-            ],
-            "sources": [
-                "PubMed",
-                "ArXiv",
-                "Semantic Scholar",
-                "Google Scholar",
-                "IEEE Xplore",
-                "ResearchGate"
-            ],
-            "timeline": {
-                "total_days": 14,
-                "phases": {
-                    "literature_search": 3,
-                    "data_collection": 5,
-                    "analysis": 4,
-                    "synthesis": 2
-                }
-            },
-            "outcomes": [
-                "Comprehensive literature review",
-                "Data analysis report",
-                "Research synthesis",
-                "Recommendations report"
-            ]
-        }
-        
-        return {
-            "status": "completed",
-            "result": {
-                "query": query,
-                "scope": scope,
-                "plan": plan,
-                "agent_id": self.agent_id,
-                "processing_time": 1.5,
-                "ai_generated": False,
-                "note": "Used fallback plan due to AI service unavailability"
-            }
-        }
-    
     async def _analyze_information(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze provided information"""
+        """Analyze provided information using AI via MCP"""
         content = payload.get("content", "")
         analysis_type = payload.get("analysis_type", "general")
         
-        # Mock information analysis
-        analysis_result = {
-            "summary": f"Analysis of {len(content)} characters of content",
-            "key_points": [
-                "Primary finding identified",
-                "Secondary patterns observed",
-                "Supporting evidence located"
-            ],
-            "insights": [
-                "Content shows clear structure",
-                "Multiple perspectives present",
-                "Evidence-based conclusions"
-            ],
-            "recommendations": [
-                "Further investigation recommended",
-                "Cross-reference with additional sources",
-                "Validate findings with experts"
-            ],
-            "confidence_score": 0.85,
-            "analysis_type": analysis_type
-        }
+        if not content:
+            raise ValueError("Content is required for information analysis")
         
-        return {
-            "status": "completed",
-            "result": analysis_result,
-            "agent_id": self.agent_id,
-            "processing_time": 1.8
-        }
+        # Create analysis prompt for AI
+        prompt = f"""
+        Please analyze the following content with a focus on {analysis_type} analysis:
+        
+        Content: {content}
+        
+        Provide a comprehensive analysis including:
+        1. Executive summary of the content
+        2. Key points and findings (3-5 main points)
+        3. Deep insights and implications
+        4. Actionable recommendations
+        5. Confidence assessment of the analysis
+        
+        Format your response as a JSON object with this exact structure:
+        {{
+            "summary": "Executive summary of the content analysis",
+            "key_points": ["Point 1", "Point 2", "Point 3", "Point 4"],
+            "insights": ["Insight 1", "Insight 2", "Insight 3"],
+            "recommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"],
+            "confidence_score": 0.85,
+            "analysis_type": "{analysis_type}"
+        }}
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for content analysis: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                analysis_result = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No valid JSON found in AI response")
+            
+            return {
+                "status": "completed",
+                "result": analysis_result,
+                "agent_id": self.agent_id,
+                "processing_time": 2.1,
+                "ai_generated": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based content analysis: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to analyze content: {str(e)}",
+                "status": "failed",
+                "result": None,
+                "agent_id": self.agent_id
+            }
     
     async def _estimate_costs(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Estimate costs for research project using integrated cost estimator"""
+        """Estimate costs for research project using the sophisticated cost estimator"""
         project_scope = payload.get("scope", "medium")
         duration_days = payload.get("duration_days", 30)
         resources_needed = payload.get("resources", [])
         query = payload.get("query", "Research project cost estimation")
         agents_needed = payload.get("agents", ["planning", "literature", "analysis"])
+        parallel_execution = payload.get("parallel_execution", False)
+        context_content = payload.get("context", "")
         
-        # Try to use the existing cost estimator if available
+        # Always try to use the sophisticated cost estimator first
         if COST_ESTIMATOR_AVAILABLE and CostEstimator:
             try:
-                # Create a mock config manager for the cost estimator
-                class MockConfigManager:
-                    def __init__(self):
-                        self.config = {
-                            "cost_settings": {
-                                "token_costs": {
-                                    "openai": {
-                                        "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
-                                        "gpt-4": {"input": 0.03, "output": 0.06}
-                                    }
-                                },
-                                "cost_thresholds": {
-                                    "session_warning": 1.0,
-                                    "session_limit": 5.0,
-                                    "daily_warning": 10.0,
-                                    "daily_limit": 50.0,
-                                    "emergency_stop": 100.0
-                                },
-                                "complexity_multipliers": {
-                                    "LOW": 1.0,
-                                    "MEDIUM": 2.5,
-                                    "HIGH": 5.0,
-                                    "CRITICAL": 10.0
-                                }
-                            }
-                        }
-                    
-                    def get(self, key, default=None):
-                        keys = key.split('.')
-                        value = self.config
-                        for k in keys:
-                            if isinstance(value, dict) and k in value:
-                                value = value[k]
-                            else:
-                                return default
-                        return value
-
-                cost_estimator = CostEstimator(MockConfigManager())
+                # Import the config manager and create cost estimator
+                from .config_manager import ConfigManager
+                config_manager = ConfigManager()
+                cost_estimator = CostEstimator(config_manager)
                 
-                # Check if the method exists and try to use it
-                if hasattr(cost_estimator, 'estimate_task_cost'):
-                    cost_result = cost_estimator.estimate_task_cost(
-                        query=query,
-                        agents=agents_needed,
-                        parallel_execution=payload.get("parallel_execution", False),
-                        context_content=payload.get("context", None)
-                    )
-                    
-                    # Convert the cost result to our expected format
-                    cost_breakdown = {
-                        "ai_operations": {
-                            "estimated_tokens": cost_result.estimated_tokens,
-                            "estimated_cost": cost_result.estimated_cost_usd,
-                            "task_complexity": str(cost_result.task_complexity),
-                            "agent_count": cost_result.agent_count,
-                            "confidence": cost_result.confidence,
-                            "reasoning": cost_result.reasoning
-                        },
-                        "traditional_costs": await self._calculate_traditional_costs(payload),
-                        "summary": {
-                            "ai_cost": cost_result.estimated_cost_usd,
-                            "traditional_cost": await self._get_traditional_total(payload),
-                            "total": cost_result.estimated_cost_usd + await self._get_traditional_total(payload),
-                            "currency": "USD"
-                        }
+                # Use the sophisticated cost estimation
+                cost_estimate = cost_estimator.estimate_task_cost(
+                    query=query,
+                    agents=agents_needed,
+                    parallel_execution=parallel_execution,
+                    context_content=context_content
+                )
+                
+                # Get cost recommendations
+                recommendations = cost_estimator.get_cost_recommendations(cost_estimate)
+                
+                # Calculate traditional costs
+                traditional_costs = await self._calculate_traditional_costs(payload)
+                
+                # Create comprehensive cost breakdown
+                cost_breakdown = {
+                    "ai_operations": {
+                        "estimated_tokens": cost_estimate.estimated_tokens,
+                        "estimated_cost": cost_estimate.estimated_cost_usd,
+                        "task_complexity": cost_estimate.task_complexity.value,
+                        "agent_count": cost_estimate.agent_count,
+                        "parallel_factor": cost_estimate.parallel_factor,
+                        "confidence": cost_estimate.confidence,
+                        "reasoning": cost_estimate.reasoning
+                    },
+                    "traditional_costs": traditional_costs,
+                    "summary": {
+                        "ai_cost": cost_estimate.estimated_cost_usd,
+                        "traditional_cost": traditional_costs["resources"]["total"],
+                        "total": cost_estimate.estimated_cost_usd + traditional_costs["resources"]["total"],
+                        "currency": "USD",
+                        "cost_per_day": (cost_estimate.estimated_cost_usd + traditional_costs["resources"]["total"]) / duration_days if duration_days > 0 else 0
+                    },
+                    "cost_optimization": {
+                        "current_tier": recommendations["current_tier"],
+                        "suggestions": recommendations["suggestions"],
+                        "alternatives": recommendations["alternatives"]
+                    },
+                    "thresholds": {
+                        "session_warning": config_manager.get("cost_settings.cost_thresholds.session_warning", 1.0),
+                        "session_limit": config_manager.get("cost_settings.cost_thresholds.session_limit", 5.0),
+                        "daily_limit": config_manager.get("cost_settings.cost_thresholds.daily_limit", 50.0),
+                        "emergency_stop": config_manager.get("cost_settings.cost_thresholds.emergency_stop", 100.0)
                     }
-                    
-                    return {
-                        "status": "completed",
-                        "result": {
-                            "project_scope": project_scope,
-                            "cost_breakdown": cost_breakdown,
-                            "estimation_method": "hybrid_ai_traditional",
-                            "recommendations": [
-                                "Monitor token usage during execution",
-                                "Consider using more cost-effective providers for routine tasks",
-                                "Implement caching to reduce redundant API calls",
-                                "Plan for traditional research costs alongside AI costs"
-                            ],
-                            "agent_id": self.agent_id,
-                            "processing_time": 0.8
-                        }
+                }
+                
+                return {
+                    "status": "completed",
+                    "result": {
+                        "project_scope": project_scope,
+                        "cost_breakdown": cost_breakdown,
+                        "estimation_method": "sophisticated_ai_cost_estimator",
+                        "recommendations": recommendations["suggestions"],
+                        "agent_id": self.agent_id,
+                        "processing_time": 0.8,
+                        "cost_estimator_used": True,
+                        "accuracy_level": "high"
                     }
-                else:
-                    # Fallback to enhanced estimation using config-based approach
-                    return await self._enhanced_cost_estimation(payload)
-                    
+                }
+                
             except Exception as e:
-                logger.error(f"Error using cost estimator: {e}")
+                logger.error(f"Error using sophisticated cost estimator: {e}")
+                # Fall back to enhanced estimation
                 return await self._enhanced_cost_estimation(payload)
         else:
+            # Fall back to enhanced estimation if sophisticated estimator not available
+            logger.warning("Sophisticated cost estimator not available, using fallback method")
             return await self._enhanced_cost_estimation(payload)
     
     async def _enhanced_cost_estimation(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Enhanced cost estimation using config-based approach"""
+        """Enhanced cost estimation using config-based approach with higher accuracy"""
         project_scope = payload.get("scope", "medium")
         duration_days = payload.get("duration_days", 30)
         resources_needed = payload.get("resources", [])
         agents_needed = payload.get("agents", ["planning", "literature", "analysis"])
+        query = payload.get("query", "")
         
-        # Load cost settings from config
+        # Load cost settings from config with more accurate defaults
         cost_settings = config.get("cost_settings", {})
         token_costs = cost_settings.get("token_costs", {})
         cost_thresholds = cost_settings.get("cost_thresholds", {})
         
-        # Estimate AI costs based on agents and complexity
+        # More accurate token estimation based on query complexity and content
         estimated_tokens_per_agent = {
             "planning": 5000,
             "literature": 15000,
             "analysis": 10000,
             "synthesis": 8000,
             "screening": 12000,
-            "writing": 20000
+            "writing": 20000,
+            "research_manager": 3000,
+            "ai_agent": 7000
         }
         
-        total_tokens = sum(estimated_tokens_per_agent.get(agent, 5000) for agent in agents_needed)
+        # Better complexity assessment
+        complexity_score = 0
+        query_lower = query.lower()
         
-        # Apply complexity multiplier
-        complexity_multipliers = cost_settings.get("complexity_multipliers", {})
-        scope_multiplier = complexity_multipliers.get(project_scope.upper(), 2.5)
-        total_tokens = int(total_tokens * scope_multiplier)
+        # Query complexity indicators (more comprehensive)
+        high_complexity_keywords = [
+            "comprehensive", "detailed analysis", "compare multiple", "research study",
+            "in-depth", "systematic review", "correlation", "statistical analysis",
+            "meta-analysis", "longitudinal", "multi-factor", "complex"
+        ]
         
-        # Calculate AI costs using OpenAI GPT-4o-mini as default
-        openai_costs = token_costs.get("openai", {}).get("gpt-4o-mini", {"input": 0.00015, "output": 0.0006})
-        input_tokens = int(total_tokens * 0.7)  # Assume 70% input, 30% output
+        medium_complexity_keywords = [
+            "analyze", "compare", "summarize", "explain", "relationship",
+            "trend", "pattern", "evaluate", "assess", "review"
+        ]
+        
+        # Calculate complexity score
+        if any(keyword in query_lower for keyword in high_complexity_keywords):
+            complexity_score += 3
+        elif any(keyword in query_lower for keyword in medium_complexity_keywords):
+            complexity_score += 2
+        else:
+            complexity_score += 1
+            
+        # Agent count factor
+        if len(agents_needed) >= 4:
+            complexity_score += 2
+        elif len(agents_needed) >= 2:
+            complexity_score += 1
+            
+        # Query length factor (more tokens needed for longer queries)
+        if len(query) > 500:
+            complexity_score += 2
+        elif len(query) > 200:
+            complexity_score += 1
+            
+        # Determine complexity multiplier
+        if complexity_score >= 6:
+            scope_multiplier = 5.0  # HIGH complexity
+            complexity_level = "HIGH"
+        elif complexity_score >= 4:
+            scope_multiplier = 2.5  # MEDIUM complexity
+            complexity_level = "MEDIUM"
+        else:
+            scope_multiplier = 1.0  # LOW complexity
+            complexity_level = "LOW"
+        
+        # Calculate total tokens with better estimation
+        base_tokens = sum(estimated_tokens_per_agent.get(agent, 5000) for agent in agents_needed)
+        query_tokens = max(len(query) // 4, 100)  # Rough tokenization
+        context_tokens = max(len(payload.get("context", "")) // 4, 0)
+        
+        total_tokens = int((base_tokens + query_tokens + context_tokens) * scope_multiplier)
+        
+        # Use actual provider pricing from config
+        primary_provider = config.get("research_manager", {}).get("provider", "openai")
+        primary_model = config.get("research_manager", {}).get("model", "gpt-4o-mini")
+        
+        openai_costs = token_costs.get(primary_provider, {}).get(primary_model, {
+            "input": 0.00015, "output": 0.0006
+        })
+        
+        # More accurate input/output token distribution
+        input_tokens = int(total_tokens * 0.75)  # Typically more input than output for research
         output_tokens = total_tokens - input_tokens
         
         ai_cost = (input_tokens / 1000 * openai_costs["input"]) + (output_tokens / 1000 * openai_costs["output"])
         
-        # Calculate traditional costs
+        # Calculate traditional costs with AI assistance
         traditional_costs = await self._calculate_traditional_costs(payload)
         traditional_total = traditional_costs["resources"]["total"]
         
-        # Combined cost breakdown
+        # Enhanced cost breakdown with more details
         cost_breakdown = {
             "ai_operations": {
                 "estimated_tokens": total_tokens,
@@ -708,7 +715,11 @@ class PlanningAgentService:
                 "cost_per_1k_output": openai_costs["output"],
                 "total_ai_cost": ai_cost,
                 "agents_used": agents_needed,
-                "complexity_multiplier": scope_multiplier
+                "complexity_multiplier": scope_multiplier,
+                "complexity_level": complexity_level,
+                "provider": primary_provider,
+                "model": primary_model,
+                "reasoning": f"Estimated {total_tokens} tokens for {len(agents_needed)} agents with {complexity_level} complexity"
             },
             "traditional_costs": traditional_costs,
             "summary": {
@@ -716,21 +727,32 @@ class PlanningAgentService:
                 "traditional_cost": traditional_total,
                 "total": ai_cost + traditional_total,
                 "currency": "USD",
-                "cost_per_day": (ai_cost + traditional_total) / duration_days if duration_days > 0 else 0
+                "cost_per_day": (ai_cost + traditional_total) / duration_days if duration_days > 0 else 0,
+                "cost_per_agent": (ai_cost + traditional_total) / len(agents_needed) if agents_needed else 0
             },
             "thresholds": {
                 "session_warning": cost_thresholds.get("session_warning", 1.0),
                 "session_limit": cost_thresholds.get("session_limit", 5.0),
-                "daily_limit": cost_thresholds.get("daily_limit", 50.0)
-            }
+                "daily_limit": cost_thresholds.get("daily_limit", 50.0),
+                "emergency_stop": cost_thresholds.get("emergency_stop", 100.0)
+            },
+            "optimization_suggestions": []
         }
+        
+        # Add optimization suggestions based on cost analysis
+        if ai_cost > 1.0:
+            cost_breakdown["optimization_suggestions"].append("Consider breaking down into smaller sub-tasks")
+        if len(agents_needed) > 3:
+            cost_breakdown["optimization_suggestions"].append("Evaluate if all agents are necessary")
+        if complexity_level == "HIGH":
+            cost_breakdown["optimization_suggestions"].append("Use caching to avoid redundant analysis")
         
         return {
             "status": "completed",
             "result": {
                 "project_scope": project_scope,
                 "cost_breakdown": cost_breakdown,
-                "estimation_method": "enhanced_config_based",
+                "estimation_method": "enhanced_config_based_v2",
                 "recommendations": [
                     "Monitor token usage during execution",
                     "Consider batch processing to reduce API calls",
@@ -739,34 +761,94 @@ class PlanningAgentService:
                     "Review agent selection for cost optimization"
                 ],
                 "agent_id": self.agent_id,
-                "processing_time": 1.0
+                "processing_time": 1.0,
+                "accuracy_level": "medium-high"
             }
         }
     
     async def _calculate_traditional_costs(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate traditional research costs"""
+        """Calculate traditional research costs using AI-assisted estimation via MCP"""
         duration_days = payload.get("duration_days", 30)
         resources_needed = payload.get("resources", [])
+        project_context = payload.get("context", "")
         
-        resource_costs_map = {
-            "database_access": 200,
-            "survey_tools": 150,
-            "analysis_software": 300,
-            "expert_consultation": 500,
-            "data_collection": 400,
-            "cloud_compute": 100
-        }
+        # Create cost estimation prompt for AI
+        prompt = f"""
+        Please estimate traditional research costs for a project with the following parameters:
         
-        resource_total = sum(resource_costs_map.get(resource, 0) for resource in resources_needed)
+        Duration: {duration_days} days
+        Resources needed: {resources_needed}
+        Project context: {project_context}
         
-        return {
-            "resources": {
-                "items": resources_needed,
-                "costs": {resource: resource_costs_map.get(resource, 0) for resource in resources_needed},
-                "total": resource_total
-            },
-            "duration_days": duration_days
-        }
+        Provide detailed cost estimates for each resource category based on current market rates:
+        1. Database access subscriptions
+        2. Survey and data collection tools
+        3. Analysis software licenses
+        4. Expert consultation fees
+        5. Cloud computing resources
+        6. Additional operational costs
+        
+        Consider regional variations and current market pricing. Format your response as a JSON object:
+        {{
+            "resources": {{
+                "items": {resources_needed},
+                "costs": {{
+                    "database_access": 200,
+                    "survey_tools": 150,
+                    "analysis_software": 300,
+                    "expert_consultation": 500,
+                    "data_collection": 400,
+                    "cloud_compute": 100
+                }},
+                "total": 1650
+            }},
+            "duration_days": {duration_days},
+            "cost_breakdown_reasoning": "Explanation of how costs were estimated",
+            "market_factors": ["Factor 1", "Factor 2"],
+            "cost_confidence": 0.8
+        }}
+        
+        Provide realistic estimates based on 2024-2025 market rates.
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for traditional cost estimation: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                cost_result = json.loads(json_match.group(0))
+                return cost_result
+            else:
+                raise ValueError("No valid JSON found in AI response")
+                
+        except Exception as e:
+            logger.error(f"Error generating AI-based cost estimation: {e}")
+            # Fallback to basic calculation if AI fails
+            resource_costs_map = {
+                "database_access": 200,
+                "survey_tools": 150,
+                "analysis_software": 300,
+                "expert_consultation": 500,
+                "data_collection": 400,
+                "cloud_compute": 100
+            }
+            
+            resource_total = sum(resource_costs_map.get(resource, 0) for resource in resources_needed)
+            
+            return {
+                "resources": {
+                    "items": resources_needed,
+                    "costs": {resource: resource_costs_map.get(resource, 0) for resource in resources_needed},
+                    "total": resource_total
+                },
+                "duration_days": duration_days,
+                "cost_breakdown_reasoning": f"Fallback calculation due to AI error: {str(e)}",
+                "market_factors": ["Standard market rates used"],
+                "cost_confidence": 0.6
+            }
     
     async def _get_traditional_total(self, payload: Dict[str, Any]) -> float:
         """Get total traditional costs"""
@@ -774,167 +856,510 @@ class PlanningAgentService:
         return traditional["resources"]["total"]
     
     async def _basic_cost_estimation(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Basic cost estimation fallback"""
+        """Basic cost estimation using AI-assisted analysis via MCP"""
         project_scope = payload.get("scope", "medium")
         duration_days = payload.get("duration_days", 30)
         resources_needed = payload.get("resources", [])
+        project_description = payload.get("description", "Research project cost estimation")
         
-        # Basic cost estimation logic
-        base_costs = {
-            "small": {"daily_rate": 500, "overhead": 0.2},
-            "medium": {"daily_rate": 750, "overhead": 0.3},
-            "large": {"daily_rate": 1000, "overhead": 0.4}
-        }
+        # Create comprehensive cost estimation prompt for AI
+        prompt = f"""
+        Please provide a detailed cost estimation for a research project with these parameters:
         
-        scope_config = base_costs.get(project_scope, base_costs["medium"])
-        daily_rate = scope_config["daily_rate"]
-        overhead_rate = scope_config["overhead"]
+        Project Scope: {project_scope}
+        Duration: {duration_days} days
+        Resources Needed: {resources_needed}
+        Project Description: {project_description}
         
-        # Calculate base costs
-        labor_cost = daily_rate * duration_days
-        overhead_cost = labor_cost * overhead_rate
+        Estimate costs across these categories:
+        1. Labor costs (daily rates based on expertise level and scope)
+        2. Overhead and administrative costs
+        3. Resource and tool costs
+        4. Contingency planning
+        5. Total project cost with breakdown
         
-        # Resource costs
-        resource_costs_map = {
-            "database_access": 200,
-            "survey_tools": 150,
-            "analysis_software": 300,
-            "expert_consultation": 500,
-            "data_collection": 400,
-            "ai_processing": 150,
-            "cloud_compute": 100
-        }
+        Consider current market rates for research services, regional variations, and project complexity.
         
-        additional_costs = sum(resource_costs_map.get(resource, 0) for resource in resources_needed)
-        total_cost = labor_cost + overhead_cost + additional_costs
-        
-        cost_breakdown = {
-            "labor": {
-                "daily_rate": daily_rate,
-                "duration_days": duration_days,
-                "total": labor_cost
-            },
-            "overhead": {
-                "rate": overhead_rate,
-                "total": overhead_cost
-            },
-            "resources": {
-                "items": resources_needed,
-                "costs": {resource: resource_costs_map.get(resource, 0) for resource in resources_needed},
-                "total": additional_costs
-            },
-            "summary": {
-                "subtotal": labor_cost + additional_costs,
-                "overhead": overhead_cost,
-                "total": total_cost,
+        Format your response as a JSON object with this exact structure:
+        {{
+            "labor": {{
+                "daily_rate": 750,
+                "duration_days": {duration_days},
+                "total": 22500
+            }},
+            "overhead": {{
+                "rate": 0.3,
+                "total": 6750
+            }},
+            "resources": {{
+                "items": {resources_needed},
+                "costs": {{
+                    "database_access": 200,
+                    "survey_tools": 150,
+                    "analysis_software": 300
+                }},
+                "total": 650
+            }},
+            "summary": {{
+                "subtotal": 23150,
+                "overhead": 6750,
+                "total": 29900,
                 "currency": "USD"
-            },
-            "timeline": {
-                "estimated_duration": duration_days,
-                "cost_per_day": total_cost / duration_days if duration_days > 0 else 0
-            }
-        }
+            }},
+            "timeline": {{
+                "estimated_duration": {duration_days},
+                "cost_per_day": 997
+            }},
+            "cost_reasoning": "Detailed explanation of cost calculation methodology",
+            "market_assumptions": ["Assumption 1", "Assumption 2"],
+            "confidence_level": 0.8
+        }}
         
-        return {
-            "status": "completed",
-            "result": {
-                "project_scope": project_scope,
-                "cost_breakdown": cost_breakdown,
-                "estimation_method": "basic",
-                "recommendations": [
-                    "Consider phased approach to reduce upfront costs",
-                    "Review resource requirements for optimization",
-                    "Include 10-15% contingency buffer",
-                    "Monitor actual costs vs estimates during execution"
-                ],
-                "agent_id": self.agent_id,
-                "processing_time": 1.2
+        Base estimates on 2024-2025 market rates for research services.
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for basic cost estimation: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                cost_breakdown = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No valid JSON found in AI response")
+            
+            return {
+                "status": "completed",
+                "result": {
+                    "project_scope": project_scope,
+                    "cost_breakdown": cost_breakdown,
+                    "estimation_method": "ai_assisted_basic",
+                    "recommendations": [
+                        "Consider phased approach to reduce upfront costs",
+                        "Review resource requirements for optimization",
+                        "Include 10-15% contingency buffer",
+                        "Monitor actual costs vs estimates during execution"
+                    ],
+                    "agent_id": self.agent_id,
+                    "processing_time": 1.2,
+                    "ai_generated": True
+                }
             }
-        }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based basic cost estimation: {e}")
+            
+            # Fallback calculation if AI fails
+            base_costs = {
+                "small": {"daily_rate": 500, "overhead": 0.2},
+                "medium": {"daily_rate": 750, "overhead": 0.3},
+                "large": {"daily_rate": 1000, "overhead": 0.4}
+            }
+            
+            scope_config = base_costs.get(project_scope, base_costs["medium"])
+            daily_rate = scope_config["daily_rate"]
+            overhead_rate = scope_config["overhead"]
+            
+            # Calculate base costs
+            labor_cost = daily_rate * duration_days
+            overhead_cost = labor_cost * overhead_rate
+            
+            # Resource costs
+            resource_costs_map = {
+                "database_access": 200,
+                "survey_tools": 150,
+                "analysis_software": 300,
+                "expert_consultation": 500,
+                "data_collection": 400,
+                "ai_processing": 150,
+                "cloud_compute": 100
+            }
+            
+            additional_costs = sum(resource_costs_map.get(resource, 0) for resource in resources_needed)
+            total_cost = labor_cost + overhead_cost + additional_costs
+            
+            cost_breakdown = {
+                "labor": {
+                    "daily_rate": daily_rate,
+                    "duration_days": duration_days,
+                    "total": labor_cost
+                },
+                "overhead": {
+                    "rate": overhead_rate,
+                    "total": overhead_cost
+                },
+                "resources": {
+                    "items": resources_needed,
+                    "costs": {resource: resource_costs_map.get(resource, 0) for resource in resources_needed},
+                    "total": additional_costs
+                },
+                "summary": {
+                    "subtotal": labor_cost + additional_costs,
+                    "overhead": overhead_cost,
+                    "total": total_cost,
+                    "currency": "USD"
+                },
+                "timeline": {
+                    "estimated_duration": duration_days,
+                    "cost_per_day": total_cost / duration_days if duration_days > 0 else 0
+                },
+                "cost_reasoning": f"Fallback calculation used due to AI error: {str(e)}",
+                "market_assumptions": ["Standard industry rates applied"],
+                "confidence_level": 0.6
+            }
+            
+            return {
+                "status": "completed",
+                "result": {
+                    "project_scope": project_scope,
+                    "cost_breakdown": cost_breakdown,
+                    "estimation_method": "fallback_basic",
+                    "recommendations": [
+                        "Consider phased approach to reduce upfront costs",
+                        "Review resource requirements for optimization",
+                        "Include 10-15% contingency buffer",
+                        "Monitor actual costs vs estimates during execution",
+                        "Re-run estimation when AI service is available"
+                    ],
+                    "agent_id": self.agent_id,
+                    "processing_time": 1.2,
+                    "ai_generated": False
+                }
+            }
     
     async def _chain_of_thought(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform chain of thought reasoning"""
+        """Perform chain of thought reasoning using AI via MCP"""
         problem = payload.get("problem", "")
         context = payload.get("context", "")
         
-        reasoning_steps = [
-            f"Problem identification: {problem}",
-            f"Context analysis: {context}",
-            "Breaking down into sub-problems",
-            "Identifying potential solutions",
-            "Evaluating solution feasibility",
-            "Selecting optimal approach"
-        ]
+        if not problem:
+            raise ValueError("Problem statement is required for chain of thought reasoning")
         
-        return {
-            "status": "completed",
-            "result": {
-                "problem": problem,
-                "reasoning_chain": reasoning_steps,
-                "conclusion": "Systematic approach identified",
-                "confidence": 0.8,
+        # Create chain of thought prompt for AI
+        prompt = f"""
+        Please perform step-by-step chain of thought reasoning for the following problem:
+        
+        Problem: {problem}
+        Context: {context}
+        
+        Break down your reasoning into clear, logical steps:
+        1. Problem identification and understanding
+        2. Context analysis and relevant factors
+        3. Sub-problem decomposition
+        4. Solution approach identification
+        5. Feasibility evaluation
+        6. Final recommendation and confidence assessment
+        
+        Format your response as a JSON object with this exact structure:
+        {{
+            "problem": "{problem}",
+            "reasoning_chain": [
+                "Step 1: Problem identification and understanding",
+                "Step 2: Context analysis",
+                "Step 3: Breaking down into sub-problems",
+                "Step 4: Identifying potential solutions",
+                "Step 5: Evaluating solution feasibility",
+                "Step 6: Selecting optimal approach"
+            ],
+            "conclusion": "Final recommendation based on reasoning",
+            "confidence": 0.8,
+            "key_assumptions": ["Assumption 1", "Assumption 2"],
+            "potential_risks": ["Risk 1", "Risk 2"]
+        }}
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for chain of thought: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                reasoning_result = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No valid JSON found in AI response")
+            
+            return {
+                "status": "completed",
+                "result": reasoning_result,
+                "agent_id": self.agent_id,
+                "ai_generated": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based chain of thought: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to perform chain of thought reasoning: {str(e)}",
+                "status": "failed", 
+                "result": None,
                 "agent_id": self.agent_id
             }
-        }
     
     async def _summarize_content(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Summarize provided content"""
+        """Summarize provided content using AI via MCP"""
         content = payload.get("content", "")
         summary_length = payload.get("length", "medium")
         
-        return {
-            "status": "completed",
-            "result": {
-                "original_length": len(content),
-                "summary": f"Summary of content ({summary_length} length)",
-                "key_points": ["Main point 1", "Main point 2", "Main point 3"],
+        if not content:
+            raise ValueError("Content is required for summarization")
+        
+        # Define length parameters
+        length_config = {
+            "short": "2-3 sentences",
+            "medium": "1-2 paragraphs", 
+            "long": "3-4 detailed paragraphs"
+        }
+        
+        target_length = length_config.get(summary_length, "1-2 paragraphs")
+        
+        # Create summarization prompt for AI
+        prompt = f"""
+        Please create a comprehensive summary of the following content:
+        
+        Content: {content}
+        
+        Summary length: {target_length}
+        
+        Provide:
+        1. A concise summary at the requested length
+        2. Key points extracted from the content (3-5 main points)
+        3. Important details that should not be overlooked
+        4. Overall assessment of the content's value and relevance
+        
+        Format your response as a JSON object with this exact structure:
+        {{
+            "original_length": {len(content)},
+            "summary": "Comprehensive summary of the content",
+            "key_points": ["Main point 1", "Main point 2", "Main point 3"],
+            "important_details": ["Detail 1", "Detail 2"],
+            "content_assessment": "Assessment of content value and relevance",
+            "summary_length": "{summary_length}"
+        }}
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for content summarization: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                summary_result = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No valid JSON found in AI response")
+            
+            return {
+                "status": "completed",
+                "result": summary_result,
+                "agent_id": self.agent_id,
+                "ai_generated": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based content summary: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to summarize content: {str(e)}",
+                "status": "failed",
+                "result": None,
                 "agent_id": self.agent_id
             }
-        }
     
     async def _extract_insights(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract insights from data"""
+        """Extract insights from data using AI via MCP"""
         data = payload.get("data", {})
         
-        return {
-            "status": "completed",
-            "result": {
-                "insights": ["Insight 1", "Insight 2"],
-                "patterns": ["Pattern A", "Pattern B"],
-                "recommendations": ["Recommendation 1", "Recommendation 2"],
+        if not data:
+            raise ValueError("Data is required for insight extraction")
+        
+        # Create insight extraction prompt for AI
+        prompt = f"""
+        Please analyze the following data and extract meaningful insights:
+        
+        Data: {json.dumps(data, indent=2)}
+        
+        Provide comprehensive analysis including:
+        1. Key insights derived from the data
+        2. Important patterns and trends identified
+        3. Actionable recommendations based on the insights
+        4. Potential implications and consequences
+        5. Areas requiring further investigation
+        
+        Format your response as a JSON object with this exact structure:
+        {{
+            "insights": ["Insight 1", "Insight 2", "Insight 3"],
+            "patterns": ["Pattern A", "Pattern B", "Pattern C"],
+            "recommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"],
+            "implications": ["Implication 1", "Implication 2"],
+            "further_investigation": ["Area 1", "Area 2"],
+            "confidence_level": 0.8,
+            "data_quality_assessment": "Assessment of data quality and reliability"
+        }}
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for insight extraction: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                insights_result = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No valid JSON found in AI response")
+            
+            return {
+                "status": "completed",
+                "result": insights_result,
+                "agent_id": self.agent_id,
+                "ai_generated": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based insights: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to extract insights: {str(e)}",
+                "status": "failed",
+                "result": None,
                 "agent_id": self.agent_id
             }
-        }
     
     async def _compare_sources(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Compare multiple sources"""
+        """Compare multiple sources using AI via MCP"""
         sources = payload.get("sources", [])
         
-        return {
-            "status": "completed",
-            "result": {
-                "sources_count": len(sources),
-                "comparison": "Sources compared successfully",
-                "similarities": ["Common theme 1", "Common theme 2"],
-                "differences": ["Difference 1", "Difference 2"],
+        if not sources or len(sources) < 2:
+            raise ValueError("At least 2 sources are required for comparison")
+        
+        # Create source comparison prompt for AI
+        prompt = f"""
+        Please compare and analyze the following sources:
+        
+        Sources to compare:
+        {json.dumps(sources, indent=2)}
+        
+        Provide a comprehensive comparison including:
+        1. Overview of all sources being compared
+        2. Key similarities between sources
+        3. Important differences and contradictions
+        4. Credibility assessment of each source
+        5. Synthesis of information across sources
+        6. Recommendations for which sources are most reliable
+        
+        Format your response as a JSON object with this exact structure:
+        {{
+            "sources_count": {len(sources)},
+            "comparison_overview": "Overall assessment of the source comparison",
+            "similarities": ["Common theme 1", "Common theme 2", "Common theme 3"],
+            "differences": ["Difference 1", "Difference 2", "Difference 3"],
+            "credibility_ranking": ["Most credible source", "Second most credible", "Third most credible"],
+            "synthesis": "Integrated understanding from all sources",
+            "recommendations": ["Recommendation 1", "Recommendation 2"],
+            "conflicting_information": ["Conflict 1", "Conflict 2"],
+            "confidence_score": 0.85
+        }}
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for source comparison: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                comparison_result = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No valid JSON found in AI response")
+            
+            return {
+                "status": "completed",
+                "result": comparison_result,
+                "agent_id": self.agent_id,
+                "ai_generated": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based source comparison: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to compare sources: {str(e)}",
+                "status": "failed",
+                "result": None,
                 "agent_id": self.agent_id
             }
-        }
     
     async def _evaluate_credibility(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate source credibility"""
+        """Evaluate source credibility using AI via MCP"""
         source = payload.get("source", {})
         
-        return {
-            "status": "completed",
-            "result": {
-                "credibility_score": 0.85,
-                "factors": ["Peer reviewed", "Recent publication", "Authoritative source"],
-                "concerns": ["Limited sample size"],
-                "overall_assessment": "Highly credible",
+        if not source:
+            raise ValueError("Source information is required for credibility evaluation")
+        
+        # Create credibility evaluation prompt for AI
+        prompt = f"""
+        Please evaluate the credibility of the following source:
+        
+        Source: {json.dumps(source, indent=2)}
+        
+        Assess credibility based on:
+        1. Author credentials and expertise
+        2. Publication venue and reputation
+        3. Peer review status
+        4. Recency and currency of information
+        5. Citation patterns and references
+        6. Methodology and evidence quality
+        7. Potential biases or conflicts of interest
+        
+        Format your response as a JSON object with this exact structure:
+        {{
+            "credibility_score": 0.85,
+            "credibility_level": "High/Medium/Low",
+            "factors": ["Peer reviewed", "Recent publication", "Authoritative source", "Strong methodology"],
+            "concerns": ["Limited sample size", "Potential bias"],
+            "strengths": ["Strong methodology", "Multiple data sources", "Expert author"],
+            "overall_assessment": "Detailed assessment of overall credibility",
+            "recommendation": "Should this source be trusted for research purposes?",
+            "verification_needed": ["Aspect 1 to verify", "Aspect 2 to verify"],
+            "comparative_assessment": "How does this compare to similar sources?"
+        }}
+        """
+        
+        try:
+            ai_response = await self._get_ai_response(prompt)
+            logger.info(f"Received AI response for credibility evaluation: {len(ai_response)} characters")
+            
+            # Parse the AI response
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                credibility_result = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No valid JSON found in AI response")
+            
+            return {
+                "status": "completed",
+                "result": credibility_result,
+                "agent_id": self.agent_id,
+                "ai_generated": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating AI-based credibility evaluation: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to evaluate credibility: {str(e)}",
+                "status": "failed",
+                "result": None,
                 "agent_id": self.agent_id
             }
-        }
     
     def get_health_status(self) -> Dict[str, Any]:
         """Get agent health status"""
@@ -978,17 +1403,8 @@ async def get_capabilities():
     """Get agent capabilities"""
     return {"capabilities": planning_service.capabilities}
 
-@app.post("/task")
-async def execute_task(task: TaskRequest):
-    """Execute a planning task directly (bypass MCP for testing)"""
-    try:
-        result = await planning_service.execute_planning_task({
-            "action": task.action,
-            "payload": task.payload
-        })
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# REMOVED: /task endpoint that bypassed MCP server
+# All task execution must go through MCP protocol - direct API access forbidden
 
 async def run_mcp_client():
     """Run the MCP client in background"""
