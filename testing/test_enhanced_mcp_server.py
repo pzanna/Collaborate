@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Simple MCP Enhanced Server Connection Test
-Phase 3.2 - Direct WebSocket Test
+Version 0.3.2 - Direct WebSocket Test
 
 This test connects directly to the Enhanced MCP Server 
 and validates basic functionality.
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 async def test_enhanced_mcp_server():
-    """Test Enhanced MCP Server Phase 3.1 connection and functionality"""
+    """Test Enhanced MCP Server Version 0.3.1 connection and functionality"""
     uri = "ws://localhost:9000"
     
     logger.info("🚀 Testing Enhanced MCP Server Connection...")
@@ -163,7 +163,7 @@ async def test_enhanced_mcp_server():
             logger.info("\n" + "="*60)
             logger.info("🏁 ENHANCED MCP SERVER TEST COMPLETE")
             logger.info("="*60)
-            logger.info("✅ Phase 3.1 Enhanced MCP Server is operational!")
+            logger.info("✅ Version 0.3.1 Enhanced MCP Server is operational!")
             logger.info("🔗 WebSocket connections working correctly")
             logger.info("📋 Ready for agent integration and production use")
             logger.info("🚀 Next: Connect existing Eunice agents")
@@ -182,7 +182,7 @@ async def main():
 
 if __name__ == "__main__":
     print("🚀 Enhanced MCP Server - Direct WebSocket Test")
-    print("Phase 3.2 - Validating Enhanced MCP Server Integration")
+    print("Version 0.3.2 - Validating Enhanced MCP Server Integration")
     print("="*70)
     
     asyncio.run(main())

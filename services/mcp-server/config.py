@@ -1,5 +1,5 @@
 """
-Enhanced MCP Server Configuration for Phase 3.1
+Enhanced MCP Server Configuration for Version 0.3.1
 Containerized MCP Server with clustering and enhanced monitoring
 """
 
@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 @dataclass
 class EnhancedMCPServerConfig:
-    """Enhanced MCP Server configuration for Phase 3.1"""
+    """Enhanced MCP Server configuration for Version 0.3.1"""
     
     # Core Server Settings
     host: str = os.getenv("MCP_HOST", "0.0.0.0")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced MCP Server Test Client - Phase 3.1
+Enhanced MCP Server Test Client - Version 0.3.1
 Test script to validate the Enhanced MCP Server functionality
 """
 

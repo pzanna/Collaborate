@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced MCP Server - Phase 3.1
+Enhanced MCP Server - Version 0.3.1
 Containerized MCP Server with clustering, enhanced monitoring, and agent coordination
 """
 
@@ -30,7 +30,7 @@ ERROR_COUNTER = Counter('mcp_errors_total', 'Total errors', ['error_type'])
 
 
 class EnhancedMCPServer:
-    """Enhanced MCP Server for Phase 3.1 with clustering and monitoring"""
+    """Enhanced MCP Server for Version 0.3.1 with clustering and monitoring"""
     
     def __init__(self, config: EnhancedMCPServerConfig):
         self.config = config
@@ -246,6 +246,8 @@ class EnhancedMCPServer:
                 await self._handle_heartbeat(client_id, data)
             elif message_type == "agent_status":
                 await self._handle_agent_status(client_id, data)
+            elif message_type == "ai_request":
+                await self._handle_ai_request(client_id, data)
             else:
                 self.logger.warning("Unknown message type", 
                                   client_id=client_id, 
@@ -437,6 +439,7 @@ class EnhancedMCPServer:
         task_id = data.get("task_id")
         result = data.get("result")
         status = data.get("status", "completed")
+        error = data.get("error")
         
         if task_id in self.active_tasks:
             task = self.active_tasks[task_id]
@@ -444,15 +447,35 @@ class EnhancedMCPServer:
             task["result"] = result
             task["completed_at"] = datetime.now()
             
-            # Forward result to original client
+            # Get original client info
             original_client_id = task["client_id"]
+            original_request_id = task.get("original_request_id")
+            
             if original_client_id in self.clients:
-                await self._send_message(original_client_id, {
-                    "type": "task_result",
-                    "task_id": task_id,
-                    "result": result,
-                    "status": status
-                })
+                # Check if this is an AI service response
+                if task.get("type") == "ai_chat_completion" and original_request_id:
+                    # Send AI response format
+                    response_message = {
+                        "type": "ai_response",
+                        "request_id": original_request_id,
+                        "status": "success" if status == "completed" else "error"
+                    }
+                    
+                    if status == "completed":
+                        response_message["result"] = result
+                    else:
+                        response_message["error"] = error or "Unknown error"
+                    
+                    await self._send_message(original_client_id, response_message)
+                else:
+                    # Send regular task result
+                    await self._send_message(original_client_id, {
+                        "type": "task_result",
+                        "task_id": task_id,
+                        "result": result,
+                        "status": status,
+                        "error": error
+                    })
             
             # Clean up completed task
             self.active_tasks.pop(task_id, None)
@@ -468,6 +491,75 @@ class EnhancedMCPServer:
             self.agent_registry[agent_id]["status"] = status
             self.agent_registry[agent_id]["metrics"] = metrics
             self.agent_registry[agent_id]["last_status_update"] = datetime.now()
+    
+    async def _handle_ai_request(self, client_id: str, data: Dict[str, Any]):
+        """Handle AI request from agent - route to AI service via MCP protocol"""
+        request_id = data.get("request_id", str(uuid.uuid4()))
+        provider = data.get("provider", "openai")
+        messages = data.get("messages", [])
+        
+        try:
+            # Find AI service agent
+            ai_service_agent = None
+            for agent_id, info in self.agent_registry.items():
+                if info["agent_type"] == "ai_service" and info["status"] == "active":
+                    ai_service_agent = agent_id
+                    break
+            
+            if not ai_service_agent:
+                raise Exception("AI service not available")
+            
+            # Create task for AI service
+            task_id = str(uuid.uuid4())
+            task_data = {
+                "provider": provider,
+                "messages": messages,
+                **{k: v for k, v in data.items() 
+                   if k not in ["request_id", "type"]}
+            }
+            
+            # Store task with original client info
+            self.active_tasks[task_id] = {
+                "id": task_id,
+                "type": "ai_chat_completion",
+                "data": task_data,
+                "client_id": client_id,
+                "original_request_id": request_id,
+                "status": "processing",
+                "created_at": datetime.now(),
+                "assigned_agent": ai_service_agent
+            }
+            
+            # Send task to AI service
+            ai_client_id = self.agent_registry[ai_service_agent]["client_id"]
+            await self._send_message(ai_client_id, {
+                "type": "task_request",
+                "task_id": task_id,
+                "task_type": "ai_chat_completion",
+                "data": task_data
+            })
+            
+            self.logger.info("AI request forwarded to AI service", 
+                           client_id=client_id,
+                           request_id=request_id,
+                           task_id=task_id,
+                           provider=provider)
+                
+        except Exception as e:
+            # Send error response back to agent
+            await self._send_message(client_id, {
+                "type": "ai_response", 
+                "request_id": request_id,
+                "error": str(e),
+                "status": "error"
+            })
+            
+            self.logger.error("AI request failed",
+                            client_id=client_id,
+                            request_id=request_id,
+                            error=str(e))
+            
+            ERROR_COUNTER.labels(error_type="ai_request_failed").inc()
     
     async def _task_processor(self):
         """Process tasks from the queue"""

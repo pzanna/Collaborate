@@ -22,7 +22,7 @@ class MCPClient:
     """
     Client for communicating with MCP server from the containerized API Gateway.
     
-    This client is specifically adapted for Phase 3 microservices architecture
+    This client is specifically adapted for Version 0.3 microservices architecture
     where the API Gateway runs as a separate container from the MCP server.
     """
 

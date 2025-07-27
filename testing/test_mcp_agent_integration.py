@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-Test MCP Agent Integration with Enhanced MCP Server
-Phase 3.2 - Agent Integration Testing
+MCP Agent Integration Test
+Version 0.3.2 - Agent Integration Testing
 
-This test connects the Research Manager and validates 
-communication with the Enhanced MCP Server.
+Test MCP agent registration and communication patterns
 """
 
 import asyncio
@@ -289,7 +288,7 @@ async def main():
 
 if __name__ == "__main__":
     print("🚀 Enhanced MCP Server - Agent Integration Test")
-    print("Phase 3.2 - Testing Research Manager Connection")
+    print("Version 0.3.2 - Testing Research Manager Connection")
     print("="*60)
     
     asyncio.run(main())

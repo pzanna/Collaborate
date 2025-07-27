@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Eunice Research Platform - Production Deployment Script
-# Phase 3 Microservices Architecture with Secure AI Service
+# Version 0.3 Microservices Architecture with Secure AI Service
 
 set -e  # Exit on any error
 
@@ -144,19 +144,42 @@ sleep 10
 print_info "Starting API Gateway..."
 docker compose up -d api-gateway
 
+# Wait for API Gateway to initialize
+sleep 15
+
 # Final health checks
 echo
-print_info "Performing final health checks..."
+print_info "Performing comprehensive health checks..."
 
-# Service endpoints
-SERVICES=(
-    "API Gateway:http://localhost:8001/health"
-    "AI Service:http://localhost:8010/health"
-    "Planning Agent:http://localhost:8007/health"
-    "Database Service:http://localhost:8011/health"
+# Infrastructure health checks
+print_info "Checking infrastructure services..."
+INFRA_SERVICES=(
+    "Redis:redis-cli ping"
+    "PostgreSQL:pg_isready -U postgres"
 )
 
 ALL_HEALTHY=true
+
+for service_info in "${INFRA_SERVICES[@]}"; do
+    IFS=':' read -r service_name service_cmd <<< "$service_info"
+    
+    if docker compose exec $(echo $service_name | tr '[:upper:]' '[:lower:]') $service_cmd >/dev/null 2>&1; then
+        print_status "$service_name is healthy"
+    else
+        print_error "$service_name health check failed"
+        ALL_HEALTHY=false
+    fi
+done
+
+# Application service endpoints
+print_info "Checking application services..."
+SERVICES=(
+    "MCP Server:http://localhost:9000/health"
+    "Database Service:http://localhost:8011/health"
+    "AI Service:http://localhost:8010/health"
+    "Planning Agent:http://localhost:8007/health"
+    "API Gateway:http://localhost:8001/health"
+)
 
 for service_info in "${SERVICES[@]}"; do
     IFS=':' read -r service_name service_url <<< "$service_info"
@@ -177,16 +200,20 @@ echo
 if [ "$ALL_HEALTHY" = true ]; then
     print_status "🎉 All services are healthy! Deployment successful!"
     echo
-    print_info "Service endpoints:"
+    print_info "Application endpoints:"
     echo "  • API Gateway: http://localhost:8001"
+    echo "  • MCP Server: http://localhost:9000"
     echo "  • AI Service: http://localhost:8010"
     echo "  • Planning Agent: http://localhost:8007"
     echo "  • Database Service: http://localhost:8011"
     echo "  • Load Balancer: http://localhost:80 (nginx)"
     echo
-    print_info "Admin endpoints:"
+    print_info "Infrastructure endpoints:"
     echo "  • Redis: localhost:6380"
     echo "  • PostgreSQL: localhost:5433"
+    echo
+    print_info "Container status:"
+    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
     echo
     print_info "Monitoring:"
     echo "  • Container logs: docker compose logs -f [service-name]"
@@ -195,6 +222,19 @@ if [ "$ALL_HEALTHY" = true ]; then
 else
     print_warning "Some services failed health checks. Check logs with:"
     echo "  docker compose logs [service-name]"
+    echo
+    print_info "Common troubleshooting commands:"
+    echo "  • Check all container status: docker compose ps"
+    echo "  • View recent logs: docker compose logs --tail=50"
+    echo "  • Restart failed service: docker compose restart [service-name]"
+    echo "  • Rebuild and restart: docker compose up -d --build [service-name]"
+    echo
+    print_info "Service-specific logs:"
+    echo "  • API Gateway: docker compose logs api-gateway"
+    echo "  • MCP Server: docker compose logs mcp-server"
+    echo "  • AI Service: docker compose logs ai-service"
+    echo "  • Planning Agent: docker compose logs planning-agent"
+    echo "  • Database Service: docker compose logs database-service"
 fi
 
 echo

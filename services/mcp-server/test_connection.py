@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Enhanced MCP Server Test Client - Phase 3.1
-Quick test to verify the containerized MCP server is responding
+Enhanced MCP Server Test Client - Version 0.3.1
+Test WebSocket connection and basic functionality
 """
 
 import asyncio
@@ -33,7 +33,7 @@ async def test_mcp_server():
             await websocket.send(json.dumps(init_message))
             response = await websocket.recv()
             
-            print("✅ Enhanced MCP Server Phase 3.1 - Connection successful!")
+            print("✅ Enhanced MCP Server Version 0.3.1 - Connection successful!")
             print(f"📦 Server Response: {response}")
             
             # Send a ping
@@ -55,9 +55,9 @@ async def test_mcp_server():
         return False
 
 if __name__ == "__main__":
-    print("🚀 Testing Enhanced MCP Server Phase 3.1...")
+    print("🚀 Testing Enhanced MCP Server Version 0.3.1...")
     success = asyncio.run(test_mcp_server())
     if success:
-        print("🎉 Enhanced MCP Server Phase 3.1 is running successfully!")
+        print("🎉 Enhanced MCP Server Version 0.3.1 is running successfully!")
     else:
-        print("💥 Enhanced MCP Server Phase 3.1 test failed")
+        print("💥 Enhanced MCP Server Version 0.3.1 test failed")

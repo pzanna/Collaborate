@@ -1,9 +1,9 @@
 #!/bin/bash
-# Enhanced MCP Server Startup Script - Phase 3.1
+# Enhanced MCP Server Startup Script - Version 0.3.1
 
 set -e
 
-echo "🚀 Starting Enhanced MCP Server - Phase 3.1"
+echo "🚀 Starting Enhanced MCP Server - Version 0.3.1"
 
 # Docker paths for Docker Desktop
 DOCKER_BIN="/Applications/Docker.app/Contents/Resources/bin/docker"
@@ -35,7 +35,7 @@ echo "✅ Docker Desktop is running"
 cd "$(dirname "$0")"
 
 # Set default environment variables if not provided
-export JWT_SECRET="${JWT_SECRET:-enhanced-mcp-server-jwt-secret-phase3.1}"
+export JWT_SECRET="${JWT_SECRET:-enhanced-mcp-server-jwt-secret-v0.3.1}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-password}"
 
 echo "📦 Building Enhanced MCP Server image..."
@@ -93,7 +93,7 @@ if [ $retry_count -eq $max_retries ]; then
 fi
 
 echo ""
-echo "🎉 Enhanced MCP Server Phase 3.1 is running successfully!"
+echo "🎉 Enhanced MCP Server Version 0.3.1 is running successfully!"
 echo ""
 echo "📊 Service URLs:"
 echo "   • MCP WebSocket:    ws://localhost:9000"
@@ -118,4 +118,4 @@ echo "📋 Current Status:"
 "$DOCKER_BIN" compose ps
 
 echo ""
-echo "🎯 Enhanced MCP Server Phase 3.1 is ready for agent connections!"
+echo "🎯 Enhanced MCP Server Version 0.3.1 is ready for agent connections!"

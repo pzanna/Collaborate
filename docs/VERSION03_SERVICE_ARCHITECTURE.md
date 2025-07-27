@@ -1,8 +1,8 @@
-# Phase 3 Service Architecture Documentation
+# Version 0.3 Service Architecture Documentation
 
 ## 🏗️ Microservices Architecture Overview
 
-This document provides detailed architectural diagrams and service specifications for Phase 3 of the Eunice Research Platform.
+This document provides detailed architectural diagrams and service specifications for Version 0.3 of the Eunice Research Platform.
 
 ## 📊 High-Level Architecture Diagram
 
@@ -29,7 +29,20 @@ graph TB
         TaskQueue[Task Queue & Registry]
     end
 
-    subgraph "Research Agents (Containerized MCP Clients)"
+    ai-service:
+    build: ./services/ai-service
+    ports: ["8010:8010"]
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - MCP_CLIENT_ID=ai-service
+      - SECURITY_MCP_ONLY=true
+      - SECURITY_REQUIRE_MCP_AUTH=true
+    depends_on: [redis, mcp-server]
+    networks: [eunice-network]ph "Research Agents (Containerized MCP Clients)"
         ResearchMgr[Research Manager Agent :8002]
         LitSearch[Literature Search Agent :8003]
         Screening[Screening & PRISMA Agent :8004]
@@ -42,7 +55,7 @@ graph TB
 
     subgraph "Supporting Services"
         Database[Database Service :8011]
-        AI[AI Service :8010]
+        AI[AI Service - MCP Client]
         Notification[Notification Service :8012]
         FileStorage[File Storage Service :8014]
     end
@@ -66,6 +79,7 @@ graph TB
     Auth --> Database
     
     MCPServer --> TaskQueue
+    MCPServer <--> AI
     MCPServer -.WebSocket.-> ResearchMgr
     MCPServer -.WebSocket.-> LitSearch
     MCPServer -.WebSocket.-> Screening
@@ -75,16 +89,12 @@ graph TB
     MCPServer -.WebSocket.-> Executor
     MCPServer -.WebSocket.-> Memory
     
-    LitSearch --> AI
+    ResearchMgr --> Database
     LitSearch --> Database
-    Screening --> AI
     Screening --> Database
-    Synthesis --> AI
     Synthesis --> Memory
     Writer --> Database
     Writer --> FileStorage
-    Planning --> AI
-    Planning --> Memory
     Executor --> FileStorage
     Memory --> Vector
     
@@ -133,7 +143,7 @@ Database_Access:
 
 ### 2. Enhanced MCP Server Service
 
-**Purpose**: Central coordination hub for all research agents with WebSocket communication.
+**Purpose**: Central coordination hub for all research agents with WebSocket communication, AI service routing, and bidirectional service integration.
 
 ```yaml
 Service: mcp-server
@@ -145,6 +155,7 @@ Resources:
 Environment:
   - DATABASE_URL=postgresql://postgres:5432/eunice
   - REDIS_URL=redis://redis-cluster:6379
+  - AI_SERVICE_URL=http://ai-service:8010
   - AGENT_REGISTRY_TTL=300
   - WEBSOCKET_MAX_CONNECTIONS=1000
 Endpoints:
@@ -156,6 +167,17 @@ Endpoints:
 Dependencies:
   - database-service
   - redis-cluster
+  - ai-service
+AI_Routing: 
+  - Routes all agent AI requests to ai-service:8010
+  - Accepts bidirectional WebSocket connections from ai-service
+  - Forwards AI service notifications to appropriate agents
+  - Manages AI service registration and capability discovery
+  - Provides MCP authentication headers for AI service security
+Service_Integration:
+  - Agent Registration: WebSocket-based agent discovery and health monitoring
+  - AI Service Integration: Bidirectional HTTP + WebSocket communication
+  - Message Routing: JSON-RPC message distribution and response correlation
 ```
 
 ### 3. Research Manager Agent
@@ -179,6 +201,7 @@ Endpoints:
 Dependencies:
   - mcp-server
   - database-service
+AI_Access: Via MCP Server routing to ai-service
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
@@ -205,6 +228,7 @@ Endpoints:
 Dependencies:
   - mcp-server
   - database-service
+AI_Access: Via MCP Server routing to ai-service
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
@@ -222,15 +246,14 @@ Resources:
 Environment:
   - MCP_SERVER_URL=ws://mcp-server:9000
   - AGENT_TYPE=screening_prisma
-  - AI_SERVICE_URL=http://ai-service:8010
 Endpoints:
   - GET  /health
   - GET  /status
 Dependencies:
   - mcp-server
-  - ai-service
   - database-service
 MCP_Connection: WebSocket to mcp-server:9000
+AI_Access: Via MCP Server routing to ai-service
 ```
 
 ### 6. Synthesis & Review Agent
@@ -247,17 +270,16 @@ Resources:
 Environment:
   - MCP_SERVER_URL=ws://mcp-server:9000
   - AGENT_TYPE=synthesis_review
-  - AI_SERVICE_URL=http://ai-service:8010
   - MEMORY_SERVICE_URL=http://memory-agent:8009
 Endpoints:
   - GET  /health
   - GET  /status
 Dependencies:
   - mcp-server
-  - ai-service
   - memory-agent
   - database-service
 MCP_Connection: WebSocket to mcp-server:9000
+AI_Access: Via MCP Server routing to ai-service
 ```
 
 ### 7. Writer Agent
@@ -282,6 +304,7 @@ Dependencies:
   - mcp-server
   - database-service
   - file-storage-service
+AI_Access: Via MCP Server routing to ai-service
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
@@ -299,17 +322,16 @@ Resources:
 Environment:
   - MCP_SERVER_URL=ws://mcp-server:9000
   - AGENT_TYPE=planning
-  - AI_SERVICE_URL=http://ai-service:8010
   - MEMORY_SERVICE_URL=http://memory-agent:8009
 Endpoints:
   - GET  /health
   - GET  /status
 Dependencies:
   - mcp-server
-  - ai-service
   - memory-agent
   - database-service
 MCP_Connection: WebSocket to mcp-server:9000
+AI_Access: Via MCP Server routing to ai-service
 ```
 
 ### 9. Executor Agent
@@ -338,6 +360,7 @@ Endpoints:
 Dependencies:
   - mcp-server
   - file-storage-service
+AI_Access: Via MCP Server routing to ai-service
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
@@ -365,6 +388,7 @@ Dependencies:
   - vector-database
   - file-storage-service
   - database-service
+AI_Access: Via MCP Server routing to ai-service
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
@@ -425,27 +449,45 @@ Access_Pattern:
 
 ### 10. AI Service
 
-**Purpose**: Multi-provider AI model access with load balancing and cost optimization.
+**Purpose**: Multi-provider AI model access as pure MCP client with no REST endpoints.
 
 ```yaml
 Service: ai-service
-Port: 8010
 Image: eunice/ai-service:latest
+MCP_Protocol: WebSocket client to mcp-server:9000
 Resources:
   CPU: 800m
   Memory: 1.5Gi
 Environment:
+  - MCP_SERVER_URL=ws://mcp-server:9000
   - OPENAI_API_KEY=${OPENAI_KEY}
   - ANTHROPIC_API_KEY=${ANTHROPIC_KEY}
   - XAI_API_KEY=${XAI_KEY}
-  - REDIS_URL=redis://redis-cluster:6379
-Endpoints:
-  - POST /ai/chat/completions
-  - POST /ai/embeddings
-  - GET  /ai/models/available
-  - GET  /ai/usage/statistics
+  - LOG_LEVEL=INFO
+Agent_Type: ai_service
+Capabilities:
+  - ai_chat_completion
+  - ai_embedding
+  - ai_model_info
+  - ai_usage_stats
 Dependencies:
-  - redis-cluster
+  - mcp-server
+MCP_Integration:
+  - Pure MCP client implementation
+  - WebSocket connection to MCP Server
+  - Task-based request processing
+  - Agent registration with capabilities
+  - Automatic reconnection and heartbeat
+Communication_Patterns:
+  - Protocol: Pure MCP JSON-RPC over WebSocket
+  - No REST endpoints or HTTP servers
+  - No direct external access
+  - All AI requests routed through MCP Server
+Security:
+  - No attack surface: No REST endpoints exposed
+  - Network isolation: Internal Docker network only
+  - Authentication: MCP protocol authentication
+  - Rate limiting: Handled by MCP Server
 ```
 
 ### 13. Notification Service
@@ -541,6 +583,34 @@ sequenceDiagram
     Gateway-->>Client: WebSocket: "Search complete"
 ```
 
+### 4. Bidirectional AI Service Communication (MCP Integration)
+
+```mermaid
+sequenceDiagram
+    participant Agent as Research Agent
+    participant MCP as MCP Server
+    participant AI as AI Service
+    participant Provider as AI Provider (OpenAI/Anthropic/XAI)
+
+    Note over Agent,Provider: Standard AI Request Flow
+    Agent->>MCP: AI request via WebSocket
+    MCP->>AI: Route to AI Service (HTTP)
+    AI->>Provider: External API call
+    Provider-->>AI: AI response
+    AI-->>MCP: HTTP response
+    MCP-->>Agent: Forward response via WebSocket
+
+    Note over Agent,Provider: AI Service Initiated Communication
+    AI->>MCP: Connect as MCP client (WebSocket)
+    AI->>MCP: Register service capabilities
+    AI->>MCP: Notify usage threshold reached
+    MCP-->>Agent: Broadcast usage alert
+    AI->>MCP: Model availability change
+    MCP-->>Agent: Update model status
+    AI->>MCP: Stream partial response
+    MCP-->>Agent: Forward streaming data
+```
+
 ## � Inter-Service Communication Protocols
 
 ### Database Access Patterns
@@ -581,11 +651,28 @@ sequenceDiagram
 ### MCP Protocol (Model Context Protocol)
 
 - **Primary Channel**: WebSocket connections between MCP Server and Agent containers
+- **AI Service Integration**: Bidirectional WebSocket connection for service notifications and streaming
 - **Protocol**: MCP JSON-RPC over WebSocket
 - **Message Format**: JSON-RPC 2.0 with MCP extensions
 - **Connection Management**: Persistent WebSocket with automatic reconnection
 - **Load Balancing**: Round-robin across agent instances
 - **Timeout**: 30 seconds for standard operations, 300 seconds for long-running tasks
+
+#### Bidirectional AI Service Communication
+
+**AI Request Flow (Agent → AI Service)**:
+
+- Agent sends AI request to MCP Server via WebSocket
+- MCP Server routes request to AI Service via HTTP REST API
+- AI Service processes request and returns response
+- MCP Server forwards response back to Agent via WebSocket
+
+**AI Service Notifications (AI Service → Agents)**:
+
+- AI Service connects to MCP Server as WebSocket client
+- AI Service registers capabilities and service type
+- AI Service can send notifications, alerts, and streaming responses
+- MCP Server broadcasts or routes notifications to appropriate agents
 
 #### Example MCP Message Flow
 
@@ -613,6 +700,23 @@ sequenceDiagram
     "next_action": "summary_generation"
   }
 }
+
+// AI Service notification to agents via MCP Server
+{
+  "jsonrpc": "2.0",
+  "method": "ai_service/notification",
+  "params": {
+    "type": "usage_alert",
+    "alert_type": "threshold_reached",
+    "details": {
+      "threshold_type": "token_usage",
+      "current_usage": 45000,
+      "limit": 50000,
+      "percentage": 90
+    },
+    "timestamp": "2025-07-27T14:30:00Z"
+  }
+}
 ```
 
 ### HTTP/REST (External API Access)
@@ -622,6 +726,48 @@ sequenceDiagram
 - **Authentication**: JWT tokens with role-based access control
 - **Rate Limiting**: 1000 requests per hour per user
 - **Versioning**: URI versioning (/api/v1/, /api/v2/)
+
+## 🔒 Pure MCP Protocol Security Architecture
+
+### MCP-Only AI Service Design
+
+The AI Service implements a **pure MCP protocol** architecture with zero REST endpoints:
+
+#### Security Architecture
+
+1. **Pure MCP Client**: AI service connects to MCP Server as WebSocket client only
+2. **No HTTP Server**: Eliminates entire REST API attack surface
+3. **Task-Based Processing**: All AI requests handled as MCP tasks
+4. **Protocol Authentication**: Built-in MCP protocol security
+5. **Network Isolation**: Internal Docker network communication only
+
+#### Communication Flow
+
+```text
+Agent → MCP Server → AI Service (MCP Client)
+  |         ↓              ↑
+  |    Task Queue    Task Results
+  |         ↓              ↑
+  └←── MCP Protocol ←──────┘
+```
+
+#### Security Benefits
+
+- **Zero HTTP Attack Surface**: No REST endpoints to exploit
+- **Protocol-Level Security**: MCP authentication built-in
+- **Centralized Access Control**: All requests flow through MCP Server
+- **Complete Audit Trail**: All AI usage logged at MCP Server level
+- **Resource Protection**: No direct access to AI providers
+- **Rate Limiting**: Naturally handled by MCP Server task queue
+
+### Exception: Health Check Removal
+
+Unlike the previous REST-based implementation, the pure MCP client has **no health check endpoint**. Health monitoring is handled through:
+
+- **MCP Connection Status**: WebSocket connection health
+- **Agent Registration**: Active registration in MCP Server
+- **Task Processing**: Successful task completion metrics
+- **Heartbeat Protocol**: MCP-native heartbeat mechanism
 
 ### Redis Message Queue
 
@@ -675,65 +821,63 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - REDIS_URL=redis://redis:6379
+      - AI_SERVICE_URL=http://ai-service:8010
       - AUTH_SERVICE_URL=http://auth-service:8013
-    depends_on: [postgres, redis, auth-service]
+    depends_on: [postgres, redis, ai-service, auth-service]
     networks: [eunice-network]
 
   # Agent Services (MCP Clients)
   literature-agent:
-    build: ./services/literature-agent
+    build: ./agents/literature
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-    depends_on: [mcp-server, postgres]
+    depends_on: [mcp-server, postgres, ai-service]
     networks: [eunice-network]
 
   screening-agent:
-    build: ./services/screening-agent
+    build: ./agents/screening
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AI_SERVICE_URL=http://ai-service:8010
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-    depends_on: [mcp-server, ai-service, postgres]
+    depends_on: [mcp-server, postgres, ai-service]
     networks: [eunice-network]
 
   synthesis-agent:
-    build: ./services/synthesis-agent
+    build: ./agents/synthesis
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AI_SERVICE_URL=http://ai-service:8010
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-    depends_on: [mcp-server, ai-service, postgres]
+    depends_on: [mcp-server, postgres, ai-service]
     networks: [eunice-network]
 
   writer-agent:
-    build: ./services/writer-agent
+    build: ./agents/writer
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - FILE_STORAGE_URL=http://file-storage:8014
-    depends_on: [mcp-server, postgres, file-storage]
+    depends_on: [mcp-server, postgres, file-storage, ai-service]
     networks: [eunice-network]
 
   planning-agent:
-    build: ./services/planning-agent
+    build: ./agents/planning
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AI_SERVICE_URL=http://ai-service:8010
     depends_on: [mcp-server, ai-service]
     networks: [eunice-network]
 
   executor-agent:
-    build: ./services/executor-agent
+    build: ./agents/executor
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - FILE_STORAGE_URL=http://file-storage:8014
       - SANDBOX_MODE=enabled
-    depends_on: [mcp-server, file-storage]
+    depends_on: [mcp-server, file-storage, ai-service]
     networks: [eunice-network]
 
   memory-agent:
-    build: ./services/memory-agent
+    build: ./agents/memory
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - VECTOR_DB_URL=http://vector-database:8080
@@ -742,11 +886,11 @@ services:
     networks: [eunice-network]
 
   research-manager-agent:
-    build: ./services/research-manager-agent
+    build: ./agents/research-manager
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-    depends_on: [mcp-server, postgres]
+    depends_on: [mcp-server, postgres, ai-service]
     networks: [eunice-network]
 
   # Supporting Services
@@ -764,7 +908,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    depends_on: [redis]
+    depends_on: [mcp-server, redis]
     networks: [eunice-network]
 
   notification-service:
@@ -777,7 +921,7 @@ services:
     networks: [eunice-network]
 
   file-storage:
-    build: ./services/file-storage
+    build: ./agents/file-storage
     ports: ["8014:8014"]
     environment:
       - STORAGE_PATH=/app/storage
@@ -888,10 +1032,10 @@ data:
         - 'literature-search:8003'
         - 'screening-prisma:8004'
         - 'synthesis-review:8005'
-        - 'writer-agent:8006'
-        - 'planning-agent:8007'
-        - 'executor-agent:8008'
-        - 'memory-agent:8009'
+        - 'writer:8006'
+        - 'planning:8007'
+        - 'executor:8008'
+        - 'memory:8009'
       metrics_path: /metrics
       scrape_interval: 10s
 ```
@@ -940,11 +1084,11 @@ data:
 
 ---
 
-**Architecture Status**: Phase 3 Design Complete  
+**Architecture Status**: Version 0.3 Design Complete  
 **Implementation**: Ready for Development  
 **Services**: 10 microservices + infrastructure  
 **Scalability**: Kubernetes-ready with auto-scaling
 
 ---
 
-*This architecture documentation provides the technical foundation for implementing Phase 3 microservices transition.*
+*This architecture documentation provides the technical foundation for implementing Version 0.3 microservices transition.*

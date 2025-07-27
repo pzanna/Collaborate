@@ -1,4 +1,4 @@
-# Enhanced MCP Server Dependencies - Phase 3.1
+# Enhanced MCP Server Dependencies - Version 0.3.1
 # Core Dependencies
 asyncio-mqtt==0.16.1
 websockets==12.0

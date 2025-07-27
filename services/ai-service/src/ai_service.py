@@ -1,25 +1,115 @@
 """
-AI Service - Centralized AI Provider Access
+AI Service - Centralized AI Provider Access with MCP Integration
 
 This service provides unified access to multiple AI providers (OpenAI, Anthropic, XAI)
-with load balancing, cost optimization, and usage tracking.
+with load balancing, cost optimization, caching, and usage tracking.
+Enhanced with MCP client capabilities for bidirectional agent communication.
+Fully aligned with Phase 3 Service Architecture specifications.
 """
 
 import asyncio
 import json
 import logging
 import os
+import signal
+import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+import hashlib
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import httpx
 import openai
 import anthropic
+import redis.asyncio as redis
+import websockets
 from datetime import datetime, timedelta
+
+
+class SecurityMiddleware(BaseHTTPMiddleware):
+    """Security middleware to enforce MCP-only access"""
+    
+    def __init__(self, app, security_config: Dict[str, Any]):
+        super().__init__(app)
+        self.security_config = security_config
+        self.mcp_only = security_config.get("mcp_only", True)
+        self.allowed_origins = security_config.get("allowed_origins", ["mcp-server"])
+        self.require_mcp_auth = security_config.get("require_mcp_auth", True)
+        
+    async def dispatch(self, request: Request, call_next):
+        # Allow health checks for monitoring
+        if request.url.path == "/health":
+            return await call_next(request)
+        
+        # Get client information
+        client_host = request.client.host if request.client else "unknown"
+        
+        # If MCP-only mode is enabled, validate the request
+        if self.mcp_only:
+            # Check if request comes from allowed origins
+            origin = request.headers.get("host", "").split(":")[0]
+            x_forwarded_for = request.headers.get("x-forwarded-for")
+            x_real_ip = request.headers.get("x-real-ip")
+            
+            # Allow requests from MCP server or internal Docker network
+            allowed_sources = [
+                "mcp-server",  # Docker service name
+                "127.0.0.1",   # Localhost
+                "localhost",   # Localhost
+                "::1"          # IPv6 localhost
+            ]
+            
+            # Check if request has MCP authentication header
+            mcp_auth_header = request.headers.get("x-mcp-auth")
+            mcp_service_id = request.headers.get("x-mcp-service-id")
+            
+            if self.require_mcp_auth:
+                if not mcp_auth_header or not mcp_service_id:
+                    logger.warning(f"Blocked direct access attempt from {client_host} - missing MCP headers")
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "error": "Direct access forbidden",
+                            "message": "AI Service only accepts requests routed through MCP Server",
+                            "code": "MCP_AUTH_REQUIRED"
+                        }
+                    )
+                
+                # Validate MCP authentication
+                if mcp_service_id != "mcp-server":
+                    logger.warning(f"Blocked access attempt with invalid MCP service ID: {mcp_service_id}")
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "error": "Invalid MCP authentication",
+                            "message": "Request must come from authorized MCP Server",
+                            "code": "INVALID_MCP_AUTH"
+                        }
+                    )
+            
+            # Additional validation for non-Docker environments
+            if not any(source in client_host for source in allowed_sources):
+                # Allow if it's from internal Docker network (typically 172.x.x.x)
+                if not (client_host.startswith("172.") or client_host.startswith("10.") or client_host.startswith("192.168.")):
+                    logger.warning(f"Blocked external access attempt from {client_host}")
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "error": "External access forbidden",
+                            "message": "AI Service only accepts requests from MCP Server",
+                            "code": "EXTERNAL_ACCESS_DENIED"
+                        }
+                    )
+        
+        # Log authorized request
+        logger.debug(f"Authorized request from {client_host} to {request.url.path}")
+        return await call_next(request)
 
 # Load configuration
 def load_config():
@@ -31,6 +121,19 @@ def load_config():
     except FileNotFoundError:
         return {
             "service": {"host": "0.0.0.0", "port": 8010, "name": "ai-service"},
+            "security": {
+                "mcp_only": True,
+                "allowed_origins": ["mcp-server"],
+                "require_mcp_auth": True,
+                "block_direct_access": True
+            },
+            "mcp": {
+                "enabled": True,
+                "server_host": "mcp-server",
+                "server_port": 9000,
+                "client_id": "ai-service",
+                "reconnect_delay": 5
+            },
             "providers": {
                 "openai": {"enabled": True, "models": ["gpt-4o-mini", "gpt-4"]},
                 "anthropic": {"enabled": True, "models": ["claude-3-haiku", "claude-3-sonnet"]},
@@ -43,6 +146,174 @@ def load_config():
 
 config = load_config()
 
+
+class MCPClient:
+    """MCP Client for AI Service to communicate with agents via MCP Server"""
+    
+    def __init__(self, host: str = "mcp-server", port: int = 9000, client_id: str = "ai-service"):
+        self.host = host
+        self.port = port
+        self.client_id = client_id
+        self.websocket: Optional[Any] = None
+        self.is_connected = False
+        self.response_callbacks: Dict[str, asyncio.Future] = {}
+        self._listen_task: Optional[asyncio.Task] = None
+        self._should_reconnect = True
+        self.reconnect_delay = 5
+        
+    async def connect(self) -> bool:
+        """Connect to MCP server"""
+        try:
+            uri = f"ws://{self.host}:{self.port}/ws"
+            logger.info(f"AI Service connecting to MCP Server at {uri}")
+            self.websocket = await websockets.connect(uri)
+            self.is_connected = True
+            
+            # Start listening for messages
+            self._listen_task = asyncio.create_task(self._listen_for_messages())
+            
+            # Register as AI service with MCP server
+            await self._register_service()
+            
+            logger.info("AI Service successfully connected to MCP Server")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to connect to MCP server: {e}")
+            self.is_connected = False
+            return False
+    
+    async def _register_service(self):
+        """Register AI service with MCP server"""
+        registration_message = {
+            "type": "service_registration",
+            "service_id": self.client_id,
+            "service_type": "ai-service",
+            "capabilities": ["chat_completions", "embeddings", "model_management"],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await self._send_message(registration_message)
+    
+    async def _listen_for_messages(self):
+        """Listen for incoming messages from MCP server"""
+        if not self.websocket:
+            logger.error("No websocket connection available")
+            return
+            
+        try:
+            async for message in self.websocket:
+                try:
+                    data = json.loads(message)
+                    await self._handle_message(data)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to decode message: {e}")
+                except Exception as e:
+                    logger.error(f"Error handling message: {e}")
+        except websockets.exceptions.ConnectionClosed:
+            logger.warning("MCP connection closed")
+            self.is_connected = False
+            if self._should_reconnect:
+                await self._reconnect()
+    
+    async def _handle_message(self, data: Dict[str, Any]):
+        """Handle incoming messages from MCP server"""
+        message_type = data.get("type")
+        
+        if message_type == "agent_notification":
+            # Handle notifications to specific agents
+            await self._handle_agent_notification(data)
+        elif message_type == "usage_alert":
+            # Handle usage/cost alerts
+            await self._handle_usage_alert(data)
+        elif message_type == "model_availability":
+            # Handle model availability updates
+            await self._handle_model_availability(data)
+        else:
+            logger.debug(f"Received unknown message type: {message_type}")
+    
+    async def _handle_agent_notification(self, data: Dict[str, Any]):
+        """Handle notifications to agents"""
+        agent_id = data.get("target_agent")
+        notification = data.get("notification")
+        logger.info(f"Sending notification to agent {agent_id}: {notification}")
+    
+    async def _handle_usage_alert(self, data: Dict[str, Any]):
+        """Handle usage/cost alerts"""
+        alert_type = data.get("alert_type")
+        threshold = data.get("threshold")
+        current_usage = data.get("current_usage")
+        logger.warning(f"Usage alert: {alert_type} - {current_usage}/{threshold}")
+    
+    async def _handle_model_availability(self, data: Dict[str, Any]):
+        """Handle model availability updates"""
+        provider = data.get("provider")
+        model = data.get("model")
+        available = data.get("available")
+        logger.info(f"Model availability update: {provider}/{model} = {available}")
+    
+    async def _send_message(self, message: Dict[str, Any]):
+        """Send message to MCP server"""
+        if not self.is_connected or not self.websocket:
+            logger.error("Cannot send message: not connected to MCP server")
+            return False
+        
+        try:
+            await self.websocket.send(json.dumps(message))
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send message: {e}")
+            return False
+    
+    async def notify_agent(self, agent_id: str, notification: Dict[str, Any]) -> bool:
+        """Send notification to specific agent via MCP Server"""
+        message = {
+            "type": "agent_notification",
+            "source": self.client_id,
+            "target_agent": agent_id,
+            "notification": notification,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        return await self._send_message(message)
+    
+    async def broadcast_usage_alert(self, alert_type: str, details: Dict[str, Any]) -> bool:
+        """Broadcast usage alert to all connected agents"""
+        message = {
+            "type": "usage_alert",
+            "source": self.client_id,
+            "alert_type": alert_type,
+            "details": details,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        return await self._send_message(message)
+    
+    async def update_model_availability(self, provider: str, model: str, available: bool) -> bool:
+        """Update model availability status"""
+        message = {
+            "type": "model_availability",
+            "source": self.client_id,
+            "provider": provider,
+            "model": model,
+            "available": available,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        return await self._send_message(message)
+    
+    async def _reconnect(self):
+        """Attempt to reconnect to MCP server"""
+        while self._should_reconnect and not self.is_connected:
+            logger.info(f"Attempting to reconnect to MCP server in {self.reconnect_delay} seconds...")
+            await asyncio.sleep(self.reconnect_delay)
+            await self.connect()
+    
+    async def disconnect(self):
+        """Disconnect from MCP server"""
+        self._should_reconnect = False
+        if self._listen_task:
+            self._listen_task.cancel()
+        if self.websocket:
+            await self.websocket.close()
+        self.is_connected = False
+
 # Setup logging
 logging.basicConfig(
     level=getattr(logging, config.get("logging", {}).get("level", "INFO")),
@@ -53,9 +324,13 @@ logger = logging.getLogger(__name__)
 # FastAPI app
 app = FastAPI(
     title="AI Service",
-    description="Centralized AI provider access with load balancing and cost optimization",
+    description="Centralized AI provider access with load balancing and cost optimization (MCP-only access)",
     version="1.0.0"
 )
+
+# Add security middleware
+security_config = config.get("security", {})
+app.add_middleware(SecurityMiddleware, security_config=security_config)
 
 # Request/Response Models
 class ChatMessage(BaseModel):
@@ -92,18 +367,78 @@ class HealthResponse(BaseModel):
     providers: Dict[str, Dict[str, Any]]
     uptime_seconds: int
     total_requests: int
+    cache_status: Dict[str, Any]
+    metrics: Dict[str, Any]
+
+class MetricsResponse(BaseModel):
+    total_requests: int
+    requests_by_provider: Dict[str, int]
+    average_response_time: float
+    error_rate: float
+    cache_hit_rate: float
+    uptime_seconds: int
 
 class AIService:
-    """Centralized AI service with multi-provider support"""
+    """Centralized AI service with multi-provider support, caching, monitoring, and MCP integration"""
     
     def __init__(self):
         self.start_time = time.time()
         self.request_count = 0
+        self.error_count = 0
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self.response_times = []
+        self.provider_request_counts = {"openai": 0, "anthropic": 0, "xai": 0}
         self.clients = {}
         self.provider_health = {}
         self.load_balancer_index = 0
+        self.redis_client = None
+        
+        # Initialize MCP client if enabled
+        mcp_config = config.get("mcp", {})
+        self.mcp_client = None
+        if mcp_config.get("enabled", True):
+            self.mcp_client = MCPClient(
+                host=mcp_config.get("server_host", "mcp-server"),
+                port=mcp_config.get("server_port", 9000),
+                client_id=mcp_config.get("client_id", "ai-service")
+            )
         
         self._initialize_clients()
+        asyncio.create_task(self._initialize_redis())
+        
+        # Initialize MCP connection
+        if self.mcp_client:
+            asyncio.create_task(self._initialize_mcp_client())
+    
+    async def _initialize_mcp_client(self):
+        """Initialize MCP client connection"""
+        if not self.mcp_client:
+            logger.warning("No MCP client available for initialization")
+            return
+            
+        try:
+            success = await self.mcp_client.connect()
+            if success:
+                logger.info("AI Service MCP client initialized successfully")
+            else:
+                logger.warning("Failed to initialize MCP client - continuing without MCP integration")
+        except Exception as e:
+            logger.error(f"Error initializing MCP client: {e}")
+            self.mcp_client = None
+        
+    async def _initialize_redis(self):
+        """Initialize Redis connection for caching"""
+        caching_config = config.get("caching", {})
+        if caching_config.get("enabled", False):
+            redis_url = os.getenv("REDIS_URL", caching_config.get("redis_url", "redis://localhost:6379"))
+            try:
+                self.redis_client = redis.from_url(redis_url, decode_responses=True)
+                await self.redis_client.ping()
+                logger.info("Redis connection established successfully")
+            except Exception as e:
+                logger.warning(f"Redis connection failed: {e}. Caching disabled.")
+                self.redis_client = None
         
     def _initialize_clients(self):
         """Initialize AI provider clients with secure API key handling"""
@@ -229,16 +564,78 @@ class AIService:
         if preferred_provider and preferred_provider in available_providers:
             return preferred_provider
         
-        # Round-robin load balancing for fallback
+        # Enhanced load balancing strategy
+        load_balance_strategy = config.get("load_balancing", {}).get("strategy", "round_robin")
+        
+        if load_balance_strategy == "least_connections":
+            # Select provider with least active requests
+            return min(available_providers, key=lambda p: self.provider_request_counts.get(p, 0))
+        elif load_balance_strategy == "weighted_round_robin":
+            # Weighted selection based on provider performance
+            weights = {"openai": 3, "anthropic": 2, "xai": 1}  # Example weights
+            weighted_providers = [p for p in available_providers for _ in range(weights.get(p, 1))]
+            if weighted_providers:
+                provider = weighted_providers[self.load_balancer_index % len(weighted_providers)]
+                self.load_balancer_index += 1
+                return provider
+        
+        # Default: Round-robin load balancing
         provider = available_providers[self.load_balancer_index % len(available_providers)]
         self.load_balancer_index += 1
         
         return provider
     
+    async def _cache_get(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Get cached response"""
+        if not self.redis_client:
+            return None
+        
+        try:
+            cached_data = await self.redis_client.get(cache_key)
+            if cached_data:
+                self.cache_hits += 1
+                return json.loads(cached_data)
+        except Exception as e:
+            logger.warning(f"Cache get error: {e}")
+        
+        self.cache_misses += 1
+        return None
+    
+    async def _cache_set(self, cache_key: str, data: Dict[str, Any], ttl: int = 3600):
+        """Set cached response"""
+        if not self.redis_client:
+            return
+        
+        try:
+            await self.redis_client.setex(cache_key, ttl, json.dumps(data))
+        except Exception as e:
+            logger.warning(f"Cache set error: {e}")
+    
+    def _generate_cache_key(self, request_data: Dict[str, Any]) -> str:
+        """Generate cache key for request"""
+        # Create a hash of the request parameters for caching
+        cache_str = json.dumps(request_data, sort_keys=True)
+        return f"ai_response:{hashlib.md5(cache_str.encode()).hexdigest()}"
+    
     async def chat_completion(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
-        """Generate chat completion using selected AI provider"""
+        """Generate chat completion using selected AI provider with caching"""
         start_time = time.time()
         self.request_count += 1
+        
+        # Generate cache key
+        cache_data = {
+            "model": request.model,
+            "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens
+        }
+        cache_key = self._generate_cache_key(cache_data)
+        
+        # Check cache first
+        cached_response = await self._cache_get(cache_key)
+        if cached_response:
+            logger.info("Cache hit for chat completion request")
+            return ChatCompletionResponse(**cached_response)
         
         provider = None
         content = ""
@@ -246,6 +643,7 @@ class AIService:
         
         try:
             provider = self._select_provider(request.provider, request.model)
+            self.provider_request_counts[provider] += 1
             client = self.clients[provider]
             
             # Convert messages to provider format
@@ -321,16 +719,30 @@ class AIService:
                 }
             
             processing_time = time.time() - start_time
+            self.response_times.append(processing_time)
             
-            return ChatCompletionResponse(
-                content=content,
-                model=request.model,
-                provider=provider or "unknown",
-                usage=usage,
-                processing_time=processing_time
-            )
+            # Keep only last 1000 response times for memory efficiency
+            if len(self.response_times) > 1000:
+                self.response_times = self.response_times[-1000:]
+            
+            response_data = {
+                "content": content,
+                "model": request.model,
+                "provider": provider or "unknown",
+                "usage": usage,
+                "processing_time": processing_time
+            }
+            
+            # Cache the response
+            caching_config = config.get("caching", {})
+            if caching_config.get("enabled", False):
+                ttl = caching_config.get("ttl_seconds", 3600)
+                await self._cache_set(cache_key, response_data, ttl)
+            
+            return ChatCompletionResponse(**response_data)
             
         except Exception as e:
+            self.error_count += 1
             logger.error(f"Chat completion error: {e}")
             # Mark provider as unhealthy
             if provider:
@@ -377,15 +789,118 @@ class AIService:
             raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
     
     def get_health_status(self) -> Dict[str, Any]:
-        """Get service health status"""
+        """Get service health status with caching and metrics"""
         uptime = int(time.time() - self.start_time)
+        
+        # Calculate cache hit rate
+        total_cache_requests = self.cache_hits + self.cache_misses
+        cache_hit_rate = (self.cache_hits / total_cache_requests) if total_cache_requests > 0 else 0.0
+        
+        # Calculate average response time
+        avg_response_time = sum(self.response_times) / len(self.response_times) if self.response_times else 0.0
+        
+        # Calculate error rate
+        error_rate = (self.error_count / self.request_count) if self.request_count > 0 else 0.0
+        
+        cache_status = {
+            "redis_connected": self.redis_client is not None,
+            "cache_hits": self.cache_hits,
+            "cache_misses": self.cache_misses,
+            "hit_rate": cache_hit_rate
+        }
+        
+        metrics = {
+            "average_response_time": avg_response_time,
+            "error_rate": error_rate,
+            "requests_by_provider": self.provider_request_counts.copy()
+        }
         
         return {
             "status": "healthy" if any(h["status"] == "healthy" for h in self.provider_health.values()) else "unhealthy",
             "providers": self.provider_health,
             "uptime_seconds": uptime,
-            "total_requests": self.request_count
+            "total_requests": self.request_count,
+            "cache_status": cache_status,
+            "metrics": metrics
         }
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get detailed service metrics"""
+        uptime = int(time.time() - self.start_time)
+        
+        # Calculate metrics
+        total_cache_requests = self.cache_hits + self.cache_misses
+        cache_hit_rate = (self.cache_hits / total_cache_requests) if total_cache_requests > 0 else 0.0
+        avg_response_time = sum(self.response_times) / len(self.response_times) if self.response_times else 0.0
+        error_rate = (self.error_count / self.request_count) if self.request_count > 0 else 0.0
+        
+        return {
+            "total_requests": self.request_count,
+            "requests_by_provider": self.provider_request_counts.copy(),
+            "average_response_time": avg_response_time,
+            "error_rate": error_rate,
+            "cache_hit_rate": cache_hit_rate,
+            "uptime_seconds": uptime
+        }
+    
+    # MCP Integration Methods
+    async def notify_agent_completion(self, agent_id: str, task_id: str, result: Dict[str, Any]) -> bool:
+        """Notify agent when AI task is completed"""
+        if not self.mcp_client or not self.mcp_client.is_connected:
+            logger.debug("MCP client not available for agent notification")
+            return False
+        
+        notification = {
+            "type": "ai_task_completed",
+            "task_id": task_id,
+            "result": result,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        return await self.mcp_client.notify_agent(agent_id, notification)
+    
+    async def notify_usage_threshold(self, threshold_type: str, current_usage: float, limit: float) -> bool:
+        """Notify all agents about usage threshold being reached"""
+        if not self.mcp_client or not self.mcp_client.is_connected:
+            logger.debug("MCP client not available for usage notification")
+            return False
+        
+        alert_details = {
+            "threshold_type": threshold_type,
+            "current_usage": current_usage,
+            "limit": limit,
+            "percentage": (current_usage / limit) * 100 if limit > 0 else 0
+        }
+        return await self.mcp_client.broadcast_usage_alert("threshold_reached", alert_details)
+    
+    async def notify_model_status_change(self, provider: str, model: str, available: bool, reason: str = "") -> bool:
+        """Notify about model availability changes"""
+        if not self.mcp_client or not self.mcp_client.is_connected:
+            logger.debug("MCP client not available for model status notification")
+            return False
+        
+        success = await self.mcp_client.update_model_availability(provider, model, available)
+        if success:
+            logger.info(f"Notified MCP about {provider}/{model} availability: {available} ({reason})")
+        return success
+    
+    async def stream_response_to_agent(self, agent_id: str, task_id: str, partial_response: str) -> bool:
+        """Stream partial responses back to requesting agent"""
+        if not self.mcp_client or not self.mcp_client.is_connected:
+            return False
+        
+        notification = {
+            "type": "ai_streaming_response",
+            "task_id": task_id,
+            "partial_response": partial_response,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        return await self.mcp_client.notify_agent(agent_id, notification)
+    
+    async def shutdown_mcp_client(self):
+        """Clean shutdown of MCP client"""
+        if self.mcp_client:
+            await self.mcp_client.disconnect()
+            logger.info("MCP client disconnected successfully")
 
 # Global service instance
 ai_service = AIService()
@@ -428,11 +943,29 @@ async def get_usage_statistics():
         "providers": ai_service.provider_health
     }
 
+# Graceful shutdown handler
+async def shutdown_handler():
+    """Handle graceful shutdown"""
+    logger.info("Shutting down AI Service...")
+    await ai_service.shutdown_mcp_client()
+    logger.info("AI Service shutdown complete")
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logger.info(f"Received signal {signum}, initiating shutdown...")
+    asyncio.create_task(shutdown_handler())
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 if __name__ == "__main__":
     SERVICE_HOST = os.getenv("SERVICE_HOST", config["service"]["host"])
     SERVICE_PORT = int(os.getenv("SERVICE_PORT", config["service"]["port"]))
     
     logger.info(f"Starting AI Service on {SERVICE_HOST}:{SERVICE_PORT}")
+    logger.info(f"MCP Integration: {'Enabled' if config.get('mcp', {}).get('enabled', True) else 'Disabled'}")
     
     uvicorn.run(
         app,

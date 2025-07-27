@@ -2,11 +2,11 @@
 
 ## Overview
 
-This is the containerized API Gateway service for Phase 3 of the Eunice Research Platform. It provides a unified REST API interface that routes requests to research agents via the MCP (Message Control Protocol) server using WebSocket communication.
+This is the containerized API Gateway service for Version 0.3 of the Eunice Research Platform. It provides a unified REST API interface that routes requests to research agents via the MCP (Message Control Protocol) server using WebSocket communication.
 
 ## Architecture
 
-The API Gateway is designed for the Phase 3 microservices architecture:
+The API Gateway is designed for the Version 0.3 microservices architecture:
 
 ```
 Client Requests → API Gateway Container → MCP Server Container → Research Agent Containers
@@ -285,8 +285,8 @@ docker run -e LOG_LEVEL=DEBUG eunice/api-gateway:latest
 
 ## Version History
 
-- **v3.0.0**: Initial containerized release for Phase 3
-- **v2.0.0**: Enhanced MCP integration (Phase 2)
+- **v3.0.0**: Initial containerized release for Version 0.3
+- **v2.0.0**: Enhanced MCP integration (Version 0.2)
 - **v1.0.0**: Basic API Gateway implementation
 
 ## Contributing

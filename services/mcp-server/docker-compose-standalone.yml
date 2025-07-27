@@ -1,4 +1,4 @@
-# Enhanced MCP Server - Phase 3 Standalone Service
+# Enhanced MCP Server - Version 0.3 Standalone Service
 version: "3.8"
 
 services:
@@ -75,4 +75,4 @@ networks:
     name: eunice-mcp-network
     labels:
       - "com.eunice.service=mcp-server"
-      - "com.eunice.phase=phase3"
+      - "com.eunice.version=v0.3"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Enhanced MCP Server - Phase 3.1 Development Test
-Validates the implementation without Docker dependencies
+Enhanced MCP Server - Version 0.3.1 Development Test
+Validate server startup and basic functionality
 """
 
 import asyncio
@@ -115,7 +115,7 @@ except ImportError as e:
 
 async def test_enhanced_mcp_server():
     """Test the Enhanced MCP Server implementation"""
-    print("\n🧪 Testing Enhanced MCP Server Phase 3.1...")
+    print("\n🧪 Testing Enhanced MCP Server Version 0.3.1...")
     
     # Test 1: Configuration
     print("\n📋 Test 1: Configuration Management")
@@ -259,7 +259,7 @@ def test_file_structure():
 
 
 if __name__ == "__main__":
-    print("🔧 Enhanced MCP Server Phase 3.1 - Development Validation")
+    print("🔧 Enhanced MCP Server Version 0.3.1 - Development Validation")
     print("=" * 60)
     
     # Test file structure
@@ -271,11 +271,11 @@ if __name__ == "__main__":
         result = asyncio.run(test_enhanced_mcp_server())
         if result:
             print("\n" + "=" * 60)
-            print("🎯 Enhanced MCP Server Phase 3.1 Implementation: VALIDATED ✅")
+            print("🎯 Enhanced MCP Server Version 0.3.1 Implementation: VALIDATED ✅")
             print("\n🚀 Ready for:")
             print("   • Docker containerization")
             print("   • Agent connectivity testing")
-            print("   • Phase 3.1 Week 2: Agent Containerization")
+            print("   • Version 0.3.1 Week 2: Agent Containerization")
             print("\n📝 Next Steps:")
             print("   1. Deploy with Docker when available")
             print("   2. Test with actual research agents")

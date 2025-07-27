@@ -2,14 +2,14 @@
 
 ## Overview
 
-Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](https://en.wikipedia.org/wiki/Agency_(novel)). It is designed to facilitate sophisticated research workflows through an integrated **Phase 3 microservices architecture** supporting collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
+Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](https://en.wikipedia.org/wiki/Agency_(novel)). It is designed to facilitate sophisticated research workflows through an integrated **Version 0.3 microservices architecture** supporting collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
 
 The platform specializes in hierarchical research organization, multi-agent collaboration, systematic literature reviews, and provides comprehensive tools for managing complex research projects across multiple domains.
 
-**Current Status**: Phase 3 Microservices Architecture (Partial Implementation)  
-**✅ Phase 2 COMPLETE** - Enhanced MCP Server, API Gateway, Task Queue System  
-**🔄 Phase 3 PARTIAL** - Core microservices infrastructure implemented  
-**❌ Phase 3.1 PENDING** - Individual agent containerization not started
+**Current Status**: Version 0.3 Microservices Architecture (Partial Implementation)  
+**✅ Version 0.2 COMPLETE** - Enhanced MCP Server, API Gateway, Task Queue System  
+**🔄 Version 0.3 PARTIAL** - Core microservices infrastructure implemented  
+**❌ Version 0.3.1 PENDING** - Individual agent containerization not started
 
 ## 🚀 Key Features
 
@@ -50,9 +50,9 @@ The platform specializes in hierarchical research organization, multi-agent coll
 - **SQLite Database**: Reliable data persistence with asynchronous operations
 - **Persona System**: AI-powered expert consultation with domain-specific knowledge
 
-## 🏗️ Architecture - Phase 3 Microservices
+## 🏗️ Architecture - Version 0.3 Microservices
 
-Eunice follows a **Phase 3 microservices architecture** with the following implemented components:
+Eunice follows a **Version 0.3 microservices architecture** with the following implemented components:
 
 ### ✅ Implemented Services
 
@@ -62,7 +62,7 @@ Eunice follows a **Phase 3 microservices architecture** with the following imple
 - **Redis** (Port 6380): Message broker and caching
 - **PostgreSQL** (Port 5433): Primary database
 
-### ❌ Pending Phase 3.1 Implementation
+### ❌ Pending Version 0.3.1 Implementation
 
 - **Individual Agent Containers**: Literature, Planning, Executor, Memory agents
 - **Service Discovery**: Agent registration and health monitoring
@@ -77,7 +77,7 @@ API Gateway (8001) → MCP Server (9000) → Database Service (8011)
                    Integrated Agents (not yet containerized)
 ```
 
-For detailed architecture information, see [Phase 3 Service Architecture](docs/PHASE3_SERVICE_ARCHITECTURE.md).
+For detailed architecture information, see [Version 0.3 Service Architecture](docs/VERSION03_SERVICE_ARCHITECTURE.md).
 
 ## 🧬 Research Agent Personas
 
@@ -182,7 +182,7 @@ python -m flake8 src/ --count --statistics --max-line-length=120
 #### 6. **Start the Platform**
 
 ```bash
-# Start all microservices (Phase 3 architecture)
+# Start all microservices (Version 0.3 architecture)
 docker compose up -d
 
 # Verify services are running
@@ -192,7 +192,7 @@ docker compose ps
 curl http://localhost:8001/health  # API Gateway
 curl http://localhost:9000/health  # MCP Server
 
-# Alternative: Use legacy startup script (Phase 2 compatibility)
+# Alternative: Use legacy startup script (Version 0.2 compatibility)
 ./start_eunice.sh
 ```
 
@@ -334,8 +334,8 @@ SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 
 ## 📚 Documentation
 
-- [Phase 3 Service Architecture](docs/PHASE3_SERVICE_ARCHITECTURE.md) - Current microservices implementation
-- [Phase 3 Microservices Transition](docs/PHASE3_MICROSERVICES_TRANSITION.md) - Full transition roadmap
+- [Version 0.3 Service Architecture](docs/VERSION03_SERVICE_ARCHITECTURE.md) - Current microservices implementation
+- [Version 0.3 Microservices Transition](docs/VERSION03_MICROSERVICES_TRANSITION.md) - Full transition roadmap
 - [Cleanup Status](docs/CLEANUP_STATUS.md) - Recent codebase cleanup summary
 - [Architecture Overview](docs/Architecture.md) - Complete architecture documentation
 - [Research Manager](docs/Research_Manager.md)

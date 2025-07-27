@@ -4,7 +4,7 @@ Containerized API Gateway Service for Eunice Research Platform
 
 This service provides a unified REST API interface that routes requests to appropriate 
 research agents via the MCP (Message Control Protocol) server. It's designed to run 
-as a containerized microservice in Phase 3 architecture.
+as a containerized microservice in Version 0.3 architecture.
 
 Key Features:
 - REST API endpoints for all research operations
@@ -92,7 +92,7 @@ def get_database():
 
 class APIGateway:
     """
-    Containerized API Gateway for Phase 3 microservices architecture.
+    Containerized API Gateway for Version 0.3 microservices architecture.
     
     Provides unified REST interface and routes requests to research agents
     via the MCP server using WebSocket communication.
@@ -508,10 +508,10 @@ async def delete_task_v2(task_id: str = Path(..., description="Task ID")):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Enhanced endpoints matching Phase 2 functionality
+# Enhanced endpoints matching Version 0.2 functionality
 
 
-# Enhanced endpoints matching Phase 2 functionality
+# Enhanced endpoints matching Version 0.2 functionality
 @app.post("/data/analysis", response_model=APIResponse)
 async def analyze_data(request: DataAnalysisRequest):
     """Analyze research data via Executor Agent."""
@@ -561,7 +561,7 @@ async def get_agents_status():
 @app.get("/agents/capabilities")
 async def get_agent_capabilities():
     """Get capabilities of all registered agents."""
-    # Static capabilities mapping for Phase 3
+    # Static capabilities mapping for Version 0.3
     capabilities = {
         "literature": ["search", "retrieve", "summarize", "extract_metadata"],
         "planning": ["plan", "coordinate", "optimize", "strategy"],
@@ -583,7 +583,7 @@ async def get_agent_capabilities():
 # Queue-based endpoints (future extension point)
 @app.post("/queue/literature/search")
 async def queue_literature_search(request: LiteratureSearchRequest):
-    """Submit literature search to task queue (placeholder for Phase 3 queue system)."""
+    """Submit literature search to task queue (placeholder for Version 0.3 queue system)."""
     # For now, process immediately via MCP
     result = await gateway.handle_literature_search(request)
     

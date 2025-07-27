@@ -3,7 +3,7 @@
 Test script for AI Agent service implementation
 
 This script validates the AI Agent service implementation according to
-Architecture.md Phase 2 specifications. It tests:
+Architecture.md Version 0.2 specifications. It tests:
 
 1. Service initialization
 2. Multi-provider support

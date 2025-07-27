@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Literature Agent - Enhanced MCP Server Integration Test
-Phase 3.2 - Connect Literature Agent to Enhanced MCP Server
+Version 0.3.2 - Connect Literature Agent to Enhanced MCP Server
 
 This test connects the Literature Agent to the Enhanced MCP Server 
 and validates literature search functionality through MCP protocol.
@@ -308,7 +308,7 @@ async def main():
 
 if __name__ == "__main__":
     print("🚀 Literature Agent - Enhanced MCP Server Integration Test")
-    print("Phase 3.2 - Connecting Literature Agent to Enhanced MCP Server")
+    print("Version 0.3.2 - Connecting Literature Agent to Enhanced MCP Server")
     print("="*70)
     
     asyncio.run(main())

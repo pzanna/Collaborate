@@ -38,7 +38,7 @@ class Config:
     
     # API Configuration
     API_TITLE = "Eunice Research Platform API Gateway"
-    API_DESCRIPTION = "Unified API gateway for the Eunice research system - Containerized Phase 3"
+    API_DESCRIPTION = "Unified API gateway for the Eunice research system - Containerized Version 0.3"
     API_VERSION = "3.0.0"
     DOCS_URL = "/docs"
     REDOC_URL = "/redoc"

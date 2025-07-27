@@ -20,12 +20,5 @@ RUN mkdir -p src config logs
 COPY src/ src/
 COPY config/ config/
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8010/health || exit 1
-
-# Expose port
-EXPOSE 8010
-
-# Run the service
-CMD ["python", "-m", "src.ai_service"]
+# Run the MCP AI service client
+CMD ["python", "-m", "src.mcp_ai_service"]

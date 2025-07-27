@@ -1,5 +1,5 @@
-# Eunice Research Platform - Phase 3 Microservices Architecture
-# Root-level orchestration following the Phase 3 design document
+# Eunice Research Platform - Version 0.3 Microservices Architecture
+# Root-level orchestration following the Version 0.3 design document
 
 services:
   # Core Services
@@ -53,27 +53,21 @@ services:
       timeout: 10s
       retries: 3
 
-  # 3. AI Service (Port 8010)
+  # 3. AI Service (MCP Client)
   ai-service:
     build: ./services/ai-service
     container_name: eunice-ai-service
-    ports:
-      - "8010:8010"
     environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8010
+      - MCP_SERVER_URL=ws://mcp-server:9000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - XAI_API_KEY=${XAI_API_KEY}
       - LOG_LEVEL=INFO
     networks:
       - eunice-microservices
+    depends_on:
+      - mcp-server
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # 4. Planning Agent (Port 8007)
   planning-agent:
@@ -85,14 +79,12 @@ services:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8007
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AI_SERVICE_URL=http://ai-service:8010
       - AGENT_TYPE=planning
       - LOG_LEVEL=INFO
     networks:
       - eunice-microservices
     depends_on:
       - mcp-server
-      - ai-service
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
@@ -183,7 +175,7 @@ networks:
     name: eunice-microservices
     labels:
       - "com.eunice.network=microservices"
-      - "com.eunice.phase=phase3"
+      - "com.eunice.version=v0.3"
 
 # Volumes
 volumes:

@@ -1,4 +1,4 @@
-# Enhanced MCP Server - Phase 3.1 Container
+# Enhanced MCP Server - Version 0.3.1 Container
 FROM python:3.11-slim
 
 # Set working directory
