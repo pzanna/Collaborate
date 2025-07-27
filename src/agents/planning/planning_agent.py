@@ -54,7 +54,7 @@ class PlanningAgent(BaseAgent):
         return [
             "plan_research",
             "analyze_information",
-            "synthesize_results",
+            "cost_estimation",
             "chain_of_thought",
             "summarize_content",
             "extract_insights",

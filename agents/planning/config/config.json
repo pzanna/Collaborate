@@ -1,0 +1,75 @@
+{
+  "service": {
+    "name": "planning-agent",
+    "type": "planning",
+    "version": "1.0.0",
+    "host": "0.0.0.0",
+    "port": 8007
+  },
+  "mcp": {
+    "server_url": "ws://mcp-server:9000",
+    "reconnect_attempts": 5,
+    "reconnect_delay": 5,
+    "ping_interval": 30,
+    "ping_timeout": 10
+  },
+  "capabilities": [
+    "plan_research",
+    "analyze_information",
+    "cost_estimation",
+    "chain_of_thought",
+    "summarize_content",
+    "extract_insights",
+    "compare_sources",
+    "evaluate_credibility"
+  ],
+  "cost_settings": {
+    "token_costs": {
+      "openai": {
+        "gpt-4o-mini": {
+          "input": 0.00015,
+          "output": 0.0006
+        },
+        "gpt-4.1-mini": {
+          "input": 0.00015,
+          "output": 0.0006
+        },
+        "gpt-4": {
+          "input": 0.03,
+          "output": 0.06
+        },
+        "gpt-3.5-turbo": {
+          "input": 0.0015,
+          "output": 0.002
+        }
+      },
+      "xai": {
+        "grok-3-mini-beta": {
+          "input": 0.0002,
+          "output": 0.0008
+        },
+        "grok-3": {
+          "input": 0.002,
+          "output": 0.004
+        }
+      }
+    },
+    "cost_thresholds": {
+      "session_warning": 1.0,
+      "session_limit": 5.0,
+      "daily_warning": 10.0,
+      "daily_limit": 50.0,
+      "emergency_stop": 100.0
+    },
+    "complexity_multipliers": {
+      "LOW": 1.0,
+      "MEDIUM": 2.5,
+      "HIGH": 5.0,
+      "CRITICAL": 10.0
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}

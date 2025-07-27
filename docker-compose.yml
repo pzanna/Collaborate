@@ -53,6 +53,29 @@ services:
       timeout: 10s
       retries: 3
 
+  # 3. Planning Agent Service (Port 8007)
+  planning-agent:
+    build: ./agents/planning
+    container_name: eunice-planning-agent
+    ports:
+      - "8007:8007"
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8007
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=planning
+      - LOG_LEVEL=INFO
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # 8. Database Service (Port 8011)
   database-service:
     build: ./services/database
