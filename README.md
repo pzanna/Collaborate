@@ -2,9 +2,14 @@
 
 ## Overview
 
-Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](https://en.wikipedia.org/wiki/Agency_(novel)). It is designed to facilitate sophisticated research workflows through an integrated microservices architecture supporting collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
+Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](https://en.wikipedia.org/wiki/Agency_(novel)). It is designed to facilitate sophisticated research workflows through an integrated **Version 0.3 microservices architecture** supporting collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
 
 The platform specializes in hierarchical research organization, multi-agent collaboration, systematic literature reviews, and provides comprehensive tools for managing complex research projects across multiple domains.
+
+**Current Status**: Version 0.3 Microservices Architecture (Partial Implementation)  
+**✅ Version 0.2 COMPLETE** - Enhanced MCP Server, API Gateway, Task Queue System  
+**🔄 Version 0.3 PARTIAL** - Core microservices infrastructure implemented  
+**❌ Version 0.3.1 PENDING** - Individual agent containerization not started
 
 ## 🚀 Key Features
 
@@ -45,19 +50,34 @@ The platform specializes in hierarchical research organization, multi-agent coll
 - **SQLite Database**: Reliable data persistence with asynchronous operations
 - **Persona System**: AI-powered expert consultation with domain-specific knowledge
 
-## 🏗️ Architecture
+## 🏗️ Architecture - Version 0.3 Microservices
 
-Eunice follows a microservices architecture with the following key components:
+Eunice follows a **Version 0.3 microservices architecture** with the following implemented components:
 
-- **Web Interface**: React/TypeScript frontend with Redux state management
-- **API Gateway**: FastAPI-based backend with WebSocket support
-- **MCP Server**: Microservices control plane for agent coordination and persona consultations
-- **Research Manager**: Oversees research operations and agent coordination
-- **Agent System**: Specialized AI agents for different research domains
-- **Persona System**: Expert consultation agents with domain-specific knowledge
-- **Storage Layer**: SQLite databases for conversations, memory, and collaboration data
+### ✅ Implemented Services
 
-For detailed architecture information, see [Architecture Overview](docs/Architecture.md).
+- **API Gateway** (Port 8001): Unified REST interface with 21+ endpoints
+- **MCP Server** (Port 9000): Enhanced coordination server with agent management
+- **Database Service** (Port 8011): Centralized data access layer
+- **Redis** (Port 6380): Message broker and caching
+- **PostgreSQL** (Port 5433): Primary database
+
+### ❌ Pending Version 0.3.1 Implementation
+
+- **Individual Agent Containers**: Literature, Planning, Executor, Memory agents
+- **Service Discovery**: Agent registration and health monitoring
+- **Advanced Security**: JWT authentication and RBAC
+- **Performance Optimization**: Distributed caching and load balancing
+
+### Current Architecture Flow
+
+```text
+API Gateway (8001) → MCP Server (9000) → Database Service (8011)
+                           ↓
+                   Integrated Agents (not yet containerized)
+```
+
+For detailed architecture information, see [Version 0.3 Service Architecture](docs/VERSION03_SERVICE_ARCHITECTURE.md).
 
 ## 🧬 Research Agent Personas
 
@@ -162,13 +182,18 @@ python -m flake8 src/ --count --statistics --max-line-length=120
 #### 6. **Start the Platform**
 
 ```bash
-# Start all services (recommended)
-./start_eunice.sh
+# Start all microservices (Version 0.3 architecture)
+docker compose up -d
 
-# Or start services individually:
-# Backend API: python web_server.py
-# MCP Server: python mcp_server.py  
-# Frontend Dev: cd frontend && npm start
+# Verify services are running
+docker compose ps
+
+# Check service health
+curl http://localhost:8001/health  # API Gateway
+curl http://localhost:9000/health  # MCP Server
+
+# Alternative: Use legacy startup script (Version 0.2 compatibility)
+./start_eunice.sh
 ```
 
 ### 🔧 Code Quality Tools (For Developers)
@@ -307,13 +332,18 @@ SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key_here
 - `config/default_config.json` - Default platform settings
 - `pytest.ini` - Test configuration
 
-## 📚 Documentation - [Architecture Overview](docs/Architecture.md)
+## 📚 Documentation
 
+- [Version 0.3 Service Architecture](docs/VERSION03_SERVICE_ARCHITECTURE.md) - Current microservices implementation
+- [Version 0.3 Microservices Transition](docs/VERSION03_MICROSERVICES_TRANSITION.md) - Full transition roadmap
+- [Cleanup Status](docs/CLEANUP_STATUS.md) - Recent codebase cleanup summary
+- [Architecture Overview](docs/Architecture.md) - Complete architecture documentation
 - [Research Manager](docs/Research_Manager.md)
 - [MCP Persona System](docs/MCP_Persona_System.md)
 - [Persona Quick Start](docs/Persona_Quick_Start.md)
 - [Persona Roles](docs/Personas/README.md)
-- [Cost Estimation System](docs/Cost_Estimation_System.md)-[Hierarchical Research Structure](docs/Hierarchical_Research_Structure.md)
+- [Cost Estimation System](docs/Cost_Estimation_System.md)
+- [Hierarchical Research Structure](docs/Hierarchical_Research_Structure.md)
 
 ## 🤝 Contributing
 

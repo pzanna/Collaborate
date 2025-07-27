@@ -47,7 +47,7 @@ class AgentLauncher:
             os.makedirs("logs", exist_ok=True)
 
             # Import config manager
-            from src.config.config_manager import ConfigManager
+            from old_src.config.config_manager import ConfigManager
             config_manager = ConfigManager()
 
             # Set up proper logging configuration (including AI API logging)
@@ -55,10 +55,10 @@ class AgentLauncher:
             logger.info("Logging configuration set up for agents")
 
             # Import all agent classes
-            from src.agents.literature_agent import LiteratureAgent
-            from src.agents.planning_agent import PlanningAgent
-            from src.agents.executor_agent import ExecutorAgent
-            from src.agents.memory_agent import MemoryAgent
+            from old_src.agents.literature_agent import LiteratureAgent
+            from old_src.agents.planning_agent import PlanningAgent
+            from old_src.agents.executor_agent import ExecutorAgent
+            from old_src.agents.memory_agent import MemoryAgent
 
             # Create and initialize agents
             agent_classes = [
