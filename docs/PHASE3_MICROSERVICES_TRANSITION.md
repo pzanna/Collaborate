@@ -535,71 +535,71 @@ async def health_check():
 
 ## 🚧 Implementation Roadmap
 
-### Phase 3.1: MCP Server Enhancement and Agent Containerization (Weeks 1-3)
+### Phase 3.1: MCP Server Enhancement and Agent Containerization
 
-#### Week 1: Enhanced MCP Server Service
+#### Enhanced MCP Server Service
 
-##### Days 1-2: MCP Server Containerization
+##### MCP Server Containerization
 
 - [ ] Create `services/mcp-server/` directory structure
 - [ ] Containerize existing MCP server with enhanced capabilities
 - [ ] Add Docker configuration for WebSocket clustering support
 - [ ] Implement REST API endpoints for external access alongside WebSocket
 
-##### Days 3-4: Database Integration and Performance
+##### Database Integration and Performance
 
 - [ ] Enhance MCP server database connection pooling
 - [ ] Implement distributed agent registry with Redis backing
 - [ ] Add comprehensive health check endpoints for MCP server
 - [ ] Test MCP server connectivity and load balancing
 
-##### Days 5-7: Agent Discovery and Health Monitoring
+##### Agent Discovery and Health Monitoring
 
 - [ ] Implement enhanced agent registration with health monitoring
 - [ ] Add agent failover and circuit breaker patterns
 - [ ] Create service discovery mechanism for containerized agents
 - [ ] Test MCP server with multiple agent connections
 
-#### Week 2: Literature Agent Containerization (Maintain MCP Communication)
+#### Literature Agent Containerization (Maintain MCP Communication)
 
-##### Days 1-2: Agent Container Setup
+##### Agent Container Setup
 
 - [ ] Create `services/literature-search-agent/Dockerfile`
 - [ ] Extract literature search logic while preserving MCP Client integration
 - [ ] Implement agent startup with MCP server connection
 - [ ] Test basic agent registration and MCP communication
 
-##### Days 3-4: Four Literature Agent Services (MCP Clients)
+##### Four Literature Agent Services (MCP Clients)
 
 - [ ] Container Literature Search Agent (port 8003, MCP Client)
 - [ ] Container Screening & PRISMA Agent (port 8004, MCP Client)
 - [ ] Container Synthesis & Review Agent (port 8005, MCP Client)
 - [ ] Container Writer Agent (port 8006, MCP Client)
 
-##### Days 5-7: MCP Communication Validation
+##### MCP Communication Validation
 
 - [ ] Verify all agents connect to MCP server via WebSocket
 - [ ] Test task delegation through MCP protocol
 - [ ] Validate agent response handling and error recovery
 - [ ] End-to-end literature pipeline testing via MCP
 
-#### Week 3: Core Agent Services (MCP Clients)
+#### Core Agent Services (MCP Clients)
 
-##### Days 1-3: Planning Agent Service
+##### Planning Agent Service
 
 - [ ] Container Planning Agent (port 8007, MCP Client)
 - [ ] Preserve task synthesis and planning workflows via MCP
 - [ ] Test resource requirement analysis through MCP communication
 - [ ] Validate planning workflows and agent dependencies
 
-##### Days 4-5: Executor Agent Service
+##### Executor Agent Service
 
 - [ ] Container Executor Agent (port 8008, MCP Client)
 - [ ] Implement secure code execution with MCP integration
 - [ ] Add file operations and data processing via MCP protocol
 - [ ] Test sandbox security and resource limits
 
-##### Days 6-7: Memory Agent Service
+##### Memory Agent Service
 
 - [ ] Container Memory Agent (port 8009, MCP Client)
 - [ ] Implement knowledge base management via MCP
@@ -608,39 +608,39 @@ async def health_check():
 
 ### Phase 3.2: Security Enhancement (Weeks 4-5)
 
-#### Week 4: Authentication Infrastructure
+#### Authentication Infrastructure
 
-**Days 1-3: JWT Authentication Service**
+**JWT Authentication Service**
 
 - [ ] Implement JWT authentication service (port 8007)
 - [ ] Create user registration and login endpoints
 - [ ] Add token validation and refresh mechanisms
 - [ ] Implement multi-factor authentication support
 
-**Days 4-5: RBAC Authorization System**
+**RBAC Authorization System**
 
 - [ ] Design role-based access control schema
 - [ ] Implement permission management system
 - [ ] Create role assignment and policy enforcement
 - [ ] Test fine-grained access controls
 
-**Days 6-7: Service-to-Service Authentication**
+**Service-to-Service Authentication**
 
 - [ ] Implement service identity and credentials
 - [ ] Add inter-service token validation
 - [ ] Create API key management system
 - [ ] Test secure service communication
 
-#### Week 5: Security Hardening
+#### Security Hardening
 
-**Days 1-3: Encryption and Security**
+**Encryption and Security**
 
 - [ ] Implement mTLS for service communication
 - [ ] Add data encryption at rest and in transit
 - [ ] Create audit logging and compliance tracking
 - [ ] Test security controls and penetration testing
 
-**Days 4-7: Security Validation**
+**Security Validation**
 
 - [ ] Conduct security assessment and vulnerability scanning
 - [ ] Implement security monitoring and alerting
@@ -649,32 +649,32 @@ async def health_check():
 
 ### Phase 3.3: Performance Optimization (Weeks 6-7)
 
-#### Week 6: Caching and Database Optimization
+#### Caching and Database Optimization
 
-**Days 1-3: Distributed Caching**
+**Distributed Caching**
 
 - [ ] Set up distributed Redis cluster
 - [ ] Implement multi-layer caching strategy
 - [ ] Add cache invalidation and consistency mechanisms
 - [ ] Test caching performance and reliability
 
-**Days 4-7: Database Optimization**
+**Database Optimization**
 
 - [ ] Implement database read replicas
 - [ ] Add connection pooling and query optimization
 - [ ] Create database monitoring and performance tuning
 - [ ] Test database scalability and failover
 
-#### Week 7: Performance Testing and Tuning
+#### WPerformance Testing and Tuning
 
-**Days 1-4: Load Testing**
+**Load Testing**
 
 - [ ] Set up load testing infrastructure
 - [ ] Create performance test scenarios
 - [ ] Execute load tests and identify bottlenecks
 - [ ] Optimize service performance based on results
 
-**Days 5-7: Performance Validation**
+**Performance Validation**
 
 - [ ] Validate API response time targets (< 100ms)
 - [ ] Test concurrent user capacity (100+ users)
@@ -683,32 +683,32 @@ async def health_check():
 
 ### Phase 3.4: Collaboration Features (Weeks 8-9)
 
-#### Week 8: Real-time Infrastructure
+#### Real-time Infrastructure
 
-**Days 1-3: WebSocket Service**
+**WebSocket Service**
 
 - [ ] Implement real-time notification service (port 8012)
 - [ ] Create WebSocket connection management
 - [ ] Add event broadcasting and message routing
 - [ ] Test real-time communication reliability
 
-**Days 4-7: Collaboration Features**
+**Collaboration Features**
 
 - [ ] Implement document collaboration capabilities
 - [ ] Add live cursor tracking and editing
 - [ ] Create comment and annotation systems
 - [ ] Test multi-user collaboration workflows
 
-#### Week 9: Team Management
+#### Team Management
 
-**Days 1-4: Team Coordination**
+**Team Coordination**
 
 - [ ] Create shared research workspace management
 - [ ] Implement team notification systems
 - [ ] Add conflict resolution for concurrent edits
 - [ ] Test collaborative research scenarios
 
-**Days 5-7: Collaboration Testing**
+**Collaboration Testing**
 
 - [ ] Validate real-time latency (< 200ms)
 - [ ] Test collaborative editing reliability
@@ -717,32 +717,32 @@ async def health_check():
 
 ### Phase 3.5: Production Deployment (Weeks 10-11)
 
-#### Week 10: Infrastructure and DevOps
+#### Infrastructure and DevOps
 
-**Days 1-3: Kubernetes Setup**
+**Kubernetes Setup**
 
 - [ ] Set up Kubernetes cluster infrastructure
 - [ ] Create service deployment manifests
 - [ ] Implement auto-scaling and resource management
 - [ ] Test cluster operations and management
 
-**Days 4-7: CI/CD Pipeline**
+**CI/CD Pipeline**
 
 - [ ] Implement continuous integration pipelines
 - [ ] Create automated testing and deployment
 - [ ] Add rollback and blue-green deployment
 - [ ] Test end-to-end deployment automation
 
-#### Week 11: Production Validation
+#### Production Validation
 
-**Days 1-4: Monitoring and Alerting**
+**Monitoring and Alerting**
 
 - [ ] Set up Prometheus metrics collection
 - [ ] Create Grafana dashboards and visualizations
 - [ ] Implement alerting rules and escalation
 - [ ] Test monitoring coverage and accuracy
 
-**Days 5-7: Final Validation**
+**Final Validation**
 
 - [ ] Execute comprehensive end-to-end testing
 - [ ] Perform final security and performance validation

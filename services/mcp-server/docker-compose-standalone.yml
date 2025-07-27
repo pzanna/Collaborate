@@ -1,0 +1,78 @@
+# Enhanced MCP Server - Phase 3 Standalone Service
+version: "3.8"
+
+services:
+  # Enhanced MCP Server (Standalone)
+  mcp-server:
+    build: .
+    container_name: eunice-mcp-server-standalone
+    ports:
+      - "9000:9000" # MCP WebSocket port
+      - "8080:8080" # Health check port
+      - "9090:9090" # Metrics port
+    environment:
+      # Core Configuration
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=9000
+      - MCP_MAX_CONNECTIONS=1000
+      # External Dependencies (from root orchestration)
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+      - REDIS_URL=redis://redis:6379
+      - REDIS_MAX_CONNECTIONS=100
+      # Agent Configuration
+      - AGENT_REGISTRY_TTL=300
+      - HEARTBEAT_INTERVAL=30
+      # Task Management
+      - MCP_MAX_CONCURRENT_TASKS=100
+      - MCP_TASK_TIMEOUT=300
+      - MCP_RETRY_ATTEMPTS=3
+      # Load Balancing
+      - LOAD_BALANCE_STRATEGY=adaptive
+      - CIRCUIT_BREAKER_ENABLED=true
+      # Security
+      - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
+      # Monitoring
+      - ENABLE_METRICS=true
+      - METRICS_PORT=9090
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      # Health Check
+      - HEALTH_CHECK_ENABLED=true
+      - HEALTH_CHECK_INTERVAL=30
+      # Allowed Agent Types
+      - ALLOWED_AGENT_TYPES=research_manager,literature_search,screening_prisma,synthesis_review,writer,planning,executor,memory
+    volumes:
+      - mcp_logs:/app/logs
+      - mcp_data:/app/data
+    networks:
+      - eunice-mcp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "validate.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
+volumes:
+  mcp_logs:
+    name: eunice-mcp-logs
+  mcp_data:
+    name: eunice-mcp-data
+
+networks:
+  eunice-mcp:
+    driver: bridge
+    name: eunice-mcp-network
+    labels:
+      - "com.eunice.service=mcp-server"
+      - "com.eunice.phase=phase3"

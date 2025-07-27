@@ -18,6 +18,9 @@ services:
       - MCP_SERVER_HOST=mcp-server
       - MCP_SERVER_PORT=9000
 
+      # Database Service Configuration
+      - DATABASE_SERVICE_URL=http://eunice-database-service:8011
+
       # Logging
       - LOG_LEVEL=INFO
 
@@ -48,36 +51,6 @@ services:
       - "com.eunice.service=api-gateway"
       - "com.eunice.version=3.0.0"
       - "com.eunice.phase=phase3"
-
-  # MCP Server Service (existing from Phase 2)
-  mcp-server:
-    build:
-      context: ../mcp-server
-      dockerfile: Dockerfile
-    container_name: eunice-mcp-server
-    ports:
-      - "9000:9000"
-    environment:
-      - LOG_LEVEL=INFO
-      - PORT=9000
-      - HOST=0.0.0.0
-
-    networks:
-      - eunice-network
-
-    restart: unless-stopped
-
-    healthcheck:
-      test: ["CMD", "python", "validate.py"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-    labels:
-      - "com.eunice.service=mcp-server"
-      - "com.eunice.version=2.0.0"
-      - "com.eunice.phase=phase2-enhanced"
 
   # Development Tools (optional)
   nginx:

@@ -46,6 +46,19 @@ from models import (
 # Import database service client for direct read access
 from database_client import DatabaseServiceClient
 
+# Import hierarchical data models for v2 endpoints
+from src.data_models.hierarchical_data_models import (
+    # Request models
+    ProjectRequest, ResearchTopicRequest, ResearchPlanRequest, TaskRequest,
+    # Update models
+    ProjectUpdate, ResearchTopicUpdate, ResearchPlanUpdate, TaskUpdate,
+    # Response models
+    ProjectResponse as HierarchicalProjectResponse, ResearchTopicResponse, 
+    ResearchPlanResponse, TaskResponse,
+    # Utility models  
+    SuccessResponse, ProjectHierarchy, ProjectStats, TopicStats, PlanStats
+)
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, Config.LOG_LEVEL.upper()),
@@ -459,10 +472,31 @@ async def get_task_status(task_id: str):
 
 
 @app.delete("/tasks/{task_id}")
-async def cancel_task(task_id: str):
-    """Cancel a research task."""
-    # Implementation depends on MCP server capabilities
-    return {"message": "Cancel functionality not yet implemented"}
+@app.delete("/tasks/{task_id}")
+async def delete_task_v2(task_id: str = Path(..., description="Task ID")):
+    """Delete a task via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="delete_task",
+            payload={"task_id": task_id},
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success:
+            return {"message": "Task deleted successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete task via MCP")
+            
+    except Exception as e:
+        logger.error(f"Task deletion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Enhanced endpoints matching Phase 2 functionality
 
 
 # Enhanced endpoints matching Phase 2 functionality
@@ -741,6 +775,529 @@ async def delete_project(project_id: str):
     except Exception as e:
         logger.error(f"Project deletion error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# V2 HIERARCHICAL RESEARCH ENDPOINTS
+# ==========================================
+
+# Research Topic Endpoints
+@app.post("/projects/{project_id}/topics", response_model=ResearchTopicResponse)
+async def create_research_topic(
+    request: ResearchTopicRequest,
+    project_id: str = Path(..., description="Project ID")
+):
+    """Create a new research topic for a project via MCP server (WRITE operation)."""
+    try:
+        # Create database write task via dedicated database agent (per architecture)
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="create_research_topic",
+            payload={
+                "project_id": project_id,
+                "topic_data": request.dict()
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            # Return the created topic data from MCP response
+            return ResearchTopicResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create research topic via MCP")
+            
+    except Exception as e:
+        logger.error(f"Topic creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/projects/{project_id}/topics", response_model=List[ResearchTopicResponse])
+async def list_research_topics(
+    project_id: str = Path(..., description="Project ID"),
+    status: Optional[str] = Query(None, description="Filter by topic status"),
+    limit: Optional[int] = Query(None, description="Limit number of results")
+):
+    """List research topics for a project via MCP server (READ operation)."""
+    try:
+        # For now, use MCP server for topics until database service supports them
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="list_research_topics",
+            payload={
+                "project_id": project_id,
+                "status_filter": status,
+                "limit": limit
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            topics = mcp_response.data if isinstance(mcp_response.data, list) else []
+            return [ResearchTopicResponse(**topic) for topic in topics]
+        else:
+            return []  # Return empty list if no topics found
+        
+    except Exception as e:
+        logger.error(f"Topic listing error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/topics/{topic_id}", response_model=ResearchTopicResponse)
+async def get_research_topic(topic_id: str = Path(..., description="Topic ID")):
+    """Get a specific research topic via MCP server (READ operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="get_research_topic",
+            payload={"topic_id": topic_id},
+            priority="normal", 
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return ResearchTopicResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Topic retrieval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/topics/{topic_id}", response_model=ResearchTopicResponse)
+async def update_research_topic(
+    request: ResearchTopicUpdate,
+    topic_id: str = Path(..., description="Topic ID")
+):
+    """Update a research topic via MCP server (WRITE operation)."""
+    try:
+        # Create database write task via dedicated database agent (per architecture)
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="update_research_topic",
+            payload={
+                "topic_id": topic_id,
+                "topic_data": request.dict(exclude_unset=True)
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return ResearchTopicResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update research topic via MCP")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Topic update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/topics/{topic_id}", response_model=SuccessResponse)
+async def delete_research_topic(topic_id: str = Path(..., description="Topic ID")):
+    """Delete a research topic via MCP server (WRITE operation)."""
+    try:
+        # Create database write task via dedicated database agent (per architecture)
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="delete_research_topic",
+            payload={"topic_id": topic_id},
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success:
+            return SuccessResponse(message="Research topic deleted successfully")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete research topic via MCP")
+            
+    except Exception as e:
+        logger.error(f"Topic deletion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Research Plan Endpoints
+@app.post("/topics/{topic_id}/plans", response_model=ResearchPlanResponse)
+async def create_research_plan(
+    request: ResearchPlanRequest,
+    topic_id: str = Path(..., description="Topic ID")
+):
+    """Create a new research plan for a topic via MCP server (WRITE operation)."""
+    try:
+        # Create database write task via dedicated database agent (per architecture)
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="create_research_plan",
+            payload={
+                "topic_id": topic_id,
+                "plan_data": request.dict()
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return ResearchPlanResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create research plan via MCP")
+            
+    except Exception as e:
+        logger.error(f"Plan creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/topics/{topic_id}/plans", response_model=List[ResearchPlanResponse])
+async def list_research_plans(
+    topic_id: str = Path(..., description="Topic ID"),
+    status: Optional[str] = Query(None, description="Filter by plan status"),
+    limit: Optional[int] = Query(None, description="Limit number of results")
+):
+    """List research plans for a topic via MCP server (READ operation).""" 
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="list_research_plans",
+            payload={
+                "topic_id": topic_id,
+                "status_filter": status,
+                "limit": limit
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            plans = mcp_response.data if isinstance(mcp_response.data, list) else []
+            return [ResearchPlanResponse(**plan) for plan in plans]
+        else:
+            return []
+        
+    except Exception as e:
+        logger.error(f"Plan listing error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/plans/{plan_id}", response_model=ResearchPlanResponse)
+async def get_research_plan(plan_id: str = Path(..., description="Plan ID")):
+    """Get a specific research plan via MCP server (READ operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="get_research_plan",
+            payload={"plan_id": plan_id},
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return ResearchPlanResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Plan retrieval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/plans/{plan_id}", response_model=ResearchPlanResponse)
+async def update_research_plan(
+    request: ResearchPlanUpdate,
+    plan_id: str = Path(..., description="Plan ID")
+):
+    """Update a research plan via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="update_research_plan",
+            payload={
+                "plan_id": plan_id,
+                "plan_data": request.dict(exclude_unset=True)
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return ResearchPlanResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update research plan via MCP")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Plan update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/plans/{plan_id}", response_model=SuccessResponse)
+async def delete_research_plan(plan_id: str = Path(..., description="Plan ID")):
+    """Delete a research plan via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="delete_research_plan",
+            payload={"plan_id": plan_id},
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success:
+            return SuccessResponse(message="Research plan deleted successfully")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete research plan via MCP")
+            
+    except Exception as e:
+        logger.error(f"Plan deletion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/plans/{plan_id}/approve", response_model=ResearchPlanResponse)
+async def approve_research_plan(plan_id: str = Path(..., description="Plan ID")):
+    """Approve a research plan via MCP server (WRITE operation).""" 
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="approve_research_plan",
+            payload={"plan_id": plan_id},
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return ResearchPlanResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to approve research plan via MCP")
+            
+    except Exception as e:
+        logger.error(f"Plan approval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Task Endpoints
+@app.post("/plans/{plan_id}/tasks", response_model=TaskResponse)
+async def create_task(
+    request: TaskRequest,
+    plan_id: str = Path(..., description="Plan ID")
+):
+    """Create a new task for a plan via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="create_task",
+            payload={
+                "plan_id": plan_id,
+                "task_data": request.dict()
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return TaskResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create task via MCP")
+            
+    except Exception as e:
+        logger.error(f"Task creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/plans/{plan_id}/tasks", response_model=List[TaskResponse])
+async def list_tasks(
+    plan_id: str = Path(..., description="Plan ID"),
+    status: Optional[str] = Query(None, description="Filter by task status"),
+    limit: Optional[int] = Query(None, description="Limit number of results")
+):
+    """List tasks for a plan via MCP server (READ operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="list_tasks",
+            payload={
+                "plan_id": plan_id,
+                "status_filter": status,
+                "limit": limit
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            tasks = mcp_response.data if isinstance(mcp_response.data, list) else []
+            return [TaskResponse(**task) for task in tasks]
+        else:
+            return []
+        
+    except Exception as e:
+        logger.error(f"Task listing error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/tasks/{task_id}", response_model=TaskResponse)
+async def get_task(task_id: str = Path(..., description="Task ID")):
+    """Get a specific task via MCP server (READ operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="get_task",
+            payload={"task_id": task_id},
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return TaskResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Task retrieval error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/tasks/{task_id}", response_model=TaskResponse)
+async def update_task(
+    request: TaskUpdate,
+    task_id: str = Path(..., description="Task ID")
+):
+    """Update a task via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="update_task",
+            payload={
+                "task_id": task_id,
+                "task_data": request.dict(exclude_unset=True)
+            },
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return TaskResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update task via MCP")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Task update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/tasks/{task_id}", response_model=SuccessResponse)
+async def delete_task(task_id: str = Path(..., description="Task ID")):
+    """Delete a task via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="delete_task",
+            payload={"task_id": task_id},
+            priority="normal",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success:
+            return SuccessResponse(message="Task deleted successfully")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete task via MCP")
+            
+    except Exception as e:
+        logger.error(f"Task deletion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/execute", response_model=TaskResponse)
+async def execute_task(task_id: str = Path(..., description="Task ID")):
+    """Execute a task via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="execute_task",
+            payload={"task_id": task_id},
+            priority="high",  # Higher priority for execution
+            timeout=600  # Longer timeout for execution
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success and mcp_response.data:
+            return TaskResponse(**mcp_response.data)
+        else:
+            raise HTTPException(status_code=500, detail="Failed to execute task via MCP")
+            
+    except Exception as e:
+        logger.error(f"Task execution error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/cancel", response_model=SuccessResponse)
+async def cancel_task(task_id: str = Path(..., description="Task ID")):
+    """Cancel a task via MCP server (WRITE operation)."""
+    try:
+        research_request = ResearchRequest(
+            agent_type="database_agent",
+            action="cancel_task",
+            payload={"task_id": task_id},
+            priority="high",
+            timeout=300
+        )
+        
+        mcp_response = await gateway.handle_research_task(research_request)
+        
+        if mcp_response.success:
+            return SuccessResponse(message="Task cancelled successfully")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to cancel task via MCP")
+            
+    except Exception as e:
+        logger.error(f"Task cancellation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Signal handlers for graceful shutdown
 
 
 # Signal handlers for graceful shutdown
