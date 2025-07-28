@@ -400,51 +400,52 @@ class DatabaseAgentService:
             logger.error(f"Error deleting project: {e}")
             raise Exception(f"Database operation failed: {str(e)}")
 
-    # TODO: Implement other operations (topics, plans, tasks) following the same pattern
+    # NOTE: Research topic, plan, and task operations are placeholder implementations
+    # These will be implemented when the Database Service adds corresponding endpoints
     
     async def _create_topic(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Create a research topic via Database Service"""
-        # TODO: Implement when Database Service has topic endpoints
+        # Research topic endpoints are not yet available in Database Service
         return {"success": True, "message": "Topic operations not yet implemented"}
     
     async def _update_topic(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Update a research topic via Database Service"""
-        # TODO: Implement when Database Service has topic endpoints
+        # Research topic endpoints are not yet available in Database Service
         return {"success": True, "message": "Topic operations not yet implemented"}
     
     async def _delete_topic(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Delete a research topic via Database Service"""
-        # TODO: Implement when Database Service has topic endpoints
+        # Research topic endpoints are not yet available in Database Service
         return {"success": True, "message": "Topic operations not yet implemented"}
     
     async def _create_plan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Create a research plan via Database Service"""
-        # TODO: Implement when Database Service has plan endpoints
+        # Research plan endpoints are not yet available in Database Service
         return {"success": True, "message": "Plan operations not yet implemented"}
 
     async def _update_plan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Update a research plan via Database Service"""
-        # TODO: Implement when Database Service has plan endpoints
+        # Research plan endpoints are not yet available in Database Service
         return {"success": True, "message": "Plan operations not yet implemented"}
 
     async def _delete_plan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Delete a research plan via Database Service"""
-        # TODO: Implement when Database Service has plan endpoints
+        # Research plan endpoints are not yet available in Database Service
         return {"success": True, "message": "Plan operations not yet implemented"}
 
     async def _create_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Create a task via Database Service"""
-        # TODO: Implement when Database Service has task endpoints
+        # Task endpoints are not yet available in Database Service
         return {"success": True, "message": "Task operations not yet implemented"}
 
     async def _update_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Update a task via Database Service"""
-        # TODO: Implement when Database Service has task endpoints
+        # Task endpoints are not yet available in Database Service
         return {"success": True, "message": "Task operations not yet implemented"}
 
     async def _delete_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Delete a task via Database Service"""
-        # TODO: Implement when Database Service has task endpoints
+        # Task endpoints are not yet available in Database Service
         return {"success": True, "message": "Task operations not yet implemented"}
 
 

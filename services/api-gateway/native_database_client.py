@@ -620,7 +620,7 @@ class NativeDatabaseClient:
                     "topics_count": stats_row['topics_count'],
                     "plans_count": stats_row['plans_count'], 
                     "tasks_count": total_tasks,
-                    "total_cost": 0.0,  # TODO: Implement cost calculation when cost columns exist
+                    "total_cost": 0.0,  # Cost calculation will be implemented when cost columns are added to database
                     "completion_rate": completion_rate
                 }
                 
