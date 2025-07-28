@@ -99,7 +99,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 7. Database Agent (Port 8011) - Moved to correct port per architecture
+  # 8. Database Agent (Port 8011) - Moved to correct port per architecture
   database-agent:
     build: ./agents/database
     container_name: eunice-database-agent
@@ -124,7 +124,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 8. Executor Agent (Port 8008)
+  # 9. Executor Agent (Port 8008)
   executor-agent:
     build: ./agents/executor
     container_name: eunice-executor-agent
@@ -147,7 +147,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 9. Memory Agent Service (Port 8009)
+  # 10. Memory Agent Service (Port 8009)
   memory-agent:
     build: ./agents/memory
     container_name: eunice-memory-agent
@@ -216,7 +216,34 @@ services:
       timeout: 10s
       retries: 3
 
-  # 8. Database (Pure Database Management - No API)
+  # 7. Screening PRISMA Agent (Port 8004) - SECURITY UPDATED
+  screening-agent:
+    build: ./agents/screening
+    image: eunice/screening-agent:secure
+    container_name: eunice-screening-agent
+    ports:
+      - "8004:8004"
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8004
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=screening
+      - LOG_LEVEL=INFO
+      # Security: Additional environment hardening
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 11. Database (Pure Database Management - No API)
   database-service:
     build: ./services/database
     container_name: eunice-database

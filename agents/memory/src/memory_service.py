@@ -94,8 +94,8 @@ class MemoryAgentService:
         self.service_port = config.get("service_port", 8009)
         self.mcp_server_url = config.get("mcp_server_url", "ws://mcp-server:9000")
         
-        # Memory configuration
-        self.memory_db_path = Path("/tmp/memory_agent_data/memory.db")
+        # Memory configuration - Use /app/data for writable storage in secure containers
+        self.memory_db_path = Path("/app/data/memory.db")
         self.max_memory_size = config.get("max_memory_size", 10000)
         self.importance_threshold = config.get("importance_threshold", 0.3)
         self.consolidation_interval = config.get("consolidation_interval", 3600)
@@ -223,7 +223,7 @@ class MemoryAgentService:
         ]
         
         registration_message = {
-            "type": "register",
+            "type": "agent_register",
             "agent_id": self.agent_id,
             "agent_type": self.agent_type,
             "capabilities": capabilities,

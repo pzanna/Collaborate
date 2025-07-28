@@ -1,0 +1,22 @@
+# Screening Agent - Alpine Security-Optimized Requirements
+# Pin all dependencies to latest secure versions (January 2025)
+
+# Core Framework (Latest secure versions)
+fastapi==0.115.6
+uvicorn==0.32.1
+
+# WebSocket & HTTP (Latest stable)
+websockets==14.1
+
+# Data Validation & Parsing (Latest)
+pydantic==2.10.4
+
+# Security Fix: python-multipart updated to latest secure version
+python-multipart==0.0.18
+
+# Security: Explicit security packages (Alpine-optimized)
+cryptography==45.0.5
+certifi==2025.7.14
+
+# Additional Alpine-specific optimizations
+wheel==0.45.1

@@ -1,0 +1,52 @@
+# Security-Enhanced Docker Compose Service Definition
+# Add this to docker-compose.yml for the screening-agent service
+
+screening-agent:
+  build:
+    context: ./agents/screening
+    dockerfile: Dockerfile.secure # Use secure Dockerfile
+  container_name: eunice-screening-agent
+  ports:
+    - "8004:8004"
+  environment:
+    - SERVICE_HOST=0.0.0.0
+    - SERVICE_PORT=8004
+    - MCP_SERVER_URL=ws://mcp-server:9000
+    - AGENT_TYPE=screening
+    - LOG_LEVEL=INFO
+    # Security: Disable Python bytecode generation
+    - PYTHONDONTWRITEBYTECODE=1
+    # Security: Force unbuffered output
+    - PYTHONUNBUFFERED=1
+    # Security: Disable Python user site directory
+    - PYTHONNOUSERSITE=1
+  networks:
+    - eunice-microservices
+  depends_on:
+    - mcp-server
+  restart: unless-stopped
+  # Security: Resource limits to prevent DoS
+  deploy:
+    resources:
+      limits:
+        cpus: "0.5"
+        memory: 512M
+      reservations:
+        cpus: "0.1"
+        memory: 128M
+  # Security: Read-only root filesystem
+  read_only: true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=100m
+  # Security: Drop all capabilities
+  cap_drop:
+    - ALL
+  # Security: Prevent privilege escalation
+  security_opt:
+    - no-new-privileges:true
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 15s
