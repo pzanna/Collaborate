@@ -22,12 +22,12 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("simple_mcp_server")
+logger = logging.getLogger("mcp_server")
 
 
-class SimpleMCPServer:
-    """Simple MCP Server for testing connectivity"""
-    
+class MCPServer:
+    """MCP Server for testing connectivity"""
+
     def __init__(self, host: str = "0.0.0.0", port: int = 9000):
         self.host = host
         self.port = port
@@ -371,7 +371,7 @@ class SimpleMCPServer:
 
 async def main():
     """Main entry point"""
-    server = SimpleMCPServer(
+    server = MCPServer(
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", "9000"))
     )

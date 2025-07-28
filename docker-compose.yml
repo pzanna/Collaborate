@@ -47,7 +47,7 @@ services:
       - redis
       - postgres
     restart: unless-stopped
-    command: ["python", "simple_mcp_server.py"]
+    command: ["python", "mcp_server.py"]
     healthcheck:
       test:
         [
@@ -99,7 +99,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 6. Database Agent (Port 8011) - Moved to correct port per architecture
+  # 7. Database Agent (Port 8011) - Moved to correct port per architecture
   database-agent:
     build: ./agents/database
     container_name: eunice-database-agent
@@ -124,7 +124,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 7. Executor Agent (Port 8008)
+  # 8. Executor Agent (Port 8008)
   executor-agent:
     build: ./agents/executor
     container_name: eunice-executor-agent
@@ -147,7 +147,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 4. Memory Agent Service (Port 8009)
+  # 9. Memory Agent Service (Port 8009)
   memory-agent:
     build: ./agents/memory
     container_name: eunice-memory-agent
@@ -170,10 +170,10 @@ services:
       timeout: 10s
       retries: 3
 
-  # 5. Research Manager Agent (Port 8002)
+    # 5. Research Manager Agent (Port 8002)
   research-manager-agent:
     build: ./agents/research-manager
-    container_name: eunice-research-manager-agent
+    container_name: eunice-research-manager
     ports:
       - "8002:8002"
     environment:
@@ -193,10 +193,33 @@ services:
       timeout: 10s
       retries: 3
 
-  # 8. Database Service (Pure Database Management - No API)
+  # 6. Literature Search Agent (Port 8003)
+  literature-agent:
+    build: ./agents/literature
+    container_name: eunice-literature-agent
+    ports:
+      - "8003:8003"
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8003
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=literature
+      - LOG_LEVEL=INFO
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 8. Database (Pure Database Management - No API)
   database-service:
     build: ./services/database
-    container_name: eunice-database-service
+    container_name: eunice-database
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - REDIS_URL=redis://redis:6379
