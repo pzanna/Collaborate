@@ -22,7 +22,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy base MCP agent
-COPY ../base_mcp_agent.py ./base_mcp_agent.py
+COPY ./base_mcp_agent.py ./base_mcp_agent.py
 
 # Copy source code
 COPY src/ ./src/

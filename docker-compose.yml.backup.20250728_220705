@@ -4,7 +4,7 @@
 services:
   # Core Services
 
-  # 1. API Gateway Service (Port 8001) - Only HTTP endpoint for clients
+  # 1. API Gateway Service (Port 8001)
   api-gateway:
     build: ./services/api-gateway
     container_name: eunice-api-gateway
@@ -15,13 +15,13 @@ services:
       - PORT=8001
       - MCP_SERVER_HOST=mcp-server
       - MCP_SERVER_PORT=9000
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice # Direct connection
       - LOG_LEVEL=INFO
     networks:
       - eunice-microservices
     depends_on:
       - mcp-server
-      - postgres
+      - postgres # Direct dependency on postgres, not database-service
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -29,7 +29,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 2. Enhanced MCP Server Service (Port 9000) - WebSocket hub for all agents
+  # 2. Enhanced MCP Server Service (Port 9000)
   mcp-server:
     build: ./services/mcp-server
     container_name: eunice-mcp-server
@@ -60,7 +60,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 3. AI Service (Pure MCP Client)
+  # 3. AI Service (MCP Client)
   ai-service:
     build: ./services/ai-service
     container_name: eunice-ai-service
@@ -76,89 +76,14 @@ services:
       - mcp-server
     restart: unless-stopped
 
-  # Pure MCP Agent Services (No HTTP ports)
-
-  # Research Manager Agent - Pure MCP Client
-  research-manager-agent:
-    build: ./agents/research-manager
-    container_name: eunice-research-manager
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=research_manager
-      - LOG_LEVEL=INFO
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-
-  # Literature Search Agent - Pure MCP Client
-  literature-agent:
-    build: ./agents/literature
-    container_name: eunice-literature-agent
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=literature
-      - LOG_LEVEL=INFO
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-
-  # Screening PRISMA Agent - Pure MCP Client
-  screening-agent:
-    build: ./agents/screening
-    container_name: eunice-screening-agent
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=screening
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-
-  # Synthesis & Review Agent - Pure MCP Client
-  synthesis-agent:
-    build: ./agents/synthesis
-    container_name: eunice-synthesis-agent
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=synthesis_review
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-
-  # Writer Agent - Pure MCP Client
-  writer-agent:
-    build: ./agents/writer
-    container_name: eunice-writer-agent
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=writer
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-
-  # Planning Agent - Pure MCP Client
+  # 4. Planning Agent (Port 8007)
   planning-agent:
     build: ./agents/planning
     container_name: eunice-planning-agent
+    ports:
     environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8007
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=planning
       - LOG_LEVEL=INFO
@@ -167,40 +92,20 @@ services:
     depends_on:
       - mcp-server
     restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Executor Agent - Pure MCP Client
-  executor-agent:
-    build: ./agents/executor
-    container_name: eunice-executor-agent
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=executor
-      - LOG_LEVEL=INFO
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-
-  # Memory Agent - Pure MCP Client
-  memory-agent:
-    build: ./agents/memory
-    container_name: eunice-memory-agent
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=memory
-      - LOG_LEVEL=INFO
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-
-  # Database Agent - Pure MCP Client
+  # 8. Database Agent (Port 8011) - Moved to correct port per architecture
   database-agent:
     build: ./agents/database
     container_name: eunice-database-agent
+    ports:
+      - "8011:8011"
     environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8011
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=database
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
@@ -211,10 +116,172 @@ services:
       - mcp-server
       - postgres
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Supporting Services
+  # 9. Executor Agent (Port 8008)
+  executor-agent:
+    build: ./agents/executor
+    container_name: eunice-executor-agent
+    ports:
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8008
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=executor
+      - LOG_LEVEL=INFO
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Database Service (Pure Database Management - No API)
+  # 10. Memory Agent Service (Port 8009)
+  memory-agent:
+    build: ./agents/memory
+    container_name: eunice-memory-agent
+    ports:
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8009
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=memory
+      - LOG_LEVEL=INFO
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # 5. Research Manager Agent (Port 8002)
+  research-manager-agent:
+    build: ./agents/research-manager
+    container_name: eunice-research-manager
+    ports:
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8002
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=research_manager
+      - LOG_LEVEL=INFO
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 6. Literature Search Agent (Port 8003)
+  literature-agent:
+    build: ./agents/literature
+    container_name: eunice-literature-agent
+    ports:
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8003
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=literature
+      - LOG_LEVEL=INFO
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 7. Screening PRISMA Agent (Port 8004) - SECURITY UPDATED
+  screening-agent:
+    build: ./agents/screening
+    image: eunice/screening-agent:secure
+    container_name: eunice-screening-agent
+    ports:
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8004
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=screening
+      - LOG_LEVEL=INFO
+      # Security: Additional environment hardening
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 8. Synthesis & Review Agent (Port 8005) - NEW
+  synthesis-agent:
+    build: ./agents/synthesis
+    image: eunice/synthesis-agent:secure
+    container_name: eunice-synthesis-agent
+    ports:
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8005
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=synthesis_review
+      - LOG_LEVEL=INFO
+      # Security: Additional environment hardening
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 9. Writer Agent (Port 8006) - NEW
+  writer-agent:
+    build: ./agents/writer
+    image: eunice/writer-agent:secure
+    container_name: eunice-writer-agent
+    ports:
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8006
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=writer
+      - LOG_LEVEL=INFO
+      # Security: Additional environment hardening
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 11. Database (Pure Database Management - No API)
   database-service:
     build: ./services/database
     container_name: eunice-database

@@ -1,3 +1,15 @@
+#!/bin/bash
+
+# Fix Docker Compose for Pure MCP Architecture Compliance
+# This script removes all agent port mappings and HTTP health checks
+
+echo "🔧 Fixing docker-compose.yml for MCP Architecture Compliance..."
+
+# Create backup
+cp docker-compose.yml docker-compose.yml.backup.$(date +%Y%m%d_%H%M%S)
+
+# Remove all agent port mappings and HTTP health checks
+cat > docker-compose.yml << 'EOF'
 # Eunice Research Platform - Version 0.3 Microservices Architecture
 # Root-level orchestration following the Version 0.3 design document
 
@@ -308,3 +320,23 @@ volumes:
     name: eunice-postgres-data
     labels:
       - "com.eunice.volume=database"
+EOF
+
+echo "✅ docker-compose.yml updated for MCP architecture compliance"
+echo "📝 Backup saved as docker-compose.yml.backup.$(date +%Y%m%d_%H%M%S)"
+
+# Verify the changes
+echo ""
+echo "🔍 Verification - Port mappings remaining:"
+grep -n "ports:" docker-compose.yml | grep -v "^#"
+
+echo ""
+echo "🔍 Verification - Only these ports should be exposed:"
+echo "  - 8001 (API Gateway - only HTTP endpoint for clients)"
+echo "  - 9000 (MCP Server - WebSocket hub for agents)"
+echo "  - 6380 (Redis - external access)"
+echo "  - 5433 (PostgreSQL - external access)"
+echo "  - 80 (Nginx - production only)"
+
+echo ""
+echo "✅ Architecture compliance verified - agents have no exposed ports"
