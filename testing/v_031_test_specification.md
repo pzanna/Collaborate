@@ -39,6 +39,10 @@ This document provides a detailed specification for testing all components up to
   - Run automated vulnerability scans (e.g., OWASP ZAP, Trivy, Docker Scout).
   - Validate no critical vulnerabilities are present.
 
+- **Code Quality and Security Checks:**
+  - Do a complete secure code review using: Bandit, Semgrep, and GitHub CodeQL
+  - Do a quality and maintainability review using: Flake8, Pylint, and Mypy
+
 - **Audit Logging:**
   - Check all services produce compliant logs for authentication events, RBAC authorization attempts, and system errors.
 

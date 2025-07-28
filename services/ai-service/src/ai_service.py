@@ -615,7 +615,7 @@ class AIService:
         """Generate cache key for request"""
         # Create a hash of the request parameters for caching
         cache_str = json.dumps(request_data, sort_keys=True)
-        return f"ai_response:{hashlib.md5(cache_str.encode()).hexdigest()}"
+        return f"ai_response:{hashlib.md5(cache_str.encode(), usedforsecurity=False).hexdigest()}"
     
     async def chat_completion(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         """Generate chat completion using selected AI provider with caching"""

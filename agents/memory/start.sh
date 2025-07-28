@@ -27,8 +27,4 @@ done
 
 # Start the Memory Agent Service
 echo "Starting Memory Agent Service on port 8009..."
-exec python -m uvicorn src.memory_service:app \
-    --host 0.0.0.0 \
-    --port 8009 \
-    --log-level info \
-    --access-log
+exec python src/memory_service.py

@@ -165,14 +165,12 @@ class MemoryAgentService:
             # Connect to MCP server
             await self._connect_to_mcp_server()
             
-            # Start task processing
-            asyncio.create_task(self._process_task_queue())
-            
-            # Start periodic consolidation
-            asyncio.create_task(self._periodic_consolidation())
-            
-            # Listen for MCP messages
-            await self._listen_for_tasks()
+            # Start task processing and listening concurrently
+            await asyncio.gather(
+                self._process_task_queue(),
+                self._periodic_consolidation(),
+                self._listen_for_tasks()
+            )
             
             logger.info("Memory Agent Service started successfully")
             
@@ -359,19 +357,17 @@ class MemoryAgentService:
             raise Exception("WebSocket connection not available")
             
         registration_message = {
-            "jsonrpc": "2.0",
-            "method": "agent/register",
-            "params": {
-                "agent_id": self.agent_id,
-                "agent_type": self.agent_type,
-                "capabilities": self.capabilities,
-                "service_info": {
+            "type": "agent_register",
+            "agent_id": self.agent_id,
+            "agent_type": self.agent_type,
+            "capabilities": self.capabilities,
+            "timestamp": datetime.now().isoformat(),
+            "service_info": {
                     "host": self.service_host,
                     "port": self.service_port,
                     "health_endpoint": f"http://{self.service_host}:{self.service_port}/health"
                 }
-            },
-            "id": f"register_{self.agent_id}"
+            
         }
         
         await self.websocket.send(json.dumps(registration_message))
@@ -904,6 +900,7 @@ class MemoryAgentService:
             "agent_type": self.agent_type,
             "status": "ready" if self.mcp_connected else "disconnected",
             "capabilities": self.capabilities,
+            "timestamp": datetime.now().isoformat(),
             "mcp_connected": self.mcp_connected,
             "memory_cache_size": len(self.memory_cache),
             "knowledge_nodes": len(self.knowledge_cache),

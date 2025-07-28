@@ -109,11 +109,11 @@ class DatabaseAgentService:
             # Connect to MCP server
             await self._connect_to_mcp_server()
             
-            # Start task processing
-            asyncio.create_task(self._process_task_queue())
-            
-            # Listen for MCP messages
-            await self._listen_for_tasks()
+            # Start task processing and listening concurrently
+            await asyncio.gather(
+                self._process_task_queue(),
+                self._listen_for_tasks()
+            )
             
             logger.info("Database Agent Service started successfully")
             
@@ -207,19 +207,16 @@ class DatabaseAgentService:
             raise Exception("WebSocket connection not available")
             
         registration_message = {
-            "jsonrpc": "2.0",
-            "method": "agent/register",
-            "params": {
-                "agent_id": self.agent_id,
-                "agent_type": self.agent_type,
-                "capabilities": self.capabilities,
-                "service_info": {
-                    "host": self.service_host,
-                    "port": self.service_port,
-                    "health_endpoint": f"http://{self.service_host}:{self.service_port}/health"
-                }
-            },
-            "id": f"register_{self.agent_id}"
+            "type": "agent_register",
+            "agent_id": self.agent_id,
+            "agent_type": self.agent_type,
+            "capabilities": self.capabilities,
+            "timestamp": datetime.now().isoformat(),
+            "service_info": {
+                "host": self.service_host,
+                "port": self.service_port,
+                "health_endpoint": f"http://{self.service_host}:{self.service_port}/health"
+            }
         }
         
         await self.websocket.send(json.dumps(registration_message))
@@ -240,7 +237,9 @@ class DatabaseAgentService:
                     
                 try:
                     data = json.loads(message)
+                    logger.info(f"Received message from MCP server: {data}")
                     await self.task_queue.put(data)
+                    logger.info("Message added to task queue")
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse MCP message: {e}")
                 except Exception as e:
@@ -258,106 +257,117 @@ class DatabaseAgentService:
     
     async def _process_task_queue(self):
         """Process tasks from the MCP queue."""
+        logger.info("Task queue processor started")
         while self.should_run:
             try:
                 # Get task from queue
+                logger.info("Waiting for task from queue")
                 task_data = await self.task_queue.get()
-                
+                logger.info(f"Got task from queue: {task_data}")
+
                 # Process the task
+                logger.info("About to process database task")
                 result = await self._process_database_task(task_data)
-                
+                logger.info(f"Task processing result: {result}")
+
                 # Send result back to MCP server
                 if self.websocket and self.mcp_connected:
                     response = {
-                        "jsonrpc": "2.0",
-                        "id": task_data.get("id"),
-                        "result": result
+                        "type": "task_result",
+                        "task_id": task_data.get("task_id"),
+                        "result": result,
+                        "status": "completed",
+                        "timestamp": datetime.now().isoformat()
                     }
+                    logger.info(f"Sending response to MCP server: {response}")
                     await self.websocket.send(json.dumps(response))
-                
+                    logger.info("Response sent successfully")
+                else:
+                    logger.warning("No websocket connection to send response")
+
                 # Mark task as done
                 self.task_queue.task_done()
-                
+                logger.info("Task marked as done")
+
             except Exception as e:
                 logger.error(f"Error processing task: {e}")
+                logger.error(f"Task queue exception: {type(e).__name__}: {str(e)}")
+                import traceback
+                logger.error(f"Task queue traceback: {traceback.format_exc()}")
                 await asyncio.sleep(1)
     
     async def _process_database_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process a database-related task."""
+        logger.info("Entering _process_database_task method")
+        logger.info(f"Method received task_data type: {type(task_data)}")
         try:
-            method = task_data.get("method", "")
-            params = task_data.get("params", {})
+            logger.info(f"Full task data received: {task_data}")
+
+            # Handle both MCP formats:
+            # 1. {"type": "task_request", "task_type": "create_project", "data": {...}}
+            # 2. {"task_id": "...", "action": "create_project", "payload": {...}}
+            task_type = task_data.get("task_type", task_data.get("action", ""))
+            data = task_data.get("data", task_data.get("payload", {}))
             
-            # Route to appropriate handler
-            if method == "task/execute":
-                task_type = params.get("task_type", "")
-                data = params.get("data", {})
-                
-                # Project operations
-                if task_type == "create_project":
-                    return await self._handle_create_project(data)
-                elif task_type == "update_project":
-                    return await self._handle_update_project(data)
-                elif task_type == "delete_project":
-                    return await self._handle_delete_project(data)
-                
-                # Topic operations
-                elif task_type == "create_topic":
-                    return await self._handle_create_topic(data)
-                elif task_type == "update_topic":
-                    return await self._handle_update_topic(data)
-                elif task_type == "delete_topic":
-                    return await self._handle_delete_topic(data)
-                
-                # Plan operations
-                elif task_type == "create_plan":
-                    return await self._handle_create_plan(data)
-                elif task_type == "update_plan":
-                    return await self._handle_update_plan(data)
-                elif task_type == "delete_plan":
-                    return await self._handle_delete_plan(data)
-                
-                # Task operations
-                elif task_type == "create_task":
-                    return await self._handle_create_task(data)
-                elif task_type == "update_task":
-                    return await self._handle_update_task(data)
-                elif task_type == "delete_task":
-                    return await self._handle_delete_task(data)
-                
-                # Literature record operations
-                elif task_type == "create_literature_record":
-                    return await self._handle_create_literature_record(data)
-                elif task_type == "update_literature_record":
-                    return await self._handle_update_literature_record(data)
-                elif task_type == "delete_literature_record":
-                    return await self._handle_delete_literature_record(data)
-                
-                # Generic database operations
-                elif task_type == "database_operations":
-                    return await self._handle_database_operations(data)
-                elif task_type == "query_execution":
-                    return await self._handle_query_execution(data)
-                
-                else:
-                    return {
-                        "status": "failed",
-                        "error": f"Unknown task type: {task_type}",
-                        "timestamp": datetime.now().isoformat()
-                    }
-            elif method == "agent/ping":
-                return {"status": "alive", "timestamp": datetime.now().isoformat()}
-            elif method == "agent/status":
-                return await self._get_agent_status()
+            logger.info(f"Processing database task: {task_type}")
+            
+            # Project operations
+            if task_type == "create_project":
+                result = await self._handle_create_project(data)
+                return result
+            elif task_type == "update_project":
+                return await self._handle_update_project(data)
+            elif task_type == "delete_project":
+                return await self._handle_delete_project(data)
+            
+            # Topic operations
+            elif task_type == "create_topic":
+                return await self._handle_create_topic(data)
+            elif task_type == "update_topic":
+                return await self._handle_update_topic(data)
+            elif task_type == "delete_topic":
+                return await self._handle_delete_topic(data)
+            
+            # Plan operations
+            elif task_type == "create_plan":
+                return await self._handle_create_plan(data)
+            elif task_type == "update_plan":
+                return await self._handle_update_plan(data)
+            elif task_type == "delete_plan":
+                return await self._handle_delete_plan(data)
+            
+            # Task operations
+            elif task_type == "create_task":
+                return await self._handle_create_task(data)
+            elif task_type == "update_task":
+                return await self._handle_update_task(data)
+            elif task_type == "delete_task":
+                return await self._handle_delete_task(data)
+            
+            # Literature record operations
+            elif task_type == "create_literature_record":
+                return await self._handle_create_literature_record(data)
+            elif task_type == "update_literature_record":
+                return await self._handle_update_literature_record(data)
+            elif task_type == "delete_literature_record":
+                return await self._handle_delete_literature_record(data)
+            
+            # Generic database operations
+            elif task_type == "database_operations":
+                return await self._handle_database_operations(data)
+            elif task_type == "query_execution":
+                return await self._handle_query_execution(data)
+            
             else:
                 return {
                     "status": "failed",
-                    "error": f"Unknown method: {method}",
+                    "error": f"Unknown task type: {task_type}",
                     "timestamp": datetime.now().isoformat()
                 }
                 
         except Exception as e:
             logger.error(f"Error processing database task: {e}")
+            import traceback
             self.operations_failed += 1
             return {
                 "status": "failed",
@@ -368,28 +378,42 @@ class DatabaseAgentService:
     async def _handle_create_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle project creation request."""
         try:
+            logger.info(f"Creating project with data: {data}")
+            
             if not self.db_pool:
+                logger.error("Database pool not available")
                 raise Exception("Database pool not available")
                 
-            project_name = data.get("project_name", "")
+            # Handle different data formats from different sources
+            project_name = data.get("project_name", data.get("name", ""))
             description = data.get("description", "")
-            user_id = data.get("user_id", "")
+            user_id = data.get("user_id", data.get("created_by", "system"))  # Default to 'system' if no user_id
             
-            if not all([project_name, user_id]):
+            # Generate or use provided project ID
+            try:
+                project_id = data.get("id", str(uuid.uuid4()))  # Use provided ID or generate new one
+            except Exception as e:
+                logger.error(f"UUID generation error: {e}")
+                project_id = "temp-id-" + str(datetime.now().timestamp())
+            
+            logger.info(f"Extracted values - name: {project_name}, desc: {description}, user: {user_id}, id: {project_id}")
+            
+            if not project_name:
+                logger.error("Project name is required")
                 return {
                     "status": "failed",
-                    "error": "Project name and user ID are required",
+                    "error": "Project name is required",
                     "timestamp": datetime.now().isoformat()
                 }
             
-            project_id = str(uuid.uuid4())
-            
+            logger.info("Executing database insert")
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
-                    INSERT INTO projects (id, name, description, created_by, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                """, project_id, project_name, description, user_id, datetime.now(), datetime.now())
-            
+                    INSERT INTO projects (id, name, description, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5)
+                """, project_id, project_name, description, datetime.now(), datetime.now())
+
+            logger.info(f"Project created successfully with ID: {project_id}")
             self.operations_completed += 1
             
             return {

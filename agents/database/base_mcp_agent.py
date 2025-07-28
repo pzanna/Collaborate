@@ -178,20 +178,11 @@ class BaseMCPAgent(ABC):
     async def _register_agent(self):
         """Register this agent with MCP server."""
         registration = {
-            "jsonrpc": "2.0",
-            "method": "agent/register",
-            "params": {
-                "agent_id": self.agent_id,
-                "agent_type": self.agent_type,
-                "capabilities": self.get_capabilities(),
-                "status": "ready",
-                "metadata": {
-                    "version": "1.0.0",
-                    "description": f"{self.agent_type.title()} agent for research platform",
-                    "supported_protocols": ["MCP-JSON-RPC"],
-                    "started_at": datetime.now().isoformat()
-                }
-            }
+            "type": "agent_register",
+            "agent_id": self.agent_id,
+            "agent_type": self.agent_type,
+            "capabilities": self.get_capabilities(),
+            "timestamp": datetime.now().isoformat()
         }
         
         await self._send_message(registration)
@@ -401,13 +392,9 @@ class BaseMCPAgent(ABC):
             try:
                 if self.connected and self.websocket and not self.websocket.closed:
                     heartbeat = {
-                        "jsonrpc": "2.0",
-                        "method": "agent/heartbeat",
-                        "params": {
-                            "agent_id": self.agent_id,
-                            "status": "alive",
-                            "timestamp": datetime.now().isoformat()
-                        }
+                        "type": "heartbeat",
+                        "agent_id": self.agent_id,
+                        "timestamp": datetime.now().isoformat()
                     }
                     await self._send_message(heartbeat)
                 

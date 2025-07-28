@@ -176,18 +176,16 @@ class PlanningAgentService:
             return
             
         registration_message = {
-            "jsonrpc": "2.0",
-            "method": "agent/register",
-            "params": {
-                "agent_id": self.agent_id,
-                "agent_type": AGENT_TYPE,
+            "type": "agent_register",
+            "agent_id": self.agent_id,
+            "agent_type": AGENT_TYPE,
                 "capabilities": self.capabilities,
-                "service_info": {
+            "timestamp": datetime.now().isoformat(),
+            "service_info": {
                     "port": SERVICE_PORT,
                     "health_endpoint": f"http://localhost:{SERVICE_PORT}/health"
                 }
-            },
-            "id": f"register_{self.agent_id}"
+            
         }
         
         await self.websocket.send(json.dumps(registration_message))

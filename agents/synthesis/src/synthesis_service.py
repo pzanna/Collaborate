@@ -200,19 +200,17 @@ class SynthesisReviewService:
             raise Exception("WebSocket connection not available")
             
         registration_message = {
-            "jsonrpc": "2.0",
-            "method": "agent/register",
-            "params": {
-                "agent_id": self.agent_id,
-                "agent_type": self.agent_type,
-                "capabilities": self.capabilities,
-                "service_info": {
+            "type": "agent_register",
+            "agent_id": self.agent_id,
+            "agent_type": self.agent_type,
+            "capabilities": self.capabilities,
+            "timestamp": datetime.now().isoformat(),
+            "service_info": {
                     "host": self.service_host,
                     "port": self.service_port,
                     "health_endpoint": f"http://{self.service_host}:{self.service_port}/health"
                 }
-            },
-            "id": f"register_{self.agent_id}"
+            
         }
         
         await self.websocket.send(json.dumps(registration_message))
@@ -882,6 +880,7 @@ class SynthesisReviewService:
             "agent_type": self.agent_type,
             "status": "ready" if self.mcp_connected else "disconnected",
             "capabilities": self.capabilities,
+            "timestamp": datetime.now().isoformat(),
             "mcp_connected": self.mcp_connected,
             "evidence_tables": len(self.evidence_tables),
             "synthesis_sessions": len(self.synthesis_sessions),

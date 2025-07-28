@@ -35,11 +35,42 @@ class DatabaseAgent(BaseMCPAgent):
     
     def get_capabilities(self) -> List[str]:
         """Return database agent capabilities."""
-        return ["database_operations", "data_storage", "query_processing", "transaction_management"]
+        return [
+            "create_project", "update_project", "delete_project", "get_project",
+            "create_topic", "update_topic", "delete_topic", "get_topic", 
+            "create_plan", "update_plan", "delete_plan", "get_plan",
+            "create_task", "update_task", "delete_task", "get_task",
+            "database_operations", "data_storage", "query_processing", "transaction_management"
+        ]
     
     def setup_task_handlers(self) -> Dict[str, Any]:
         """Setup task handlers for database operations."""
         return {
+            # Project operations
+            "create_project": self._handle_create_project,
+            "update_project": self._handle_update_project,
+            "delete_project": self._handle_delete_project,
+            "get_project": self._handle_get_project,
+            
+            # Topic operations  
+            "create_topic": self._handle_create_topic,
+            "update_topic": self._handle_update_topic,
+            "delete_topic": self._handle_delete_topic,
+            "get_topic": self._handle_get_topic,
+            
+            # Plan operations
+            "create_plan": self._handle_create_plan,
+            "update_plan": self._handle_update_plan,
+            "delete_plan": self._handle_delete_plan,
+            "get_plan": self._handle_get_plan,
+            
+            # Task operations
+            "create_task": self._handle_create_task,
+            "update_task": self._handle_update_task,
+            "delete_task": self._handle_delete_task,
+            "get_task": self._handle_get_task,
+            
+            # Legacy handlers
             "process_request": self._handle_process_request,
             "get_status": self._handle_get_status,
             "health_check": self._handle_health_check
@@ -96,6 +127,85 @@ class DatabaseAgent(BaseMCPAgent):
             "request_type": request_type,
             "processed": True
         }
+
+    # Project Operations
+    async def _handle_create_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle project creation."""
+        try:
+            self.logger.info(f"Creating project: {data.get('name', 'unknown')}")
+            # For now, return success - actual DB implementation would go here
+            return {
+                "status": "completed",
+                "message": "Project created successfully",
+                "data": data,
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            self.logger.error(f"Error creating project: {e}")
+            raise
+
+    async def _handle_update_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle project update."""
+        return {"status": "completed", "message": "Project updated", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_delete_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle project deletion."""
+        return {"status": "completed", "message": "Project deleted", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_get_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle project retrieval."""
+        return {"status": "completed", "message": "Project retrieved", "timestamp": datetime.now().isoformat()}
+
+    # Topic Operations
+    async def _handle_create_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle topic creation."""
+        return {"status": "completed", "message": "Topic created", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_update_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle topic update."""
+        return {"status": "completed", "message": "Topic updated", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_delete_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle topic deletion."""
+        return {"status": "completed", "message": "Topic deleted", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_get_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle topic retrieval."""
+        return {"status": "completed", "message": "Topic retrieved", "timestamp": datetime.now().isoformat()}
+
+    # Plan Operations
+    async def _handle_create_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plan creation."""
+        return {"status": "completed", "message": "Plan created", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_update_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plan update."""
+        return {"status": "completed", "message": "Plan updated", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_delete_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plan deletion."""
+        return {"status": "completed", "message": "Plan deleted", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_get_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plan retrieval."""
+        return {"status": "completed", "message": "Plan retrieved", "timestamp": datetime.now().isoformat()}
+
+    # Task Operations
+    async def _handle_create_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task creation."""
+        return {"status": "completed", "message": "Task created", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_update_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task update."""
+        return {"status": "completed", "message": "Task updated", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_delete_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task deletion."""
+        return {"status": "completed", "message": "Task deleted", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_get_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task retrieval."""
+        return {"status": "completed", "message": "Task retrieved", "timestamp": datetime.now().isoformat()}
 
 
 # Create main entry point

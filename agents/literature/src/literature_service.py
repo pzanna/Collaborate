@@ -206,15 +206,11 @@ class LiteratureSearchService:
         ]
         
         registration_message = {
-            "type": "register",
+            "type": "agent_register",
             "agent_id": self.agent_id,
             "agent_type": self.agent_type,
             "capabilities": capabilities,
-            "service_info": {
-                "host": self.service_host,
-                "port": self.service_port,
-                "health_endpoint": f"http://{self.service_host}:{self.service_port}/health"
-            }
+            "timestamp": datetime.now().isoformat()
         }
         
         await self.websocket.send(json.dumps(registration_message))
@@ -912,7 +908,7 @@ class LiteratureSearchService:
         author_string = ', '.join(sorted([a.lower().strip() for a in authors]))
         content_string = f"{title}|{author_string}|{year}"
         
-        return hashlib.md5(content_string.encode()).hexdigest()
+        return hashlib.md5(content_string.encode(), usedforsecurity=False).hexdigest()
 
 
 # Request/Response models removed - NO DIRECT API ENDPOINTS ALLOWED

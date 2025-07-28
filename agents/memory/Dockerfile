@@ -48,6 +48,7 @@ RUN apk del gcc musl-dev g++ make linux-headers && \
 # Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
+COPY ./start.sh ./start.sh
 
 # Copy shared health check service
 COPY health_check_service.py ./health_check_service.py
@@ -57,8 +58,10 @@ RUN mkdir -p /app/data /app/tmp && \
     chown -R memoryagent:memoryagent /app && \
     chmod -R 750 /app && \
     chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
+    chmod +x /app/start.sh && \
     find /app -type d -exec chmod 750 {} \; && \
-    find /app -type f -exec chmod 640 {} \;
+    find /app -name "*.py" -exec chmod 640 {} \; && \
+    find /app -name "*.json" -exec chmod 640 {} \;
 
 # Switch to non-root user
 USER memoryagent
@@ -72,4 +75,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 # Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["python", "-m", "uvicorn", "src.memory_service:app", "--host", "0.0.0.0", "--port", "8009"]
+CMD ["sh", "-c", "ls -la /app/ && echo 'Starting memory agent...' && python src/memory_service.py"]
