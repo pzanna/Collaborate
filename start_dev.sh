@@ -48,16 +48,67 @@ docker compose up -d ai-service
 # Wait for AI service
 sleep 10
 
-# Test AI service
-print_info "Testing AI service..."
-if curl -f http://localhost:8010/health >/dev/null 2>&1; then
-    print_status "AI service is ready!"
-    echo
-    echo "🎯 AI Service is running at: http://localhost:8010"
-    echo "📊 Health endpoint: http://localhost:8010/health"
-    echo "🧪 Run integration tests: python test_integration.py"
-    echo "🛑 Stop services: docker compose down"
+# Start API Gateway for frontend communication
+print_info "Starting API Gateway..."
+docker compose up -d api-gateway
+
+# Wait for API Gateway
+sleep 5
+
+# Test backend services
+print_info "Testing backend services..."
+backend_ready=true
+
+if ! curl -f http://localhost:8001/health >/dev/null 2>&1; then
+    echo "❌ API Gateway failed to start"
+    backend_ready=false
+fi
+
+if [ "$backend_ready" = true ]; then
+    print_status "Backend services are ready!"
+    
+    # Start React frontend
+    print_info "Starting React frontend..."
+    cd frontend
+    
+    # Check if node_modules exists, install if not
+    if [ ! -d "node_modules" ]; then
+        print_info "Installing frontend dependencies..."
+        npm install
+    fi
+    
+    # Start the React dev server in background
+    print_info "Launching React development server..."
+    nohup node /Users/paulzanna/Github/Eunice/frontend/node_modules/.bin/vite > ../logs/frontend.log 2>&1 &
+    FRONTEND_PID=$!
+    
+    # Wait for frontend to start
+    sleep 5
+    
+    # Test frontend
+    if curl -f http://localhost:5173/ >/dev/null 2>&1; then
+        print_status "Frontend is ready!"
+        echo
+        echo "🎯 Services are running:"
+        echo "   📱 React Frontend: http://localhost:5173/"
+        echo "   🚪 API Gateway: http://localhost:8001"
+        echo "   📊 Health check: http://localhost:8001/health"
+        echo
+        echo "📝 Logs:"
+        echo "   Frontend: tail -f logs/frontend.log"
+        echo "   Backend: docker compose logs -f"
+        echo
+        echo "🛑 To stop:"
+        echo "   Frontend: kill $FRONTEND_PID"
+        echo "   Backend: docker compose down"
+        echo
+        echo "   Or use: ./stop_dev.sh"
+    else
+        echo "❌ Frontend failed to start. Check logs: tail -f logs/frontend.log"
+    fi
+    
+    cd ..
 else
-    echo "❌ AI service failed to start. Check logs:"
-    echo "   docker compose logs ai-service"
+    echo "❌ Backend services failed to start. Check logs:"
+    echo "   docker compose logs"
 fi

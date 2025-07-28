@@ -48,6 +48,20 @@ if ! docker info >/dev/null 2>&1; then
 fi
 print_status "Docker is running"
 
+# Check if Node.js is available for frontend build
+if ! command -v node >/dev/null 2>&1; then
+    print_error "Node.js is not installed. Please install Node.js to build the frontend."
+    exit 1
+fi
+print_status "Node.js is available ($(node --version))"
+
+# Check if npm is available
+if ! command -v npm >/dev/null 2>&1; then
+    print_error "npm is not installed. Please install npm to build the frontend."
+    exit 1
+fi
+print_status "npm is available ($(npm --version))"
+
 # Check if .env file exists
 if [[ ! -f "$ENV_FILE" ]]; then
     print_error ".env file not found. Please create it with your API keys."
@@ -79,6 +93,29 @@ print_status "Log directory created: $LOG_DIR"
 
 echo
 print_info "Building and starting services..."
+
+# Build React Frontend
+print_info "Building React frontend..."
+cd frontend
+
+# Install frontend dependencies if node_modules doesn't exist
+if [[ ! -d "node_modules" ]]; then
+    print_info "Installing frontend dependencies..."
+    npm install
+fi
+
+# Build the frontend for production
+print_info "Building frontend for production..."
+npm run build
+
+# Verify build was successful
+if [[ ! -d "dist" ]]; then
+    print_error "Frontend build failed - dist directory not found"
+    exit 1
+fi
+print_status "Frontend built successfully"
+
+cd ..
 
 # Stop any existing containers
 print_info "Stopping existing containers..."
@@ -175,7 +212,6 @@ done
 print_info "Checking application services..."
 SERVICES=(
     "MCP Server:http://localhost:9000/health"
-    "Database Service:http://localhost:8011/health"
     "AI Service:http://localhost:8010/health"
     "Planning Agent:http://localhost:8007/health"
     "API Gateway:http://localhost:8001/health"
@@ -192,30 +228,55 @@ for service_info in "${SERVICES[@]}"; do
     fi
 done
 
-# Start optional services
-print_info "Starting optional services..."
+# Start nginx with frontend
+print_info "Starting nginx with React frontend..."
 docker compose up -d nginx --profile production
+
+# Wait for nginx to start
+sleep 5
+
+# Check nginx and frontend
+print_info "Checking frontend deployment..."
+if curl -f "http://localhost/nginx-health" >/dev/null 2>&1; then
+    print_status "Nginx is healthy"
+else
+    print_error "Nginx health check failed"
+    ALL_HEALTHY=false
+fi
+
+if curl -f "http://localhost/" >/dev/null 2>&1; then
+    print_status "Frontend is accessible"
+else
+    print_error "Frontend is not accessible"
+    ALL_HEALTHY=false
+fi
 
 echo
 if [ "$ALL_HEALTHY" = true ]; then
     print_status "🎉 All services are healthy! Deployment successful!"
     echo
-    print_info "Application endpoints:"
+    print_info "🌐 Frontend Application:"
+    echo "  • React Frontend: http://localhost/"
+    echo "  • Frontend Health: http://localhost/nginx-health"
+    echo
+    print_info "🔗 Backend API endpoints:"
     echo "  • API Gateway: http://localhost:8001"
     echo "  • MCP Server: http://localhost:9000"
     echo "  • AI Service: http://localhost:8010"
     echo "  • Planning Agent: http://localhost:8007"
-    echo "  • Database Service: http://localhost:8011"
-    echo "  • Load Balancer: http://localhost:80 (nginx)"
     echo
-    print_info "Infrastructure endpoints:"
+    print_info "📡 API Access (via nginx proxy):"
+    echo "  • Frontend API calls: http://localhost/api/*"
+    echo "  • Direct API access: http://localhost:8001/*"
+    echo
+    print_info "🗄️  Infrastructure endpoints:"
     echo "  • Redis: localhost:6380"
     echo "  • PostgreSQL: localhost:5433"
     echo
-    print_info "Container status:"
+    print_info "📊 Container status:"
     docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
     echo
-    print_info "Monitoring:"
+    print_info "🔍 Monitoring:"
     echo "  • Container logs: docker compose logs -f [service-name]"
     echo "  • Service status: docker compose ps"
     echo "  • Stop all: docker compose down"
@@ -223,18 +284,23 @@ else
     print_warning "Some services failed health checks. Check logs with:"
     echo "  docker compose logs [service-name]"
     echo
-    print_info "Common troubleshooting commands:"
+    print_info "🔧 Common troubleshooting commands:"
     echo "  • Check all container status: docker compose ps"
     echo "  • View recent logs: docker compose logs --tail=50"
     echo "  • Restart failed service: docker compose restart [service-name]"
     echo "  • Rebuild and restart: docker compose up -d --build [service-name]"
     echo
-    print_info "Service-specific logs:"
+    print_info "🐛 Service-specific logs:"
+    echo "  • Frontend (nginx): docker compose logs nginx"
     echo "  • API Gateway: docker compose logs api-gateway"
     echo "  • MCP Server: docker compose logs mcp-server"
     echo "  • AI Service: docker compose logs ai-service"
     echo "  • Planning Agent: docker compose logs planning-agent"
-    echo "  • Database Service: docker compose logs database-service"
+    echo
+    print_info "🌐 Frontend troubleshooting:"
+    echo "  • Rebuild frontend: cd frontend && npm run build"
+    echo "  • Check nginx config: docker compose exec nginx nginx -t"
+    echo "  • Access frontend files: docker compose exec nginx ls -la /usr/share/nginx/html"
 fi
 
 echo
