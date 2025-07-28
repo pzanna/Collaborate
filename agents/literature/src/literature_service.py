@@ -6,13 +6,20 @@ This module provides a containerized Literature Search Agent that specializes in
 - Multi-source bibliographic search (PubMed, arXiv, Semantic Scholar)
 - Result normalization and deduplication
 - Integration with MCP protocol for task coordination
+
+ARCHITECTURE COMPLIANCE:
+- ONLY exposes health check API endpoint (/health)
+- ALL business operations via MCP protocol exclusively
+- NO direct HTTP/REST endpoints for business logic
 """
 
 import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
+import sys
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -24,8 +31,11 @@ from urllib.parse import quote
 import aiohttp
 import uvicorn
 import websockets
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI
+
+# Import the standardized health check service
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from health_check_service import create_health_check_app
 
 # Configure logging
 logging.basicConfig(
@@ -905,27 +915,8 @@ class LiteratureSearchService:
         return hashlib.md5(content_string.encode()).hexdigest()
 
 
-# Request/Response models for FastAPI
-class SearchRequest(BaseModel):
-    query: str = Field(description="Search query string")
-    max_results: int = Field(default=10, description="Maximum number of results")
-    sources: List[str] = Field(default=["semantic_scholar", "arxiv"], description="Sources to search")
-    search_depth: str = Field(default="standard", description="Search depth: standard, comprehensive")
-    filters: Dict[str, Any] = Field(default_factory=dict, description="Additional filters")
-
-
-class TaskRequest(BaseModel):
-    action: str
-    payload: Dict[str, Any]
-
-
-class HealthResponse(BaseModel):
-    status: str
-    agent_type: str
-    mcp_connected: bool
-    capabilities: List[str]
-    supported_sources: List[str]
-
+# Request/Response models removed - NO DIRECT API ENDPOINTS ALLOWED
+# All business operations must go through MCP protocol exclusively
 
 # Global service instance
 literature_service: Optional[LiteratureSearchService] = None
@@ -963,93 +954,51 @@ async def lifespan(app: FastAPI):
             await literature_service.stop()
 
 
-# FastAPI application
-app = FastAPI(
-    title="Literature Search Service",
-    description="Literature Search Agent for academic paper discovery and collection",
+def get_mcp_status() -> Dict[str, Any]:
+    """Get MCP connection status for health check."""
+    if literature_service:
+        return {
+            "connected": literature_service.mcp_connected,
+            "last_heartbeat": datetime.now().isoformat()
+        }
+    return {"connected": False, "last_heartbeat": "never"}
+
+
+def get_additional_metadata() -> Dict[str, Any]:
+    """Get additional metadata for health check."""
+    if literature_service:
+        return {
+            "capabilities": [
+                "search_academic_papers",
+                "search_literature", 
+                "normalize_records",
+                "deduplicate_results",
+                "multi_source_search",
+                "bibliographic_search"
+            ],
+            "supported_sources": list(literature_service.api_configs.keys())
+        }
+    return {}
+
+
+# Create health check only FastAPI application
+app = create_health_check_app(
+    agent_type="literature",
+    agent_id="literature-search-agent",
     version="1.0.0",
-    lifespan=lifespan
+    get_mcp_status=get_mcp_status,
+    get_additional_metadata=get_additional_metadata
 )
 
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint."""
-    if not literature_service:
-        raise HTTPException(status_code=503, detail="Service not initialized")
-    
-    capabilities = [
-        "search_academic_papers",
-        "search_literature",
-        "normalize_records",
-        "deduplicate_results",
-        "multi_source_search",
-        "bibliographic_search"
-    ]
-    
-    return HealthResponse(
-        status="healthy",
-        agent_type="literature",
-        mcp_connected=literature_service.mcp_connected,
-        capabilities=capabilities,
-        supported_sources=list(literature_service.api_configs.keys())
-    )
-
-
-@app.post("/search")
-async def search_papers(request: SearchRequest):
-    """Search for academic papers."""
-    if not literature_service:
-        raise HTTPException(status_code=503, detail="Service not initialized")
-    
-    try:
-        # Create search query
-        search_query = SearchQuery(
-            lit_review_id=str(uuid.uuid4()),
-            query=request.query,
-            max_results=request.max_results,
-            sources=request.sources,
-            search_depth=request.search_depth,
-            filters=request.filters
-        )
-        
-        # Execute search
-        search_report = await literature_service.search_literature(search_query)
-        
-        return {
-            "results": search_report.records,
-            "summary": {
-                "total_found": search_report.total_fetched,
-                "total_unique": search_report.total_unique,
-                "sources": search_report.per_source_counts,
-                "search_duration": (search_report.end_time - search_report.start_time).total_seconds()
-            },
-            "errors": search_report.errors
-        }
-        
-    except Exception as e:
-        logger.error(f"Error searching papers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/task")
-async def process_task(request: TaskRequest):
-    """Process a literature search task directly (for testing)."""
-    if not literature_service:
-        raise HTTPException(status_code=503, detail="Service not initialized")
-    
-    try:
-        result = await literature_service._process_literature_task({
-            "action": request.action,
-            "payload": request.payload
-        })
-        return result
-    except Exception as e:
-        logger.error(f"Error processing task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Set lifespan for service management
+app.router.lifespan_context = lifespan
 
 
 if __name__ == "__main__":
+    logger.info("🚨 ARCHITECTURE COMPLIANCE: Literature Search Agent")
+    logger.info("✅ ONLY health check API exposed")
+    logger.info("✅ All business operations via MCP protocol exclusively")
+    
     uvicorn.run(
         "literature_service:app",
         host="0.0.0.0",

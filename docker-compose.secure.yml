@@ -56,7 +56,7 @@ services:
 
   # 2. Enhanced MCP Server Service (Port 9000) - Security Enhanced
   mcp-server:
-    image: eunice/mcp-server:alpine-secure
+    build: eunice/mcp-server:alpine-secure
     container_name: eunice-mcp-server
     ports:
       - "9000:9000"
