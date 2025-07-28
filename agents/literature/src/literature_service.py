@@ -34,7 +34,7 @@ import websockets
 from fastapi import FastAPI
 
 # Import the standardized health check service
-sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent))
 from health_check_service import create_health_check_app
 
 # Configure logging

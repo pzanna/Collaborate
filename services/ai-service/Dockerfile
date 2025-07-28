@@ -52,10 +52,19 @@ RUN chown -R aiservice:aiservice /app && \
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONNOUSERSITE=1
+ENV HEALTH_PORT=8010
 
 # Switch to non-root user
 USER aiservice
 
 # Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8010/health || exit 1
+
+# Expose health check port
+EXPOSE 8010
+
 CMD ["python", "-u", "-m", "src.mcp_ai_service"]

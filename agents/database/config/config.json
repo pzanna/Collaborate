@@ -1,6 +1,8 @@
 {
-  "agent_type": "database",
+  "service_host": "0.0.0.0",
+  "service_port": 8011,
   "mcp_server_url": "ws://mcp-server:9000",
+  "agent_type": "database",
   "heartbeat_interval": 30,
   "ping_timeout": 10,
   "database": {
