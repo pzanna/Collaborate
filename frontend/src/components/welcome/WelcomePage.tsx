@@ -131,18 +131,18 @@ const WelcomePage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-8 space-y-8">
       {/* Welcome Header */}
       <div className="text-center py-8">
         <div className="flex justify-center mb-4">
           <ConnectionStatus />
         </div>
-        <h1 className="text-4xl font-bold text-gray-900 mb-1">{greeting}!</h1>
-        <p className="text-lg text-gray-600 mb-4">
+        <h1 className="text-4xl font-bold text-foreground mb-1">{greeting}!</h1>
+        <p className="text-lg text-muted-foreground mb-4">
           Welcome back to your research workspace
         </p>
         {/* Academic Quote */}
-        <p className="text-sm italic text-gray-600">"{quote}"</p>
+        <p className="text-sm italic text-muted-foreground">"{quote}"</p>
       </div>
 
       {/* Pending Items */}
@@ -156,14 +156,14 @@ const WelcomePage: React.FC = () => {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : pendingItems.length > 0 ? (
             <div className="space-y-3">
               {pendingItems.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -174,21 +174,23 @@ const WelcomePage: React.FC = () => {
                       {getItemTypeIcon(item.type)}
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{item.title}</p>
-                      <p className="text-sm text-gray-500 capitalize">
+                      <p className="font-medium text-foreground">
+                        {item.title}
+                      </p>
+                      <p className="text-sm text-muted-foreground capitalize">
                         {item.type} • {item.status}
                       </p>
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-muted-foreground">
                     {formatTimeAgo(item.created_at)}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+            <div className="text-center py-8 text-muted-foreground">
+              <ClipboardDocumentListIcon className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
               <p>No pending items at the moment</p>
               <p className="text-sm">All caught up! Great work.</p>
             </div>
@@ -200,9 +202,9 @@ const WelcomePage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="cursor-pointer hover:shadow-md transition-shadow">
           <CardContent className="text-center py-6">
-            <ClockIcon className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-            <h3 className="font-semibold text-gray-900">Start Research</h3>
-            <p className="text-sm text-gray-600">
+            <ClockIcon className="h-8 w-8 mx-auto mb-2 text-primary" />
+            <h3 className="font-semibold text-foreground">Start Research</h3>
+            <p className="text-sm text-muted-foreground">
               Begin a new research session
             </p>
           </CardContent>
@@ -210,9 +212,9 @@ const WelcomePage: React.FC = () => {
 
         <Card className="cursor-pointer hover:shadow-md transition-shadow">
           <CardContent className="text-center py-6">
-            <ClipboardDocumentListIcon className="h-8 w-8 mx-auto mb-2 text-green-600" />
-            <h3 className="font-semibold text-gray-900">View Projects</h3>
-            <p className="text-sm text-gray-600">
+            <ClipboardDocumentListIcon className="h-8 w-8 mx-auto mb-2 text-primary" />
+            <h3 className="font-semibold text-foreground">View Projects</h3>
+            <p className="text-sm text-muted-foreground">
               Browse your research projects
             </p>
           </CardContent>
@@ -220,9 +222,9 @@ const WelcomePage: React.FC = () => {
 
         <Card className="cursor-pointer hover:shadow-md transition-shadow">
           <CardContent className="text-center py-6">
-            <ChatBubbleLeftRightIcon className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-            <h3 className="font-semibold text-gray-900">Review Tasks</h3>
-            <p className="text-sm text-gray-600">
+            <ChatBubbleLeftRightIcon className="h-8 w-8 mx-auto mb-2 text-primary" />
+            <h3 className="font-semibold text-foreground">Review Tasks</h3>
+            <p className="text-sm text-muted-foreground">
               Check task progress and results
             </p>
           </CardContent>
