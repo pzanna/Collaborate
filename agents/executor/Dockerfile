@@ -50,12 +50,15 @@ COPY src/ ./src/
 COPY config/ ./config/
 COPY start.sh ./
 
+# Copy shared health check service
+COPY health_check_service.py ./health_check_service.py
+
 # Security: Create secure work directory and set strict permissions
 RUN mkdir -p /app/work /app/tmp && \
     chown -R executor:executor /app && \
     chmod -R 750 /app && \
     chmod 750 /app/start.sh && \
-    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
+    chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \; && \
     chmod 750 /app/start.sh

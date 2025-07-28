@@ -49,11 +49,14 @@ RUN apk del gcc musl-dev g++ make linux-headers && \
 COPY src/ ./src/
 COPY config/ ./config/
 
+# Copy shared health check service
+COPY health_check_service.py ./health_check_service.py
+
 # Security: Create secure data directory with proper permissions
 RUN mkdir -p /app/data /app/tmp && \
     chown -R memoryagent:memoryagent /app && \
     chmod -R 750 /app && \
-    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
+    chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \;
 

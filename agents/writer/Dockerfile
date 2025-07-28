@@ -1,44 +1,70 @@
-# Pure MCP Client Dockerfile - Writer Agent
-# Architecture-compliant: No HTTP server, WebSocket-only communication
-
+# Writer Agent - SECURITY HARDENED with Alpine
 FROM python:3.12-alpine
 
-# Security: Create non-root user
-RUN addgroup -g 1001 -S eunice && \
-    adduser -u 1001 -S eunice -G eunice
+# Security: Set build arguments for better control
+ARG SERVICE_PORT=8006
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 
-# Install system dependencies
-RUN apk add --no-cache \
+# Security: Install security updates and minimal required packages
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
     gcc \
     musl-dev \
+    curl \
+    ca-certificates \
+    tini \
     libffi-dev \
-    tini
+    && rm -rf /var/cache/apk/* \
+    && rm -rf /tmp/*
 
-# Set working directory
+# Security: Create dedicated non-root user with minimal privileges
+RUN addgroup -g ${GROUP_ID} -S writeragent && \
+    adduser -u ${USER_ID} -S writeragent -G writeragent -h /app -s /sbin/nologin
+
+# Set secure working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
+# Security: Copy requirements first for better layer caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy base MCP agent
-COPY ./base_mcp_agent.py ./base_mcp_agent.py
+# Security: Install Python packages with verification and cleanup
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --no-compile -r requirements.txt && \
+    pip cache purge && \
+    find /usr/local -name '*.pyc' -delete && \
+    find /usr/local -name '*.pyo' -delete && \
+    find /usr/local -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 
-# Copy source code
+# Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
 
-# Set ownership and permissions
-RUN chown -R eunice:eunice /app
-USER eunice
+# Copy shared health check service
+COPY health_check_service.py ./health_check_service.py
 
-# Environment variables
-ENV PYTHONPATH=/app:/app/src
-ENV PYTHONUNBUFFERED=1
+# Security: Set strict file permissions and ownership
+RUN chown -R writeragent:writeragent /app && \
+    chmod -R 750 /app && \
+    chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
+    find /app -type d -exec chmod 750 {} \; && \
+    find /app -type f -exec chmod 640 {} \;
 
-# No health check via HTTP - MCP connection is monitored by MCP server
-# Health is determined by successful WebSocket connection and registration
+# Security: Create writable temp directory for application
+RUN mkdir -p /app/tmp && \
+    chown writeragent:writeragent /app/tmp && \
+    chmod 750 /app/tmp
 
-# Use tini for proper signal handling
+# Switch to non-root user
+USER writeragent
+
+# Expose port
+EXPOSE 8006
+
+# Security: Enhanced health check with timeout
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8006/health || exit 1
+
+# Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["python", "/app/src/writer_agent.py"]
+CMD ["python", "-u", "src/writer_service.py"]

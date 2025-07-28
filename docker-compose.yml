@@ -92,7 +92,11 @@ services:
   research-manager-agent:
     build: ./agents/research-manager
     container_name: eunice-research-manager
+    ports:
+      - "8002:8002"
     environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8002
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=research_manager
       - LOG_LEVEL=INFO
@@ -104,6 +108,12 @@ services:
     depends_on:
       - mcp-server
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Literature Search Agent - Pure MCP Client
   literature-agent:
@@ -235,6 +245,60 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Synthesis & Review Agent - Pure MCP Client
+  synthesis-agent:
+    build: ./agents/synthesis
+    container_name: eunice-synthesis-agent
+    ports:
+      - "8005:8005"
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8005
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=synthesis
+      - LOG_LEVEL=INFO
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - PYTHONNOUSERSITE=1
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Writer Agent - Pure MCP Client
+  writer-agent:
+    build: ./agents/writer
+    container_name: eunice-writer-agent
+    ports:
+      - "8006:8006"
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8006
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=writer
+      - LOG_LEVEL=INFO
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - PYTHONNOUSERSITE=1
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
       interval: 30s
       timeout: 10s
       retries: 3
