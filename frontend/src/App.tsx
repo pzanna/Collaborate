@@ -1,48 +1,22 @@
-import React from "react"
-import { Routes, Route } from "react-router-dom"
-import MainLayout from "./components/layout/MainLayout"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import Layout from "./components/layout/Layout"
 import WelcomePage from "./components/welcome/WelcomePage"
-import ResearchWorkspace from "./components/research/ResearchWorkspace"
-import ProjectsView from "./components/projects/ProjectsView"
-import ProjectDetailView from "./components/projects/ProjectDetailView"
-import ResearchTaskDetailView from "./components/research/ResearchTaskDetailView"
-import ResearchTopicList from "./components/research/ResearchTopicList"
-import ResearchTopicDetail from "./components/research/ResearchTopicDetail"
-import HealthDashboard from "./components/health/HealthDashboard"
-import TaskViewer from "./components/tasks/TaskViewer"
-import DebugUI from "./components/debug/DebugUI"
+import { ROUTES } from "./utils/routes"
 
 function App() {
   return (
-    <div className="h-screen bg-gray-50">
-      <MainLayout>
+    <BrowserRouter>
+      <Layout>
         <Routes>
-          <Route path="/" element={<WelcomePage />} />
-          <Route path="/research" element={<ResearchWorkspace />} />
-          <Route path="/research/:sessionId" element={<ResearchWorkspace />} />
           <Route
-            path="/research/task/:taskId"
-            element={<ResearchTaskDetailView />}
+            path={ROUTES.HOME}
+            element={<Navigate to={ROUTES.WELCOME} replace />}
           />
-          <Route path="/projects" element={<ProjectsView />} />
-          <Route path="/projects/:projectId" element={<ProjectDetailView />} />
-
-          {/* Hierarchical Research Routes */}
-          <Route
-            path="/projects/:projectId/topics"
-            element={<ResearchTopicList />}
-          />
-          <Route
-            path="/projects/:projectId/topics/:topicId"
-            element={<ResearchTopicDetail />}
-          />
-
-          <Route path="/health" element={<HealthDashboard />} />
-          <Route path="/tasks" element={<TaskViewer />} />
-          <Route path="/debug" element={<DebugUI />} />
+          <Route path={ROUTES.WELCOME} element={<WelcomePage />} />
+          {/* Future routes can be added here */}
         </Routes>
-      </MainLayout>
-    </div>
+      </Layout>
+    </BrowserRouter>
   )
 }
 

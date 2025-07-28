@@ -65,12 +65,23 @@ python test_api_gateway.py
 - `GET /status` - Detailed service status
 - `GET /metrics` - Service metrics for monitoring
 
-### Research Operations
+### Project Management (v2)
 
-- `POST /literature/search` - Search academic literature
-- `POST /research/tasks` - Submit research tasks
-- `GET /tasks/{task_id}/status` - Get task status
-- `DELETE /tasks/{task_id}` - Cancel task (future)
+- `POST /v2/projects` - Create new project
+- `GET /v2/projects` - List all projects (with filters)
+- `GET /v2/projects/{project_id}` - Get specific project
+- `PUT /v2/projects/{project_id}` - Update project
+- `DELETE /v2/projects/{project_id}` - Delete project
+- `GET /v2/projects/{project_id}/stats` - Get project statistics
+- `GET /v2/projects/{project_id}/hierarchy` - Get complete project hierarchy
+
+### Research Topics (v2 - In Development)
+
+- `POST /v2/projects/{project_id}/topics` - Create research topic (planned)
+- `GET /v2/projects/{project_id}/topics` - List topics (planned)
+- `GET /v2/topics/{topic_id}` - Get specific topic (planned)
+- `PUT /v2/topics/{topic_id}` - Update topic (planned)
+- `DELETE /v2/topics/{topic_id}` - Delete topic (planned)
 
 ### Documentation
 

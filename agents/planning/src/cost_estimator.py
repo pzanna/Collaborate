@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from ..config.config_manager import ConfigManager
+from config_manager import ConfigManager
 
 
 class CostTier(Enum):
@@ -97,7 +97,7 @@ class CostEstimator:
         """
         cost_info = self.token_costs.get(provider, {}).get(model)
         if not cost_info:
-            logger.warning(f"No cost info for {provider}/{model}, defaulting to OpenAI GPT-4")
+            self.logger.warning(f"No cost info for {provider}/{model}, defaulting to OpenAI GPT-4")
             cost_info = self.token_costs["openai"]["gpt-4"]
         input_cost = (input_tokens / 1000) * cost_info["input"]
         output_cost = (output_tokens / 1000) * cost_info["output"]

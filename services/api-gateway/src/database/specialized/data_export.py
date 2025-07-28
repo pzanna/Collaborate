@@ -574,7 +574,14 @@ class ImportEngine:
 
             # Convert XML to dict (simplified)
             def xml_to_dict(element):
-                """TODO: Add docstring for xml_to_dict."""
+                """Convert XML element to dictionary representation.
+                
+                Args:
+                    element: XML element to convert
+                    
+                Returns:
+                    dict: Dictionary representation of the XML element
+                """
                 result = {}
 
                 # Add attributes

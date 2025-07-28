@@ -1,0 +1,46 @@
+{
+  "service_name": "research_manager",
+  "service_host": "0.0.0.0",
+  "service_port": 8002,
+  "mcp_server_url": "ws://mcp-server:9000",
+  "max_concurrent_tasks": 5,
+  "task_timeout": 600,
+  "response_timeout": 300,
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "research_settings": {
+    "max_retries": 2,
+    "default_single_agent_cost_threshold": 0.5,
+    "enable_parallel_execution": true,
+    "cost_approval_threshold": 0.5,
+    "context_cleanup_delay": 3600
+  },
+  "agent_coordination": {
+    "planning_agent": {
+      "type": "planning",
+      "capabilities": [
+        "plan_research",
+        "analyze_information",
+        "synthesize_results"
+      ],
+      "timeout": 300
+    },
+    "literature_agent": {
+      "type": "literature",
+      "capabilities": ["search_academic_papers", "review_documents"],
+      "timeout": 300
+    },
+    "executor_agent": {
+      "type": "executor",
+      "capabilities": ["execute_research", "process_data"],
+      "timeout": 300
+    },
+    "memory_agent": {
+      "type": "memory",
+      "capabilities": ["store_information", "retrieve_context"],
+      "timeout": 300
+    }
+  }
+}

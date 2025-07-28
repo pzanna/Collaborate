@@ -42,7 +42,7 @@ class Project(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that project name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Project name cannot be empty")
         return v.strip()
@@ -66,7 +66,7 @@ class ResearchTopic(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that topic name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Topic name cannot be empty")
         return v.strip()
@@ -100,14 +100,14 @@ class ResearchPlan(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that plan name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Plan name cannot be empty")
         return v.strip()
 
     @validator("estimated_cost", "actual_cost")
     def cost_must_be_non_negative(cls, v):
-        """TODO: Add docstring for cost_must_be_non_negative."""
+        """Validate that cost values are non-negative."""
         if v < 0:
             raise ValueError("Cost cannot be negative")
         return v
@@ -164,28 +164,28 @@ class Task(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that task name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Task name cannot be empty")
         return v.strip()
 
     @validator("estimated_cost", "actual_cost")
     def cost_must_be_non_negative(cls, v):
-        """TODO: Add docstring for cost_must_be_non_negative."""
+        """Validate that cost values are non-negative."""
         if v < 0:
             raise ValueError("Cost cannot be negative")
         return v
 
     @validator("progress")
     def progress_must_be_valid(cls, v):
-        """TODO: Add docstring for progress_must_be_valid."""
+        """Validate that progress is between 0 and 100."""
         if not 0 <= v <= 100:
             raise ValueError("Progress must be between 0 and 100")
         return v
 
     @validator("max_results")
     def max_results_must_be_positive(cls, v):
-        """TODO: Add docstring for max_results_must_be_positive."""
+        """Validate that max_results is a positive integer."""
         if v <= 0:
             raise ValueError("Max results must be positive")
         return v
@@ -221,7 +221,7 @@ class ProjectRequest(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that project name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Project name cannot be empty")
         return v.strip()
@@ -236,7 +236,7 @@ class ResearchTopicRequest(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that topic name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Topic name cannot be empty")
         return v.strip()
@@ -253,7 +253,7 @@ class ResearchPlanRequest(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that plan name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Plan name cannot be empty")
         return v.strip()
@@ -273,14 +273,14 @@ class TaskRequest(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that task name is not empty or whitespace-only."""
         if not v.strip():
             raise ValueError("Task name cannot be empty")
         return v.strip()
 
     @validator("max_results")
     def max_results_must_be_positive(cls, v):
-        """TODO: Add docstring for max_results_must_be_positive."""
+        """Validate that max_results is a positive integer."""
         if v <= 0:
             raise ValueError("Max results must be positive")
         return v
@@ -297,7 +297,7 @@ class ProjectUpdate(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that project name is not empty or whitespace-only when provided."""
         if v is not None and not v.strip():
             raise ValueError("Project name cannot be empty")
         return v.strip() if v else v
@@ -313,7 +313,7 @@ class ResearchTopicUpdate(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that topic name is not empty or whitespace-only when provided."""
         if v is not None and not v.strip():
             raise ValueError("Topic name cannot be empty")
         return v.strip() if v else v
@@ -331,7 +331,7 @@ class ResearchPlanUpdate(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that plan name is not empty or whitespace-only when provided."""
         if v is not None and not v.strip():
             raise ValueError("Plan name cannot be empty")
         return v.strip() if v else v
@@ -353,14 +353,14 @@ class TaskUpdate(BaseModel):
 
     @validator("name")
     def name_must_not_be_empty(cls, v):
-        """TODO: Add docstring for name_must_not_be_empty."""
+        """Validate that task name is not empty or whitespace-only when provided."""
         if v is not None and not v.strip():
             raise ValueError("Task name cannot be empty")
         return v.strip() if v else v
 
     @validator("max_results")
     def max_results_must_be_positive(cls, v):
-        """TODO: Add docstring for max_results_must_be_positive."""
+        """Validate that max_results is a positive integer when provided."""
         if v is not None and v <= 0:
             raise ValueError("Max results must be positive")
         return v

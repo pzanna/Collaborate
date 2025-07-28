@@ -1,0 +1,31 @@
+{
+  "service_host": "0.0.0.0",
+  "service_port": 8004,
+  "mcp_server_url": "ws://mcp-server:9000",
+  "service": {
+    "name": "screening-agent",
+    "type": "screening",
+    "host": "0.0.0.0",
+    "port": 8004
+  },
+  "mcp_server": {
+    "url": "ws://mcp-server:9000",
+    "reconnect_interval": 30,
+    "ping_interval": 30
+  },
+  "screening": {
+    "default_confidence_threshold": 0.7,
+    "keyword_match_threshold": 0.5,
+    "stages": ["title_abstract", "full_text"],
+    "decision_types": ["include", "exclude", "unsure"]
+  },
+  "prisma": {
+    "enable_flowchart_generation": true,
+    "track_exclusion_reasons": true,
+    "session_timeout_hours": 24
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(levelname)s - %(message)s"
+  }
+}

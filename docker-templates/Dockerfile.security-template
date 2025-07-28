@@ -1,0 +1,53 @@
+# Security-Hardened Python Alpine Template
+# Based on Python 3.12-alpine with comprehensive security measures
+FROM python:3.12-alpine
+
+# Security: Install security updates and minimal required packages
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    curl \
+    ca-certificates \
+    && rm -rf /var/cache/apk/* \
+    && rm -rf /tmp/*
+
+# Security: Create dedicated non-root user with minimal privileges
+RUN addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup -h /app -s /sbin/nologin
+
+# Set secure working directory
+WORKDIR /app
+
+# Security: Copy requirements first for better layer caching
+COPY requirements.txt .
+
+# Security: Install Python packages with verification and cleanup
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --no-compile -r requirements.txt && \
+    pip cache purge && \
+    find /usr/local -name '*.pyc' -delete && \
+    find /usr/local -name '*.pyo' -delete && \
+    find /usr/local -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+
+# Copy application code
+COPY src/ ./src/
+COPY config/ ./config/
+
+# Security: Set strict file permissions and ownership
+RUN chown -R appuser:appgroup /app && \
+    chmod -R 750 /app && \
+    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
+    find /app -type d -exec chmod 750 {} \; && \
+    find /app -type f -exec chmod 640 {} \;
+
+# Security: Remove package manager and unnecessary tools
+RUN apk del --purge && \
+    rm -rf /var/cache/apk/* /tmp/* /var/tmp/* /root/.cache
+
+# Switch to non-root user
+USER appuser
+
+# Security: Use non-privileged port and explicit command
+EXPOSE ${SERVICE_PORT:-8000}
+
+# Security: Use exec form to prevent shell injection
+CMD ["python", "-u", "src/service.py"]

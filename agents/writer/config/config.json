@@ -1,0 +1,25 @@
+{
+  "service_name": "writer-agent",
+  "service_port": 8006,
+  "service_host": "0.0.0.0",
+  "agent_type": "writer",
+  "agent_id": "writer",
+  "mcp_server_url": "ws://mcp-server:9000",
+  "capabilities": [
+    "manuscript_generation",
+    "academic_writing",
+    "citation_formatting",
+    "bibliography_management",
+    "document_templates",
+    "export_formats",
+    "prisma_flowcharts",
+    "evidence_tables"
+  ],
+  "dependencies": ["mcp-server", "database-service", "storage-service"],
+  "output_formats": ["markdown", "latex", "docx", "pdf", "html"],
+  "citation_styles": ["apa", "vancouver", "harvard", "chicago"],
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}

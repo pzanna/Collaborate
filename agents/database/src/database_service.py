@@ -1,0 +1,1139 @@
+"""
+Database Agent Service for Eunice Research Platform.
+
+This module provides a containerized Database Agent that handles:
+- Database write operations (CREATE, UPDATE, DELETE)
+- Project and task management database operations
+- Literature review database operations
+- User and collaboration database operations
+- Direct database access and connection management
+
+ARCHITECTURE COMPLIANCE:
+- ONLY exposes health check API endpoint (/health)
+- ALL business operations via MCP protocol exclusively
+- NO direct HTTP/REST endpoints for business logic
+"""
+
+import asyncio
+import json
+import logging
+import uuid
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import uvicorn
+import websockets
+from fastapi import FastAPI
+from websockets.exceptions import ConnectionClosed, WebSocketException
+
+# Import database libraries
+import asyncpg
+
+# Import the standardized health check service
+sys.path.append(str(Path(__file__).parent.parent))
+from health_check_service import create_health_check_app
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+class DatabaseAgentService:
+    """
+    Database Agent Service for database operations.
+    
+    Handles all database write operations, project management,
+    and data persistence via MCP protocol.
+    """
+    
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize Database Agent Service."""
+        self.config = config
+        self.agent_id = "database_agent"
+        self.agent_type = "database"
+        
+        # Service configuration
+        self.service_host = config.get("service_host", "0.0.0.0")
+        self.service_port = config.get("service_port", 8011)
+        self.mcp_server_url = config.get("mcp_server_url", "ws://mcp-server:9000")
+        
+        # Database configuration
+        self.database_url = config.get("database_url", "postgresql://postgres:password@postgres:5432/eunice")
+        self.max_connections = config.get("max_connections", 10)
+        self.connection_timeout = config.get("connection_timeout", 30)
+        
+        # MCP connection
+        self.websocket: Optional[websockets.WebSocketClientProtocol] = None
+        self.mcp_connected = False
+        self.should_run = True
+        
+        # Database connection pool
+        self.db_pool: Optional[asyncpg.Pool] = None
+        
+        # Task processing queue
+        self.task_queue = asyncio.Queue()
+        
+        # Start time for uptime tracking
+        self.start_time = datetime.now()
+        
+        # Operation counters
+        self.operations_completed = 0
+        self.operations_failed = 0
+        
+        # Capabilities
+        self.capabilities = [
+            "create_project", "update_project", "delete_project",
+            "create_topic", "update_topic", "delete_topic", 
+            "create_plan", "update_plan", "delete_plan",
+            "create_task", "update_task", "delete_task",
+            "create_literature_record", "update_literature_record", "delete_literature_record",
+            "database_operations", "data_persistence", "query_execution"
+        ]
+        
+        logger.info(f"Database Agent Service initialized on port {self.service_port}")
+    
+    async def start(self):
+        """Start the Database Agent Service."""
+        try:
+            # Initialize database connection pool
+            await self._initialize_database_pool()
+            
+            # Test database connection
+            await self._test_database_connection()
+            
+            # Connect to MCP server
+            await self._connect_to_mcp_server()
+            
+            # Start task processing and listening concurrently
+            await asyncio.gather(
+                self._process_task_queue(),
+                self._listen_for_tasks()
+            )
+            
+            logger.info("Database Agent Service started successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to start Database Agent Service: {e}")
+            raise
+    
+    async def stop(self):
+        """Stop the Database Agent Service."""
+        try:
+            self.should_run = False
+            
+            # Close database pool
+            if self.db_pool:
+                await self.db_pool.close()
+            
+            # Close MCP connection
+            if self.websocket:
+                await self.websocket.close()
+            
+            logger.info("Database Agent Service stopped")
+            
+        except Exception as e:
+            logger.error(f"Error stopping Database Agent Service: {e}")
+    
+    async def _initialize_database_pool(self):
+        """Initialize database connection pool."""
+        try:
+            self.db_pool = await asyncpg.create_pool(
+                self.database_url,
+                min_size=1,
+                max_size=self.max_connections,
+                command_timeout=self.connection_timeout
+            )
+            logger.info(f"Database pool initialized with max {self.max_connections} connections")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize database pool: {e}")
+            raise
+    
+    async def _test_database_connection(self):
+        """Test database connection."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not initialized")
+            
+            async with self.db_pool.acquire() as conn:
+                result = await conn.fetchval("SELECT 1")
+                if result == 1:
+                    logger.info("✅ Database connection test successful")
+                else:
+                    raise Exception("Database connection test failed")
+                    
+        except Exception as e:
+            logger.error(f"❌ Database connection test failed: {e}")
+            raise
+    
+    async def _connect_to_mcp_server(self):
+        """Connect to MCP server."""
+        max_retries = 10
+        retry_delay = 5
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Connecting to MCP server at {self.mcp_server_url} (attempt {attempt + 1})")
+                
+                self.websocket = await websockets.connect(
+                    self.mcp_server_url,
+                    ping_interval=30,
+                    ping_timeout=10
+                )
+                
+                # Register with MCP server
+                await self._register_with_mcp_server()
+                
+                self.mcp_connected = True
+                logger.info("Successfully connected to MCP server")
+                return
+                
+            except Exception as e:
+                logger.warning(f"Failed to connect to MCP server (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error("Failed to connect to MCP server after all retries")
+                    raise
+    
+    async def _register_with_mcp_server(self):
+        """Register this agent with the MCP server."""
+        if not self.websocket:
+            raise Exception("WebSocket connection not available")
+            
+        registration_message = {
+            "type": "agent_register",
+            "agent_id": self.agent_id,
+            "agent_type": self.agent_type,
+            "capabilities": self.capabilities,
+            "timestamp": datetime.now().isoformat(),
+            "service_info": {
+                "host": self.service_host,
+                "port": self.service_port,
+                "health_endpoint": f"http://{self.service_host}:{self.service_port}/health"
+            }
+        }
+        
+        await self.websocket.send(json.dumps(registration_message))
+        logger.info(f"Registered with MCP server: {len(self.capabilities)} capabilities")
+    
+    async def _listen_for_tasks(self):
+        """Listen for tasks from MCP server."""
+        try:
+            if not self.websocket:
+                logger.error("Cannot listen for tasks: no websocket connection")
+                return
+                
+            logger.info("Starting to listen for tasks from MCP server")
+            
+            async for message in self.websocket:
+                if not self.should_run:
+                    break
+                    
+                try:
+                    data = json.loads(message)
+                    logger.info(f"Received message from MCP server: {data}")
+                    await self.task_queue.put(data)
+                    logger.info("Message added to task queue")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse MCP message: {e}")
+                except Exception as e:
+                    logger.error(f"Error handling MCP message: {e}")
+                    
+        except ConnectionClosed:
+            logger.warning("MCP server connection closed")
+            self.mcp_connected = False
+        except WebSocketException as e:
+            logger.error(f"WebSocket error: {e}")
+            self.mcp_connected = False
+        except Exception as e:
+            logger.error(f"Unexpected error in message listener: {e}")
+            self.mcp_connected = False
+    
+    async def _process_task_queue(self):
+        """Process tasks from the MCP queue."""
+        logger.info("Task queue processor started")
+        while self.should_run:
+            try:
+                # Get task from queue
+                logger.info("Waiting for task from queue")
+                task_data = await self.task_queue.get()
+                logger.info(f"Got task from queue: {task_data}")
+
+                # Process the task
+                logger.info("About to process database task")
+                result = await self._process_database_task(task_data)
+                logger.info(f"Task processing result: {result}")
+
+                # Send result back to MCP server
+                if self.websocket and self.mcp_connected:
+                    response = {
+                        "type": "task_result",
+                        "task_id": task_data.get("task_id"),
+                        "result": result,
+                        "status": "completed",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    logger.info(f"Sending response to MCP server: {response}")
+                    await self.websocket.send(json.dumps(response))
+                    logger.info("Response sent successfully")
+                else:
+                    logger.warning("No websocket connection to send response")
+
+                # Mark task as done
+                self.task_queue.task_done()
+                logger.info("Task marked as done")
+
+            except Exception as e:
+                logger.error(f"Error processing task: {e}")
+                logger.error(f"Task queue exception: {type(e).__name__}: {str(e)}")
+                import traceback
+                logger.error(f"Task queue traceback: {traceback.format_exc()}")
+                await asyncio.sleep(1)
+    
+    async def _process_database_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a database-related task."""
+        logger.info("Entering _process_database_task method")
+        logger.info(f"Method received task_data type: {type(task_data)}")
+        try:
+            logger.info(f"Full task data received: {task_data}")
+
+            # Handle both MCP formats:
+            # 1. {"type": "task_request", "task_type": "create_project", "data": {...}}
+            # 2. {"task_id": "...", "action": "create_project", "payload": {...}}
+            task_type = task_data.get("task_type", task_data.get("action", ""))
+            data = task_data.get("data", task_data.get("payload", {}))
+            
+            logger.info(f"Processing database task: {task_type}")
+            
+            # Project operations
+            if task_type == "create_project":
+                result = await self._handle_create_project(data)
+                return result
+            elif task_type == "update_project":
+                return await self._handle_update_project(data)
+            elif task_type == "delete_project":
+                return await self._handle_delete_project(data)
+            
+            # Topic operations
+            elif task_type == "create_topic":
+                return await self._handle_create_topic(data)
+            elif task_type == "update_topic":
+                return await self._handle_update_topic(data)
+            elif task_type == "delete_topic":
+                return await self._handle_delete_topic(data)
+            
+            # Plan operations
+            elif task_type == "create_plan":
+                return await self._handle_create_plan(data)
+            elif task_type == "update_plan":
+                return await self._handle_update_plan(data)
+            elif task_type == "delete_plan":
+                return await self._handle_delete_plan(data)
+            
+            # Task operations
+            elif task_type == "create_task":
+                return await self._handle_create_task(data)
+            elif task_type == "update_task":
+                return await self._handle_update_task(data)
+            elif task_type == "delete_task":
+                return await self._handle_delete_task(data)
+            
+            # Literature record operations
+            elif task_type == "create_literature_record":
+                return await self._handle_create_literature_record(data)
+            elif task_type == "update_literature_record":
+                return await self._handle_update_literature_record(data)
+            elif task_type == "delete_literature_record":
+                return await self._handle_delete_literature_record(data)
+            
+            # Generic database operations
+            elif task_type == "database_operations":
+                return await self._handle_database_operations(data)
+            elif task_type == "query_execution":
+                return await self._handle_query_execution(data)
+            
+            else:
+                return {
+                    "status": "failed",
+                    "error": f"Unknown task type: {task_type}",
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Error processing database task: {e}")
+            import traceback
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_create_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle project creation request."""
+        try:
+            logger.info(f"Creating project with data: {data}")
+            
+            if not self.db_pool:
+                logger.error("Database pool not available")
+                raise Exception("Database pool not available")
+                
+            # Handle different data formats from different sources
+            project_name = data.get("project_name", data.get("name", ""))
+            description = data.get("description", "")
+            user_id = data.get("user_id", data.get("created_by", "system"))  # Default to 'system' if no user_id
+            
+            # Generate or use provided project ID
+            try:
+                project_id = data.get("id", str(uuid.uuid4()))  # Use provided ID or generate new one
+            except Exception as e:
+                logger.error(f"UUID generation error: {e}")
+                project_id = "temp-id-" + str(datetime.now().timestamp())
+            
+            logger.info(f"Extracted values - name: {project_name}, desc: {description}, user: {user_id}, id: {project_id}")
+            
+            if not project_name:
+                logger.error("Project name is required")
+                return {
+                    "status": "failed",
+                    "error": "Project name is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            logger.info("Executing database insert")
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO projects (id, name, description, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5)
+                """, project_id, project_name, description, datetime.now(), datetime.now())
+
+            logger.info(f"Project created successfully with ID: {project_id}")
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "project_id": project_id,
+                "project_name": project_name,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create project: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_update_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle project update request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            project_id = data.get("project_id", "")
+            updates = data.get("updates", {})
+            
+            if not project_id:
+                return {
+                    "status": "failed",
+                    "error": "Project ID is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Build update query dynamically
+            set_clauses = []
+            values = []
+            param_count = 1
+            
+            for field, value in updates.items():
+                if field in ["name", "description", "status"]:
+                    set_clauses.append(f"{field} = ${param_count}")
+                    values.append(value)
+                    param_count += 1
+            
+            if not set_clauses:
+                return {
+                    "status": "failed",
+                    "error": "No valid fields to update",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Add updated_at
+            set_clauses.append(f"updated_at = ${param_count}")
+            values.append(datetime.now())
+            param_count += 1
+            
+            # Add project_id for WHERE clause
+            values.append(project_id)
+            
+            query = f"""
+                UPDATE projects 
+                SET {', '.join(set_clauses)}
+                WHERE id = ${param_count}
+            """
+            
+            async with self.db_pool.acquire() as conn:
+                result = await conn.execute(query, *values)
+                rows_affected = int(result.split()[-1])
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "project_id": project_id,
+                "rows_affected": rows_affected,
+                "updates_applied": updates,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to update project: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_delete_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle project deletion request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            project_id = data.get("project_id", "")
+            
+            if not project_id:
+                return {
+                    "status": "failed",
+                    "error": "Project ID is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as conn:
+                result = await conn.execute("DELETE FROM projects WHERE id = $1", project_id)
+                rows_affected = int(result.split()[-1])
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "project_id": project_id,
+                "rows_affected": rows_affected,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete project: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_create_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle topic creation request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            topic_name = data.get("topic_name", "")
+            project_id = data.get("project_id", "")
+            description = data.get("description", "")
+            
+            if not all([topic_name, project_id]):
+                return {
+                    "status": "failed",
+                    "error": "Topic name and project ID are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            topic_id = str(uuid.uuid4())
+            
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO topics (id, name, description, project_id, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                """, topic_id, topic_name, description, project_id, datetime.now(), datetime.now())
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "topic_id": topic_id,
+                "topic_name": topic_name,
+                "project_id": project_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create topic: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_update_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle topic update request."""
+        return await self._generic_update("topics", data)
+    
+    async def _handle_delete_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle topic deletion request."""
+        return await self._generic_delete("topics", data.get("topic_id", ""))
+    
+    async def _handle_create_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plan creation request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            plan_name = data.get("plan_name", "")
+            project_id = data.get("project_id", "")
+            plan_data = data.get("plan_data", {})
+            
+            if not all([plan_name, project_id]):
+                return {
+                    "status": "failed",
+                    "error": "Plan name and project ID are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            plan_id = str(uuid.uuid4())
+            
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO research_plans (id, name, project_id, plan_data, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                """, plan_id, plan_name, project_id, json.dumps(plan_data), datetime.now(), datetime.now())
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "plan_id": plan_id,
+                "plan_name": plan_name,
+                "project_id": project_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create plan: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_update_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plan update request."""
+        return await self._generic_update("research_plans", data)
+    
+    async def _handle_delete_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plan deletion request."""
+        return await self._generic_delete("research_plans", data.get("plan_id", ""))
+    
+    async def _handle_create_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task creation request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            task_name = data.get("task_name", "")
+            project_id = data.get("project_id", "")
+            task_type = data.get("task_type", "general")
+            task_data_json = data.get("task_data", {})
+            
+            if not all([task_name, project_id]):
+                return {
+                    "status": "failed",
+                    "error": "Task name and project ID are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            task_id = str(uuid.uuid4())
+            
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO tasks (id, name, task_type, project_id, task_data, status, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """, task_id, task_name, task_type, project_id, json.dumps(task_data_json), 
+                     "pending", datetime.now(), datetime.now())
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "task_id": task_id,
+                "task_name": task_name,
+                "project_id": project_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create task: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_update_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task update request."""
+        return await self._generic_update("tasks", data)
+    
+    async def _handle_delete_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task deletion request."""
+        return await self._generic_delete("tasks", data.get("task_id", ""))
+    
+    async def _handle_create_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle literature record creation request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            title = data.get("title", "")
+            authors = data.get("authors", [])
+            project_id = data.get("project_id", "")
+            metadata_json = data.get("metadata", {})
+            
+            if not all([title, project_id]):
+                return {
+                    "status": "failed",
+                    "error": "Title and project ID are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            record_id = str(uuid.uuid4())
+            
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO literature_records (id, title, authors, project_id, metadata, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                """, record_id, title, json.dumps(authors), project_id, json.dumps(metadata_json), 
+                     datetime.now(), datetime.now())
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "record_id": record_id,
+                "title": title,
+                "project_id": project_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create literature record: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_update_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle literature record update request."""
+        return await self._generic_update("literature_records", data)
+    
+    async def _handle_delete_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle literature record deletion request."""
+        return await self._generic_delete("literature_records", data.get("record_id", ""))
+    
+    async def _handle_database_operations(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle generic database operations request."""
+        try:
+            operation = data.get("operation", "")
+            
+            if operation == "backup":
+                return await self._handle_backup_operation(data)
+            elif operation == "maintenance":
+                return await self._handle_maintenance_operation(data)
+            elif operation == "analytics":
+                return await self._handle_analytics_operation(data)
+            else:
+                return {
+                    "status": "failed",
+                    "error": f"Unknown database operation: {operation}",
+                    "available_operations": ["backup", "maintenance", "analytics"],
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to execute database operations: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_query_execution(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle raw query execution request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            query = data.get("query", "")
+            params = data.get("params", [])
+            query_type = data.get("query_type", "select")
+            
+            if not query:
+                return {
+                    "status": "failed",
+                    "error": "Query is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Safety check - only allow certain query types
+            allowed_types = ["insert", "update", "delete"]
+            if query_type.lower() not in allowed_types:
+                return {
+                    "status": "failed",
+                    "error": f"Query type '{query_type}' not allowed. Allowed types: {allowed_types}",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as conn:
+                if query_type.lower() in ["insert", "update", "delete"]:
+                    result = await conn.execute(query, *params)
+                    rows_affected = int(result.split()[-1]) if result else 0
+                    
+                    self.operations_completed += 1
+                    
+                    return {
+                        "status": "completed",
+                        "query_type": query_type,
+                        "rows_affected": rows_affected,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": "Unsupported query type",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Failed to execute query: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _generic_update(self, table_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generic update handler for database tables."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            record_id = data.get("id", data.get(f"{table_name[:-1]}_id", ""))  # Remove 's' for singular
+            updates = data.get("updates", {})
+            
+            if not record_id:
+                return {
+                    "status": "failed",
+                    "error": "Record ID is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            if not updates:
+                return {
+                    "status": "failed",
+                    "error": "Updates are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Build update query
+            set_clauses = []
+            values = []
+            param_count = 1
+            
+            for field, value in updates.items():
+                set_clauses.append(f"{field} = ${param_count}")
+                values.append(value)
+                param_count += 1
+            
+            # Add updated_at
+            set_clauses.append(f"updated_at = ${param_count}")
+            values.append(datetime.now())
+            param_count += 1
+            
+            # Add record_id for WHERE clause
+            values.append(record_id)
+            
+            query = f"""
+                UPDATE {table_name} 
+                SET {', '.join(set_clauses)}
+                WHERE id = ${param_count}
+            """
+            
+            async with self.db_pool.acquire() as conn:
+                result = await conn.execute(query, *values)
+                rows_affected = int(result.split()[-1])
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "table": table_name,
+                "record_id": record_id,
+                "rows_affected": rows_affected,
+                "updates_applied": updates,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to update {table_name}: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _generic_delete(self, table_name: str, record_id: str) -> Dict[str, Any]:
+        """Generic delete handler for database tables."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            if not record_id:
+                return {
+                    "status": "failed",
+                    "error": "Record ID is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as conn:
+                result = await conn.execute(f"DELETE FROM {table_name} WHERE id = $1", record_id)
+                rows_affected = int(result.split()[-1])
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "table": table_name,
+                "record_id": record_id,
+                "rows_affected": rows_affected,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete from {table_name}: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_backup_operation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle database backup operation."""
+        # Simplified backup operation
+        return {
+            "status": "completed",
+            "operation": "backup",
+            "message": "Backup operation initiated (implementation required)",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def _handle_maintenance_operation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle database maintenance operation."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+            
+            # Simple maintenance - analyze tables
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("ANALYZE")
+            
+            return {
+                "status": "completed",
+                "operation": "maintenance",
+                "message": "Database analysis completed",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return {
+                "status": "failed",
+                "operation": "maintenance",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_analytics_operation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle database analytics operation."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+            
+            # Simple analytics - table counts
+            analytics = {}
+            tables = ["projects", "topics", "tasks", "literature_records"]
+            
+            async with self.db_pool.acquire() as conn:
+                for table in tables:
+                    try:
+                        count = await conn.fetchval(f"SELECT COUNT(*) FROM {table}")
+                        analytics[f"{table}_count"] = count
+                    except:
+                        analytics[f"{table}_count"] = 0
+            
+            return {
+                "status": "completed",
+                "operation": "analytics",
+                "analytics": analytics,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return {
+                "status": "failed",
+                "operation": "analytics",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _get_agent_status(self) -> Dict[str, Any]:
+        """Get current agent status."""
+        uptime = (datetime.now() - self.start_time).total_seconds()
+        
+        # Database pool status
+        pool_status = {}
+        if self.db_pool:
+            pool_status = {
+                "pool_size": self.db_pool.get_size(),
+                "pool_max_size": self.db_pool.get_max_size(),
+                "pool_min_size": self.db_pool.get_min_size()
+            }
+        
+        return {
+            "agent_id": self.agent_id,
+            "agent_type": self.agent_type,
+            "status": "ready" if self.mcp_connected else "disconnected",
+            "capabilities": self.capabilities,
+            "mcp_connected": self.mcp_connected,
+            "database_connected": self.db_pool is not None,
+            "operations_completed": self.operations_completed,
+            "operations_failed": self.operations_failed,
+            "pool_status": pool_status,
+            "uptime_seconds": uptime,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+# Global service instance
+database_service: Optional[DatabaseAgentService] = None
+
+
+def get_mcp_status() -> Dict[str, Any]:
+    """Get MCP connection status for health check."""
+    if database_service:
+        return {
+            "connected": database_service.mcp_connected,
+            "last_heartbeat": datetime.now().isoformat()
+        }
+    return {"connected": False, "last_heartbeat": "never"}
+
+
+def get_additional_metadata() -> Dict[str, Any]:
+    """Get additional metadata for health check."""
+    if database_service:
+        pool_info = {}
+        if database_service.db_pool:
+            pool_info = {
+                "pool_size": database_service.db_pool.get_size(),
+                "pool_max_size": database_service.db_pool.get_max_size()
+            }
+        
+        return {
+            "capabilities": database_service.capabilities,
+            "operations_completed": database_service.operations_completed,
+            "operations_failed": database_service.operations_failed,
+            "database_connected": database_service.db_pool is not None,
+            "pool_info": pool_info,
+            "agent_id": database_service.agent_id
+        }
+    return {}
+
+
+# Create health check only FastAPI application
+app = create_health_check_app(
+    agent_type="database",
+    agent_id="database-agent",
+    version="1.0.0",
+    get_mcp_status=get_mcp_status,
+    get_additional_metadata=get_additional_metadata
+)
+
+
+async def main():
+    """Main entry point for the database agent service."""
+    global database_service
+    
+    try:
+        # Load configuration
+        config_path = Path("/app/config/config.json")
+        if config_path.exists():
+            with open(config_path) as f:
+                config = json.load(f)
+        else:
+            config = {
+                "service_host": "0.0.0.0",
+                "service_port": 8011,
+                "mcp_server_url": "ws://mcp-server:9000",
+                "database_url": "postgresql://postgres:password@postgres:5432/eunice",
+                "max_connections": 10,
+                "connection_timeout": 30
+            }
+        
+        # Initialize service
+        database_service = DatabaseAgentService(config)
+        
+        # Start FastAPI health check server in background
+        config_uvicorn = uvicorn.Config(
+            app,
+            host=config["service_host"],
+            port=config["service_port"],
+            log_level="info"
+        )
+        server = uvicorn.Server(config_uvicorn)
+        
+        logger.info("🚨 ARCHITECTURE COMPLIANCE: Database Agent")
+        logger.info("✅ ONLY health check API exposed")
+        logger.info("✅ All business operations via MCP protocol exclusively")
+        
+        # Start server and MCP service concurrently
+        await asyncio.gather(
+            server.serve(),
+            database_service.start()
+        )
+        
+    except KeyboardInterrupt:
+        logger.info("Database agent shutdown requested")
+    except Exception as e:
+        logger.error(f"Database agent failed: {e}")
+        sys.exit(1)
+    finally:
+        if database_service:
+            await database_service.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

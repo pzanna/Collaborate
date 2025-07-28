@@ -6,10 +6,10 @@ Eunice is an advanced research platform named after the AI from William Gibson's
 
 The platform specializes in hierarchical research organization, multi-agent collaboration, systematic literature reviews, and provides comprehensive tools for managing complex research projects across multiple domains.
 
-**Current Status**: Version 0.3 Microservices Architecture (Partial Implementation)  
+**Current Status**: Version 0.3 Microservices Architecture (Core Services Complete)  
 **✅ Version 0.2 COMPLETE** - Enhanced MCP Server, API Gateway, Task Queue System  
-**🔄 Version 0.3 PARTIAL** - Core microservices infrastructure implemented  
-**❌ Version 0.3.1 PENDING** - Individual agent containerization not started
+**✅ Version 0.3 CORE COMPLETE** - API Gateway, MCP Server, Database integration, Project management  
+**🔄 Version 0.3.1 PARTIAL** - Research topic and plan endpoints in development
 
 ## 🚀 Key Features
 
@@ -56,13 +56,19 @@ Eunice follows a **Version 0.3 microservices architecture** with the following i
 
 ### ✅ Implemented Services
 
-- **API Gateway** (Port 8001): Unified REST interface with 21+ endpoints
-- **MCP Server** (Port 9000): Enhanced coordination server with agent management
-- **Database Service** (Port 8011): Centralized data access layer
-- **Redis** (Port 6380): Message broker and caching
-- **PostgreSQL** (Port 5433): Primary database
+- **API Gateway** (Port 8001): Unified REST interface with 25+ endpoints including project management
+- **MCP Server** (Port 9000): Enhanced coordination server with agent management and WebSocket communication
+- **Database Service** (Port 8011): PostgreSQL integration with native connection pooling
+- **Redis** (Port 6380): Message broker and caching layer
+- **PostgreSQL** (Port 5433): Primary database with hierarchical research structure
 
-### ❌ Pending Version 0.3.1 Implementation
+### 🔄 In Development (Version 0.3.1)
+
+- **Research Topic Management**: Full CRUD operations for research topics within projects
+- **Research Plan Management**: Planning and organization endpoints for systematic research
+- **Task Management**: Individual task tracking and execution monitoring
+
+### ❌ Future Implementation
 
 - **Individual Agent Containers**: Literature, Planning, Executor, Memory agents
 - **Service Discovery**: Agent registration and health monitoring

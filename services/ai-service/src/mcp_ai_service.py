@@ -20,7 +20,11 @@ import websockets
 import openai
 import anthropic
 import httpx
+import uvicorn
 from pydantic import BaseModel
+
+# Import the standardized health check service
+from .health_check_service import create_health_check_app
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +52,7 @@ class MCPAIService:
         self.websocket: Optional[websockets.WebSocketClientProtocol] = None
         self.is_connected = False
         self.is_running = False
+        self.start_time = time.time()
         
         # Request tracking
         self.pending_requests: Dict[str, asyncio.Future] = {}
@@ -113,6 +118,26 @@ class MCPAIService:
             return False
         
         return True
+    
+    def get_mcp_status(self) -> Dict[str, Any]:
+        """Get MCP connection status for health check."""
+        return {
+            "connected": self.is_connected,
+            "last_heartbeat": datetime.now().isoformat()
+        }
+    
+    def get_additional_metadata(self) -> Dict[str, Any]:
+        """Get additional metadata for health check."""
+        return {
+            "capabilities": self.capabilities,
+            "ai_providers": {
+                "openai_available": self.openai_client is not None,
+                "anthropic_available": self.anthropic_client is not None,
+                "xai_available": self.xai_client is not None
+            },
+            "agent_id": self.agent_id,
+            "uptime_seconds": int(time.time() - self.start_time)
+        }
     
     async def start(self):
         """Start the MCP AI Service client"""
@@ -535,21 +560,74 @@ class MCPAIService:
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop()))
 
 
+# Global service instance for health check access
+ai_service_instance: Optional[MCPAIService] = None
+
+
+def get_mcp_status() -> Dict[str, Any]:
+    """Get MCP connection status for health check."""
+    if ai_service_instance:
+        return ai_service_instance.get_mcp_status()
+    return {"connected": False, "last_heartbeat": "never"}
+
+
+def get_additional_metadata() -> Dict[str, Any]:
+    """Get additional metadata for health check."""
+    if ai_service_instance:
+        return ai_service_instance.get_additional_metadata()
+    return {}
+
+
 async def main():
     """Main entry point for AI Service MCP Client"""
-    ai_service = MCPAIService()
+    global ai_service_instance
     
     try:
-        # Setup signal handlers
-        ai_service._setup_signal_handlers()
+        # Create AI service instance
+        ai_service_instance = MCPAIService()
         
-        # Start the service
-        await ai_service.start()
+        # Create health check app
+        health_app = create_health_check_app(
+            agent_type="ai_service",
+            agent_id=ai_service_instance.agent_id,
+            version="1.0.0",
+            get_mcp_status=get_mcp_status,
+            get_additional_metadata=get_additional_metadata
+        )
+        
+        # Configure health check server
+        health_port = int(os.getenv('HEALTH_PORT', '8010'))
+        health_config = uvicorn.Config(
+            health_app,
+            host="0.0.0.0",
+            port=health_port,
+            log_level="info",
+            access_log=False
+        )
+        health_server = uvicorn.Server(health_config)
+        
+        logger.info("🚨 ARCHITECTURE COMPLIANCE: AI Service")
+        logger.info("✅ ONLY health check API exposed")
+        logger.info("✅ All business operations via MCP protocol exclusively")
+        logger.info(f"Health check API running on port {health_port}")
+        
+        # Setup signal handlers
+        ai_service_instance._setup_signal_handlers()
+        
+        # Start both services concurrently
+        await asyncio.gather(
+            health_server.serve(),
+            ai_service_instance.start()
+        )
         
     except KeyboardInterrupt:
         logger.info("Received shutdown signal")
+    except Exception as e:
+        logger.error(f"AI Service error: {e}")
+        sys.exit(1)
     finally:
-        await ai_service.stop()
+        if ai_service_instance:
+            await ai_service_instance.stop()
 
 
 if __name__ == "__main__":

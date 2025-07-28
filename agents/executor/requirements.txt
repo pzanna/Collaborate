@@ -1,0 +1,14 @@
+# Essential Executor Agent Dependencies - Alpine Compatible
+
+# FastAPI and HTTP server
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# WebSocket communication for MCP
+websockets==12.0
+
+# Async file operations
+aiofiles==23.2.0
+
+# HTTP client for API calls
+aiohttp==3.9.1

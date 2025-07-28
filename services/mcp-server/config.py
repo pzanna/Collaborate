@@ -88,7 +88,7 @@ class EnhancedMCPServerConfig:
     # Agent Configuration
     allowed_agent_types: List[str] = field(default_factory=lambda: os.getenv(
         "ALLOWED_AGENT_TYPES", 
-        "research_manager,literature_search,screening_prisma,synthesis_review,writer,planning,executor,memory"
+        "research_manager,literature_search,screening_prisma,synthesis_review,writer,planning,executor,memory,database"
     ).split(","))
     
     def __post_init__(self):
