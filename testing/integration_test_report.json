@@ -1,0 +1,476 @@
+{
+  "summary": {
+    "total_tests": 6,
+    "passed": 4,
+    "failed": 2,
+    "pass_rate": 66.66666666666666,
+    "total_duration": 0.2917189598083496,
+    "timestamp": "2025-07-28T21:46:03.049274"
+  },
+  "results": [
+    {
+      "test_name": "test_all_service_health",
+      "status": "FAIL",
+      "healthy_services": 9,
+      "unhealthy_services": 1,
+      "details": {
+        "healthy": [
+          {
+            "service": "api-gateway",
+            "status": "degraded",
+            "mcp_connected": false,
+            "capabilities": 0
+          },
+          {
+            "service": "research-manager",
+            "status": "healthy",
+            "mcp_connected": true,
+            "capabilities": 7
+          },
+          {
+            "service": "literature-agent",
+            "status": "healthy",
+            "mcp_connected": true,
+            "capabilities": 6
+          },
+          {
+            "service": "screening-agent",
+            "status": "healthy",
+            "mcp_connected": false,
+            "capabilities": 8
+          },
+          {
+            "service": "synthesis-agent",
+            "status": "healthy",
+            "mcp_connected": true,
+            "capabilities": 6
+          },
+          {
+            "service": "writer-agent",
+            "status": "healthy",
+            "mcp_connected": true,
+            "capabilities": 8
+          },
+          {
+            "service": "planning-agent",
+            "status": "healthy",
+            "mcp_connected": true,
+            "capabilities": 0
+          },
+          {
+            "service": "executor-agent",
+            "status": "degraded",
+            "mcp_connected": false,
+            "capabilities": 9
+          },
+          {
+            "service": "database-agent",
+            "status": "healthy",
+            "mcp_connected": true,
+            "capabilities": 0
+          }
+        ],
+        "unhealthy": [
+          {
+            "service": "memory-agent",
+            "error": "('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+          }
+        ]
+      }
+    },
+    {
+      "test_name": "test_basic_connectivity",
+      "status": "FAIL",
+      "connected_services": 9,
+      "total_services": 10,
+      "details": {
+        "api-gateway": {
+          "connected": true,
+          "status_code": 404
+        },
+        "research-manager": {
+          "connected": true,
+          "status_code": 404
+        },
+        "literature-agent": {
+          "connected": true,
+          "status_code": 404
+        },
+        "screening-agent": {
+          "connected": true,
+          "status_code": 404
+        },
+        "synthesis-agent": {
+          "connected": true,
+          "status_code": 404
+        },
+        "writer-agent": {
+          "connected": true,
+          "status_code": 404
+        },
+        "planning-agent": {
+          "connected": true,
+          "status_code": 404
+        },
+        "executor-agent": {
+          "connected": true,
+          "status_code": 404
+        },
+        "memory-agent": {
+          "connected": false,
+          "error": "('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+        },
+        "database-agent": {
+          "connected": true,
+          "status_code": 404
+        }
+      }
+    },
+    {
+      "test_name": "test_agent_endpoints",
+      "status": "PASS",
+      "details": {
+        "synthesis-agent": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": false,
+            "status_code": 404
+          },
+          "/synthesize": {
+            "available": true,
+            "status_code": 405
+          }
+        },
+        "writer-agent": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": false,
+            "status_code": 404
+          },
+          "/generate": {
+            "available": false,
+            "status_code": 404
+          }
+        },
+        "literature-agent": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": false,
+            "status_code": 404
+          },
+          "/search": {
+            "available": true,
+            "status_code": 405
+          }
+        },
+        "screening-agent": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": false,
+            "status_code": 404
+          },
+          "/screen": {
+            "available": true,
+            "status_code": 405
+          }
+        },
+        "planning-agent": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": true,
+            "status_code": 200
+          },
+          "/plan": {
+            "available": false,
+            "status_code": 404
+          }
+        },
+        "executor-agent": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": true,
+            "status_code": 200
+          },
+          "/execute": {
+            "available": false,
+            "status_code": 404
+          }
+        },
+        "database-agent": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": false,
+            "status_code": 404
+          },
+          "/query": {
+            "available": false,
+            "status_code": 404
+          }
+        },
+        "research-manager": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/capabilities": {
+            "available": false,
+            "status_code": 404
+          }
+        },
+        "api-gateway": {
+          "/health": {
+            "available": true,
+            "status_code": 200
+          },
+          "/status": {
+            "available": true,
+            "status_code": 200
+          }
+        }
+      }
+    },
+    {
+      "test_name": "test_agent_health_details",
+      "status": "PASS",
+      "details": {
+        "api-gateway": {
+          "status": "degraded",
+          "agent_type": null,
+          "mcp_connected": false,
+          "capabilities": [],
+          "processing_capabilities": [],
+          "output_formats": [],
+          "citation_styles": []
+        },
+        "research-manager": {
+          "status": "healthy",
+          "agent_type": "research_manager",
+          "mcp_connected": true,
+          "capabilities": [
+            "start_research_task",
+            "cancel_task",
+            "get_task_status",
+            "orchestrate_research",
+            "estimate_task_cost",
+            "coordinate_agents",
+            "monitor_progress"
+          ],
+          "processing_capabilities": [],
+          "output_formats": [],
+          "citation_styles": []
+        },
+        "literature-agent": {
+          "status": "healthy",
+          "agent_type": "literature",
+          "mcp_connected": true,
+          "capabilities": [
+            "search_academic_papers",
+            "search_literature",
+            "normalize_records",
+            "deduplicate_results",
+            "multi_source_search",
+            "bibliographic_search"
+          ],
+          "processing_capabilities": [],
+          "output_formats": [],
+          "citation_styles": []
+        },
+        "screening-agent": {
+          "status": "healthy",
+          "agent_type": "screening",
+          "mcp_connected": false,
+          "capabilities": [
+            "screen_records",
+            "apply_criteria",
+            "create_prisma_session",
+            "update_prisma_data",
+            "generate_prisma_flowchart",
+            "track_screening_decisions",
+            "validate_inclusion_exclusion",
+            "batch_screening"
+          ],
+          "processing_capabilities": [],
+          "output_formats": [],
+          "citation_styles": []
+        },
+        "synthesis-agent": {
+          "status": "healthy",
+          "agent_type": "synthesis_review",
+          "mcp_connected": true,
+          "capabilities": [
+            "data_extraction",
+            "evidence_synthesis",
+            "meta_analysis",
+            "statistical_aggregation",
+            "evidence_table_generation",
+            "outcome_extraction"
+          ],
+          "processing_capabilities": [
+            "narrative_synthesis",
+            "thematic_synthesis",
+            "framework_synthesis",
+            "forest_plot_generation",
+            "heterogeneity_assessment"
+          ],
+          "output_formats": [],
+          "citation_styles": []
+        },
+        "writer-agent": {
+          "status": "healthy",
+          "agent_type": "writer",
+          "mcp_connected": true,
+          "capabilities": [
+            "manuscript_generation",
+            "academic_writing",
+            "citation_formatting",
+            "bibliography_management",
+            "document_templates",
+            "export_formats",
+            "prisma_flowcharts",
+            "evidence_tables"
+          ],
+          "processing_capabilities": [],
+          "output_formats": [
+            "markdown",
+            "latex",
+            "docx",
+            "pdf",
+            "html"
+          ],
+          "citation_styles": [
+            "apa",
+            "vancouver",
+            "harvard",
+            "chicago"
+          ]
+        },
+        "planning-agent": {
+          "status": "healthy",
+          "agent_type": "planning",
+          "mcp_connected": true,
+          "capabilities": [],
+          "processing_capabilities": [],
+          "output_formats": [],
+          "citation_styles": []
+        },
+        "executor-agent": {
+          "status": "degraded",
+          "agent_type": "executor",
+          "mcp_connected": false,
+          "capabilities": [
+            "execute_code",
+            "make_api_call",
+            "process_data",
+            "read_file",
+            "write_file",
+            "run_command",
+            "transform_data",
+            "validate_data",
+            "execute_research"
+          ],
+          "processing_capabilities": [],
+          "output_formats": [],
+          "citation_styles": []
+        },
+        "memory-agent": {
+          "error": "('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+        },
+        "database-agent": {
+          "status": "healthy",
+          "agent_type": null,
+          "mcp_connected": true,
+          "capabilities": [],
+          "processing_capabilities": [],
+          "output_formats": [],
+          "citation_styles": []
+        }
+      }
+    },
+    {
+      "test_name": "test_mcp_connectivity_status",
+      "status": "PASS",
+      "connected_agents": 6,
+      "total_agents": 10,
+      "details": {
+        "api-gateway": {
+          "mcp_connected": false,
+          "agent_type": "unknown"
+        },
+        "research-manager": {
+          "mcp_connected": true,
+          "agent_type": "research_manager"
+        },
+        "literature-agent": {
+          "mcp_connected": true,
+          "agent_type": "literature"
+        },
+        "screening-agent": {
+          "mcp_connected": false,
+          "agent_type": "screening"
+        },
+        "synthesis-agent": {
+          "mcp_connected": true,
+          "agent_type": "synthesis_review"
+        },
+        "writer-agent": {
+          "mcp_connected": true,
+          "agent_type": "writer"
+        },
+        "planning-agent": {
+          "mcp_connected": true,
+          "agent_type": "planning"
+        },
+        "executor-agent": {
+          "mcp_connected": false,
+          "agent_type": "executor"
+        },
+        "memory-agent": {
+          "error": "('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+        },
+        "database-agent": {
+          "mcp_connected": true,
+          "agent_type": "unknown"
+        }
+      }
+    },
+    {
+      "test_name": "test_cross_agent_communication",
+      "status": "PASS",
+      "successful_tests": 1,
+      "total_tests": 2,
+      "details": [
+        {
+          "test": "synthesis_agent_mock_request",
+          "success": true,
+          "status_code": 200
+        },
+        {
+          "test": "writer_agent_mock_request",
+          "success": false,
+          "status_code": 404
+        }
+      ]
+    }
+  ]
+}

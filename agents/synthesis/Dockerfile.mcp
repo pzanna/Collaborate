@@ -1,5 +1,5 @@
-# Pure MCP Client Dockerfile - Synthesis Agent
-# Architecture-compliant: No HTTP server, WebSocket-only communication
+# Pure MCP Client Dockerfile - Architecture Compliant
+# No HTTP server, WebSocket-only communication
 
 FROM python:3.12-alpine
 
@@ -11,8 +11,7 @@ RUN addgroup -g 1001 -S eunice && \
 RUN apk add --no-cache \
     gcc \
     musl-dev \
-    libffi-dev \
-    tini
+    libffi-dev
 
 # Set working directory
 WORKDIR /app
@@ -20,9 +19,6 @@ WORKDIR /app
 # Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy base MCP agent
-COPY ../base_mcp_agent.py ./base_mcp_agent.py
 
 # Copy source code
 COPY src/ ./src/
@@ -33,12 +29,12 @@ RUN chown -R eunice:eunice /app
 USER eunice
 
 # Environment variables
-ENV PYTHONPATH=/app:/app/src
+ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
-# No health check via HTTP - MCP connection is monitored by MCP server
-# Health is determined by successful WebSocket connection and registration
+# Health check via MCP connection (not HTTP)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import asyncio, websockets; asyncio.run(websockets.connect('ws://mcp-server:9000').close())" || exit 1
 
-# Use tini for proper signal handling
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["python", "/app/src/synthesis_agent.py"]
+# Run the pure MCP agent (no HTTP server)
+CMD ["python", "/app/src/synthesis_mcp_agent.py"]

@@ -81,6 +81,7 @@ services:
     build: ./agents/planning
     container_name: eunice-planning-agent
     ports:
+      - "8007:8007"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8007
@@ -93,6 +94,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -127,6 +129,7 @@ services:
     build: ./agents/executor
     container_name: eunice-executor-agent
     ports:
+      - "8008:8008"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8008
@@ -139,6 +142,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -148,6 +152,7 @@ services:
     build: ./agents/memory
     container_name: eunice-memory-agent
     ports:
+      - "8009:8009"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8009
@@ -160,6 +165,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -169,6 +175,7 @@ services:
     build: ./agents/research-manager
     container_name: eunice-research-manager
     ports:
+      - "8002:8002"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8002
@@ -181,6 +188,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -190,6 +198,7 @@ services:
     build: ./agents/literature
     container_name: eunice-literature-agent
     ports:
+      - "8003:8003"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8003
@@ -202,6 +211,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -212,6 +222,7 @@ services:
     image: eunice/screening-agent:secure
     container_name: eunice-screening-agent
     ports:
+      - "8004:8004"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8004
@@ -227,6 +238,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -237,6 +249,7 @@ services:
     image: eunice/synthesis-agent:secure
     container_name: eunice-synthesis-agent
     ports:
+      - "8005:8005"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8005
@@ -252,6 +265,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -262,6 +276,7 @@ services:
     image: eunice/writer-agent:secure
     container_name: eunice-writer-agent
     ports:
+      - "8006:8006"
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8006
@@ -277,6 +292,7 @@ services:
       - mcp-server
     restart: unless-stopped
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
       interval: 30s
       timeout: 10s
       retries: 3
