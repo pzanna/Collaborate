@@ -1,0 +1,28 @@
+# FastAPI and HTTP server
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# WebSocket communication for MCP
+websockets==12.0
+
+# Async file operations
+aiofiles==23.2.0
+
+# HTTP client for API calls
+aiohttp==3.9.1
+
+# Data processing libraries (optional but commonly used)
+pandas==2.1.4
+numpy==1.25.2
+
+# Standard libraries (these are included with Python but listed for clarity)
+# json - built-in
+# csv - built-in  
+# datetime - built-in
+# math - built-in
+# statistics - built-in
+# pathlib - built-in
+# os - built-in
+# sys - built-in
+# io - built-in
+# collections - built-in

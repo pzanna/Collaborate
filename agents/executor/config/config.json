@@ -1,0 +1,69 @@
+{
+  "service": {
+    "name": "executor_agent",
+    "description": "Executor Agent for code execution, data processing, and automation tasks",
+    "version": "1.0.0",
+    "host": "0.0.0.0",
+    "port": 8008,
+    "type": "executor"
+  },
+  "mcp": {
+    "server_url": "ws://mcp-server:9000",
+    "reconnect_attempts": 5,
+    "reconnect_delay": 5,
+    "ping_interval": 30,
+    "ping_timeout": 10
+  },
+  "capabilities": [
+    "execute_code",
+    "make_api_call",
+    "process_data",
+    "read_file",
+    "write_file",
+    "run_command",
+    "transform_data",
+    "validate_data",
+    "execute_research"
+  ],
+  "execution": {
+    "max_time": 30,
+    "allowed_imports": [
+      "pandas",
+      "numpy",
+      "json",
+      "csv",
+      "datetime",
+      "math",
+      "statistics",
+      "requests",
+      "urllib",
+      "pathlib",
+      "os",
+      "sys",
+      "io",
+      "collections"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "max_file_size": 1048576,
+    "safe_commands": [
+      "ls",
+      "cat",
+      "head",
+      "tail",
+      "wc",
+      "grep",
+      "sort",
+      "uniq",
+      "python",
+      "pip",
+      "node",
+      "npm"
+    ]
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}

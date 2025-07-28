@@ -34,7 +34,7 @@ import asyncpg
 
 # Configuration
 SERVICE_HOST = os.getenv("SERVICE_HOST", "0.0.0.0")
-SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8008"))
+SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8011"))
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "ws://mcp-server:9000")
 AGENT_TYPE = os.getenv("AGENT_TYPE", "database")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@postgres:5432/eunice")
