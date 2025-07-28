@@ -514,7 +514,11 @@ class WriterAgent(BaseMCPAgent):
         title = citation.get("title", "Untitled")
         journal = citation.get("journal", "")
         
-        author_str = ", ".join([author.split()[-1] + " " + "".join([n[0] for n in author.split()[:-1]]) for author in authors[:6]])
+        author_str = ", ".join([
+            author.split()[-1] + " " + "".join([n[0] for n in author.split()[:-1]]) if len(author.split()) > 1
+            else author
+            for author in authors[:6]
+        ])
         
         if journal:
             return f"{author_str}. {title}. {journal}. {year}."
