@@ -1,0 +1,21 @@
+{
+  "service_name": "synthesis-review-agent",
+  "service_port": 8005,
+  "service_host": "0.0.0.0",
+  "agent_type": "synthesis_review",
+  "agent_id": "synthesis_review",
+  "mcp_server_url": "ws://mcp-server:9000",
+  "capabilities": [
+    "data_extraction",
+    "evidence_synthesis",
+    "meta_analysis",
+    "statistical_aggregation",
+    "evidence_table_generation",
+    "outcome_extraction"
+  ],
+  "dependencies": ["mcp-server", "ai-service", "memory-agent"],
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}
