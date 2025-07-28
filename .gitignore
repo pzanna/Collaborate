@@ -210,3 +210,4 @@ __marimo__/
 .DS_Store
 /frontend/node_modules
 /thesis_output
+docs/Commands.txt

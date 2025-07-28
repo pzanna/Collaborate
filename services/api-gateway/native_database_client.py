@@ -14,6 +14,7 @@ Features:
 """
 
 import asyncio
+import json
 import logging
 import os
 import decimal
@@ -51,8 +52,8 @@ class NativeDatabaseClient:
             server_settings: Additional server settings
         """
         self.database_url = database_url or os.getenv(
-            "DATABASE_READ_URL", 
-            "postgresql://postgres:password@postgres:5432/eunice"
+            "DATABASE_URL", 
+            os.getenv("DATABASE_READ_URL", "postgresql://postgres:password@postgres:5432/eunice")
         )
         self.min_size = min_size
         self.max_size = max_size
@@ -152,7 +153,7 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 # Build query with optional filters
-                query = "SELECT id, name, description, created_at, updated_at FROM projects"
+                query = "SELECT id, name, description, status, created_at, updated_at, metadata FROM projects"
                 params = []
                 
                 if status_filter:
@@ -173,14 +174,21 @@ class NativeDatabaseClient:
                 # Convert rows to dictionaries
                 projects = []
                 for row in rows:
+                    metadata = row['metadata'] or {}
+                    if isinstance(metadata, str):
+                        try:
+                            metadata = json.loads(metadata)
+                        except:
+                            metadata = {}
+                    
                     projects.append({
                         "id": str(row['id']),
                         "name": row['name'],
                         "description": row['description'] or "",
-                        "status": "active",  # Default status
+                        "status": row['status'] or "active",
                         "created_at": row['created_at'].isoformat() if row['created_at'] else None,
                         "updated_at": row['updated_at'].isoformat() if row['updated_at'] else None,
-                        "metadata": {}
+                        "metadata": metadata
                     })
                 
                 return projects
@@ -202,29 +210,33 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, created_at, updated_at 
+                    SELECT id, name, description, status, created_at, updated_at, metadata 
                     FROM projects 
                     WHERE id = $1
                 """
                 
-                row = await conn.fetchrow(query, int(project_id))
+                row = await conn.fetchrow(query, project_id)
                 
                 if not row:
                     return None
+                
+                metadata = row['metadata'] or {}
+                if isinstance(metadata, str):
+                    try:
+                        metadata = json.loads(metadata)
+                    except:
+                        metadata = {}
                 
                 return {
                     "id": str(row['id']),
                     "name": row['name'],
                     "description": row['description'] or "",
-                    "status": "active",  # Default status
+                    "status": row['status'] or "active",
                     "created_at": row['created_at'].isoformat() if row['created_at'] else None,
                     "updated_at": row['updated_at'].isoformat() if row['updated_at'] else None,
-                    "metadata": {}
+                    "metadata": metadata
                 }
                 
-        except ValueError:
-            # Invalid project_id format
-            return None
         except Exception as e:
             logger.error(f"Failed to fetch project {project_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
@@ -338,7 +350,7 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at 
+                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata 
                     FROM research_plans 
                     WHERE topic_id = $1
                 """
@@ -354,9 +366,16 @@ class NativeDatabaseClient:
                 
                 plans = []
                 for row in rows:
+                    metadata = row['metadata'] or {}
+                    if isinstance(metadata, str):
+                        try:
+                            metadata = json.loads(metadata)
+                        except:
+                            metadata = {}
+                    
                     plans.append({
                         "id": str(row['id']),
-                        "topic_id": str(row['topic_id']),
+                        "topic_id": str(row['topic_id']) if row['topic_id'] else None,
                         "name": row['name'],
                         "description": row['description'] or "",
                         "plan_type": row.get('plan_type', 'comprehensive'),
@@ -370,7 +389,7 @@ class NativeDatabaseClient:
                         "completed_tasks": 0,
                         "progress": 0.0,
                         "plan_structure": {},  # Additional fields
-                        "metadata": {}
+                        "metadata": metadata
                     })
                 
                 return plans
@@ -392,7 +411,7 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at 
+                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata 
                     FROM research_plans 
                     WHERE id = $1
                 """
@@ -400,9 +419,16 @@ class NativeDatabaseClient:
                 row = await conn.fetchrow(query, plan_id)
                 
                 if row:
+                    metadata = row['metadata'] or {}
+                    if isinstance(metadata, str):
+                        try:
+                            metadata = json.loads(metadata)
+                        except:
+                            metadata = {}
+                    
                     return {
                         "id": str(row['id']),
-                        "topic_id": str(row['topic_id']),
+                        "topic_id": str(row['topic_id']) if row['topic_id'] else None,
                         "name": row['name'],
                         "description": row['description'] or "",
                         "plan_type": row.get('plan_type', 'comprehensive'),
@@ -416,7 +442,7 @@ class NativeDatabaseClient:
                         "completed_tasks": 0,
                         "progress": 0.0,
                         "plan_structure": {},  # Additional fields
-                        "metadata": {}
+                        "metadata": metadata
                     }
                 return None
                 

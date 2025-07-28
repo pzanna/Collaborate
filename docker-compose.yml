@@ -47,8 +47,15 @@ services:
       - redis
       - postgres
     restart: unless-stopped
+    command: ["python", "simple_mcp_server.py"]
     healthcheck:
-      test: ["CMD", "python", "validate.py"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s = socket.socket(); s.connect(('localhost', 9000)); s.close()",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -92,7 +99,32 @@ services:
       timeout: 10s
       retries: 3
 
-  # 8. Database Service (Pure Database Management)
+  # 5. Database Agent (Port 8008)
+  database-agent:
+    build: ./agents/database
+    container_name: eunice-database-agent
+    ports:
+      - "8008:8008"
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8008
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=database
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+      - LOG_LEVEL=INFO
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+      - postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 8. Database Service (Pure Database Management - No API)
   database-service:
     build: ./services/database
     container_name: eunice-database-service
@@ -108,8 +140,6 @@ services:
       - postgres
       - redis
     restart: unless-stopped
-    # Note: No port exposure - this is a pure database management service
-    # API operations are handled by the API Gateway with direct DB connections
 
   # Supporting Infrastructure
 
