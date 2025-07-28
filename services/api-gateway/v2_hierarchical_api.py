@@ -355,8 +355,12 @@ async def get_project_stats(
 ):
     """Get project statistics."""
     try:
-        # For now, return 404 until proper database integration is complete
-        raise HTTPException(status_code=404, detail="Project not found")
+        # Get project statistics from database
+        stats = await db.get_project_stats(project_id)
+        if not stats:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return ProjectStats(**stats)
 
     except HTTPException:
         raise
@@ -371,8 +375,12 @@ async def get_project_hierarchy(
 ):
     """Get complete hierarchy for a project (topics -> plans -> tasks)."""
     try:
-        # For now, return 404 until proper database integration is complete
-        raise HTTPException(status_code=404, detail="Project not found")
+        # Get complete project hierarchy from database
+        hierarchy = await db.get_project_hierarchy(project_id)
+        if not hierarchy:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return ProjectHierarchy(**hierarchy)
 
     except HTTPException:
         raise

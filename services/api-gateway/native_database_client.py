@@ -562,6 +562,125 @@ class NativeDatabaseClient:
             logger.error(f"Failed to fetch task {task_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
 
+    async def get_project_stats(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get project statistics including counts and costs.
+        
+        Args:
+            project_id: Project ID
+            
+        Returns:
+            Project statistics dictionary or None if project not found
+        """
+        try:
+            async with self.get_connection() as conn:
+                # First verify project exists
+                project_exists = await conn.fetchval(
+                    "SELECT 1 FROM projects WHERE id = $1", project_id
+                )
+                if not project_exists:
+                    return None
+
+                # Get counts of topics, plans, and tasks
+                stats_query = """
+                    SELECT 
+                        COALESCE(
+                            (SELECT COUNT(*) FROM research_topics WHERE project_id = $1), 0
+                        ) as topics_count,
+                        COALESCE(
+                            (SELECT COUNT(*) 
+                             FROM research_plans rp 
+                             JOIN research_topics rt ON rp.topic_id = rt.id 
+                             WHERE rt.project_id = $1), 0
+                        ) as plans_count,
+                        COALESCE(
+                            (SELECT COUNT(*) 
+                             FROM tasks t 
+                             JOIN research_plans rp ON t.plan_id = rp.id 
+                             JOIN research_topics rt ON rp.topic_id = rt.id 
+                             WHERE rt.project_id = $1), 0
+                        ) as tasks_count,
+                        COALESCE(
+                            (SELECT COUNT(*) 
+                             FROM tasks t 
+                             JOIN research_plans rp ON t.plan_id = rp.id 
+                             JOIN research_topics rt ON rp.topic_id = rt.id 
+                             WHERE rt.project_id = $1 AND t.status = 'completed'), 0
+                        ) as completed_tasks
+                """
+                
+                stats_row = await conn.fetchrow(stats_query, project_id)
+                
+                # Calculate completion rate
+                total_tasks = stats_row['tasks_count']
+                completed_tasks = stats_row['completed_tasks']
+                completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0.0
+                
+                return {
+                    "topics_count": stats_row['topics_count'],
+                    "plans_count": stats_row['plans_count'], 
+                    "tasks_count": total_tasks,
+                    "total_cost": 0.0,  # TODO: Implement cost calculation when cost columns exist
+                    "completion_rate": completion_rate
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get project stats for {project_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+
+    async def get_project_hierarchy(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get complete project hierarchy with topics, plans, and tasks.
+        
+        Args:
+            project_id: Project ID
+            
+        Returns:
+            Project hierarchy dictionary or None if project not found
+        """
+        try:
+            # Get the project
+            project = await self.get_project(project_id)
+            if not project:
+                return None
+
+            # Get project statistics
+            stats = await self.get_project_stats(project_id)
+            if stats:
+                project.update({
+                    "topics_count": stats["topics_count"],
+                    "plans_count": stats["plans_count"],
+                    "tasks_count": stats["tasks_count"],
+                    "total_cost": stats["total_cost"],
+                    "completion_rate": stats["completion_rate"]
+                })
+
+            # Get all topics for this project
+            topics = await self.get_research_topics(project_id=project_id)
+            
+            # Get all plans and tasks for each topic
+            plans = []
+            tasks = []
+            
+            for topic in topics:
+                topic_plans = await self.get_research_plans(topic["id"])
+                plans.extend(topic_plans)
+                
+                for plan in topic_plans:
+                    plan_tasks = await self.get_tasks(plan["id"])
+                    tasks.extend(plan_tasks)
+            
+            return {
+                "project": project,
+                "topics": topics,
+                "plans": plans,
+                "tasks": tasks
+            }
+                
+        except Exception as e:
+            logger.error(f"Failed to get project hierarchy for {project_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+
     async def execute_read_query(self, query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
         """
         Execute a read-only query against the database.
