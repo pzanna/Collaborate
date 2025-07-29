@@ -62,13 +62,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!refreshToken) return false
 
     try {
-      const response = await fetch("http://localhost:8013/refresh-token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      })
+      const response = await fetch(
+        `http://localhost:8013/refresh?refresh_token=${encodeURIComponent(
+          refreshToken
+        )}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      )
 
       if (response.ok) {
         const data = await response.json()

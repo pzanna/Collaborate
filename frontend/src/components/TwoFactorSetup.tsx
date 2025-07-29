@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 
 export function TwoFactorSetup() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("")
+  const [qrCodeImageUrl, setQrCodeImageUrl] = useState<string>("")
   const [secret, setSecret] = useState<string>("")
   const [totpCode, setTotpCode] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
@@ -23,7 +24,14 @@ export function TwoFactorSetup() {
   useEffect(() => {
     // Check if 2FA is already enabled
     checkTwoFactorStatus()
-  }, [])
+    
+    // Cleanup blob URL when component unmounts
+    return () => {
+      if (qrCodeImageUrl) {
+        URL.revokeObjectURL(qrCodeImageUrl)
+      }
+    }
+  }, [qrCodeImageUrl])
 
   const checkTwoFactorStatus = async () => {
     try {
@@ -40,6 +48,33 @@ export function TwoFactorSetup() {
       }
     } catch (error) {
       console.error("Error checking 2FA status:", error)
+    }
+  }
+
+  const fetchQrCodeImage = async () => {
+    try {
+      const token = localStorage.getItem("access_token")
+      if (!token) {
+        setError("No authentication token found")
+        return
+      }
+
+      const response = await fetch("http://localhost:8013/2fa/qrcode", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const imageUrl = URL.createObjectURL(blob)
+        setQrCodeImageUrl(imageUrl)
+      } else {
+        setError("Failed to load QR code image")
+      }
+    } catch (error) {
+      console.error("Error fetching QR code image:", error)
+      setError("Error loading QR code image")
     }
   }
 
@@ -63,6 +98,8 @@ export function TwoFactorSetup() {
       if (response.ok) {
         setQrCodeUrl(data.qr_code_url)
         setSecret(data.secret_key)
+        // Fetch the QR code image
+        await fetchQrCodeImage()
       } else {
         setError(data.detail || "Failed to setup 2FA")
       }
@@ -202,11 +239,17 @@ export function TwoFactorSetup() {
                 <p className="text-sm text-muted-foreground mb-2">
                   Scan this QR code with your authenticator app:
                 </p>
-                <img
-                  src={qrCodeUrl}
-                  alt="QR Code"
-                  className="mx-auto border rounded"
-                />
+                {qrCodeImageUrl ? (
+                  <img
+                    src={qrCodeImageUrl}
+                    alt="QR Code"
+                    className="mx-auto border rounded"
+                  />
+                ) : (
+                  <div className="mx-auto w-64 h-64 border rounded flex items-center justify-center text-muted-foreground">
+                    Loading QR Code...
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-2">
                   Or enter this secret manually:{" "}
                   <code className="bg-gray-100 px-1 rounded text-xs">

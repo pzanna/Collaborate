@@ -105,21 +105,9 @@ async def get_user_by_email(session: Session, email: str) -> Optional[UserInDB]:
     return result
 
 
-async def get_user_by_username(session: Session, username: str) -> Optional[UserInDB]:
-    """Get user by username."""
-    statement = select(User).where(User.username == username)
-    result = session.exec(statement).first()
-    return result
-
-
-async def authenticate_user(session: Session, username: str, password: str) -> Optional[UserInDB]:
-    """Authenticate a user with username/email and password."""
-    # Try to get user by username first
-    user = await get_user_by_username(session, username)
-    
-    # If not found, try by email
-    if not user:
-        user = await get_user_by_email(session, username)
+async def authenticate_user(session: Session, email: str, password: str) -> Optional[UserInDB]:
+    """Authenticate a user with email and password."""
+    user = await get_user_by_email(session, email)
     
     if not user:
         return None
@@ -138,14 +126,14 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], sessio
     
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username = payload.get("sub")
-        if username is None:
+        email = payload.get("sub")
+        if email is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(email=email)
     except JWTError:
         raise credentials_exception
     
-    user = await get_user_by_username(session, username=token_data.username)
+    user = await get_user_by_email(session, token_data.email)
     if user is None:
         raise credentials_exception
     return user
@@ -189,17 +177,9 @@ async def register_user(user_data: UserCreate, session: SessionDep):
             detail="Email already registered"
         )
     
-    existing_username = await get_user_by_username(session, user_data.username)
-    if existing_username:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken"
-        )
-    
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
-        username=user_data.username,
         email=user_data.email,
         full_name=user_data.full_name,
         hashed_password=hashed_password,
@@ -225,7 +205,7 @@ async def login_for_access_token(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -239,10 +219,10 @@ async def login_for_access_token(
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "role": user.role}, 
+        data={"sub": user.email, "role": user.role}, 
         expires_delta=access_token_expires
     )
-    refresh_token = create_refresh_token(data={"sub": user.username})
+    refresh_token = create_refresh_token(data={"sub": user.email})
     
     return Token(
         access_token=access_token,
@@ -258,11 +238,11 @@ async def login_with_2fa(
     session: SessionDep
 ):
     """Authenticate user with 2FA and return JWT tokens."""
-    user = await authenticate_user(session, login_data.username, login_data.password)
+    user = await authenticate_user(session, login_data.email, login_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
         )
     
     # Check if 2FA is enabled
@@ -300,10 +280,10 @@ async def login_with_2fa(
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "role": user.role}, 
+        data={"sub": user.email, "role": user.role}, 
         expires_delta=access_token_expires
     )
-    refresh_token = create_refresh_token(data={"sub": user.username})
+    refresh_token = create_refresh_token(data={"sub": user.email})
     
     return Token(
         access_token=access_token,
@@ -385,7 +365,7 @@ async def delete_user_by_id(
     session.delete(user_to_delete)
     session.commit()
     
-    return {"message": f"User {user_to_delete.username} (ID: {user_id}) successfully deleted"}
+    return {"message": f"User {user_to_delete.email} (ID: {user_id}) successfully deleted"}
 
 
 # Token validation endpoint (for other services)
@@ -394,19 +374,19 @@ async def validate_token(token: str, session: SessionDep):
     """Validate a JWT token and return user info (for service-to-service auth)."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username = payload.get("sub")
+        email = payload.get("sub")
         role = payload.get("role", "researcher")
         
-        if username is None:
+        if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         
-        user = await get_user_by_username(session, username)
+        user = await get_user_by_email(session, email)
         if user is None or user.is_disabled:
             raise HTTPException(status_code=401, detail="User not found or disabled")
         
         return {
             "valid": True,
-            "username": username,
+            "email": email,
             "role": role,
             "user_id": user.id
         }
@@ -420,23 +400,23 @@ async def refresh_access_token(refresh_token: str, session: SessionDep):
     """Refresh access token using refresh token."""
     try:
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username = payload.get("sub")
+        email = payload.get("sub")
         token_type = payload.get("type")
         
-        if username is None or token_type != "refresh":
+        if email is None or token_type != "refresh":
             raise HTTPException(status_code=401, detail="Invalid refresh token")
         
-        user = await get_user_by_username(session, username)
+        user = await get_user_by_email(session, email)
         if user is None or user.is_disabled:
             raise HTTPException(status_code=401, detail="User not found or disabled")
         
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user.username, "role": user.role},
+            data={"sub": user.email, "role": user.role},
             expires_delta=access_token_expires
         )
-        new_refresh_token = create_refresh_token(data={"sub": user.username})
+        new_refresh_token = create_refresh_token(data={"sub": user.email})
         
         return Token(
             access_token=access_token,
@@ -458,13 +438,13 @@ async def check_permission(
     """Check if user has permission for a specific resource and action."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username = payload.get("sub")
+        email = payload.get("sub")
         role = payload.get("role", "researcher")
         
-        if username is None:
+        if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         
-        user = await get_user_by_username(session, username)
+        user = await get_user_by_email(session, email)
         if user is None or user.is_disabled:
             raise HTTPException(status_code=401, detail="User not found or disabled")
         
@@ -497,7 +477,7 @@ async def check_permission(
         
         return {
             "has_permission": has_permission,
-            "username": username,
+            "email": email,
             "role": role,
             "resource": resource,
             "action": action

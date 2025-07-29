@@ -13,8 +13,7 @@ from sqlmodel import SQLModel, Field as SQLField
 
 class UserBase(SQLModel):
     """Base user model with common fields."""
-    username: str = SQLField(index=True, max_length=50)
-    email: EmailStr = SQLField(index=True)
+    email: EmailStr = SQLField(index=True, unique=True)
     full_name: Optional[str] = SQLField(default=None, max_length=100)
     role: str = SQLField(default="researcher", max_length=20)
 
@@ -40,7 +39,6 @@ class UserCreate(UserBase):
 
 class UserUpdate(SQLModel):
     """User update model."""
-    username: Optional[str] = Field(default=None, max_length=50)
     email: Optional[EmailStr] = Field(default=None)
     full_name: Optional[str] = Field(default=None, max_length=100)
     password: Optional[str] = Field(default=None, min_length=8, max_length=100)
@@ -69,18 +67,18 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     """Token data model for validation."""
-    username: Optional[str] = None
+    email: str
 
 
 class LoginRequest(BaseModel):
     """Login request model."""
-    username: str
+    email: str
     password: str
 
 
 class LoginWith2FARequest(BaseModel):
     """Login request model with 2FA."""
-    username: str
+    email: str
     password: str
     totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
 
