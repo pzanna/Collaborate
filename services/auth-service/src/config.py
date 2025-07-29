@@ -1,0 +1,37 @@
+"""
+Configuration settings for the Authentication Service.
+"""
+
+import os
+import secrets
+from typing import Optional
+
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    """Application settings."""
+    
+    # Database
+    DATABASE_URL: str = "postgresql://postgres:password@localhost:5433/eunice"
+    
+    # JWT Settings
+    SECRET_KEY: str = secrets.token_urlsafe(32)
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # Service Settings
+    HOST: str = "0.0.0.0"
+    PORT: int = 8013
+    DEBUG: bool = False
+    
+    # CORS Settings - Development configuration
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:8001,http://127.0.0.1:5176"
+    
+    model_config = {"env_file": ".env", "case_sensitive": True}
+
+
+def get_settings() -> Settings:
+    """Get application settings."""
+    return Settings()

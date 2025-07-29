@@ -16,7 +16,7 @@
 #
 # Containers Built:
 #   - Research Agents: planning, screening, memory, executor, literature, database
-#   - Platform Services: MCP server, API gateway, AI service, database service
+#   - Platform Services: MCP server, API gateway, auth service, AI service, database service
 #   - Research Manager: coordination and workflow management
 #
 # Build Features:
@@ -36,7 +36,7 @@
 #   - All Dockerfile locations accessible
 #
 # Expected Results:
-#   - 11 containers built successfully
+#   - 12 containers built successfully
 #   - 0 CRITICAL vulnerabilities (vs 16+ in Debian)
 #   - ~50% smaller image sizes than Debian equivalents
 #
@@ -74,6 +74,7 @@ SERVICES=(
     "database-agent:agents/database"
     "research-manager-agent:agents/research-manager"
     "api-gateway:services/api-gateway"
+    "auth-service:services/auth-service"
     "mcp-server:services/mcp-server"
     "ai-service:services/ai-service"
     "database-service:services/database"
@@ -122,7 +123,7 @@ for service_info in "${SERVICES[@]}"; do
     
     BUILD_COUNT=$((BUILD_COUNT + 1))
     
-    echo -e "\n${YELLOW}[$BUILD_COUNT/11] Building: $service_name${NC}"
+    echo -e "\n${YELLOW}[$BUILD_COUNT/12] Building: $service_name${NC}"
     echo "────────────────────────────────────"
     echo "📁 Path: $service_path"
     echo "🏷️  Image: $image_name"
@@ -162,9 +163,9 @@ done
 
 echo -e "\n${BLUE}📊 BUILD SUMMARY${NC}"
 echo "================="
-echo "🏗️  Total Services: 11"
+echo "🏗️  Total Services: 12"
 echo "✅ Successful Builds: $SUCCESS_COUNT"
-echo "❌ Failed Builds: $((11 - SUCCESS_COUNT))"
+echo "❌ Failed Builds: $((12 - SUCCESS_COUNT))"
 
 if [[ ${#FAILED_BUILDS[@]} -gt 0 ]]; then
     echo -e "\n${RED}Failed Services:${NC}"
@@ -175,7 +176,7 @@ fi
 
 echo -e "\n${GREEN}🎯 NEXT STEPS${NC}"
 echo "============="
-if [[ $SUCCESS_COUNT -eq 11 ]]; then
+if [[ $SUCCESS_COUNT -eq 12 ]]; then
     echo "🚀 All containers built successfully!"
     echo "1. Test individual containers: docker run <image-name>"
     echo "2. Deploy with security-hardened compose: docker-compose -f docker-compose.secure.yml up"

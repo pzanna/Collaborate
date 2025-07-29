@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card"
-import ConnectionStatus from "../common/ConnectionStatus"
 import {
   ClockIcon,
   ChatBubbleLeftRightIcon,
@@ -34,15 +33,18 @@ const WelcomePage: React.FC = () => {
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Replace with actual user data as needed
+  const firstName = "Researcher"
+
   // Generate time-based greeting
   useEffect(() => {
     const hour = new Date().getHours()
     if (hour < 12) {
-      setGreeting("Good Morning")
+      setGreeting(`Good Morning ${firstName}`)
     } else if (hour < 17) {
-      setGreeting("Good Afternoon")
+      setGreeting(`Good Afternoon ${firstName}`)
     } else {
-      setGreeting("Good Evening")
+      setGreeting(`Good Evening ${firstName}`)
     }
   }, [])
 
@@ -134,9 +136,7 @@ const WelcomePage: React.FC = () => {
     <div className="p-8 space-y-8">
       {/* Welcome Header */}
       <div className="text-center py-8">
-        <div className="flex justify-center mb-4">
-          <ConnectionStatus />
-        </div>
+        <div className="flex justify-center mb-4"></div>
         <h1 className="text-4xl font-bold text-foreground mb-1">{greeting}!</h1>
         <p className="text-lg text-muted-foreground mb-4">
           Welcome back to your research workspace

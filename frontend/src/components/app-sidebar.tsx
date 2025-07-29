@@ -9,7 +9,9 @@ import {
   Users,
   Database,
   Brain,
+  Activity,
 } from "lucide-react"
+import { ROUTES } from "@/utils/routes"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -21,7 +23,13 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/hooks/useAuth"
 
 // Eunice application data
 const data = {
@@ -187,6 +195,19 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useAuth()
+
+  // Transform auth user data to match NavUser component expectations
+  const userData = user
+    ? {
+        name: `${user.first_name} ${user.last_name}`,
+        email: user.email,
+        avatar: user.profile_image_url
+          ? `http://localhost:8013${user.profile_image_url}`
+          : "/avatars/researcher.jpg", // Default avatar fallback
+      }
+    : data.user // Fallback to static data
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -195,9 +216,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <NavMain items={data.navMain} />
         <NavProjects projects={data.projects} />
+        {user?.role === "admin" && (
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+            <SidebarGroupLabel>System</SidebarGroupLabel>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href={ROUTES.SYSTEM_HEALTH}>
+                    <Activity />
+                    <span>System Health</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={userData} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

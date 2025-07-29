@@ -11,11 +11,22 @@
 # 
 # Services Stopped:
 #   - API Gateway (port 8001)
+#   - Auth Service (port 8013)
 #   - Memory Agent (port 8009) 
 #   - Executor Agent (port 8008)
+#   - Planning Agent (port 8007)
+#   - Research Manager Agent (port 8002)
+#   - Literature Agent (port 8003)
+#   - Screening Agent (port 8004)
+#   - Synthesis Agent (port 8005)
+#   - Writer Agent (port 8006)
+#   - Database Agent (port 8011)
 #   - MCP Server (port 9000)
+#   - AI Service (internal)
+#   - Database Service (internal)
 #   - PostgreSQL (port 5433)
 #   - Redis (port 6380)
+#   - Frontend Dev Server (port 5173)
 #
 # What it does:
 #   1. Stops all Docker Compose services gracefully
@@ -53,6 +64,32 @@ print_info() {
 # This sends SIGTERM to containers, allowing them to shutdown cleanly
 print_info "Stopping all services..."
 docker compose -f docker-compose.secure.yml down --remove-orphans
+
+# Stop any remaining Eunice containers that might be running independently
+print_info "Stopping any remaining Eunice containers..."
+REMAINING_CONTAINERS=$(docker ps -q --filter "name=eunice-*" 2>/dev/null || true)
+if [ -n "$REMAINING_CONTAINERS" ]; then
+    docker stop $REMAINING_CONTAINERS >/dev/null 2>&1 || true
+    docker rm $REMAINING_CONTAINERS >/dev/null 2>&1 || true
+    print_status "Stopped remaining Eunice containers"
+else
+    print_info "No additional Eunice containers found"
+fi
+
+# Stop frontend development server if running
+print_info "Stopping frontend development server..."
+if [ -f "logs/frontend.pid" ]; then
+    FRONTEND_PID=$(cat logs/frontend.pid)
+    if kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        kill "$FRONTEND_PID"
+        print_status "Frontend development server stopped (PID: $FRONTEND_PID)"
+    else
+        print_info "Frontend development server was not running"
+    fi
+    rm -f logs/frontend.pid
+else
+    print_info "No frontend PID file found"
+fi
 
 # Clean up any orphaned containers that might be left behind
 # These can occur from previous failed starts or manual container operations
