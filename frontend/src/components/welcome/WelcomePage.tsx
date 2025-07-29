@@ -5,6 +5,7 @@ import {
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline"
+import { useAuth } from "../../hooks/useAuth"
 
 interface PendingItem {
   id: string
@@ -33,8 +34,11 @@ const WelcomePage: React.FC = () => {
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Replace with actual user data as needed
-  const firstName = "Researcher"
+  // Get the logged-in user's information
+  const { user } = useAuth()
+
+  // Use the user's first name, with fallback to "Researcher" if not available
+  const firstName = user?.first_name || "Researcher"
 
   // Generate time-based greeting
   useEffect(() => {
@@ -46,7 +50,7 @@ const WelcomePage: React.FC = () => {
     } else {
       setGreeting(`Good Evening ${firstName}`)
     }
-  }, [])
+  }, [firstName])
 
   // Generate random academic quote
   useEffect(() => {

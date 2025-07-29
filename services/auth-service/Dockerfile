@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY src/ ./src/
 
+# Create uploads directory for profile pictures
+RUN mkdir -p /app/uploads/profile_pictures
+
 # Create non-root user
 RUN adduser -D -s /bin/sh appuser
 RUN chown -R appuser:appuser /app
