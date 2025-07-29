@@ -120,7 +120,7 @@ Resources:
   CPU: 500m
   Memory: 1Gi
 Environment:
-  - AUTH_SERVICE_URL=http://auth-service:8007
+  - AUTH_SERVICE_URL=http://auth-service:8013
   - ORCHESTRATOR_URL=http://research-orchestrator:8002
   - REDIS_URL=redis://redis-cluster:6379
   - DATABASE_READ_URL=postgresql://postgres:password@postgres:5432/eunice
@@ -392,31 +392,56 @@ AI_Access: Via MCP Server routing to ai-service
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-### 11. Authentication Service
+### 11. Authentication Service ✅ **IMPLEMENTED**
 
-**Purpose**: User authentication, authorization, and session management.
+**Purpose**: User authentication, authorization, and session management with JWT tokens and 2FA support.
 
 ```yaml
 Service: auth-service
 Port: 8013
-Image: eunice/auth-service:latest
+Image: eunice-auth-service:latest (716MB)
+Status: ✅ Containerized and operational
 Resources:
   CPU: 500m
-  Memory: 1Gi
+  Memory: 512Mi
+  Security: Read-only filesystem, non-root user, dropped capabilities
 Environment:
-  - JWT_SECRET=${JWT_SECRET_KEY}
+  - SECRET_KEY=${AUTH_SECRET_KEY}
   - DATABASE_URL=postgresql://postgres:5432/eunice
-  - REDIS_URL=redis://redis-cluster:6379
-  - MFA_ENABLED=true
+  - ALGORITHM=HS256
+  - ACCESS_TOKEN_EXPIRE_MINUTES=30
+  - REFRESH_TOKEN_EXPIRE_DAYS=7
+  - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8001
+  - DEBUG=false
 Endpoints:
-  - POST /auth/login
-  - POST /auth/logout
-  - POST /auth/refresh
-  - POST /auth/mfa/setup
-  - POST /auth/mfa/verify
+  - POST /register              # User registration
+  - POST /token                 # JWT login
+  - POST /login-2fa            # 2FA login
+  - GET  /users/me             # Current user profile
+  - PATCH /users/me            # Update profile
+  - DELETE /users/me           # Delete own account
+  - DELETE /admin/users/{id}   # Admin user deletion
+  - POST /validate-token       # Service validation
+  - POST /refresh              # Token refresh
+  - POST /check-permission     # RBAC checks
+  - POST /2fa/setup           # 2FA setup
+  - POST /2fa/verify          # 2FA verification
+  - POST /2fa/disable         # 2FA disable
+  - GET /health               # Health check
+Features:
+  - JWT access and refresh tokens
+  - TOTP 2FA with backup codes
+  - Password strength validation
+  - RBAC with researcher/admin/collaborator roles
+  - Service-to-service authentication
+  - User management CLI tools
 Dependencies:
-  - database-service
-  - redis-cluster
+  - postgres (database storage)
+Integration:
+  - Docker Compose ready
+  - Security hardened container
+  - Frontend CORS configured
+  - API Gateway integration
 ```
 
 ### 12. Database Service
@@ -503,7 +528,7 @@ Resources:
   Memory: 1Gi
 Environment:
   - REDIS_URL=redis://redis-cluster:6379
-  - AUTH_SERVICE_URL=http://auth-service:8007
+  - AUTH_SERVICE_URL=http://auth-service:8013
   - EMAIL_SMTP_HOST=${SMTP_HOST}
 Endpoints:
   - WebSocket /ws/notifications

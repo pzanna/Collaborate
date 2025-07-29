@@ -2,13 +2,13 @@
 
 ## Architecture Overview
 
-The Eunice rese## Implementation Roadmap
+The Eunice Implementation Roadmap
 
 ### Version 0.1: Foundation (✅ COMPLETE)
 
 - ✅ Modular monolith with MCP coordination
 - ✅ Basic agent system in `src/agents/`
-- ✅ SQLite-based data storage
+- ✅ PostgreSQL-based data storage
 - ✅ React-based web interface
 - ✅ Core MCP protocol implementation
 
@@ -144,7 +144,7 @@ This structure enables intuitive navigation and clear separation of concerns.
 
 8. **Data Storage**
 
-   - **SQLite** for structured project and task data.
+   - **PostgreSQL** for structured project and task data.
    - **Memory Cache** for high-speed data access.
    - **File Storage** for unstructured research artefacts.
    - **Literature Database** for metadata and content of academic articles.
@@ -204,7 +204,7 @@ This structure enables intuitive navigation and clear separation of concerns.
 
 - Modular monolith with MCP coordination
 - Basic agent system in `src/agents/`
-- SQLite-based data storage
+- PostgreSQL-based data storage
 - React-based web interface
 - Core MCP protocol implementation
 
@@ -437,7 +437,7 @@ The Eunice platform implements a comprehensive JWT-based authentication service 
                            ▼                      ▼
                    ┌──────────────┐    ┌─────────────────┐
                    │ Microservices│    │ User Database   │
-                   │   (Agents)   │    │   (SQLite)      │
+                   │   (Agents)   │    │   (PostgreSQL)  │
                    └──────────────┘    └─────────────────┘
 ```
 
@@ -485,7 +485,7 @@ The Eunice platform implements a comprehensive JWT-based authentication service 
 - **JWT Tokens**: Secure user session management with configurable expiration times
 - **Service Authentication**: MCP-based secure inter-service communication with token validation
 - **API Key Management**: Secure storage and rotation for external service APIs
-- **Multi-Factor Authentication**: Framework ready for 2FA implementation
+- **Multi-Factor Authentication**: ✅ Complete TOTP-based 2FA implementation with Google/Microsoft Authenticator support
 - **Token Refresh**: Automated token renewal without user re-authentication
 
 ### Authorization Levels
@@ -530,6 +530,102 @@ The Eunice platform implements a comprehensive JWT-based authentication service 
 - Token revocation mechanisms for high-security use cases
 - Rate limiting implementation for authentication endpoints
 - Structured audit logging for security events
+
+### Two-Factor Authentication (2FA) Service (Version 0.3.3)
+
+The Eunice platform implements a comprehensive TOTP-based Two-Factor Authentication system that provides enterprise-grade security for user accounts. The 2FA service integrates seamlessly with popular authenticator applications and provides robust backup mechanisms.
+
+#### 2FA Features
+
+- **TOTP-based Authentication**: Time-based One-Time Passwords using industry-standard RFC 6238
+- **Authenticator App Support**: Compatible with Google Authenticator, Microsoft Authenticator, Authy, and other TOTP apps
+- **QR Code Generation**: Automatic QR code generation for easy authenticator app setup
+- **Backup Codes**: 8-character alphanumeric backup codes for account recovery
+- **Seamless Integration**: Built into existing JWT authentication flow without breaking changes
+- **User-Controlled**: Users can enable, disable, and manage their 2FA settings independently
+
+#### 2FA Architecture
+
+**Core Components:**
+
+- `TwoFactorAuthService`: Complete TOTP service with secret generation, verification, and backup code management
+- Enhanced User model with 2FA fields (`totp_secret`, `is_2fa_enabled`, `backup_codes`)
+- QR code generation service for authenticator app setup
+- Backup code system with secure storage and usage tracking
+
+**2FA Endpoints:**
+
+- `POST /2fa/setup` - Initialize 2FA setup and generate secret/backup codes
+- `GET /2fa/qrcode` - Retrieve QR code for authenticator app configuration
+- `POST /2fa/verify` - Verify TOTP code and enable 2FA
+- `POST /2fa/disable` - Disable 2FA with password and TOTP/backup code verification
+- `GET /2fa/status` - Get user's current 2FA status and backup code information
+- `POST /2fa/backup-codes/regenerate` - Generate new backup codes
+
+#### 2FA Security Implementation
+
+**TOTP Configuration:**
+
+- **Algorithm**: SHA-1 (RFC 6238 standard for compatibility)
+- **Digits**: 6-digit codes (industry standard)
+- **Period**: 30-second time windows
+- **Validation Window**: ±30 seconds for clock drift tolerance
+- **Secret Length**: 32 characters (160 bits of entropy)
+
+**Backup Code System:**
+
+- **Format**: 8-character alphanumeric codes (A-Z, 0-9)
+- **Quantity**: 10 backup codes per user
+- **Usage**: One-time use with automatic invalidation
+- **Storage**: JSON-encoded in database with usage tracking
+- **Regeneration**: Users can regenerate all backup codes at any time
+
+**Security Measures:**
+
+- **Secret Protection**: TOTP secrets securely stored in database
+- **Backup Code Hashing**: Could be enhanced with hashing for additional security
+- **Verification Limits**: TOTP window prevents replay attacks
+- **Account Recovery**: Multiple backup codes ensure account accessibility
+
+#### 2FA User Flow
+
+1. **Setup Process**:
+   - User initiates 2FA setup via `/2fa/setup`
+   - System generates TOTP secret and backup codes
+   - User scans QR code with authenticator app
+   - User verifies setup with TOTP code via `/2fa/verify`
+   - 2FA is enabled and backup codes are provided
+
+2. **Login with 2FA**:
+   - User provides username/password
+   - System detects 2FA is enabled
+   - User provides 6-digit TOTP code or 8-character backup code
+   - System validates code and issues JWT tokens
+
+3. **Account Management**:
+   - Users can check 2FA status and remaining backup codes
+   - Users can disable 2FA with password + TOTP/backup verification
+   - Users can regenerate backup codes when needed
+
+#### Dependencies and Integration
+
+**Required Libraries:**
+
+- `pyotp==2.9.0` - TOTP implementation
+- `qrcode[pil]==7.4.2` - QR code generation
+- `cryptography==43.0.3` - Cryptographic operations
+
+**Database Integration:**
+
+- User model enhanced with 2FA fields
+- Backward compatible - existing users unaffected
+- Migration-friendly design
+
+**API Integration:**
+
+- 2FA verification integrated into existing login endpoints
+- Non-breaking changes to authentication flow
+- Comprehensive error handling and user feedback
 
 ---
 

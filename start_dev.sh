@@ -89,12 +89,41 @@ docker compose -f docker-compose.secure.yml up -d mcp-server
 # Brief wait for MCP server WebSocket to be available
 sleep 5
 
-# Phase 3: Start core research agents
+# Phase 3: Start authentication service
+# This handles JWT tokens, user management, and RBAC
+print_info "Starting authentication service..."
+docker compose -f docker-compose.secure.yml up -d auth-service
+
+# Brief wait for auth service to be ready
+sleep 5
+
+# Phase 4: Start core research agents
 # Memory agent handles knowledge graph, Executor handles task processing
 print_info "Starting core agents (Memory, Executor)..."
 docker compose -f docker-compose.secure.yml up -d memory-agent executor-agent
 
-# Phase 4: Start API Gateway 
+# Phase 5: Start AI service
+# This provides LLM integration and handles AI API calls
+print_info "Starting AI service..."
+docker compose -f docker-compose.secure.yml up -d ai-service
+
+# Phase 6: Start all research workflow agents
+# These agents handle the complete research pipeline
+print_info "Starting research workflow agents..."
+docker compose -f docker-compose.secure.yml up -d \
+    planning-agent \
+    research-manager-agent \
+    literature-agent \
+    screening-agent \
+    synthesis-agent \
+    writer-agent
+
+# Phase 7: Start database service
+# This provides database management and maintenance
+print_info "Starting database service..."
+docker compose -f docker-compose.secure.yml up -d database-service database-agent
+
+# Phase 8: Start API Gateway 
 # This provides the REST API interface and frontend communication
 print_info "Starting API Gateway..."
 docker compose -f docker-compose.secure.yml up -d api-gateway
@@ -116,6 +145,89 @@ else
     services_ready=false
 fi
 
+# Test Authentication Service health endpoint
+if curl -f -s http://localhost:8013/health >/dev/null 2>&1; then
+    print_status "Authentication Service is healthy"
+else
+    echo "❌ Authentication Service health check failed"
+    services_ready=false
+fi
+
+# Test Memory Agent health endpoint
+if curl -f -s http://localhost:8009/health >/dev/null 2>&1; then
+    print_status "Memory Agent is healthy"
+else
+    echo "❌ Memory Agent health check failed"
+    services_ready=false
+fi
+
+# Test Executor Agent health endpoint
+if curl -f -s http://localhost:8008/health >/dev/null 2>&1; then
+    print_status "Executor Agent is healthy"
+else
+    echo "❌ Executor Agent health check failed"
+    services_ready=false
+fi
+
+# Test Planning Agent health endpoint
+if curl -f -s http://localhost:8007/health >/dev/null 2>&1; then
+    print_status "Planning Agent is healthy"
+else
+    echo "❌ Planning Agent health check failed"
+    services_ready=false
+fi
+
+# Test Research Manager Agent health endpoint
+if curl -f -s http://localhost:8002/health >/dev/null 2>&1; then
+    print_status "Research Manager Agent is healthy"
+else
+    echo "❌ Research Manager Agent health check failed"
+    services_ready=false
+fi
+
+# Test Literature Agent health endpoint
+if curl -f -s http://localhost:8003/health >/dev/null 2>&1; then
+    print_status "Literature Agent is healthy"
+else
+    echo "❌ Literature Agent health check failed"
+    services_ready=false
+fi
+
+# Test Screening Agent health endpoint
+if curl -f -s http://localhost:8004/health >/dev/null 2>&1; then
+    print_status "Screening Agent is healthy"
+else
+    echo "❌ Screening Agent health check failed"
+    services_ready=false
+fi
+
+# Test Synthesis Agent health endpoint
+if curl -f -s http://localhost:8005/health >/dev/null 2>&1; then
+    print_status "Synthesis Agent is healthy"
+else
+    echo "❌ Synthesis Agent health check failed"
+    services_ready=false
+fi
+
+# Test Writer Agent health endpoint
+if curl -f -s http://localhost:8006/health >/dev/null 2>&1; then
+    print_status "Writer Agent is healthy"
+else
+    echo "❌ Writer Agent health check failed"
+    services_ready=false
+fi
+
+# Test Database Agent health endpoint
+if curl -f -s http://localhost:8011/health >/dev/null 2>&1; then
+    print_status "Database Agent is healthy"
+else
+    echo "❌ Database Agent health check failed"
+    services_ready=false
+fi
+
+# Note: AI service doesn't expose HTTP health endpoint (internal service)
+# Note: Database service doesn't expose HTTP health endpoint (internal service)
+
 # Note: MCP server uses WebSocket protocol, no HTTP health endpoint available
 # Connection status will be verified through agent connections
 
@@ -124,16 +236,28 @@ if [ "$services_ready" = true ]; then
     print_status "Core services are ready!"
     echo
     echo "🎯 Development Environment Status:"
-    echo "   🔧 MCP Server:    http://localhost:9000 (WebSocket)"
-    echo "   🚪 API Gateway:   http://localhost:8001"
-    echo "   🧠 Memory Agent:  http://localhost:8009"
-    echo "   ⚡ Executor Agent: http://localhost:8008"
-    echo "   🔍 PostgreSQL:    localhost:5433"
-    echo "   📋 Redis:         localhost:6380"
+    echo "   🔧 MCP Server:        http://localhost:9000 (WebSocket)"
+    echo "   🚪 API Gateway:       http://localhost:8001"
+    echo "   🔐 Auth Service:      http://localhost:8013"
+    echo "   🧠 Memory Agent:      http://localhost:8009"
+    echo "   ⚡ Executor Agent:     http://localhost:8008"
+    echo "   � Planning Agent:    http://localhost:8007"
+    echo "   �🔍 Research Manager:  http://localhost:8002"
+    echo "   📚 Literature Agent:  http://localhost:8003"
+    echo "   🔬 Screening Agent:   http://localhost:8004"
+    echo "   📝 Synthesis Agent:   http://localhost:8005"
+    echo "   ✍️  Writer Agent:      http://localhost:8006"
+    echo "   🗄️  Database Agent:    http://localhost:8011"
+    echo "   🤖 AI Service:        (Internal - no HTTP endpoint)"
+    echo "   💾 Database Service:  (Internal - no HTTP endpoint)"
+    echo "   🔍 PostgreSQL:        localhost:5433"
+    echo "   📋 Redis:             localhost:6380"
     echo
     echo "📊 Health & Documentation:"  
     echo "   Health Check:     http://localhost:8001/health"
+    echo "   Auth Health:      http://localhost:8013/health"
     echo "   API Docs:         http://localhost:8001/docs"
+    echo "   Auth API Docs:    http://localhost:8013/docs"
     echo "   Container Status: docker compose -f docker-compose.secure.yml ps"
     echo
     echo "📝 View Logs:"
@@ -151,7 +275,7 @@ else
     echo "   docker compose -f docker-compose.secure.yml ps"
     echo
     echo "💡 Common issues:"
-    echo "   - Port conflicts: Check if ports 8001, 8008, 8009, 9000, 5433, 6380 are free"
+    echo "   - Port conflicts: Check if ports 8001, 8008, 8009, 8013, 9000, 5433, 6380 are free"
     echo "   - Resource limits: Ensure at least 2GB RAM available"
     echo "   - Docker issues: Verify Docker daemon is running"
     exit 1

@@ -147,9 +147,9 @@ if ! docker compose exec postgres pg_isready -U postgres | grep -q "accepting co
 fi
 print_status "PostgreSQL is healthy"
 
-# Start core services
-print_info "Starting core services..."
-docker compose up -d mcp-server database-service
+# Start core services and executor/memory agents
+print_info "Starting core services and executor/memory agents..."
+docker compose up -d mcp-server database-service auth-service executor-agent memory-agent
 
 # Wait for core services
 sleep 15
@@ -170,12 +170,12 @@ else
     docker compose logs ai-service --tail=20
 fi
 
-# Start Planning Agent
-print_info "Starting Planning Agent..."
-docker compose up -d planning-agent
+# Start all research agents
+print_info "Starting all research agents..."
+docker compose up -d planning-agent research-manager-agent literature-agent screening-agent synthesis-agent writer-agent database-agent
 
-# Wait for Planning Agent
-sleep 10
+# Wait for research agents
+sleep 15
 
 # Start API Gateway
 print_info "Starting API Gateway..."
@@ -213,8 +213,17 @@ print_info "Checking application services..."
 SERVICES=(
     "MCP Server:http://localhost:9000/health"
     "AI Service:http://localhost:8010/health"
-    "Planning Agent:http://localhost:8007/health"
+    "Auth Service:http://localhost:8013/health"
     "API Gateway:http://localhost:8001/health"
+    "Planning Agent:http://localhost:8007/health"
+    "Research Manager:http://localhost:8002/health"
+    "Literature Agent:http://localhost:8003/health"
+    "Screening Agent:http://localhost:8004/health"
+    "Synthesis Agent:http://localhost:8005/health"
+    "Writer Agent:http://localhost:8006/health"
+    "Database Agent:http://localhost:8011/health"
+    "Executor Agent:http://localhost:8008/health"
+    "Memory Agent:http://localhost:8009/health"
 )
 
 for service_info in "${SERVICES[@]}"; do
@@ -261,9 +270,20 @@ if [ "$ALL_HEALTHY" = true ]; then
     echo
     print_info "🔗 Backend API endpoints:"
     echo "  • API Gateway: http://localhost:8001"
+    echo "  • Auth Service: http://localhost:8013"
     echo "  • MCP Server: http://localhost:9000"
     echo "  • AI Service: http://localhost:8010"
+    echo
+    print_info "🤖 Research Agents:"
     echo "  • Planning Agent: http://localhost:8007"
+    echo "  • Research Manager: http://localhost:8002"
+    echo "  • Literature Agent: http://localhost:8003"
+    echo "  • Screening Agent: http://localhost:8004"
+    echo "  • Synthesis Agent: http://localhost:8005"
+    echo "  • Writer Agent: http://localhost:8006"
+    echo "  • Database Agent: http://localhost:8011"
+    echo "  • Executor Agent: http://localhost:8008"
+    echo "  • Memory Agent: http://localhost:8009"
     echo
     print_info "📡 API Access (via nginx proxy):"
     echo "  • Frontend API calls: http://localhost/api/*"

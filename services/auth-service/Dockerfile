@@ -1,13 +1,14 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+# Use Python 3.12 Alpine image
+FROM python:3.12-alpine
 
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apk update && apk add --no-cache \
     gcc \
-    && rm -rf /var/lib/apt/lists/*
+    musl-dev \
+    curl
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -19,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 
 # Create non-root user
-RUN useradd --create-home --shell /bin/bash appuser
+RUN adduser -D -s /bin/sh appuser
 RUN chown -R appuser:appuser /app
 USER appuser
 
