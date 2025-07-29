@@ -87,13 +87,13 @@ export function LoginForm({
 
       const data = await response.json()
 
-      if (response.ok) {
+      if (response.status === 202) {
+        // 2FA required - backend returns 202 when 2FA is enabled
+        setNeedsTwoFA(true)
+      } else if (response.ok) {
         // Login successful - no 2FA required for /token endpoint
         await login(data.access_token, data.refresh_token)
         navigate(ROUTES.WELCOME)
-      } else if (response.status === 202) {
-        // 2FA required - backend returns 202 when 2FA is enabled
-        setNeedsTwoFA(true)
       } else {
         // Login failed - invalid credentials or other error
         setErrors({ submit: data.detail || "Invalid email or password" })
