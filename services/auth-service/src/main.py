@@ -8,16 +8,21 @@ Part of the Eunice Research Platform microservices architecture.
 import json
 import os
 import secrets
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 from io import BytesIO
 import base64
+import shutil
+from pathlib import Path
+import subprocess
+import psutil
 
 from jose import JWTError, jwt
-from fastapi import Depends, FastAPI, HTTPException, status, Response
+from fastapi import Depends, FastAPI, HTTPException, status, Response, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -32,8 +37,16 @@ from .config import get_settings
 from .two_factor import TwoFactorAuthService
 from .two_factor import TwoFactorAuthService
 
+# Password change request model
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
 # Initialize settings
 settings = get_settings()
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # FastAPI app instance
 app = FastAPI(
@@ -49,8 +62,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS.split(","),
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Password hashing context
@@ -98,14 +112,14 @@ def create_refresh_token(data: dict) -> str:
     return encoded_jwt
 
 
-async def get_user_by_email(session: Session, email: str) -> Optional[UserInDB]:
+async def get_user_by_email(session: Session, email: str) -> Optional[User]:
     """Get user by email."""
     statement = select(User).where(User.email == email)
     result = session.exec(statement).first()
     return result
 
 
-async def authenticate_user(session: Session, email: str, password: str) -> Optional[UserInDB]:
+async def authenticate_user(session: Session, email: str, password: str) -> Optional[User]:
     """Authenticate a user with email and password."""
     user = await get_user_by_email(session, email)
     
@@ -116,7 +130,7 @@ async def authenticate_user(session: Session, email: str, password: str) -> Opti
     return user
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep) -> UserInDB:
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep) -> User:
     """Get the current authenticated user from JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -139,7 +153,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], sessio
     return user
 
 
-async def get_current_active_user(current_user: Annotated[UserInDB, Depends(get_current_user)]) -> UserInDB:
+async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """Get the current active user (not disabled)."""
     if current_user.is_disabled:
         raise HTTPException(status_code=400, detail="Inactive user")
@@ -165,6 +179,17 @@ async def health_check():
     }
 
 
+# Debug CORS configuration endpoint  
+@app.get("/debug/cors")
+async def debug_cors():
+    """Debug CORS configuration."""
+    return {
+        "allowed_origins": settings.ALLOWED_ORIGINS,
+        "allowed_origins_list": settings.ALLOWED_ORIGINS.split(","),
+        "settings_debug": settings.DEBUG
+    }
+
+
 # User registration endpoint
 @app.post("/register", response_model=UserPublic)
 async def register_user(user_data: UserCreate, session: SessionDep):
@@ -181,7 +206,8 @@ async def register_user(user_data: UserCreate, session: SessionDep):
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
         email=user_data.email,
-        full_name=user_data.full_name,
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
         hashed_password=hashed_password,
         role=user_data.role or "researcher",  # Default role
         is_disabled=False
@@ -485,6 +511,268 @@ async def check_permission(
         
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+# User profile update endpoint
+@app.put("/users/me", response_model=UserPublic)
+async def update_user_profile(
+    user_update: UserUpdate,
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    session: SessionDep
+):
+    """Update the current user's profile information."""
+    
+    # Check if email is being changed and if it's already taken
+    if user_update.email and user_update.email != current_user.email:
+        existing_user = await get_user_by_email(session, user_update.email)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+    
+    # Update user fields
+    update_data = user_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if hasattr(current_user, field):
+            setattr(current_user, field, value)
+    
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    
+    return current_user
+
+
+# Password change endpoint
+@app.post("/change-password")
+async def change_password(
+    password_change: PasswordChangeRequest,
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    session: SessionDep
+):
+    """Change the current user's password."""
+    
+    # Verify current password
+    if not verify_password(password_change.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    
+    # Hash and update new password
+    new_hashed_password = get_password_hash(password_change.new_password)
+    current_user.hashed_password = new_hashed_password
+    
+    session.add(current_user)
+    session.commit()
+    
+    return {"message": "Password changed successfully"}
+
+
+# Profile picture upload endpoint
+@app.post("/upload-profile-picture")
+async def upload_profile_picture(
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    session: SessionDep,
+    file: UploadFile = File(...)
+):
+    """Upload a profile picture for the current user."""
+    
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image (JPEG, PNG, GIF, etc.)"
+        )
+    
+    # Validate file size (5MB limit)
+    if file.size and file.size > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size must be less than 5MB"
+        )
+    
+    # Create uploads directory if it doesn't exist
+    upload_dir = Path("uploads/profile_pictures")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate unique filename
+    file_extension = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
+    unique_filename = f"profile_{current_user.id}_{secrets.token_urlsafe(8)}.{file_extension}"
+    file_path = upload_dir / unique_filename
+    
+    # Save file
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save file"
+        )
+    
+    # Update user profile with image URL
+    profile_image_url = f"/uploads/profile_pictures/{unique_filename}"
+    current_user.profile_image_url = profile_image_url
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    
+    return {
+        "message": "Profile picture uploaded successfully",
+        "profile_image_url": profile_image_url
+    }
+
+
+# Serve uploaded profile pictures
+@app.get("/uploads/profile_pictures/{filename}")
+async def get_profile_picture(filename: str):
+    """Serve uploaded profile pictures."""
+    file_path = Path("uploads/profile_pictures") / filename
+    
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile picture not found"
+        )
+    
+    return FileResponse(file_path)
+
+
+# System Health Models
+class ContainerStatus(BaseModel):
+    name: str
+    status: str  # running, stopped, error
+    uptime: str
+    port: Optional[str] = None
+    health: str  # healthy, unhealthy, starting
+
+
+class SystemInfo(BaseModel):
+    platform: str
+    total_containers: int
+    running_containers: int
+    memory: dict
+    disk: dict
+
+
+class SystemHealthResponse(BaseModel):
+    containers: list[ContainerStatus]
+    system_info: SystemInfo
+
+
+# System health endpoint
+@app.get("/system/health", response_model=SystemHealthResponse)
+async def get_system_health(
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)]
+):
+    """Get real-time system health information."""
+    
+    # Check if user has admin role
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Admin role required."
+        )
+    
+    try:
+        import docker
+        import os
+        from datetime import datetime
+        
+        # Connect to Docker via the secure socket proxy
+        docker_host = os.getenv("DOCKER_HOST", "tcp://docker-socket-proxy:2375")
+        client = docker.DockerClient(base_url=docker_host)
+        
+        # Get all containers
+        all_containers = client.containers.list(all=True)
+        
+        containers = []
+        running_count = 0
+        
+        for container in all_containers:
+            status_text = container.status
+            if status_text == "running":
+                running_count += 1
+            
+            # Calculate uptime for running containers
+            uptime = "N/A"
+            if status_text == "running" and container.attrs.get("State", {}).get("StartedAt"):
+                started_at = container.attrs["State"]["StartedAt"]
+                try:
+                    # Parse Docker timestamp format
+                    started_time = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+                    uptime_delta = datetime.now(started_time.tzinfo) - started_time
+                    days = uptime_delta.days
+                    hours, remainder = divmod(uptime_delta.seconds, 3600)
+                    minutes, _ = divmod(remainder, 60)
+                    
+                    if days > 0:
+                        uptime = f"{days}d {hours}h {minutes}m"
+                    else:
+                        uptime = f"{hours}h {minutes}m"
+                except:
+                    uptime = "Unknown"
+            
+            # Extract port mapping
+            port_info = None
+            if container.attrs.get("NetworkSettings", {}).get("Ports"):
+                ports = container.attrs["NetworkSettings"]["Ports"]
+                for container_port, host_binding in ports.items():
+                    if host_binding:
+                        port_info = host_binding[0]["HostPort"]
+                        break
+            
+            # Determine health status
+            health_status = "healthy"  # Default
+            health_check = container.attrs.get("State", {}).get("Health", {})
+            if health_check:
+                health_status = health_check.get("Status", "healthy").lower()
+            elif status_text == "exited":
+                health_status = "unhealthy"
+            elif status_text == "running":
+                health_status = "healthy"
+            else:
+                health_status = "starting"
+            
+            containers.append(ContainerStatus(
+                name=container.name,
+                status=status_text,
+                uptime=uptime,
+                port=port_info,
+                health=health_status
+            ))
+        
+        # Get real system information using psutil
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        system_info = SystemInfo(
+            platform=f"Docker Platform on {os.uname().sysname}",
+            total_containers=len(containers),
+            running_containers=running_count,
+            memory={
+                "used": f"{memory.percent:.1f}%",
+                "total": f"{memory.total // (1024**3)}GB"
+            },
+            disk={
+                "used": f"{disk.percent:.1f}%", 
+                "total": f"{disk.total // (1024**3)}GB"
+            }
+        )
+        
+        return SystemHealthResponse(
+            containers=containers,
+            system_info=system_info
+        )
+        
+    except Exception as e:
+        logger.error(f"System health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"System health check failed: {str(e)}"
+        )
 
 
 # 2FA Setup endpoint

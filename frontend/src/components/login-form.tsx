@@ -91,9 +91,12 @@ export function LoginForm({
         // Login successful - no 2FA required for /token endpoint
         await login(data.access_token, data.refresh_token)
         navigate(ROUTES.WELCOME)
-      } else {
-        // Check if user might have 2FA enabled - try the 2FA endpoint
+      } else if (response.status === 202) {
+        // 2FA required - backend returns 202 when 2FA is enabled
         setNeedsTwoFA(true)
+      } else {
+        // Login failed - invalid credentials or other error
+        setErrors({ submit: data.detail || "Invalid email or password" })
       }
     } catch (error) {
       setErrors({ submit: "Network error. Please try again." })
@@ -114,7 +117,7 @@ export function LoginForm({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: formData.email, // Backend expects username field but we use email
+          email: formData.email,
           password: formData.password,
           totp_code: formData.totpCode,
         }),

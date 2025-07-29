@@ -17,6 +17,7 @@ class UserBase(SQLModel):
     first_name: Optional[str] = SQLField(default=None, max_length=50)
     last_name: Optional[str] = SQLField(default=None, max_length=50)
     role: str = SQLField(default="researcher", max_length=20)
+    profile_image_url: Optional[str] = SQLField(default=None, max_length=500)
 
 
 class User(UserBase, table=True):
@@ -45,6 +46,7 @@ class UserUpdate(SQLModel):
     last_name: Optional[str] = Field(default=None, max_length=50)
     password: Optional[str] = Field(default=None, min_length=8, max_length=100)
     role: Optional[str] = Field(default=None, max_length=20)
+    profile_image_url: Optional[str] = Field(default=None, max_length=500)
 
 
 class UserPublic(UserBase):

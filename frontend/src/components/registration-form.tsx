@@ -29,6 +29,7 @@ export function RegistrationForm({
 
   const [formData, setFormData] = useState({
     firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -42,6 +43,10 @@ export function RegistrationForm({
 
     if (!formData.firstName.trim()) {
       newErrors.firstName = "First name is required"
+    }
+
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = "Last name is required"
     }
 
     if (!formData.email.trim()) {
@@ -134,9 +139,9 @@ export function RegistrationForm({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: formData.email, // Use email as username
           email: formData.email,
-          full_name: formData.firstName,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
           password: formData.password,
         }),
       })
@@ -183,6 +188,23 @@ export function RegistrationForm({
                 {errors.firstName && (
                   <span className="text-sm text-red-500">
                     {errors.firstName}
+                  </span>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lastName">Last name</Label>
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  placeholder="Doe"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                />
+                {errors.lastName && (
+                  <span className="text-sm text-red-500">
+                    {errors.lastName}
                   </span>
                 )}
               </div>

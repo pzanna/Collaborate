@@ -8,6 +8,8 @@ WORKDIR /app
 RUN apk update && apk add --no-cache \
     gcc \
     musl-dev \
+    linux-headers \
+    python3-dev \
     curl
 
 # Copy requirements first for better caching

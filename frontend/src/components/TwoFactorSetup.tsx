@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/hooks/useAuth"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -10,8 +12,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { ROUTES } from "@/utils/routes"
 
 export function TwoFactorSetup() {
+  const navigate = useNavigate()
+  const { refreshUserData } = useAuth()
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("")
   const [qrCodeImageUrl, setQrCodeImageUrl] = useState<string>("")
   const [secret, setSecret] = useState<string>("")
@@ -140,6 +145,14 @@ export function TwoFactorSetup() {
         setQrCodeUrl("")
         setSecret("")
         setTotpCode("")
+
+        // Refresh user data to update 2FA status in context
+        await refreshUserData()
+
+        // Redirect to welcome page after successful 2FA setup
+        setTimeout(() => {
+          navigate(ROUTES.WELCOME)
+        }, 2000)
       } else {
         setError(data.detail || "Verification failed")
       }
@@ -300,12 +313,12 @@ export function TwoFactorSetup() {
           )}
 
           <div className="text-center">
-            <a
-              href="/"
+            <button
+              onClick={() => navigate(ROUTES.WELCOME)}
               className="text-sm text-muted-foreground hover:underline"
             >
               ← Back to Dashboard
-            </a>
+            </button>
           </div>
         </CardContent>
       </Card>

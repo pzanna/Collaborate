@@ -25,7 +25,11 @@ export function WelcomePage() {
           {user && (
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Welcome back,</p>
-              <p className="font-medium">{user.full_name || user.email}</p>
+              <p className="font-medium">
+                {user.first_name && user.last_name
+                  ? `${user.first_name} ${user.last_name}`
+                  : user.email}
+              </p>
               <p className="text-sm text-muted-foreground">{user.email}</p>
             </div>
           )}
@@ -38,13 +42,23 @@ export function WelcomePage() {
           </div>
 
           <div className="space-y-2">
-            <Button
-              onClick={() => navigate(ROUTES.TWO_FACTOR)}
-              variant="default"
-              className="w-full"
-            >
-              Setup Two-Factor Authentication
-            </Button>
+            {!user?.is_2fa_enabled ? (
+              <Button
+                onClick={() => navigate(ROUTES.TWO_FACTOR)}
+                variant="default"
+                className="w-full"
+              >
+                Setup Two-Factor Authentication
+              </Button>
+            ) : (
+              <Button
+                onClick={() => navigate(ROUTES.TWO_FACTOR)}
+                variant="outline"
+                className="w-full"
+              >
+                Manage Two-Factor Authentication
+              </Button>
+            )}
 
             <Button onClick={logout} variant="outline" className="w-full">
               Sign Out

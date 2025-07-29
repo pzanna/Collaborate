@@ -1,0 +1,34 @@
+services:
+  docker-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    container_name: docker-socket-proxy
+    environment:
+      - LOG_LEVEL=info
+      - CONTAINERS=1 # Allow listing and managing containers
+      - SERVICES=1 # Allow listing and managing services
+      - NETWORKS=1 # Allow listing networks
+      - VOLUMES=1 # Allow listing volumes
+      - IMAGES=1 # Allow listing images
+      - INFO=1 # Allow system info
+      - VERSION=1 # Allow version info
+      - PING=1 # Allow ping
+      - EVENTS=1 # Allow events
+      - EXEC=0 # Disable exec for security
+      - SYSTEM=0 # Block system-level API access
+      - BUILD=0 # Disable build operations
+      - COMMIT=0 # Disable commit operations
+      - POST=0 # Make API read-only for extra security
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - eunice-network
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /run
+    ports:
+      - "2375:2375" # Internal Docker API proxy port
+
+networks:
+  eunice-network:
+    external: true

@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     PORT: int = 8013
     DEBUG: bool = False
     
-    # CORS Settings
-    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8001"
+    # CORS Settings - Development configuration
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:8001,http://127.0.0.1:5176"
     
     model_config = {"env_file": ".env", "case_sensitive": True}
 
