@@ -36,6 +36,30 @@ function App() {
           element={<Navigate to={ROUTES.AUTH} replace />}
         />
 
+        {/* Development-only test route (bypasses auth) */}
+        <Route
+          path="/test-projects"
+          element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<ProjectManagement />} />
+              </Routes>
+            </Layout>
+          }
+        />
+
+        {/* Development-only test route for welcome page */}
+        <Route
+          path="/test-welcome"
+          element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<WelcomePage />} />
+              </Routes>
+            </Layout>
+          }
+        />
+
         {/* Protected routes */}
         <Route
           path="*"
