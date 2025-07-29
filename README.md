@@ -47,7 +47,7 @@ The platform specializes in hierarchical research organization, multi-agent coll
 - **Real-time WebSocket Communication**: Live updates, collaboration, and expert consultations
 - **RESTful API**: Comprehensive backend API for all platform operations
 - **Modern React Frontend**: Responsive web interface with TypeScript
-- **SQLite Database**: Reliable data persistence with asynchronous operations
+- **PostgreSQL Database**: Reliable data persistence with asynchronous operations
 - **Persona System**: AI-powered expert consultation with domain-specific knowledge
 
 ## 🏗️ Architecture - Version 0.3 Microservices

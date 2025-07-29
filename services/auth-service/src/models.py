@@ -14,7 +14,8 @@ from sqlmodel import SQLModel, Field as SQLField
 class UserBase(SQLModel):
     """Base user model with common fields."""
     email: EmailStr = SQLField(index=True, unique=True)
-    full_name: Optional[str] = SQLField(default=None, max_length=100)
+    first_name: Optional[str] = SQLField(default=None, max_length=50)
+    last_name: Optional[str] = SQLField(default=None, max_length=50)
     role: str = SQLField(default="researcher", max_length=20)
 
 
@@ -40,7 +41,8 @@ class UserCreate(UserBase):
 class UserUpdate(SQLModel):
     """User update model."""
     email: Optional[EmailStr] = Field(default=None)
-    full_name: Optional[str] = Field(default=None, max_length=100)
+    first_name: Optional[str] = Field(default=None, max_length=50)
+    last_name: Optional[str] = Field(default=None, max_length=50)
     password: Optional[str] = Field(default=None, min_length=8, max_length=100)
     role: Optional[str] = Field(default=None, max_length=20)
 

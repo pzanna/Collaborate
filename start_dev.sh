@@ -14,9 +14,20 @@
 #   - Redis (port 6380)           - Message queue and caching
 #   - PostgreSQL (port 5433)      - Primary database  
 #   - MCP Server (port 9000)      - WebSocket communication hub
+#   - Auth Service (port 8013)    - JWT authentication and user management
 #   - Memory Agent (port 8009)    - Knowledge graph and context management
 #   - Executor Agent (port 8008)  - Task execution and workflow management
+#   - Planning Agent (port 8007)  - Research planning and organization
+#   - Research Manager (port 8002) - Research workflow coordination
+#   - Literature Agent (port 8003) - Academic literature search and analysis
+#   - Screening Agent (port 8004)  - Paper screening and filtering
+#   - Synthesis Agent (port 8005)  - Research synthesis and summarization
+#   - Writer Agent (port 8006)     - Academic writing and documentation
+#   - Database Agent (port 8011)   - Database operations and management
+#   - AI Service (internal)        - LLM integration and AI operations
+#   - Database Service (internal)  - Database connection management
 #   - API Gateway (port 8001)     - REST API and frontend communication
+#   - Frontend Dev Server (5173)  - React web UI with hot-reload
 #
 # Prerequisites:
 #   - Docker and Docker Compose installed
@@ -127,6 +138,27 @@ docker compose -f docker-compose.secure.yml up -d database-service database-agen
 # This provides the REST API interface and frontend communication
 print_info "Starting API Gateway..."
 docker compose -f docker-compose.secure.yml up -d api-gateway
+
+# Phase 9: Start Frontend Development Server
+# This starts the Vite dev server locally for hot-reload development
+print_info "Starting Frontend Development Server..."
+if command -v npm >/dev/null 2>&1; then
+    cd frontend
+    # Install dependencies if node_modules doesn't exist
+    if [ ! -d "node_modules" ]; then
+        print_info "Installing frontend dependencies..."
+        npm install
+    fi
+    # Start Vite dev server in background
+    npm run dev > ../logs/frontend.log 2>&1 &
+    FRONTEND_PID=$!
+    echo $FRONTEND_PID > ../logs/frontend.pid
+    cd ..
+    print_status "Frontend dev server started (PID: $FRONTEND_PID)"
+else
+    print_warning "npm not found - frontend dev server not started"
+    print_warning "To start manually: cd frontend && npm run dev"
+fi
 
 # Final wait for all services to complete initialization
 print_info "Waiting for services to initialize..."

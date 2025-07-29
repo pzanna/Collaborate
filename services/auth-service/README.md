@@ -59,7 +59,7 @@ Copy `.env.example` to `.env` and configure:
 
 ```bash
 # Database
-DATABASE_URL=sqlite:///./auth.db
+DATABASE_URL=postgresql://postgres:password@eunice-postgres:5432/eunice
 
 # JWT
 SECRET_KEY=your-secure-secret-key
@@ -108,7 +108,7 @@ docker build -t eunice-auth-service .
 
 ```bash
 docker run -p 8013:8013 \
-  -e DATABASE_URL=sqlite:///./auth.db \
+  -e DATABASE_URL=postgresql://postgres:password@eunice-postgres:5432/eunice \
   -e SECRET_KEY=your-secret-key \
   eunice-auth-service
 ```

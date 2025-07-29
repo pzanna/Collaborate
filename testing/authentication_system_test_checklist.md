@@ -17,21 +17,20 @@ This comprehensive checklist covers all aspects of testing the JWT-based authent
 
 ```markdown
 - [ ] **Valid Registration**
-  - [ ] Register user with valid username, email, full_name, password, role
+  - [ ] Register user with valid email, first_name, last_name, password, role
   - [ ] Verify response contains user ID and public user data
   - [ ] Confirm password is properly hashed in PostgreSQL database
   - [ ] Check default role assignment (researcher)
 
 - [ ] **Database Testing**
-  - [ ] Test PostgreSQL connection (not SQLite in production)
+  - [ ] Test PostgreSQL connection (all environments use PostgreSQL)
   - [ ] Verify user table exists and is accessible
   - [ ] Test database connection failure handling
   - [ ] Check database transaction handling
   - [ ] Verify password hashing storage in PostgreSQL
 
 - [ ] **Registration Validation**
-  - [ ] Test duplicate username rejection
-  - [ ] Test duplicate email rejection
+  - [ ] Test duplicate email rejection (username field removed)
   - [ ] Test invalid email format rejection
   - [ ] Test weak password rejection (< 8 characters)
   - [ ] Test empty/missing required fields
@@ -49,15 +48,14 @@ This comprehensive checklist covers all aspects of testing the JWT-based authent
 
 ```markdown
 - [ ] **Successful Login**
-  - [ ] Login with valid username/password
-  - [ ] Login with valid email/password
+  - [ ] Login with valid email/password (username removed)
   - [ ] Verify JWT access token generation
   - [ ] Verify JWT refresh token generation
   - [ ] Check token expiration times (30 min access, 7 days refresh)
   - [ ] Validate token structure and claims
 
 - [ ] **Failed Login Attempts**
-  - [ ] Test invalid username/password combinations
+  - [ ] Test invalid email/password combinations
   - [ ] Test non-existent user login
   - [ ] Test disabled user login
   - [ ] Test empty credentials
@@ -218,11 +216,11 @@ This comprehensive checklist covers all aspects of testing the JWT-based authent
 
 - [ ] **Profile Updates**
   - [ ] Test PATCH /users/me with valid data
-  - [ ] Test username updates
-  - [ ] Test email updates with validation
-  - [ ] Test full_name updates
+  - [ ] Test email updates with validation (username field removed)
+  - [ ] Test first_name updates
+  - [ ] Test last_name updates
   - [ ] Test password changes with proper hashing
-  - [ ] Verify duplicate username/email prevention
+  - [ ] Verify duplicate email prevention
 
 - [ ] **Account Deletion**
   - [ ] Test DELETE /users/me (self-deletion)
@@ -473,9 +471,9 @@ trivy image eunice/auth-service:alpine-secure
 ```python
 # Test user data
 TEST_USERS = {
-    "admin": {"username": "admin", "role": "admin", "password": "AdminPass123!"},
-    "researcher": {"username": "researcher1", "role": "researcher", "password": "ResearchPass123!"},
-    "collaborator": {"username": "collab1", "role": "collaborator", "password": "CollabPass123!"}
+    "admin": {"email": "admin@example.com", "first_name": "Admin", "last_name": "User", "role": "admin", "password": "AdminPass123!"},
+    "researcher": {"email": "researcher1@example.com", "first_name": "Research", "last_name": "Scientist", "role": "researcher", "password": "ResearchPass123!"},
+    "collaborator": {"email": "collab1@example.com", "first_name": "Collab", "last_name": "Partner", "role": "collaborator", "password": "CollabPass123!"}
 }
 
 # Test 2FA data

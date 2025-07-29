@@ -701,7 +701,7 @@ async def health_check():
 - [x] **Role-Based Access Control**: Basic RBAC with researcher, admin, and collaborator roles
 - [x] **Token Validation**: Service-to-service token validation endpoints for microservices
 - [x] **Docker Containerization**: Security-hardened container with resource limits and read-only filesystem
-- [x] **Database Integration**: PostgreSQL for production, SQLite for development
+- [x] **Database Integration**: PostgreSQL for all environments
 - [x] **User Management Tools**: CLI script for account management, deletion, and testing
 - [x] **Frontend Integration**: CORS configuration and seamless frontend authentication flow
 - [x] **Health Monitoring**: Health check endpoints and container health monitoring
@@ -713,7 +713,7 @@ async def health_check():
 Service: auth-service
 Port: 8013
 Container: eunice-auth-service:latest (716MB)
-Database: PostgreSQL (production) / SQLite (development)
+Database: PostgreSQL (all environments)
 Dependencies: [postgres]
 Security Features:
   - JWT tokens (HS256 algorithm)

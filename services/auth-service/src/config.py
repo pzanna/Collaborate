@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """Application settings."""
     
     # Database
-    DATABASE_URL: str = "sqlite:///./auth.db"
+    DATABASE_URL: str = "postgresql://postgres:password@localhost:5433/eunice"
     
     # JWT Settings
     SECRET_KEY: str = secrets.token_urlsafe(32)

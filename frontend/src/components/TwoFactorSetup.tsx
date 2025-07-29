@@ -24,7 +24,7 @@ export function TwoFactorSetup() {
   useEffect(() => {
     // Check if 2FA is already enabled
     checkTwoFactorStatus()
-    
+
     // Cleanup blob URL when component unmounts
     return () => {
       if (qrCodeImageUrl) {
