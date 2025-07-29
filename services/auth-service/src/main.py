@@ -623,7 +623,7 @@ async def upload_profile_picture(
             detail="Permission denied. Unable to save file. Please contact system administrator."
         )
     except OSError as e:
-        if e.errno == 30:  # Read-only file system
+        if e.errno == errno.EROFS:  # Read-only file system
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="File system is read-only. Please contact system administrator."
