@@ -48,9 +48,9 @@ def test_health_check(client: TestClient):
 def test_register_user(client: TestClient):
     """Test user registration."""
     user_data = {
-        "username": "testuser",
         "email": "test@example.com",
-        "full_name": "Test User",
+        "first_name": "Test",
+        "last_name": "User",
         "password": "testpassword123",
         "role": "researcher"
     }
@@ -58,7 +58,8 @@ def test_register_user(client: TestClient):
     response = client.post("/register", json=user_data)
     assert response.status_code == 200
     data = response.json()
-    assert data["username"] == "testuser"
+    assert data["first_name"] == "Test"
+    assert data["last_name"] == "User"
     assert data["email"] == "test@example.com"
     assert "id" in data
 
@@ -67,17 +68,17 @@ def test_login_user(client: TestClient):
     """Test user login."""
     # First register a user
     user_data = {
-        "username": "logintest",
         "email": "login@example.com",
-        "full_name": "Login Test",
+        "first_name": "Login",
+        "last_name": "Test",
         "password": "testpassword123",
         "role": "researcher"
     }
     client.post("/register", json=user_data)
     
-    # Then login
+    # Then login (using email as username per OAuth2PasswordRequestForm)
     login_data = {
-        "username": "logintest",
+        "username": "login@example.com",  # OAuth2 uses username field but we pass email
         "password": "testpassword123"
     }
     
@@ -93,16 +94,16 @@ def test_get_current_user(client: TestClient):
     """Test getting current user information."""
     # Register and login
     user_data = {
-        "username": "currentuser",
         "email": "current@example.com",
-        "full_name": "Current User",
+        "first_name": "Current",
+        "last_name": "User",
         "password": "testpassword123",
         "role": "researcher"
     }
     client.post("/register", json=user_data)
     
     login_data = {
-        "username": "currentuser",
+        "username": "current@example.com",  # OAuth2 uses username field but we pass email
         "password": "testpassword123"
     }
     login_response = client.post("/token", data=login_data)
@@ -113,37 +114,17 @@ def test_get_current_user(client: TestClient):
     response = client.get("/users/me", headers=headers)
     assert response.status_code == 200
     data = response.json()
-    assert data["username"] == "currentuser"
+    assert data["first_name"] == "Current"
+    assert data["last_name"] == "User"
     assert data["email"] == "current@example.com"
 
 
 def test_duplicate_username(client: TestClient):
-    """Test that duplicate usernames are rejected."""
+    """Test that duplicate emails are rejected (username field removed)."""
     user_data = {
-        "username": "duplicate",
-        "email": "first@example.com",
-        "full_name": "First User",
-        "password": "testpassword123",
-        "role": "researcher"
-    }
-    
-    # First registration should succeed
-    response1 = client.post("/register", json=user_data)
-    assert response1.status_code == 200
-    
-    # Second registration with same username should fail
-    user_data["email"] = "second@example.com"
-    response2 = client.post("/register", json=user_data)
-    assert response2.status_code == 400
-    assert "Username already taken" in response2.json()["detail"]
-
-
-def test_duplicate_email(client: TestClient):
-    """Test that duplicate emails are rejected."""
-    user_data = {
-        "username": "first",
         "email": "duplicate@example.com",
-        "full_name": "First User",
+        "first_name": "First",
+        "last_name": "User",
         "password": "testpassword123",
         "role": "researcher"
     }
@@ -153,7 +134,28 @@ def test_duplicate_email(client: TestClient):
     assert response1.status_code == 200
     
     # Second registration with same email should fail
-    user_data["username"] = "second"
+    user_data["first_name"] = "Second"
+    response2 = client.post("/register", json=user_data)
+    assert response2.status_code == 400
+    assert "Email already registered" in response2.json()["detail"]
+
+
+def test_duplicate_email(client: TestClient):
+    """Test that duplicate emails are rejected."""
+    user_data = {
+        "email": "duplicate@example.com",
+        "first_name": "First",
+        "last_name": "User",
+        "password": "testpassword123",
+        "role": "researcher"
+    }
+    
+    # First registration should succeed
+    response1 = client.post("/register", json=user_data)
+    assert response1.status_code == 200
+    
+    # Second registration with same email should fail
+    user_data["first_name"] = "Second"
     response2 = client.post("/register", json=user_data)
     assert response2.status_code == 400
     assert "Email already registered" in response2.json()["detail"]
@@ -162,10 +164,10 @@ def test_duplicate_email(client: TestClient):
 def test_invalid_login(client: TestClient):
     """Test login with invalid credentials."""
     login_data = {
-        "username": "nonexistent",
+        "username": "nonexistent@example.com",  # OAuth2 uses username field but we pass email
         "password": "wrongpassword"
     }
     
     response = client.post("/token", data=login_data)
     assert response.status_code == 401
-    assert "Incorrect username or password" in response.json()["detail"]
+    assert "Incorrect email or password" in response.json()["detail"]
