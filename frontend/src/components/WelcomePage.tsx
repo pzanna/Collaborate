@@ -42,10 +42,18 @@ export function WelcomePage() {
           </div>
 
           <div className="space-y-2">
+            <Button
+              onClick={() => navigate(ROUTES.PROJECTS)}
+              variant="default"
+              className="w-full"
+            >
+              View Projects
+            </Button>
+
             {!user?.is_2fa_enabled ? (
               <Button
                 onClick={() => navigate(ROUTES.TWO_FACTOR)}
-                variant="default"
+                variant="outline"
                 className="w-full"
               >
                 Setup Two-Factor Authentication
