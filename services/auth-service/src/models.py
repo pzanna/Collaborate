@@ -84,7 +84,7 @@ class LoginWith2FARequest(BaseModel):
     """Login request model with 2FA."""
     email: str
     password: str
-    totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
+    totp_code: Optional[str] = Field(default=None, min_length=6, max_length=8)  # Allow both TOTP (6) and backup codes (8)
 
 
 class Setup2FAResponse(BaseModel):
