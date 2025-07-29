@@ -595,7 +595,18 @@ async def upload_profile_picture(
     
     # Create uploads directory if it doesn't exist
     upload_dir = Path("uploads/profile_pictures")
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        upload_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to create upload directory. Please contact system administrator."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to prepare upload directory: {str(e)}"
+        )
     
     # Generate unique filename
     file_extension = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
@@ -606,10 +617,25 @@ async def upload_profile_picture(
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Permission denied. Unable to save file. Please contact system administrator."
+        )
+    except OSError as e:
+        if e.errno == 30:  # Read-only file system
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="File system is read-only. Please contact system administrator."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"File system error: {str(e)}"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save file"
+            detail=f"Failed to save file: {str(e)}"
         )
     
     # Update user profile with image URL
