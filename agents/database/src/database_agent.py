@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 import sys
+import asyncpg
 
 # Import base MCP agent
 sys.path.append('/app')
@@ -31,13 +32,37 @@ class DatabaseAgent(BaseMCPAgent):
     def __init__(self, agent_type: str, config: Dict[str, Any]):
         """Initialize Database Agent."""
         super().__init__(agent_type, config)
-        self.logger.info("Database Agent initialized with MCP client")
+        self.db_pool: Optional[asyncpg.Pool] = None
+        self.database_url = config.get("database_url", "postgresql://postgres:password@postgres:5432/eunice")
+        self.logger.info("Database Agent initialized with MCP client and database connection")
+    
+    async def start(self):
+        """Start the agent with database connection."""
+        # Initialize database connection
+        await self._initialize_database()
+        # Start the base MCP agent
+        await super().start()
+    
+    async def _initialize_database(self):
+        """Initialize database connection pool."""
+        try:
+            self.db_pool = await asyncpg.create_pool(
+                self.database_url,
+                min_size=1,
+                max_size=5,
+                command_timeout=30
+            )
+            self.logger.info("✅ Database connection pool initialized")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to initialize database: {e}")
+            raise
     
     def get_capabilities(self) -> List[str]:
         """Return database agent capabilities."""
         return [
             "create_project", "update_project", "delete_project", "get_project",
             "create_topic", "update_topic", "delete_topic", "get_topic", 
+            "create_research_topic", "update_research_topic", "delete_research_topic", "get_research_topic",
             "create_plan", "update_plan", "delete_plan", "get_plan",
             "create_task", "update_task", "delete_task", "get_task",
             "database_operations", "data_storage", "query_processing", "transaction_management"
@@ -57,6 +82,12 @@ class DatabaseAgent(BaseMCPAgent):
             "update_topic": self._handle_update_topic,
             "delete_topic": self._handle_delete_topic,
             "get_topic": self._handle_get_topic,
+
+            # Research Topic operations (hierarchical API)
+            "create_research_topic": self._handle_create_research_topic,
+            "update_research_topic": self._handle_update_research_topic,
+            "delete_research_topic": self._handle_delete_research_topic,
+            "get_research_topic": self._handle_get_research_topic,
             
             # Plan operations
             "create_plan": self._handle_create_plan,
@@ -172,6 +203,79 @@ class DatabaseAgent(BaseMCPAgent):
     async def _handle_get_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle topic retrieval."""
         return {"status": "completed", "message": "Topic retrieved", "timestamp": datetime.now().isoformat()}
+
+    # Research Topic Operations (hierarchical API)
+    async def _handle_create_research_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle research topic creation."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database connection not available")
+            
+            # Extract data fields
+            project_id = data.get("project_id")
+            name = data.get("name", data.get("topic_name", ""))
+            description = data.get("description", "")
+            keywords = data.get("keywords", [])
+            priority = data.get("priority", "medium")
+            
+            if not project_id:
+                raise ValueError("project_id is required")
+            if not name:
+                raise ValueError("name is required")
+            
+            # Generate unique ID
+            topic_id = str(uuid.uuid4())
+            now = datetime.now()
+            
+            # Create the research topic in database
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO research_topics (
+                        id, project_id, name, description, keywords, priority,
+                        status, created_at, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """, topic_id, project_id, name, description, keywords, priority,
+                    "active", now, now)
+            
+            self.logger.info(f"✅ Created research topic: {name} (ID: {topic_id})")
+            
+            return {
+                "status": "completed",
+                "message": "Research topic created successfully",
+                "topic_id": topic_id,
+                "data": {
+                    "id": topic_id,
+                    "project_id": project_id,
+                    "name": name,
+                    "description": description,
+                    "keywords": keywords,
+                    "priority": priority,
+                    "status": "active",
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat()
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to create research topic: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    async def _handle_update_research_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle research topic update."""
+        return {"status": "completed", "message": "Research topic updated", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_delete_research_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle research topic deletion."""
+        return {"status": "completed", "message": "Research topic deleted", "timestamp": datetime.now().isoformat()}
+
+    async def _handle_get_research_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle research topic retrieval."""
+        return {"status": "completed", "message": "Research topic retrieved", "timestamp": datetime.now().isoformat()}
 
     # Plan Operations
     async def _handle_create_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:

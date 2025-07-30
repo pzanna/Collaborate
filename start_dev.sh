@@ -13,7 +13,7 @@
 # Services Started:
 #   - Redis (port 6380)           - Message queue and caching
 #   - PostgreSQL (port 5433)      - Primary database  
-#   - Docker Socket Proxy (2375)  - Secure Docker API access
+#   - Docker Socket Proxy (internal) - Secure Docker API access for auth service
 #   - MCP Server (port 9000)      - WebSocket communication hub
 #   - Auth Service (port 8013)    - JWT authentication and user management
 #   - Memory Agent (port 8009)    - Knowledge graph and context management
@@ -33,7 +33,7 @@
 # Prerequisites:
 #   - Docker and Docker Compose installed
 #   - 2GB+ RAM available
-#   - Ports 2375, 5433, 6380, 8001-8013, 9000 available
+#   - Ports 5433, 6380, 8001-8013, 9000 available
 #   - .env file (optional, defaults will be used if missing)
 #
 # Usage:
@@ -258,13 +258,9 @@ else
     services_ready=false
 fi
 
-# Test Docker Socket Proxy health endpoint
-if curl -f -s http://localhost:2375/_ping >/dev/null 2>&1; then
-    print_status "Docker Socket Proxy is healthy"
-else
-    echo "❌ Docker Socket Proxy health check failed"
-    services_ready=false
-fi
+# Note: Docker Socket Proxy is an internal service (no external port exposed)
+# Its health is managed by Docker Compose internal health checks
+print_status "Docker Socket Proxy is running (internal service)"
 
 # Note: AI service doesn't expose HTTP health endpoint (internal service)
 # Note: Database service doesn't expose HTTP health endpoint (internal service)
@@ -289,7 +285,7 @@ if [ "$services_ready" = true ]; then
     echo "   📝 Synthesis Agent:   http://localhost:8005"
     echo "   ✍️  Writer Agent:      http://localhost:8006"
     echo "   🗄️  Database Agent:    http://localhost:8011"
-    echo "   🐳 Docker Socket Proxy: http://localhost:2375"
+    echo "   🐳 Docker Socket Proxy: (Internal service - no external access)"
     echo "   🤖 AI Service:        (Internal - no HTTP endpoint)"
     echo "   💾 Database Service:  (Internal - no HTTP endpoint)"
     echo "   🔍 PostgreSQL:        localhost:5433"

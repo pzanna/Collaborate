@@ -89,6 +89,7 @@ class DatabaseAgentService:
         self.capabilities = [
             "create_project", "update_project", "delete_project",
             "create_topic", "update_topic", "delete_topic", 
+            "create_research_topic", "update_research_topic", "delete_research_topic",
             "create_plan", "update_plan", "delete_plan",
             "create_task", "update_task", "delete_task",
             "create_literature_record", "update_literature_record", "delete_literature_record",
@@ -323,6 +324,8 @@ class DatabaseAgentService:
             # Topic operations
             elif task_type == "create_topic":
                 return await self._handle_create_topic(data)
+            elif task_type == "create_research_topic":
+                return await self._handle_create_research_topic(data)
             elif task_type == "update_topic":
                 return await self._handle_update_topic(data)
             elif task_type == "delete_topic":
@@ -385,7 +388,7 @@ class DatabaseAgentService:
                 raise Exception("Database pool not available")
                 
             # Handle different data formats from different sources
-            project_name = data.get("project_name", data.get("name", ""))
+            project_name = data.get("name", data.get("project_name", ""))  # Use 'name' as primary, 'project_name' as fallback
             description = data.get("description", "")
             user_id = data.get("user_id", data.get("created_by", "system"))  # Default to 'system' if no user_id
             
@@ -546,7 +549,7 @@ class DatabaseAgentService:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
-            topic_name = data.get("topic_name", "")
+            topic_name = data.get("name", data.get("topic_name", ""))  # Use 'name' as primary, 'topic_name' as fallback
             project_id = data.get("project_id", "")
             description = data.get("description", "")
             
@@ -584,6 +587,70 @@ class DatabaseAgentService:
                 "timestamp": datetime.now().isoformat()
             }
     
+    async def _handle_create_research_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle research topic creation request with correct table and field names."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+            
+            # Extract data from API Gateway format
+            payload = data.get("payload", data)  # Handle nested payload structure
+            
+            topic_id = payload.get("id", str(uuid.uuid4()))
+            project_id = payload.get("project_id", "")
+            name = payload.get("name", "")
+            description = payload.get("description", "")
+            status = payload.get("status", "active")
+            created_at = payload.get("created_at", datetime.now().isoformat())
+            updated_at = payload.get("updated_at", datetime.now().isoformat())
+            metadata = payload.get("metadata", "{}")
+            
+            # Ensure metadata is a string (for JSON storage)
+            if isinstance(metadata, dict):
+                metadata = json.dumps(metadata)
+            elif not isinstance(metadata, str):
+                metadata = "{}"
+            
+            if not all([name, project_id]):
+                return {
+                    "status": "failed",
+                    "error": "Topic name and project ID are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Parse datetime strings
+            try:
+                created_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00')) if isinstance(created_at, str) else created_at
+                updated_dt = datetime.fromisoformat(updated_at.replace('Z', '+00:00')) if isinstance(updated_at, str) else updated_at
+            except:
+                created_dt = datetime.now()
+                updated_dt = datetime.now()
+            
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO research_topics (id, project_id, name, description, status, created_at, updated_at, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+                """, topic_id, project_id, name, description, status, created_dt, updated_dt, metadata)
+            
+            self.operations_completed += 1
+            
+            return {
+                "status": "completed",
+                "topic_id": topic_id,
+                "name": name,
+                "project_id": project_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create research topic: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+
     async def _handle_update_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle topic update request."""
         return await self._generic_update("topics", data)
@@ -598,7 +665,7 @@ class DatabaseAgentService:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
-            plan_name = data.get("plan_name", "")
+            plan_name = data.get("name", data.get("plan_name", ""))  # Use 'name' as primary, 'plan_name' as fallback
             project_id = data.get("project_id", "")
             plan_data = data.get("plan_data", {})
             
@@ -650,7 +717,7 @@ class DatabaseAgentService:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
-            task_name = data.get("task_name", "")
+            task_name = data.get("name", data.get("task_name", ""))  # Use 'name' as primary, 'task_name' as fallback
             project_id = data.get("project_id", "")
             task_type = data.get("task_type", "general")
             task_data_json = data.get("task_data", {})

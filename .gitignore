@@ -211,3 +211,4 @@ __marimo__/
 /frontend/node_modules
 /thesis_output
 docs/Commands.txt
+/logs

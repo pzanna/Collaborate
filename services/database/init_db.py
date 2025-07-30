@@ -123,18 +123,40 @@ async def initialize_schema():
         
         logger.info("Initializing database schema...")
         
-        # Drop existing tables if they exist (for clean initialization)
-        logger.info("Dropping existing tables if they exist...")
-        await conn.execute("DROP TABLE IF EXISTS tasks CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS research_tasks CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS research_plans CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS research_topics CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS projects CASCADE")
+        # Check if force reset is requested (useful for development)
+        force_reset = os.getenv("FORCE_DB_RESET", "false").lower() == "true"
+        
+        if force_reset:
+            logger.warning("FORCE_DB_RESET=true - Dropping and recreating all tables!")
+            # Drop existing tables if they exist (for clean initialization)
+            logger.info("Dropping existing tables...")
+            await conn.execute("DROP TABLE IF EXISTS tasks CASCADE")
+            await conn.execute("DROP TABLE IF EXISTS research_tasks CASCADE")
+            await conn.execute("DROP TABLE IF EXISTS research_plans CASCADE")
+            await conn.execute("DROP TABLE IF EXISTS research_topics CASCADE")
+            await conn.execute("DROP TABLE IF EXISTS projects CASCADE")
+            logger.info("Creating new database tables...")
+        else:
+            # Check if tables already exist to avoid data loss
+            tables_exist = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'projects'
+                )
+            """)
+            
+            if tables_exist:
+                logger.info("Database tables already exist - skipping initialization to preserve data")
+                await conn.close()
+                return
+                
+            logger.info("Creating new database tables...")
         
         # Create projects table
         logger.info("Creating projects table...")
         await conn.execute("""
-            CREATE TABLE projects (
+            CREATE TABLE IF NOT EXISTS projects (
                 id VARCHAR(36) PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 description TEXT,
@@ -148,7 +170,7 @@ async def initialize_schema():
         # Create research_topics table
         logger.info("Creating research_topics table...")
         await conn.execute("""
-            CREATE TABLE research_topics (
+            CREATE TABLE IF NOT EXISTS research_topics (
                 id VARCHAR(36) PRIMARY KEY,
                 project_id VARCHAR(36) REFERENCES projects(id) ON DELETE CASCADE,
                 name VARCHAR(255) NOT NULL,
@@ -163,7 +185,7 @@ async def initialize_schema():
         # Create research_plans table
         logger.info("Creating research_plans table...")
         await conn.execute("""
-            CREATE TABLE research_plans (
+            CREATE TABLE IF NOT EXISTS research_plans (
                 id VARCHAR(36) PRIMARY KEY,
                 topic_id VARCHAR(36) REFERENCES research_topics(id) ON DELETE CASCADE,
                 name VARCHAR(255) NOT NULL,
@@ -179,7 +201,7 @@ async def initialize_schema():
         # Create tasks table (used by API Gateway)
         logger.info("Creating tasks table...")
         await conn.execute("""
-            CREATE TABLE tasks (
+            CREATE TABLE IF NOT EXISTS tasks (
                 id VARCHAR(36) PRIMARY KEY,
                 plan_id VARCHAR(36) REFERENCES research_plans(id) ON DELETE CASCADE,
                 name VARCHAR(255) NOT NULL,
@@ -196,7 +218,7 @@ async def initialize_schema():
         # Create research_tasks table (alias for tasks, used by database service)
         logger.info("Creating research_tasks table...")
         await conn.execute("""
-            CREATE TABLE research_tasks (
+            CREATE TABLE IF NOT EXISTS research_tasks (
                 id VARCHAR(36) PRIMARY KEY,
                 plan_id VARCHAR(36) REFERENCES research_plans(id) ON DELETE CASCADE,
                 name VARCHAR(255) NOT NULL,
@@ -210,17 +232,17 @@ async def initialize_schema():
             )
         """)
         
-        # Create indexes for better performance
+        # Create indexes for better performance (only if they don't exist)
         logger.info("Creating database indexes...")
-        await conn.execute("CREATE INDEX idx_research_topics_project_id ON research_topics(project_id)")
-        await conn.execute("CREATE INDEX idx_research_plans_topic_id ON research_plans(topic_id)")
-        await conn.execute("CREATE INDEX idx_tasks_plan_id ON tasks(plan_id)")
-        await conn.execute("CREATE INDEX idx_research_tasks_plan_id ON research_tasks(plan_id)")
-        await conn.execute("CREATE INDEX idx_projects_status ON projects(status)")
-        await conn.execute("CREATE INDEX idx_research_topics_status ON research_topics(status)")
-        await conn.execute("CREATE INDEX idx_research_plans_status ON research_plans(status)")
-        await conn.execute("CREATE INDEX idx_tasks_status ON tasks(status)")
-        await conn.execute("CREATE INDEX idx_research_tasks_status ON research_tasks(status)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_topics_project_id ON research_topics(project_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_plans_topic_id ON research_plans(topic_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_plan_id ON tasks(plan_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_tasks_plan_id ON research_tasks(plan_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_topics_status ON research_topics(status)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_plans_status ON research_plans(status)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_tasks_status ON research_tasks(status)")
         
         # Create simplified sync triggers between tasks and research_tasks
         logger.info("Creating simplified sync triggers...")
@@ -488,9 +510,17 @@ async def main():
         # Initialize schema
         await initialize_schema()
         
-        # Create sample data if requested
+        # Create sample data if requested and database is empty
         if os.getenv("CREATE_SAMPLE_DATA", "false").lower() == "true":
-            await create_sample_data()
+            conn = await asyncpg.connect(DATABASE_URL)
+            project_count = await conn.fetchval("SELECT COUNT(*) FROM projects")
+            await conn.close()
+            
+            if project_count == 0:
+                logger.info("Creating sample data for empty database...")
+                await create_sample_data()
+            else:
+                logger.info(f"Database already has {project_count} projects - skipping sample data creation")
         
         # Verify schema
         await verify_schema()
