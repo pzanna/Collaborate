@@ -31,3 +31,6 @@ passlib[bcrypt]==1.7.4
 # Utilities
 python-dotenv==1.0.0
 click==8.1.7
+
+# Development utilities
+watchfiles==0.21.0

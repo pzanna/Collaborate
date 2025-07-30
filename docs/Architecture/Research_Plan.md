@@ -311,11 +311,9 @@ Format your response as a JSON object with this exact structure:
 
 **Required UI Components**:
 
-- "Generate AI Plan" button in plan creation dialog
-- Plan structure display with collapsible sections (objectives, questions, etc.)
+- Connect the "Start Research" button to the new API endpoint to generate AI plans
 - Cost estimation display before generation
 - Approval workflow interface (approve/reject buttons)
-- Plan comparison view (manual vs AI-generated)
 - Cost breakdown and optimization suggestions display
 
 ## Implementation Roadmap

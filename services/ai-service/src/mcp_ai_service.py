@@ -19,7 +19,6 @@ import time
 import websockets
 import openai
 import anthropic
-import httpx
 import uvicorn
 from pydantic import BaseModel
 
@@ -341,6 +340,23 @@ class MCPAIService:
     
     # AI Task Handlers
     
+    def _extract_json_from_content(self, content: str) -> str:
+        """Extract JSON from markdown-wrapped content if present, otherwise return as-is"""
+        if not content:
+            return content
+            
+        # Check if content contains JSON wrapped in markdown code blocks
+        import re
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+        if json_match:
+            # Extract just the JSON content without markdown wrapper
+            extracted_json = json_match.group(1).strip()
+            logger.info(f"Extracted JSON from markdown wrapper: {len(extracted_json)} chars")
+            return extracted_json
+        
+        # If no markdown-wrapped JSON found, return original content
+        return content
+
     async def _handle_chat_completion(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle chat completion request"""
         provider = task_data.get("provider", "openai")
@@ -358,19 +374,24 @@ class MCPAIService:
                    if k not in ["provider", "messages", "model"]}
             )
             
+            # Process each choice to extract JSON from markdown if present
+            processed_choices = []
+            for choice in response.choices:
+                original_content = choice.message.content
+                processed_content = self._extract_json_from_content(original_content)
+                
+                processed_choices.append({
+                    "index": choice.index,
+                    "message": {
+                        "role": choice.message.role,
+                        "content": processed_content
+                    },
+                    "finish_reason": choice.finish_reason
+                })
+            
             return {
                 "id": response.id,
-                "choices": [
-                    {
-                        "index": choice.index,
-                        "message": {
-                            "role": choice.message.role,
-                            "content": choice.message.content
-                        },
-                        "finish_reason": choice.finish_reason
-                    }
-                    for choice in response.choices
-                ],
+                "choices": processed_choices,
                 "usage": {
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,
@@ -414,6 +435,9 @@ class MCPAIService:
                 else:
                     content = str(first_block)
             
+            # Extract JSON from markdown if present
+            processed_content = self._extract_json_from_content(content)
+            
             return {
                 "id": response.id,
                 "choices": [
@@ -421,7 +445,7 @@ class MCPAIService:
                         "index": 0,
                         "message": {
                             "role": "assistant",
-                            "content": content
+                            "content": processed_content
                         },
                         "finish_reason": response.stop_reason
                     }
@@ -446,19 +470,24 @@ class MCPAIService:
                    if k not in ["provider", "messages", "model"]}
             )
             
+            # Process each choice to extract JSON from markdown if present
+            processed_choices = []
+            for choice in response.choices:
+                original_content = choice.message.content
+                processed_content = self._extract_json_from_content(original_content)
+                
+                processed_choices.append({
+                    "index": choice.index,
+                    "message": {
+                        "role": choice.message.role,
+                        "content": processed_content
+                    },
+                    "finish_reason": choice.finish_reason
+                })
+            
             return {
                 "id": response.id,
-                "choices": [
-                    {
-                        "index": choice.index,
-                        "message": {
-                            "role": choice.message.role,
-                            "content": choice.message.content
-                        },
-                        "finish_reason": choice.finish_reason
-                    }
-                    for choice in response.choices
-                ],
+                "choices": processed_choices,
                 "usage": {
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,

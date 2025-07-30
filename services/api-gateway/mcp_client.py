@@ -176,6 +176,36 @@ class MCPClient:
             logger.error(f"Failed to get task status for {task_id}: {e}")
             return None
 
+    async def wait_for_task_result(self, task_id: str, timeout: float = 60.0) -> Optional[Dict[str, Any]]:
+        """Wait for a task result from the MCP server"""
+        if not self.is_connected or not self.websocket:
+            logger.error("Not connected to MCP server")
+            return None
+
+        try:
+            # Create a future to wait for the task result
+            result_future = asyncio.Future()
+            callback_key = f"result_{task_id}"
+            self.response_callbacks[callback_key] = result_future
+
+            logger.info(f"Waiting for task result: {task_id} (timeout: {timeout}s)")
+
+            # Wait for task result with timeout
+            try:
+                result = await asyncio.wait_for(result_future, timeout=timeout)
+                logger.info(f"Received task result for {task_id}")
+                return result
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for task result: {task_id}")
+                return None
+            finally:
+                # Clean up callback
+                self.response_callbacks.pop(callback_key, None)
+
+        except Exception as e:
+            logger.error(f"Failed to wait for task result {task_id}: {e}")
+            return None
+
     async def cancel_task(self, task_id: str) -> bool:
         """Cancel a task"""
         if not self.is_connected or not self.websocket:
@@ -269,6 +299,21 @@ class MCPClient:
                     if isinstance(callback, asyncio.Future) and not callback.done():
                         callback.set_result(message.get("data", {}))
             
+            elif message_type == "task_result":
+                # Handle task result (actual completion from agent)
+                task_id = message.get("task_id")
+                result_key = f"result_{task_id}"
+                
+                if result_key in self.response_callbacks:
+                    callback = self.response_callbacks[result_key]
+                    if isinstance(callback, asyncio.Future) and not callback.done():
+                        # Pass the complete message as the result
+                        callback.set_result(message)
+                        logger.info(f"Delivered task result for {task_id}")
+                
+                # Also log for debugging
+                logger.info(f"Received task result for {task_id}: {message.get('status', 'unknown')}")
+            
             elif message_type == "registration_confirmed":
                 logger.info("API Gateway registration confirmed by MCP server")
             
@@ -280,6 +325,17 @@ class MCPClient:
                 task_id = message.get("data", {}).get("task_id")
                 error = message.get("data", {}).get("error", "Unknown error")
                 logger.error(f"Task {task_id} rejected: {error}")
+                
+                # Also notify any waiting callbacks about the rejection
+                result_key = f"result_{task_id}"
+                if result_key in self.response_callbacks:
+                    callback = self.response_callbacks[result_key]
+                    if isinstance(callback, asyncio.Future) and not callback.done():
+                        callback.set_result({
+                            "status": "rejected", 
+                            "error": error,
+                            "task_id": task_id
+                        })
             
             else:
                 logger.debug(f"Received unhandled message type: {message_type}")

@@ -41,6 +41,155 @@ import {
 } from "@/utils/api"
 import { ROUTES, getTopicDetailsPath } from "@/utils/routes"
 
+// Component to display structured research plan content
+function PlanStructureDisplay({
+  planStructure,
+}: {
+  planStructure: Record<string, any>
+}) {
+  if (!planStructure) return null
+
+  return (
+    <div className="space-y-6">
+      {planStructure.objectives && Array.isArray(planStructure.objectives) && (
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
+            📋 Research Objectives
+          </h4>
+          <ul className="space-y-2">
+            {planStructure.objectives.map(
+              (objective: string, index: number) => (
+                <li key={index} className="flex items-start">
+                  <span className="inline-block w-6 h-6 bg-blue-100 text-blue-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                    {index + 1}
+                  </span>
+                  <span className="text-sm text-gray-700">{objective}</span>
+                </li>
+              )
+            )}
+          </ul>
+        </div>
+      )}
+
+      {planStructure.key_areas && Array.isArray(planStructure.key_areas) && (
+        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+          <h4 className="font-semibold text-green-900 mb-3 flex items-center">
+            🎯 Key Research Areas
+          </h4>
+          <ul className="space-y-2">
+            {planStructure.key_areas.map((area: string, index: number) => (
+              <li key={index} className="flex items-start">
+                <span className="inline-block w-6 h-6 bg-green-100 text-green-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                  {index + 1}
+                </span>
+                <span className="text-sm text-gray-700">{area}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {planStructure.questions && Array.isArray(planStructure.questions) && (
+        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+          <h4 className="font-semibold text-purple-900 mb-3 flex items-center">
+            ❓ Research Questions
+          </h4>
+          <ul className="space-y-2">
+            {planStructure.questions.map((question: string, index: number) => (
+              <li key={index} className="flex items-start">
+                <span className="inline-block w-6 h-6 bg-purple-100 text-purple-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                  {index + 1}
+                </span>
+                <span className="text-sm text-gray-700">{question}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {planStructure.sources && Array.isArray(planStructure.sources) && (
+        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+          <h4 className="font-semibold text-yellow-900 mb-3 flex items-center">
+            📚 Data Sources
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {planStructure.sources.map((source: string, index: number) => (
+              <span
+                key={index}
+                className="inline-block bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full"
+              >
+                {source}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {planStructure.timeline && (
+        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+          <h4 className="font-semibold text-orange-900 mb-3 flex items-center">
+            ⏱️ Timeline
+          </h4>
+          <div className="space-y-2">
+            {planStructure.timeline.total_days && (
+              <div className="text-sm">
+                <span className="font-medium text-gray-700">
+                  Total Duration:
+                </span>{" "}
+                <span className="text-orange-700 font-semibold">
+                  {planStructure.timeline.total_days} days
+                </span>
+              </div>
+            )}
+            {planStructure.timeline.phases && (
+              <div>
+                <span className="font-medium text-gray-700 text-sm">
+                  Phases:
+                </span>
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {Object.entries(planStructure.timeline.phases).map(
+                    ([phase, days]) => (
+                      <div
+                        key={phase}
+                        className="bg-orange-100 p-2 rounded text-center"
+                      >
+                        <div className="text-xs font-medium text-orange-800 capitalize">
+                          {phase.replace("_", " ")}
+                        </div>
+                        <div className="text-sm font-semibold text-orange-900">
+                          {String(days)} days
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {planStructure.outcomes && Array.isArray(planStructure.outcomes) && (
+        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+          <h4 className="font-semibold text-indigo-900 mb-3 flex items-center">
+            🎯 Expected Outcomes
+          </h4>
+          <ul className="space-y-2">
+            {planStructure.outcomes.map((outcome: string, index: number) => (
+              <li key={index} className="flex items-start">
+                <span className="inline-block w-6 h-6 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                  {index + 1}
+                </span>
+                <span className="text-sm text-gray-700">{outcome}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ResearchPlanDetails() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -103,13 +252,75 @@ export function ResearchPlanDetails() {
   const formatPlanStructure = (planStructure?: Record<string, any>): string => {
     if (!planStructure) return ""
 
-    // Convert the plan structure object to a formatted string
     let formatted = ""
-    if (planStructure.sections && Array.isArray(planStructure.sections)) {
-      formatted += planStructure.sections.join("\n") + "\n\n"
+
+    // Handle AI-generated plan structure format
+    if (planStructure.objectives && Array.isArray(planStructure.objectives)) {
+      formatted += "📋 OBJECTIVES:\n"
+      planStructure.objectives.forEach((obj: string, index: number) => {
+        formatted += `${index + 1}. ${obj}\n`
+      })
+      formatted += "\n"
     }
-    if (planStructure.details) {
-      formatted += planStructure.details
+
+    if (planStructure.key_areas && Array.isArray(planStructure.key_areas)) {
+      formatted += "🎯 KEY RESEARCH AREAS:\n"
+      planStructure.key_areas.forEach((area: string, index: number) => {
+        formatted += `${index + 1}. ${area}\n`
+      })
+      formatted += "\n"
+    }
+
+    if (planStructure.questions && Array.isArray(planStructure.questions)) {
+      formatted += "❓ RESEARCH QUESTIONS:\n"
+      planStructure.questions.forEach((question: string, index: number) => {
+        formatted += `${index + 1}. ${question}\n`
+      })
+      formatted += "\n"
+    }
+
+    if (planStructure.sources && Array.isArray(planStructure.sources)) {
+      formatted += "📚 DATA SOURCES:\n"
+      planStructure.sources.forEach((source: string, index: number) => {
+        formatted += `${index + 1}. ${source}\n`
+      })
+      formatted += "\n"
+    }
+
+    if (planStructure.timeline) {
+      formatted += "⏱️ TIMELINE:\n"
+      if (planStructure.timeline.total_days) {
+        formatted += `Total Duration: ${planStructure.timeline.total_days} days\n`
+      }
+      if (planStructure.timeline.phases) {
+        formatted += "Phases:\n"
+        Object.entries(planStructure.timeline.phases).forEach(
+          ([phase, days]) => {
+            formatted += `  • ${phase
+              .replace("_", " ")
+              .toUpperCase()}: ${days} days\n`
+          }
+        )
+      }
+      formatted += "\n"
+    }
+
+    if (planStructure.outcomes && Array.isArray(planStructure.outcomes)) {
+      formatted += "🎯 EXPECTED OUTCOMES:\n"
+      planStructure.outcomes.forEach((outcome: string, index: number) => {
+        formatted += `${index + 1}. ${outcome}\n`
+      })
+      formatted += "\n"
+    }
+
+    // Fallback for legacy format
+    if (!formatted) {
+      if (planStructure.sections && Array.isArray(planStructure.sections)) {
+        formatted += planStructure.sections.join("\n") + "\n\n"
+      }
+      if (planStructure.details) {
+        formatted += planStructure.details
+      }
     }
 
     return formatted
@@ -207,18 +418,6 @@ export function ResearchPlanDetails() {
     } finally {
       setIsApproving(false)
     }
-  }
-
-  const handleGenerateAI = () => {
-    if (!researchPlan) return
-
-    setAiFormData({
-      name: `AI Generated: ${researchPlan.name}`,
-      description: researchPlan.description || "",
-      plan_type: "comprehensive",
-    })
-    setShowAIDialog(true)
-    setError(null)
   }
 
   const handleConfirmAIGeneration = async () => {
@@ -402,11 +601,16 @@ export function ResearchPlanDetails() {
                 />
               </div>
             ) : (
-              <div className="bg-gray-50 p-4 rounded-md">
-                <pre className="whitespace-pre-wrap text-sm">
-                  {formatPlanStructure(researchPlan.plan_structure) ||
-                    "No research plan content available."}
-                </pre>
+              <div className="space-y-4">
+                {researchPlan.plan_structure ? (
+                  <PlanStructureDisplay
+                    planStructure={researchPlan.plan_structure}
+                  />
+                ) : (
+                  <div className="bg-gray-50 p-4 rounded-md text-center text-gray-500">
+                    No research plan content available.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -435,14 +639,6 @@ export function ResearchPlanDetails() {
               >
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
-              </Button>
-              <Button
-                onClick={handleGenerateAI}
-                disabled={researchPlan.plan_approved}
-                variant="secondary"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generate AI Plan
               </Button>
               <Button variant="destructive" onClick={handleDelete}>
                 <Trash2 className="h-4 w-4 mr-2" />

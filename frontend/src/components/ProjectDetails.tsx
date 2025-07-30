@@ -37,11 +37,7 @@ import {
   type UpdateTopicRequest,
   type ResearchPlan,
 } from "@/utils/api"
-import {
-  ROUTES,
-  getTopicDetailsPath,
-  getResearchPlanDetailsPath,
-} from "@/utils/routes"
+import { ROUTES, getResearchPlanDetailsPath } from "@/utils/routes"
 
 export function ProjectDetails() {
   const { id } = useParams<{ id: string }>()
@@ -54,6 +50,7 @@ export function ProjectDetails() {
   )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [generatingPlans, setGeneratingPlans] = useState<Set<string>>(new Set())
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null)
@@ -195,9 +192,61 @@ export function ProjectDetails() {
     setError(null)
   }
 
+  const handleGenerateAIPlan = async (topic: Topic) => {
+    try {
+      setGeneratingPlans((prev) => new Set(prev).add(topic.id))
+      setError(null)
+
+      const planRequest = {
+        name: `AI-Generated Research Plan for ${topic.name}`,
+        description: `Comprehensive research plan generated for the topic: ${topic.name}`,
+        plan_type: "comprehensive",
+      }
+
+      const response = await apiClient.generateAIResearchPlan(
+        topic.id,
+        planRequest
+      )
+
+      // Update the topicPlans state with the new plan
+      setTopicPlans((prev) => ({
+        ...prev,
+        [topic.id]: [...(prev[topic.id] || []), response.plan],
+      }))
+
+      // Navigate to the new plan details page
+      navigate(getResearchPlanDetailsPath(response.plan.id))
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to generate AI research plan"
+      )
+      console.error("Error generating AI research plan:", err)
+    } finally {
+      setGeneratingPlans((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(topic.id)
+        return newSet
+      })
+    }
+  }
+
   const getTopicButtonProps = (topic: Topic) => {
     const plans = topicPlans[topic.id] || []
     const hasPlans = plans.length > 0
+    const isGenerating = generatingPlans.has(topic.id)
+
+    if (isGenerating) {
+      return {
+        text: "Generating Plan...",
+        variant: "outline" as const,
+        onClick: () => {}, // Disabled while generating
+        disabled: true,
+        className: "cursor-not-allowed opacity-50",
+        icon: <Loader2 className="h-4 w-4 animate-spin mr-2" />,
+      }
+    }
 
     if (hasPlans) {
       // If there are multiple plans, link to the first one
@@ -211,7 +260,7 @@ export function ProjectDetails() {
       return {
         text: "Start Research",
         variant: "default" as const,
-        onClick: () => navigate(getTopicDetailsPath(topic.id)),
+        onClick: () => handleGenerateAIPlan(topic),
         className: "bg-green-600 hover:bg-green-700",
       }
     }
@@ -394,7 +443,9 @@ export function ProjectDetails() {
                           size="sm"
                           onClick={buttonProps.onClick}
                           className={buttonProps.className}
+                          disabled={buttonProps.disabled}
                         >
+                          {buttonProps.icon}
                           {buttonProps.text}
                         </Button>
                       )

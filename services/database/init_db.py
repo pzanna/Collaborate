@@ -191,11 +191,14 @@ async def initialize_schema():
                 name VARCHAR(255) NOT NULL,
                 description TEXT,
                 plan_type VARCHAR(50) DEFAULT 'comprehensive',
-                status VARCHAR(50) DEFAULT 'active',
+                status VARCHAR(50) DEFAULT 'draft',
+                plan_approved BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                estimated_cost DECIMAL(10,2) DEFAULT 0.0,
+                actual_cost DECIMAL(10,2) DEFAULT 0.0,
                 metadata JSONB DEFAULT '{}',
-                plan_structure JSONB DEFAULT NULL
+                plan_structure JSONB DEFAULT '{}'
             )
         """)
         

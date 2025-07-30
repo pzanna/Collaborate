@@ -2,15 +2,19 @@
 FROM python:3.12-alpine
 
 # Security: Set build arguments for better control
+ARG SERVICE_PORT=8010
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Security: Install security updates and minimal required packages
 RUN apk update && apk upgrade && \
     apk add --no-cache \
+    gcc \
+    musl-dev \
     curl \
     ca-certificates \
     tini \
+    bash \
     && rm -rf /var/cache/apk/* \
     && rm -rf /tmp/*
 
@@ -38,15 +42,18 @@ RUN mkdir -p src config logs tmp && \
     chmod -R 750 /app
 
 # Copy application code
-COPY src/ src/
-COPY config/ config/
+COPY src/ ./src/
+COPY config/ ./config/
+COPY start-dev.sh ./
 
 # Security: Set strict file permissions and ownership
 RUN chown -R aiservice:aiservice /app && \
     chmod -R 750 /app && \
-    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
+    chmod 750 /app/start-dev.sh && \
+    chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
-    find /app -type f -exec chmod 640 {} \;
+    find /app -type f -exec chmod 640 {} \; && \
+    chmod 750 /app/start-dev.sh
 
 # Set secure environment variables
 ENV PYTHONDONTWRITEBYTECODE=1

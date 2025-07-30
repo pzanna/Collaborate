@@ -6,3 +6,4 @@ httpx==0.25.0
 asyncpg==0.29.0
 structlog==23.2.0
 redis==5.0.1
+watchfiles==0.18.0
