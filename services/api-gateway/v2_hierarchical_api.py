@@ -391,7 +391,7 @@ async def create_research_topic(
                     detail="Failed to store topic - MCP server unavailable"
                 )
         else:
-            logger.warning(f"MCP client not available for topic creation {topic_id}")
+            logger.warning(f"MCP client not available for topic creation {topic_id or 'unknown topic'}")
             # In a production system, you might want to queue this for later processing
             # For now, we'll return an error since the topic won't actually be stored
             raise HTTPException(
