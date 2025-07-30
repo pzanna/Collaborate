@@ -238,25 +238,28 @@ async def update_project(
         if not existing_project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Build update data from non-None fields
-        update_data = {"id": project_id}
+        # Build update data from non-None fields - format for database agent
+        updates = {}
         if project_update.name is not None:
-            update_data["name"] = project_update.name
+            updates["name"] = project_update.name
         if project_update.description is not None:
-            update_data["description"] = project_update.description
+            updates["description"] = project_update.description
         if project_update.status is not None:
-            update_data["status"] = project_update.status
+            updates["status"] = project_update.status
         if project_update.metadata is not None:
-            update_data["metadata"] = json.dumps(project_update.metadata)
+            updates["metadata"] = json.dumps(project_update.metadata)
 
-        # Send project update via MCP
+        # Send project update via MCP - format expected by database agent
         if mcp_client and mcp_client.is_connected:
             task_data = {
                 "task_id": str(uuid4()),
                 "context_id": f"project-{project_id}",
                 "agent_type": "database",
                 "action": "update_project",
-                "payload": update_data
+                "payload": {
+                    "project_id": project_id,
+                    "updates": updates
+                }
             }
             success = await mcp_client.send_research_action(task_data)
             if not success:

@@ -75,13 +75,16 @@ python test_api_gateway.py
 - `GET /v2/projects/{project_id}/stats` - Get project statistics
 - `GET /v2/projects/{project_id}/hierarchy` - Get complete project hierarchy
 
-### Research Topics (v2 - In Development)
+### Research Topics (v2 - ✅ Fully Implemented)
 
-- `POST /v2/projects/{project_id}/topics` - Create research topic (planned)
-- `GET /v2/projects/{project_id}/topics` - List topics (planned)
-- `GET /v2/topics/{topic_id}` - Get specific topic (planned)
-- `PUT /v2/topics/{topic_id}` - Update topic (planned)
-- `DELETE /v2/topics/{topic_id}` - Delete topic (planned)
+- `POST /v2/projects/{project_id}/topics` - Create research topic
+- `GET /v2/projects/{project_id}/topics` - List project topics
+- `GET /v2/topics/{topic_id}` - Get specific topic
+- `GET /v2/projects/{project_id}/topics/{topic_id}` - Get topic within project
+- `PUT /v2/topics/{topic_id}` - Update topic
+- `PUT /v2/projects/{project_id}/topics/{topic_id}` - Update topic within project
+- `DELETE /v2/topics/{topic_id}` - Delete topic
+- `DELETE /v2/projects/{project_id}/topics/{topic_id}` - Delete topic within project
 
 ### Documentation
 

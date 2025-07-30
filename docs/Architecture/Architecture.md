@@ -1,5 +1,9 @@
 # Eunice Research Platform - Extended Solution Architecture and Development Guidelines
 
+**Version**: v0.3.1  
+**Testing Status**: ✅ Core API functionality verified (90% operations working)  
+**Last Updated**: July 30, 2025
+
 ## Architecture Overview
 
 The Eunice Implementation Roadmap
