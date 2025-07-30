@@ -2,7 +2,7 @@
 Native PostgreSQL Database Client for API Gateway
 
 This client provides direct native PostgreSQL connections for READ operations,
-replacing the HTTP-based DatabaseServiceClient to achieve better performance.
+offering high performance through direct database connectivity.
 Only READ operations are allowed from the API Gateway.
 
 Features:
