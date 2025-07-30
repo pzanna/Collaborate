@@ -10,6 +10,8 @@ import {
   Save,
   X,
   Check,
+  Sparkles,
+  DollarSign,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +21,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -26,8 +36,10 @@ import {
   apiClient,
   type ResearchPlan,
   type UpdateResearchPlanRequest,
+  type GenerateAIResearchPlanRequest,
+  type GenerateAIResearchPlanResponse,
 } from "@/utils/api"
-import { ROUTES } from "@/utils/routes"
+import { ROUTES, getTopicDetailsPath } from "@/utils/routes"
 
 export function ResearchPlanDetails() {
   const { id } = useParams<{ id: string }>()
@@ -38,10 +50,19 @@ export function ResearchPlanDetails() {
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
+  const [showAIDialog, setShowAIDialog] = useState(false)
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+  const [aiPlanData, setAiPlanData] =
+    useState<GenerateAIResearchPlanResponse | null>(null)
   const [editFormData, setEditFormData] = useState({
     name: "",
     description: "",
     plan_structure: "",
+  })
+  const [aiFormData, setAiFormData] = useState({
+    name: "",
+    description: "",
+    plan_type: "comprehensive",
   })
 
   // Load research plan on component mount
@@ -186,6 +207,61 @@ export function ResearchPlanDetails() {
     } finally {
       setIsApproving(false)
     }
+  }
+
+  const handleGenerateAI = () => {
+    if (!researchPlan) return
+
+    setAiFormData({
+      name: `AI Generated: ${researchPlan.name}`,
+      description: researchPlan.description || "",
+      plan_type: "comprehensive",
+    })
+    setShowAIDialog(true)
+    setError(null)
+  }
+
+  const handleConfirmAIGeneration = async () => {
+    if (!researchPlan || !aiFormData.name.trim()) {
+      setError("Plan name is required")
+      return
+    }
+
+    setIsGeneratingAI(true)
+    try {
+      const request: GenerateAIResearchPlanRequest = {
+        name: aiFormData.name,
+        description: aiFormData.description,
+        plan_type: aiFormData.plan_type,
+        metadata: { generated_with_ai: true },
+      }
+
+      const response = await apiClient.generateAIResearchPlan(
+        researchPlan.topic_id,
+        request
+      )
+      setAiPlanData(response)
+      setError(null)
+
+      // Update the current plan with the AI-generated data
+      setResearchPlan(response.plan)
+      setShowAIDialog(false)
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to generate AI research plan"
+      )
+      console.error("Error generating AI research plan:", err)
+    } finally {
+      setIsGeneratingAI(false)
+    }
+  }
+
+  const handleCancelAIGeneration = () => {
+    setShowAIDialog(false)
+    setAiPlanData(null)
+    setError(null)
   }
 
   if (loading) {
@@ -360,6 +436,14 @@ export function ResearchPlanDetails() {
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
+              <Button
+                onClick={handleGenerateAI}
+                disabled={researchPlan.plan_approved}
+                variant="secondary"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate AI Plan
+              </Button>
               <Button variant="destructive" onClick={handleDelete}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
@@ -411,20 +495,126 @@ export function ResearchPlanDetails() {
             </div>
             <div>
               <div className="text-2xl font-bold">
-                ${researchPlan.actual_cost?.toFixed(0) || 0}
+                ${researchPlan.estimated_cost?.toFixed(2) || "0.00"}
               </div>
-              <div className="text-sm text-muted-foreground">Cost</div>
+              <div className="text-sm text-muted-foreground">Estimated</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold">
+                ${researchPlan.actual_cost?.toFixed(2) || "0.00"}
+              </div>
+              <div className="text-sm text-muted-foreground">Actual</div>
             </div>
           </div>
         </CardContent>
       </Card>
-      {/* Back to Projects Button - Centered in Container */}
+
+      {/* AI Generation Dialog */}
+      <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Sparkles className="h-5 w-5 mr-2 text-blue-500" />
+              Generate AI Research Plan
+            </DialogTitle>
+            <DialogDescription>
+              Use AI to generate a comprehensive research plan based on your
+              topic and requirements.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="ai-plan-name">Plan Name</Label>
+              <Input
+                id="ai-plan-name"
+                value={aiFormData.name}
+                onChange={(e) =>
+                  setAiFormData({ ...aiFormData, name: e.target.value })
+                }
+                placeholder="Enter a name for the AI-generated plan"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="ai-plan-description">
+                Description (Optional)
+              </Label>
+              <Textarea
+                id="ai-plan-description"
+                value={aiFormData.description}
+                onChange={(e) =>
+                  setAiFormData({ ...aiFormData, description: e.target.value })
+                }
+                placeholder="Provide additional context for the AI to consider"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="ai-plan-type">Plan Type</Label>
+              <select
+                id="ai-plan-type"
+                value={aiFormData.plan_type}
+                onChange={(e) =>
+                  setAiFormData({ ...aiFormData, plan_type: e.target.value })
+                }
+                className="w-full p-2 border border-input rounded-md bg-background"
+              >
+                <option value="comprehensive">Comprehensive</option>
+                <option value="focused">Focused</option>
+                <option value="exploratory">Exploratory</option>
+              </select>
+            </div>
+
+            {aiPlanData && (
+              <div className="bg-blue-50 p-4 rounded-md">
+                <div className="flex items-center mb-2">
+                  <DollarSign className="h-4 w-4 mr-2 text-green-600" />
+                  <span className="font-medium">Cost Estimate</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Estimated cost: $
+                  {aiPlanData.cost_estimate.estimated_cost.toFixed(2)}
+                  (Complexity: {aiPlanData.cost_estimate.complexity})
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelAIGeneration}
+              disabled={isGeneratingAI}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmAIGeneration}
+              disabled={isGeneratingAI || !aiFormData.name.trim()}
+            >
+              {isGeneratingAI ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate Plan
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Back to Topic Button - Centered in Container */}
       <div className="flex justify-center pt-4">
         <Button
           variant="outline"
-          onClick={() =>
-            navigate(ROUTES.TOPIC_DETAILS.replace(":id", researchPlan.topic_id))
-          }
+          onClick={() => navigate(getTopicDetailsPath(researchPlan.topic_id))}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Topic

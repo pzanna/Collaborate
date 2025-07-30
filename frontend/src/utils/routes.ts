@@ -13,7 +13,6 @@ export const ROUTES = {
   SYSTEM_HEALTH: "/system-health",
   PROJECTS: "/projects",
   PROJECT_DETAILS: "/projects/:id",
-  TOPIC_DETAILS: "/topics/:id",
   RESEARCH_PLAN_DETAILS: "/plans/:id",
   // Future routes can be added here
   // RESEARCH: '/research',

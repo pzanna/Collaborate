@@ -94,6 +94,28 @@ export interface UpdateResearchPlanRequest {
   metadata?: Record<string, any>
 }
 
+export interface GenerateAIResearchPlanRequest {
+  name: string
+  description?: string
+  plan_type?: string
+  metadata?: Record<string, any>
+}
+
+export interface GenerateAIResearchPlanResponse {
+  plan: ResearchPlan
+  cost_estimate: {
+    estimated_cost: number
+    complexity: string
+  }
+  ai_plan_content: {
+    sections: string[]
+    methodology: string
+    timeline: string
+    resources: string[]
+    deliverables: string[]
+  }
+}
+
 /**
  * Generic API request function
  */
@@ -238,6 +260,16 @@ export const apiClient = {
   async approveResearchPlan(planId: string): Promise<ResearchPlan> {
     return await apiRequest(`/v2/plans/${planId}/approve`, {
       method: "POST",
+    })
+  },
+
+  async generateAIResearchPlan(
+    topicId: string,
+    request: GenerateAIResearchPlanRequest
+  ): Promise<GenerateAIResearchPlanResponse> {
+    return await apiRequest(`/v2/topics/${topicId}/ai-plans`, {
+      method: "POST",
+      body: JSON.stringify(request),
     })
   },
 
