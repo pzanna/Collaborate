@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
   Plus,
@@ -35,8 +35,13 @@ import {
   type Topic,
   type CreateTopicRequest,
   type UpdateTopicRequest,
+  type ResearchPlan,
 } from "@/utils/api"
-import { ROUTES, getTopicDetailsPath } from "@/utils/routes"
+import {
+  ROUTES,
+  getTopicDetailsPath,
+  getResearchPlanDetailsPath,
+} from "@/utils/routes"
 
 export function ProjectDetails() {
   const { id } = useParams<{ id: string }>()
@@ -44,6 +49,9 @@ export function ProjectDetails() {
 
   const [project, setProject] = useState<Project | null>(null)
   const [topics, setTopics] = useState<Topic[]>([])
+  const [topicPlans, setTopicPlans] = useState<Record<string, ResearchPlan[]>>(
+    {}
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -55,16 +63,7 @@ export function ProjectDetails() {
     project_id: id || "",
   })
 
-  // Load project and topics on component mount
-  useEffect(() => {
-    if (!id) {
-      navigate(ROUTES.PROJECTS)
-      return
-    }
-    loadProjectData()
-  }, [id, navigate])
-
-  const loadProjectData = async () => {
+  const loadProjectData = useCallback(async () => {
     if (!id) return
 
     try {
@@ -79,6 +78,25 @@ export function ProjectDetails() {
 
       setProject(projectData)
       setTopics(topicsData)
+
+      // Load research plans for each topic
+      const plansPromises = topicsData.map(async (topic) => {
+        try {
+          const plans = await apiClient.getResearchPlans(topic.id)
+          return { topicId: topic.id, plans }
+        } catch (err) {
+          console.warn(`Failed to load plans for topic ${topic.id}:`, err)
+          return { topicId: topic.id, plans: [] }
+        }
+      })
+
+      const plansResults = await Promise.all(plansPromises)
+      const plansMap = plansResults.reduce((acc, { topicId, plans }) => {
+        acc[topicId] = plans
+        return acc
+      }, {} as Record<string, ResearchPlan[]>)
+
+      setTopicPlans(plansMap)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load project data"
@@ -87,7 +105,16 @@ export function ProjectDetails() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  // Load project and topics on component mount
+  useEffect(() => {
+    if (!id) {
+      navigate(ROUTES.PROJECTS)
+      return
+    }
+    loadProjectData()
+  }, [id, navigate, loadProjectData])
 
   const handleCreateTopic = async () => {
     try {
@@ -166,6 +193,28 @@ export function ProjectDetails() {
   const resetForm = () => {
     setFormData({ name: "", description: "", project_id: id || "" })
     setError(null)
+  }
+
+  const getTopicButtonProps = (topic: Topic) => {
+    const plans = topicPlans[topic.id] || []
+    const hasPlans = plans.length > 0
+
+    if (hasPlans) {
+      // If there are multiple plans, link to the first one
+      const firstPlan = plans[0]
+      return {
+        text: "View Plan",
+        variant: "outline" as const,
+        onClick: () => navigate(getResearchPlanDetailsPath(firstPlan.id)),
+      }
+    } else {
+      return {
+        text: "Start Research",
+        variant: "default" as const,
+        onClick: () => navigate(getTopicDetailsPath(topic.id)),
+        className: "bg-green-600 hover:bg-green-700",
+      }
+    }
   }
 
   if (loading) {
@@ -337,13 +386,19 @@ export function ProjectDetails() {
                     Created {new Date(topic.created_at).toLocaleDateString()}
                   </div>
                   <div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(getTopicDetailsPath(topic.id))}
-                    >
-                      View Topic
-                    </Button>
+                    {(() => {
+                      const buttonProps = getTopicButtonProps(topic)
+                      return (
+                        <Button
+                          variant={buttonProps.variant}
+                          size="sm"
+                          onClick={buttonProps.onClick}
+                          className={buttonProps.className}
+                        >
+                          {buttonProps.text}
+                        </Button>
+                      )
+                    })()}
                   </div>
                 </div>
               </AccordionContent>

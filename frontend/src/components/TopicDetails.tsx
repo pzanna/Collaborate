@@ -210,64 +210,6 @@ export function TopicDetails() {
             </p>
           )}
         </div>
-
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Research Plan
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Research Plan</DialogTitle>
-              <DialogDescription>
-                Create a new research plan for this topic.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name">Research Plan Name</Label>
-                <Input
-                  id="name"
-                  placeholder="Enter research plan name..."
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe this research plan..."
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                />
-              </div>
-              {error && (
-                <div className="text-sm text-red-600 flex items-center space-x-1">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{error}</span>
-                </div>
-              )}
-              <div className="flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setCreateDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateResearchPlan}>
-                  Create Research Plan
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Error Display */}
@@ -290,13 +232,6 @@ export function TopicDetails() {
             <h3 className="text-lg font-semibold mb-2">
               No research plans yet
             </h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Get started by creating your first research plan for this topic
-            </p>
-            <Button onClick={() => setCreateDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Research Plan
-            </Button>
           </CardContent>
         </Card>
       ) : (
