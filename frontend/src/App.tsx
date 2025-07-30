@@ -6,6 +6,7 @@ import { TwoFactorSetup } from "./components/TwoFactorSetup"
 import { UserProfile } from "./components/UserProfile"
 import { SystemHealth } from "./components/SystemHealth"
 import { ProjectManagement } from "./components/ProjectManagement"
+import { ProjectDetails } from "./components/ProjectDetails"
 import { ProtectedRoute } from "./components/auth/ProtectedRoute"
 import { useAuth } from "./hooks/useAuth"
 import { ROUTES } from "./utils/routes"
@@ -43,6 +44,7 @@ function App() {
             <Layout>
               <Routes>
                 <Route path="/" element={<ProjectManagement />} />
+                <Route path="/:id" element={<ProjectDetails />} />
               </Routes>
             </Layout>
           }
@@ -73,6 +75,7 @@ function App() {
                   />
                   <Route path={ROUTES.WELCOME} element={<WelcomePage />} />
                   <Route path={ROUTES.PROJECTS} element={<ProjectManagement />} />
+                  <Route path={ROUTES.PROJECT_DETAILS} element={<ProjectDetails />} />
                   <Route path={ROUTES.PROFILE} element={<UserProfile />} />
                   <Route
                     path={ROUTES.SYSTEM_HEALTH}

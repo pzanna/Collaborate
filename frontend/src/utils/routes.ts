@@ -12,6 +12,7 @@ export const ROUTES = {
   PROFILE: "/profile",
   SYSTEM_HEALTH: "/system-health",
   PROJECTS: "/projects",
+  PROJECT_DETAILS: "/projects/:id",
   // Future routes can be added here
   // RESEARCH: '/research',
   // TASKS: '/tasks',
@@ -25,4 +26,11 @@ export type RoutePath = (typeof ROUTES)[RouteKey]
  */
 export const getRoutePath = (routeKey: RouteKey): string => {
   return ROUTES[routeKey]
+}
+
+/**
+ * Generate a project details path with a specific project ID
+ */
+export const getProjectDetailsPath = (projectId: string): string => {
+  return `/projects/${projectId}`
 }
