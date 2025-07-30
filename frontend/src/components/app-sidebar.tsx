@@ -6,10 +6,8 @@ import {
   Search,
   Settings2,
   SquareTerminal,
-  Users,
-  Database,
-  Brain,
   Activity,
+  Folder,
 } from "lucide-react"
 import { ROUTES } from "@/utils/routes"
 
@@ -30,6 +28,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/hooks/useAuth"
+import { useProjects } from "@/hooks/useProjects"
 
 // Eunice application data
 const data = {
@@ -107,7 +106,7 @@ const data = {
     },
     {
       title: "Research Projects",
-      url: "/projects",
+      url: ROUTES.PROJECTS,
       icon: FileText,
       items: [
         {
@@ -175,27 +174,11 @@ const data = {
       ],
     },
   ],
-  projects: [
-    {
-      name: "Neuroscience Meta-Analysis",
-      url: "/projects/neuroscience-meta",
-      icon: Brain,
-    },
-    {
-      name: "Clinical Trial Review",
-      url: "/projects/clinical-trials",
-      icon: Users,
-    },
-    {
-      name: "Database Integration",
-      url: "/projects/database-integration",
-      icon: Database,
-    },
-  ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
+  const { projects } = useProjects()
 
   // Transform auth user data to match NavUser component expectations
   const userData = user
@@ -208,6 +191,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
     : data.user // Fallback to static data
 
+  // Transform projects for NavProjects component
+  const projectsForNav = projects.map(project => ({
+    name: project.name,
+    url: `${ROUTES.PROJECTS}?project=${project.id}`,
+    icon: Folder,
+  }))
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -215,7 +205,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavProjects projects={projectsForNav} />
         {user?.role === "admin" && (
           <SidebarGroup className="group-data-[collapsible=icon]:hidden">
             <SidebarGroupLabel>System</SidebarGroupLabel>

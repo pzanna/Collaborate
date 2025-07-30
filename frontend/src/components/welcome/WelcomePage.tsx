@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card"
 import {
   ClockIcon,
@@ -6,6 +7,7 @@ import {
   ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline"
 import { useAuth } from "../../hooks/useAuth"
+import { ROUTES } from "../../utils/routes"
 
 interface PendingItem {
   id: string
@@ -33,6 +35,7 @@ const WelcomePage: React.FC = () => {
   const [quote, setQuote] = useState("")
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([])
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
 
   // Get the logged-in user's information
   const { user } = useAuth()
@@ -214,7 +217,10 @@ const WelcomePage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow">
+        <Card 
+          className="cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => navigate('/test-projects')}
+        >
           <CardContent className="text-center py-6">
             <ClipboardDocumentListIcon className="h-8 w-8 mx-auto mb-2 text-primary" />
             <h3 className="font-semibold text-foreground">View Projects</h3>

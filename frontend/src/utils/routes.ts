@@ -11,9 +11,9 @@ export const ROUTES = {
   TWO_FACTOR: "/2fa-setup",
   PROFILE: "/profile",
   SYSTEM_HEALTH: "/system-health",
+  PROJECTS: "/projects",
   // Future routes can be added here
   // RESEARCH: '/research',
-  // PROJECTS: '/projects',
   // TASKS: '/tasks',
 } as const
 
