@@ -5,6 +5,7 @@ import AuthPage from "./components/auth/AuthPage"
 import { TwoFactorSetup } from "./components/TwoFactorSetup"
 import { UserProfile } from "./components/UserProfile"
 import { SystemHealth } from "./components/SystemHealth"
+import { ProjectManagement } from "./components/ProjectManagement"
 import { ProtectedRoute } from "./components/auth/ProtectedRoute"
 import { useAuth } from "./hooks/useAuth"
 import { ROUTES } from "./utils/routes"
@@ -35,6 +36,30 @@ function App() {
           element={<Navigate to={ROUTES.AUTH} replace />}
         />
 
+        {/* Development-only test route (bypasses auth) */}
+        <Route
+          path="/test-projects"
+          element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<ProjectManagement />} />
+              </Routes>
+            </Layout>
+          }
+        />
+
+        {/* Development-only test route for welcome page */}
+        <Route
+          path="/test-welcome"
+          element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<WelcomePage />} />
+              </Routes>
+            </Layout>
+          }
+        />
+
         {/* Protected routes */}
         <Route
           path="*"
@@ -47,6 +72,7 @@ function App() {
                     element={<Navigate to={ROUTES.WELCOME} replace />}
                   />
                   <Route path={ROUTES.WELCOME} element={<WelcomePage />} />
+                  <Route path={ROUTES.PROJECTS} element={<ProjectManagement />} />
                   <Route path={ROUTES.PROFILE} element={<UserProfile />} />
                   <Route
                     path={ROUTES.SYSTEM_HEALTH}
