@@ -13,6 +13,7 @@
 # Services Started:
 #   - Redis (port 6380)           - Message queue and caching
 #   - PostgreSQL (port 5433)      - Primary database  
+#   - Docker Socket Proxy (2375)  - Secure Docker API access
 #   - MCP Server (port 9000)      - WebSocket communication hub
 #   - Auth Service (port 8013)    - JWT authentication and user management
 #   - Memory Agent (port 8009)    - Knowledge graph and context management
@@ -32,7 +33,7 @@
 # Prerequisites:
 #   - Docker and Docker Compose installed
 #   - 2GB+ RAM available
-#   - Ports 5433, 6380, 8001, 8008, 8009, 9000 available
+#   - Ports 2375, 5433, 6380, 8001-8013, 9000 available
 #   - .env file (optional, defaults will be used if missing)
 #
 # Usage:
@@ -83,9 +84,9 @@ print_info "Stopping existing services..."
 docker compose -f docker-compose.secure.yml down --remove-orphans 2>/dev/null || true
 
 # Phase 1: Start core infrastructure services
-# Redis and PostgreSQL must be ready before other services start
-print_info "Starting infrastructure (Redis, PostgreSQL)..."
-docker compose -f docker-compose.secure.yml up -d redis postgres
+# Redis, PostgreSQL, and Docker Socket Proxy must be ready before other services start
+print_info "Starting infrastructure (Redis, PostgreSQL, Docker Socket Proxy)..."
+docker compose -f docker-compose.secure.yml up -d redis postgres docker-socket-proxy
 
 # Wait for infrastructure services to be fully ready
 # Database connections require this initialization time
@@ -257,6 +258,14 @@ else
     services_ready=false
 fi
 
+# Test Docker Socket Proxy health endpoint
+if curl -f -s http://localhost:2375/_ping >/dev/null 2>&1; then
+    print_status "Docker Socket Proxy is healthy"
+else
+    echo "❌ Docker Socket Proxy health check failed"
+    services_ready=false
+fi
+
 # Note: AI service doesn't expose HTTP health endpoint (internal service)
 # Note: Database service doesn't expose HTTP health endpoint (internal service)
 
@@ -280,6 +289,7 @@ if [ "$services_ready" = true ]; then
     echo "   📝 Synthesis Agent:   http://localhost:8005"
     echo "   ✍️  Writer Agent:      http://localhost:8006"
     echo "   🗄️  Database Agent:    http://localhost:8011"
+    echo "   🐳 Docker Socket Proxy: http://localhost:2375"
     echo "   🤖 AI Service:        (Internal - no HTTP endpoint)"
     echo "   💾 Database Service:  (Internal - no HTTP endpoint)"
     echo "   🔍 PostgreSQL:        localhost:5433"

@@ -582,6 +582,7 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - REFRESH_TOKEN_EXPIRE_DAYS=7
       - DEBUG=false
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:8001,http://localhost
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
@@ -592,6 +593,7 @@ services:
       - eunice-microservices
     depends_on:
       - postgres
+      - docker-socket-proxy
     restart: unless-stopped
     # Security: Resource limits
     deploy:
@@ -659,6 +661,65 @@ services:
       - no-new-privileges:true
 
   # Supporting Infrastructure with Security
+
+  # Docker Socket Proxy (Security Layer for Docker API Access) - Security Enhanced
+  docker-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    container_name: eunice-docker-socket-proxy
+    environment:
+      - LOG_LEVEL=info
+      - CONTAINERS=1 # Allow listing and managing containers
+      - SERVICES=1 # Allow listing and managing services
+      - NETWORKS=1 # Allow listing networks
+      - VOLUMES=1 # Allow listing volumes
+      - IMAGES=1 # Allow listing images
+      - INFO=1 # Allow system info
+      - VERSION=1 # Allow version info
+      - PING=1 # Allow ping
+      - EVENTS=1 # Allow events
+      - EXEC=0 # Disable exec for security
+      - SYSTEM=0 # Block system-level API access
+      - BUILD=0 # Disable build operations
+      - COMMIT=0 # Disable commit operations
+      - POST=0 # Make API read-only for extra security
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - eunice-microservices
+    restart: unless-stopped
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+    # Security: Read-only filesystem
+    read_only: true
+    tmpfs:
+      - /run:noexec,nosuid,size=10m
+    # Security: Drop all capabilities
+    cap_drop:
+      - ALL
+    # Security: Prevent privilege escalation
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:2375/_ping",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 
   # Redis (Message Broker & Cache) - Security Enhanced
   redis:
