@@ -34,10 +34,12 @@ def get_database():
     try:
         db_client = get_native_database()
         if not db_client._initialized:
+            logger.error("Database client not initialized")
             raise HTTPException(status_code=503, detail="Database service not available")
         return db_client
     except Exception as e:
-        raise HTTPException(status_code=503, detail="Database service not available")
+        logger.error(f"Database dependency error: {e}")
+        raise HTTPException(status_code=503, detail=f"Database service not available: {str(e)}")
 
 
 # MCP client reference (will be set by main app)
@@ -59,6 +61,39 @@ def get_mcp_client():
 def override_dependencies(database_dependency, mcp_client_dependency):
     """Override the dependency functions with actual implementations."""
     pass  # No longer needed with direct approach
+
+
+# =============================================================================
+# DEBUG AND HEALTH CHECK ENDPOINTS
+# =============================================================================
+
+@v2_router.get("/debug/database")
+async def debug_database_connection(db=Depends(get_database)):
+    """Debug endpoint to test database connection and project lookup."""
+    try:
+        # Test basic database health
+        health = await db.health_check()
+        
+        # Test project lookup
+        test_project_id = "589e3d6d-79d1-497e-9780-42f32d4547f5"
+        project = await db.get_project(test_project_id)
+        
+        # List all projects
+        all_projects = await db.get_projects(limit=10)
+        
+        return {
+            "database_health": health,
+            "test_project_lookup": {
+                "project_id": test_project_id,
+                "found": project is not None,
+                "project_data": project
+            },
+            "all_projects": [{"id": p["id"], "name": p["name"]} for p in all_projects]
+        }
+        
+    except Exception as e:
+        logger.error(f"Database debug failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================
@@ -332,10 +367,34 @@ async def create_research_topic(
 ):
     """Create a new research topic within a project."""
     try:
-        # First check if project exists
-        existing_project = await db.get_project(project_id)
-        if not existing_project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        # Enhanced logging for debugging project lookup issues
+        logger.info(f"Creating research topic for project_id: {project_id}")
+        logger.info(f"Topic request: name='{topic_request.name}', description='{topic_request.description}'")
+        
+        # First check if project exists with enhanced error handling
+        try:
+            logger.info(f"Looking up project in database: {project_id}")
+            existing_project = await db.get_project(project_id)
+            
+            if not existing_project:
+                logger.warning(f"Project not found in database: {project_id}")
+                # List all available projects for debugging
+                try:
+                    all_projects = await db.get_projects(limit=10)
+                    logger.info(f"Available projects in database: {[p['id'] for p in all_projects]}")
+                except Exception as list_error:
+                    logger.error(f"Failed to list available projects: {list_error}")
+                    
+                raise HTTPException(status_code=404, detail="Project not found")
+            else:
+                logger.info(f"Project found: {existing_project['name']} (id: {existing_project['id']})")
+                
+        except HTTPException:
+            # Re-raise HTTP exceptions as-is
+            raise
+        except Exception as db_error:
+            logger.error(f"Database error while looking up project {project_id}: {db_error}")
+            raise HTTPException(status_code=503, detail="Database lookup failed")
 
         # Generate ID and timestamps
         topic_id = str(uuid4())
