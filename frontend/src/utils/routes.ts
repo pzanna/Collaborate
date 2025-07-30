@@ -13,6 +13,8 @@ export const ROUTES = {
   SYSTEM_HEALTH: "/system-health",
   PROJECTS: "/projects",
   PROJECT_DETAILS: "/projects/:id",
+  TOPIC_DETAILS: "/topics/:id",
+  RESEARCH_PLAN_DETAILS: "/plans/:id",
   // Future routes can be added here
   // RESEARCH: '/research',
   // TASKS: '/tasks',
@@ -33,4 +35,18 @@ export const getRoutePath = (routeKey: RouteKey): string => {
  */
 export const getProjectDetailsPath = (projectId: string): string => {
   return `/projects/${projectId}`
+}
+
+/**
+ * Generate a topic details path with a specific topic ID
+ */
+export const getTopicDetailsPath = (topicId: string): string => {
+  return `/topics/${topicId}`
+}
+
+/**
+ * Generate a research plan details path with a specific plan ID
+ */
+export const getResearchPlanDetailsPath = (planId: string): string => {
+  return `/plans/${planId}`
 }

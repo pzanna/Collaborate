@@ -7,6 +7,8 @@ import { UserProfile } from "./components/UserProfile"
 import { SystemHealth } from "./components/SystemHealth"
 import { ProjectManagement } from "./components/ProjectManagement"
 import { ProjectDetails } from "./components/ProjectDetails"
+import { TopicDetails } from "./components/TopicDetails"
+import { ResearchPlanDetails } from "./components/ResearchPlanDetails"
 import { ProtectedRoute } from "./components/auth/ProtectedRoute"
 import { useAuth } from "./hooks/useAuth"
 import { ROUTES } from "./utils/routes"
@@ -48,6 +50,16 @@ function App() {
             <ProjectDetails />
           </Layout>
         } />
+        <Route path="/test-topics/:id" element={
+          <Layout>
+            <TopicDetails />
+          </Layout>
+        } />
+        <Route path="/test-plans/:id" element={
+          <Layout>
+            <ResearchPlanDetails />
+          </Layout>
+        } />
 
         {/* Development-only test route for welcome page */}
         <Route
@@ -75,6 +87,8 @@ function App() {
                   <Route path={ROUTES.WELCOME} element={<WelcomePage />} />
                   <Route path={ROUTES.PROJECTS} element={<ProjectManagement />} />
                   <Route path={ROUTES.PROJECT_DETAILS} element={<ProjectDetails />} />
+                  <Route path={ROUTES.TOPIC_DETAILS} element={<TopicDetails />} />
+                  <Route path={ROUTES.RESEARCH_PLAN_DETAILS} element={<ResearchPlanDetails />} />
                   <Route path={ROUTES.PROFILE} element={<UserProfile />} />
                   <Route
                     path={ROUTES.SYSTEM_HEALTH}
