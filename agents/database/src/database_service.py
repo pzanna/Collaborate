@@ -90,13 +90,17 @@ class DatabaseAgentService:
             "create_project", "update_project", "delete_project",
             "create_topic", "update_topic", "delete_topic", 
             "create_research_topic", "update_research_topic", "delete_research_topic",
-            "create_plan", "update_plan", "delete_plan",
+            "create_plan", "create_research_plan", "update_plan", "delete_plan",
             "create_task", "update_task", "delete_task",
             "create_literature_record", "update_literature_record", "delete_literature_record",
             "database_operations", "data_persistence", "query_execution"
         ]
         
         logger.info(f"Database Agent Service initialized on port {self.service_port}")
+    
+    def get_capabilities(self) -> List[str]:
+        """Return list of agent capabilities."""
+        return self.capabilities
     
     async def start(self):
         """Start the Database Agent Service."""
@@ -222,6 +226,7 @@ class DatabaseAgentService:
         
         await self.websocket.send(json.dumps(registration_message))
         logger.info(f"Registered with MCP server: {len(self.capabilities)} capabilities")
+        logger.info(f"DEBUG: Capabilities sent: {self.capabilities}")
     
     async def _listen_for_tasks(self):
         """Listen for tasks from MCP server."""
@@ -317,7 +322,12 @@ class DatabaseAgentService:
                 result = await self._handle_create_project(data)
                 return result
             elif task_type == "update_project":
-                return await self._handle_update_project(data)
+                logger.info("CRITICAL DEBUG: About to call _handle_update_project")
+                logger.error("CRITICAL ERROR: This should definitely appear in logs!")
+                print("PRINT STATEMENT: This should appear even if logging is broken")
+                result = await self._handle_update_project(data)
+                logger.info(f"CRITICAL DEBUG: Got result from _handle_update_project: {result}")
+                return result
             elif task_type == "delete_project":
                 return await self._handle_delete_project(data)
             
@@ -328,11 +338,15 @@ class DatabaseAgentService:
                 return await self._handle_create_research_topic(data)
             elif task_type == "update_topic":
                 return await self._handle_update_topic(data)
+            elif task_type == "update_research_topic":
+                return await self._handle_update_research_topic(data)
             elif task_type == "delete_topic":
                 return await self._handle_delete_topic(data)
+            elif task_type == "delete_research_topic":
+                return await self._handle_delete_research_topic(data)
             
             # Plan operations
-            elif task_type == "create_plan":
+            elif task_type == "create_plan" or task_type == "create_research_plan":
                 return await self._handle_create_plan(data)
             elif task_type == "update_plan":
                 return await self._handle_update_plan(data)
@@ -436,20 +450,61 @@ class DatabaseAgentService:
             }
     
     async def _handle_update_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle project update request."""
+        """Handle project update request - supports multiple data formats."""
+        logger.error("🚨🚨🚨 ABSOLUTELY CRITICAL ERROR: _handle_update_project was called! 🚨🚨🚨")
+        logger.error("🔥🔥🔥 FORCE REBUILD TEST - THIS SHOULD APPEAR IN LOGS! 🔥🔥🔥")
+        print("🚨 PRINT: _handle_update_project method entry 🚨")
+        print("🔥 PRINT: FORCE REBUILD TEST - THIS SHOULD ALSO APPEAR! 🔥")
+        logger.info(f"🔍 ABSOLUTELY FIRST LINE: Received data: {data}")
         try:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
-            project_id = data.get("project_id", "")
-            updates = data.get("updates", {})
+            logger.info(f"🔍 DEBUG: Received data for update_project: {data}")
+            logger.info(f"🔍 DEBUG: Data type: {type(data)}")
+            logger.info(f"🔍 DEBUG: Data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                
+            # Handle multiple data formats for backward compatibility
+            # Format 1: {"project_id": "...", "updates": {...}}
+            # Format 2: {"id": "...", "name": "...", "description": "...", ...}
+            
+            project_id = data.get("project_id") or data.get("id", "")
+            logger.error(f"🔥 CRITICAL: Extracted project_id: '{project_id}' from data keys: {list(data.keys())}")
+            logger.error(f"🔥 CRITICAL: data.get('project_id'): '{data.get('project_id')}', data.get('id'): '{data.get('id')}'")
             
             if not project_id:
+                logger.error("🚨 CRITICAL FAILURE: Project ID is empty or None!")
                 return {
                     "status": "failed",
                     "error": "Project ID is required",
                     "timestamp": datetime.now().isoformat()
                 }
+            
+            # Extract updates from either format
+            if "updates" in data:
+                # Format 1: structured with updates field
+                updates = data.get("updates", {})
+            else:
+                # Format 2: direct fields, extract the updatable ones
+                updates = {}
+                for field in ["name", "description", "status", "metadata"]:
+                    if field in data:
+                        value = data[field]
+                        # Handle metadata string conversion
+                        if field == "metadata" and isinstance(value, str):
+                            try:
+                                # Parse JSON string and convert back to string for database
+                                parsed_metadata = json.loads(value)
+                                value = json.dumps(parsed_metadata)  # Convert back to JSON string
+                            except json.JSONDecodeError:
+                                logger.warning(f"Failed to parse metadata JSON: {value}")
+                                value = "{}"  # Default to empty JSON object string
+                        elif field == "metadata" and isinstance(value, dict):
+                            # If already a dict, convert to JSON string for database
+                            value = json.dumps(value)
+                        updates[field] = value
+            
+            logger.info(f"DEBUG: Final updates dict: {updates}")
             
             # Build update query dynamically
             set_clauses = []
@@ -457,7 +512,7 @@ class DatabaseAgentService:
             param_count = 1
             
             for field, value in updates.items():
-                if field in ["name", "description", "status"]:
+                if field in ["name", "description", "status", "metadata"]:
                     set_clauses.append(f"{field} = ${param_count}")
                     values.append(value)
                     param_count += 1
@@ -483,9 +538,14 @@ class DatabaseAgentService:
                 WHERE id = ${param_count}
             """
             
+            logger.info(f"Executing update query: {query}")
+            logger.info(f"With values: {values}")
+            
             async with self.db_pool.acquire() as conn:
                 result = await conn.execute(query, *values)
                 rows_affected = int(result.split()[-1])
+                
+            logger.info(f"Update completed, rows affected: {rows_affected}")
             
             self.operations_completed += 1
             
@@ -512,7 +572,7 @@ class DatabaseAgentService:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
-            project_id = data.get("project_id", "")
+            project_id = data.get("id", "")
             
             if not project_id:
                 return {
@@ -658,44 +718,110 @@ class DatabaseAgentService:
     async def _handle_delete_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle topic deletion request."""
         return await self._generic_delete("topics", data.get("topic_id", ""))
+
+    async def _handle_update_research_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle research topic update request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+            
+            # Extract ID from payload or data
+            topic_id = data.get("id", data.get("topic_id", ""))
+            if not topic_id:
+                return {
+                    "status": "failed",
+                    "error": "Topic ID is required for update",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Use the research_topics table for research topic updates
+            return await self._generic_update("research_topics", data)
+            
+        except Exception as e:
+            logger.error(f"Failed to update research topic: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    async def _handle_delete_research_topic(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle research topic deletion request."""
+        try:
+            # Extract ID from payload or data (API Gateway sends it as 'id')
+            topic_id = data.get("id", data.get("topic_id", ""))
+            if not topic_id:
+                return {
+                    "status": "failed", 
+                    "error": "Topic ID is required for deletion",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Use the research_topics table for research topic deletions
+            return await self._generic_delete("research_topics", topic_id)
+            
+        except Exception as e:
+            logger.error(f"Failed to delete research topic: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
     
     async def _handle_create_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle plan creation request."""
+        """Handle research plan creation request."""
         try:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
-            plan_name = data.get("name", data.get("plan_name", ""))  # Use 'name' as primary, 'plan_name' as fallback
-            project_id = data.get("project_id", "")
-            plan_data = data.get("plan_data", {})
+            # Extract fields to match the actual research_plans table schema
+            plan_id = data.get("id", str(uuid.uuid4()))  # Use provided ID or generate new one
+            topic_id = data.get("topic_id", "")  # Research plans belong to topics, not projects
+            name = data.get("name", "")
+            description = data.get("description", "")
+            plan_type = data.get("plan_type", "comprehensive") 
+            status = data.get("status", "draft")
+            metadata = data.get("metadata", {})
             
-            if not all([plan_name, project_id]):
+            # Validate required fields
+            if not all([name, topic_id]):
                 return {
                     "status": "failed",
-                    "error": "Plan name and project ID are required",
+                    "error": "Plan name and topic ID are required",
                     "timestamp": datetime.now().isoformat()
                 }
             
-            plan_id = str(uuid.uuid4())
+            # Convert metadata to JSON string if it's a dict or parse it if it's a string
+            if isinstance(metadata, str):
+                try:
+                    metadata_json = json.loads(metadata)
+                except json.JSONDecodeError:
+                    metadata_json = {}
+            else:
+                metadata_json = metadata
             
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
-                    INSERT INTO research_plans (id, name, project_id, plan_data, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                """, plan_id, plan_name, project_id, json.dumps(plan_data), datetime.now(), datetime.now())
+                    INSERT INTO research_plans (id, topic_id, name, description, plan_type, status, created_at, updated_at, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """, plan_id, topic_id, name, description, plan_type, status, datetime.now(), datetime.now(), json.dumps(metadata_json))
             
             self.operations_completed += 1
             
             return {
                 "status": "completed",
                 "plan_id": plan_id,
-                "plan_name": plan_name,
-                "project_id": project_id,
+                "name": name,
+                "topic_id": topic_id,
+                "plan_type": plan_type,
+                "status": status,
                 "timestamp": datetime.now().isoformat()
             }
             
         except Exception as e:
-            logger.error(f"Failed to create plan: {e}")
+            logger.error(f"Failed to create research plan: {e}")
             self.operations_failed += 1
             return {
                 "status": "failed",
@@ -717,26 +843,39 @@ class DatabaseAgentService:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
-            task_name = data.get("name", data.get("task_name", ""))  # Use 'name' as primary, 'task_name' as fallback
-            project_id = data.get("project_id", "")
-            task_type = data.get("task_type", "general")
-            task_data_json = data.get("task_data", {})
+            # Extract task data according to research_tasks schema
+            task_name = data.get("name", data.get("task_name", ""))
+            plan_id = data.get("plan_id", "")
+            description = data.get("description", "")
+            task_type = data.get("task_type", "research")
+            task_order = data.get("task_order", 1)
+            status = data.get("status", "pending")
+            metadata = data.get("metadata", {})
             
-            if not all([task_name, project_id]):
+            # Use provided ID or generate new one
+            task_id = data.get("id", str(uuid.uuid4()))
+            
+            if not all([task_name, plan_id]):
                 return {
                     "status": "failed",
-                    "error": "Task name and project ID are required",
+                    "error": "Task name and plan ID are required",
                     "timestamp": datetime.now().isoformat()
                 }
             
-            task_id = str(uuid.uuid4())
+            # Convert metadata to JSON if it's a string
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse metadata JSON: {metadata}")
+                    metadata = {}
             
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
-                    INSERT INTO tasks (id, name, task_type, project_id, task_data, status, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                """, task_id, task_name, task_type, project_id, json.dumps(task_data_json), 
-                     "pending", datetime.now(), datetime.now())
+                    INSERT INTO research_tasks (id, plan_id, name, description, task_type, task_order, status, created_at, updated_at, metadata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                """, task_id, plan_id, task_name, description, task_type, task_order, status, 
+                     datetime.now(), datetime.now(), json.dumps(metadata))
             
             self.operations_completed += 1
             
@@ -744,7 +883,8 @@ class DatabaseAgentService:
                 "status": "completed",
                 "task_id": task_id,
                 "task_name": task_name,
-                "project_id": project_id,
+                "plan_id": plan_id,
+                "task_type": task_type,
                 "timestamp": datetime.now().isoformat()
             }
             

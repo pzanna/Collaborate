@@ -464,8 +464,8 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, plan_id, task_type, status, task_order, created_at, updated_at 
-                    FROM tasks 
+                    SELECT id, name, description, plan_id, task_type, status, task_order, created_at, updated_at, metadata 
+                    FROM research_tasks 
                     WHERE plan_id = $1
                 """
                 params = [plan_id]
@@ -480,6 +480,14 @@ class NativeDatabaseClient:
                 
                 tasks = []
                 for row in rows:
+                    # Parse metadata if available
+                    metadata = {}
+                    if row.get('metadata'):
+                        try:
+                            metadata = json.loads(row['metadata']) if isinstance(row['metadata'], str) else row['metadata']
+                        except (json.JSONDecodeError, TypeError):
+                            metadata = {}
+                    
                     tasks.append({
                         "id": str(row['id']),
                         "plan_id": str(row['plan_id']),
@@ -502,7 +510,7 @@ class NativeDatabaseClient:
                         "reasoning_output": None,
                         "execution_results": [],
                         "synthesis": None,
-                        "metadata": {}
+                        "metadata": metadata
                     })
                 
                 return tasks
@@ -524,8 +532,8 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, plan_id, task_type, status, task_order, created_at, updated_at 
-                    FROM tasks 
+                    SELECT id, name, description, plan_id, task_type, status, task_order, created_at, updated_at, metadata 
+                    FROM research_tasks 
                     WHERE id = $1
                 """
                 

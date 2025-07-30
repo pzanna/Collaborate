@@ -1,22 +1,23 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  Edit,
+  Trash2,
+  ArrowLeft,
   FolderOpen,
   Calendar,
   AlertCircle,
-  Loader2
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion"
 import {
   Dialog,
   DialogContent,
@@ -28,13 +29,13 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { 
-  apiClient, 
-  type Project, 
-  type CreateProjectRequest, 
-  type UpdateProjectRequest 
+import {
+  apiClient,
+  type Project,
+  type CreateProjectRequest,
+  type UpdateProjectRequest,
 } from "@/utils/api"
-import { getProjectDetailsPath } from "@/utils/routes"
+import { ROUTES, getProjectDetailsPath } from "@/utils/routes"
 
 export function ProjectManagement() {
   const navigate = useNavigate()
@@ -98,8 +99,13 @@ export function ProjectManagement() {
         description: formData.description,
       }
 
-      const updatedProject = await apiClient.updateProject(editingProject.id, updateData)
-      setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p))
+      const updatedProject = await apiClient.updateProject(
+        editingProject.id,
+        updateData
+      )
+      setProjects(
+        projects.map((p) => (p.id === updatedProject.id ? updatedProject : p))
+      )
       setEditDialogOpen(false)
       setEditingProject(null)
       setFormData({ name: "", description: "" })
@@ -117,7 +123,7 @@ export function ProjectManagement() {
 
     try {
       await apiClient.deleteProject(project.id)
-      setProjects(projects.filter(p => p.id !== project.id))
+      setProjects(projects.filter((p) => p.id !== project.id))
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete project")
@@ -160,7 +166,7 @@ export function ProjectManagement() {
             Manage your research projects, plans, and tasks
           </p>
         </div>
-        
+
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={resetForm}>
@@ -182,7 +188,9 @@ export function ProjectManagement() {
                   id="name"
                   placeholder="Enter project name..."
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                 />
               </div>
               <div>
@@ -191,7 +199,9 @@ export function ProjectManagement() {
                   id="description"
                   placeholder="Describe your project..."
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                 />
               </div>
               {error && (
@@ -201,12 +211,13 @@ export function ProjectManagement() {
                 </div>
               )}
               <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setCreateDialogOpen(false)}
+                >
                   Cancel
                 </Button>
-                <Button onClick={handleCreateProject}>
-                  Create Project
-                </Button>
+                <Button onClick={handleCreateProject}>Create Project</Button>
               </div>
             </div>
           </DialogContent>
@@ -241,19 +252,15 @@ export function ProjectManagement() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Accordion type="multiple" className="w-full space-y-4">
           {projects.map((project) => (
-            <Card 
-              key={project.id} 
-              className="hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => navigate(getProjectDetailsPath(project.id))}
-            >
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{project.name}</CardTitle>
+            <AccordionItem key={project.id} value={project.id.toString()}>
+              <AccordionTrigger>
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-medium text-lg">{project.name}</span>
                   <div className="flex space-x-1">
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -262,8 +269,8 @@ export function ProjectManagement() {
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -274,40 +281,51 @@ export function ProjectManagement() {
                     </Button>
                   </div>
                 </div>
-                {project.description && (
-                  <CardDescription className="line-clamp-2">
-                    {project.description}
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
+              </AccordionTrigger>
+              <AccordionContent>
                 <div className="space-y-3">
+                  {project.description && (
+                    <div className="text-muted-foreground">
+                      {project.description}
+                    </div>
+                  )}
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4 mr-2" />
                     Created {new Date(project.created_at).toLocaleDateString()}
                   </div>
-                  
                   <div className="text-sm">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      project.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        project.status === "active"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
                       {project.status}
                     </span>
                   </div>
-
                   {/* Placeholder for plans and tasks - will be implemented later */}
                   <div className="pt-2 border-t">
                     <div className="text-xs text-muted-foreground">
                       Plans: 0 • Tasks: 0
                     </div>
                   </div>
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        navigate(getProjectDetailsPath(project.id))
+                      }
+                    >
+                      View Project
+                    </Button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              </AccordionContent>
+            </AccordionItem>
           ))}
-        </div>
+        </Accordion>
       )}
 
       {/* Edit Project Dialog */}
@@ -326,7 +344,9 @@ export function ProjectManagement() {
                 id="edit-name"
                 placeholder="Enter project name..."
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
               />
             </div>
             <div>
@@ -335,7 +355,9 @@ export function ProjectManagement() {
                 id="edit-description"
                 placeholder="Describe your project..."
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
               />
             </div>
             {error && (
@@ -345,16 +367,24 @@ export function ProjectManagement() {
               </div>
             )}
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleEditProject}>
-                Save Changes
-              </Button>
+              <Button onClick={handleEditProject}>Save Changes</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+      {/* Back to Dashboard Button - Centered in Container */}
+      <div className="flex justify-center pt-4">
+        <Button variant="outline" onClick={() => navigate(ROUTES.WELCOME)}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
+      </div>
     </div>
   )
 }

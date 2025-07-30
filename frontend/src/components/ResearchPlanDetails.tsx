@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { 
-  Edit, 
-  Trash2, 
+import {
+  Edit,
+  Trash2,
   ArrowLeft,
   Calendar,
   AlertCircle,
   Loader2,
   Save,
   X,
-  Check
+  Check,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,17 +22,17 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { 
-  apiClient, 
+import {
+  apiClient,
   type ResearchPlan,
-  type UpdateResearchPlanRequest 
+  type UpdateResearchPlanRequest,
 } from "@/utils/api"
 import { ROUTES } from "@/utils/routes"
 
 export function ResearchPlanDetails() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  
+
   const [researchPlan, setResearchPlan] = useState<ResearchPlan | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +41,7 @@ export function ResearchPlanDetails() {
   const [editFormData, setEditFormData] = useState({
     name: "",
     description: "",
-    plan_structure: ""
+    plan_structure: "",
   })
 
   // Load research plan on component mount
@@ -55,22 +55,24 @@ export function ResearchPlanDetails() {
 
   const loadResearchPlan = async () => {
     if (!id) return
-    
+
     try {
       setLoading(true)
       setError(null)
-      
+
       const planData = await apiClient.getResearchPlan(id)
       setResearchPlan(planData)
-      
+
       // Initialize edit form data
       setEditFormData({
         name: planData.name,
         description: planData.description || "",
-        plan_structure: formatPlanStructure(planData.plan_structure)
+        plan_structure: formatPlanStructure(planData.plan_structure),
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load research plan")
+      setError(
+        err instanceof Error ? err.message : "Failed to load research plan"
+      )
       console.error("Error loading research plan:", err)
     } finally {
       setLoading(false)
@@ -79,7 +81,7 @@ export function ResearchPlanDetails() {
 
   const formatPlanStructure = (planStructure?: Record<string, any>): string => {
     if (!planStructure) return ""
-    
+
     // Convert the plan structure object to a formatted string
     let formatted = ""
     if (planStructure.sections && Array.isArray(planStructure.sections)) {
@@ -88,19 +90,21 @@ export function ResearchPlanDetails() {
     if (planStructure.details) {
       formatted += planStructure.details
     }
-    
+
     return formatted
   }
 
   const parsePlanStructure = (structureText: string): Record<string, any> => {
     // Simple parsing - in a real app this might be more sophisticated
     const lines = structureText.split("\n")
-    const sections = lines.filter(line => line.trim().match(/^\d+\./))
-    const details = lines.filter(line => !line.trim().match(/^\d+\./) && line.trim()).join("\n")
-    
+    const sections = lines.filter((line) => line.trim().match(/^\d+\./))
+    const details = lines
+      .filter((line) => !line.trim().match(/^\d+\./) && line.trim())
+      .join("\n")
+
     return {
       sections: sections.length > 0 ? sections : undefined,
-      details: details || undefined
+      details: details || undefined,
     }
   }
 
@@ -111,12 +115,12 @@ export function ResearchPlanDetails() {
 
   const handleCancelEdit = () => {
     if (!researchPlan) return
-    
+
     // Reset form data to original values
     setEditFormData({
       name: researchPlan.name,
       description: researchPlan.description || "",
-      plan_structure: formatPlanStructure(researchPlan.plan_structure)
+      plan_structure: formatPlanStructure(researchPlan.plan_structure),
     })
     setIsEditing(false)
     setError(null)
@@ -132,7 +136,7 @@ export function ResearchPlanDetails() {
       const updateData: UpdateResearchPlanRequest = {
         name: editFormData.name,
         description: editFormData.description,
-        plan_structure: parsePlanStructure(editFormData.plan_structure)
+        plan_structure: parsePlanStructure(editFormData.plan_structure),
       }
 
       const updatedPlan = await apiClient.updateResearchPlan(id, updateData)
@@ -140,13 +144,18 @@ export function ResearchPlanDetails() {
       setIsEditing(false)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update research plan")
+      setError(
+        err instanceof Error ? err.message : "Failed to update research plan"
+      )
       console.error("Error updating research plan:", err)
     }
   }
 
   const handleDelete = async () => {
-    if (!researchPlan || !window.confirm(`Are you sure you want to delete "${researchPlan.name}"?`)) {
+    if (
+      !researchPlan ||
+      !window.confirm(`Are you sure you want to delete "${researchPlan.name}"?`)
+    ) {
       return
     }
 
@@ -154,7 +163,9 @@ export function ResearchPlanDetails() {
       await apiClient.deleteResearchPlan(researchPlan.id)
       navigate(-1) // Go back to previous page
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete research plan")
+      setError(
+        err instanceof Error ? err.message : "Failed to delete research plan"
+      )
       console.error("Error deleting research plan:", err)
     }
   }
@@ -168,7 +179,9 @@ export function ResearchPlanDetails() {
       setResearchPlan(approvedPlan)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve research plan")
+      setError(
+        err instanceof Error ? err.message : "Failed to approve research plan"
+      )
       console.error("Error approving research plan:", err)
     } finally {
       setIsApproving(false)
@@ -207,18 +220,6 @@ export function ResearchPlanDetails() {
 
   return (
     <div className="px-6 py-8 space-y-6 max-w-4xl mx-auto">
-      {/* Header with Back Button */}
-      <div className="flex items-center space-x-4">
-        <Button 
-          onClick={() => navigate(-1)} 
-          variant="outline"
-          size="sm"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-      </div>
-
       {/* Research Plan Information */}
       <div className="space-y-4">
         <div>
@@ -229,7 +230,9 @@ export function ResearchPlanDetails() {
                 <Input
                   id="edit-name"
                   value={editFormData.name}
-                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, name: e.target.value })
+                  }
                 />
               </div>
               <div>
@@ -237,7 +240,12 @@ export function ResearchPlanDetails() {
                 <Textarea
                   id="edit-description"
                   value={editFormData.description}
-                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      description: e.target.value,
+                    })
+                  }
                 />
               </div>
             </div>
@@ -252,19 +260,21 @@ export function ResearchPlanDetails() {
             </>
           )}
         </div>
-        
+
         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
           <div className="flex items-center">
             <Calendar className="h-4 w-4 mr-2" />
             Created {new Date(researchPlan.created_at).toLocaleDateString()}
           </div>
-          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-            researchPlan.status === 'active' 
-              ? 'bg-green-100 text-green-800'
-              : researchPlan.status === 'completed'
-              ? 'bg-blue-100 text-blue-800' 
-              : 'bg-gray-100 text-gray-800'
-          }`}>
+          <span
+            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+              researchPlan.status === "active"
+                ? "bg-green-100 text-green-800"
+                : researchPlan.status === "completed"
+                ? "bg-blue-100 text-blue-800"
+                : "bg-gray-100 text-gray-800"
+            }`}
+          >
             {researchPlan.status}
           </span>
           {researchPlan.plan_approved && (
@@ -292,7 +302,9 @@ export function ResearchPlanDetails() {
         <CardHeader>
           <CardTitle>Research Plan</CardTitle>
           <CardDescription>
-            {isEditing ? "Edit the research plan content below" : "Current research plan content"}
+            {isEditing
+              ? "Edit the research plan content below"
+              : "Current research plan content"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -305,13 +317,19 @@ export function ResearchPlanDetails() {
                   className="min-h-[300px] font-mono text-sm"
                   placeholder="Enter your research plan content here..."
                   value={editFormData.plan_structure}
-                  onChange={(e) => setEditFormData({ ...editFormData, plan_structure: e.target.value })}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      plan_structure: e.target.value,
+                    })
+                  }
                 />
               </div>
             ) : (
               <div className="bg-gray-50 p-4 rounded-md">
                 <pre className="whitespace-pre-wrap text-sm">
-                  {formatPlanStructure(researchPlan.plan_structure) || "No research plan content available."}
+                  {formatPlanStructure(researchPlan.plan_structure) ||
+                    "No research plan content available."}
                 </pre>
               </div>
             )}
@@ -335,17 +353,14 @@ export function ResearchPlanDetails() {
             </>
           ) : (
             <>
-              <Button 
+              <Button
                 onClick={handleEdit}
                 disabled={researchPlan.plan_approved}
               >
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
-              <Button 
-                variant="destructive" 
-                onClick={handleDelete}
-              >
+              <Button variant="destructive" onClick={handleDelete}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </Button>
@@ -354,7 +369,7 @@ export function ResearchPlanDetails() {
         </div>
 
         {!isEditing && !researchPlan.plan_approved && (
-          <Button 
+          <Button
             onClick={handleApprove}
             disabled={isApproving}
             className="bg-green-600 hover:bg-green-700"
@@ -377,24 +392,44 @@ export function ResearchPlanDetails() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <div className="text-2xl font-bold">{researchPlan.tasks_count || 0}</div>
+              <div className="text-2xl font-bold">
+                {researchPlan.tasks_count || 0}
+              </div>
               <div className="text-sm text-muted-foreground">Tasks</div>
             </div>
             <div>
-              <div className="text-2xl font-bold">{researchPlan.completed_tasks || 0}</div>
+              <div className="text-2xl font-bold">
+                {researchPlan.completed_tasks || 0}
+              </div>
               <div className="text-sm text-muted-foreground">Completed</div>
             </div>
             <div>
-              <div className="text-2xl font-bold">{researchPlan.progress?.toFixed(0) || 0}%</div>
+              <div className="text-2xl font-bold">
+                {researchPlan.progress?.toFixed(0) || 0}%
+              </div>
               <div className="text-sm text-muted-foreground">Progress</div>
             </div>
             <div>
-              <div className="text-2xl font-bold">${researchPlan.actual_cost?.toFixed(0) || 0}</div>
+              <div className="text-2xl font-bold">
+                ${researchPlan.actual_cost?.toFixed(0) || 0}
+              </div>
               <div className="text-sm text-muted-foreground">Cost</div>
             </div>
           </div>
         </CardContent>
       </Card>
+      {/* Back to Projects Button - Centered in Container */}
+      <div className="flex justify-center pt-4">
+        <Button
+          variant="outline"
+          onClick={() =>
+            navigate(ROUTES.TOPIC_DETAILS.replace(":id", researchPlan.topic_id))
+          }
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Topic
+        </Button>
+      </div>
     </div>
   )
 }

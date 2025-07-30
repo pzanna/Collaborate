@@ -2,8 +2,6 @@
  * API client utilities for communicating with the Eunice backend
  */
 
-import { mockApiClient } from './mockApi'
-
 const API_BASE_URL = "/api" // This will be proxied to http://localhost:8001
 
 // Types for project data
@@ -124,305 +122,123 @@ async function apiRequest(
 }
 
 /**
- * Check if backend is available
- */
-async function isBackendAvailable(): Promise<boolean> {
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 2000)
-    
-    const response = await fetch(`${API_BASE_URL}/health`, { 
-      method: 'GET',
-      signal: controller.signal
-    })
-    
-    clearTimeout(timeoutId)
-    return response.ok
-  } catch {
-    return false
-  }
-}
-
-/**
- * API client methods with automatic fallback to mock data
+ * API client methods for communicating with the Eunice backend
  */
 export const apiClient = {
   // Health check
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    try {
-      return await apiRequest("/health")
-    } catch {
-      console.warn("Backend not available, using mock data")
-      return mockApiClient.healthCheck()
-    }
+    return await apiRequest("/health")
   },
 
   // Project methods
   async getProjects(): Promise<Project[]> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest("/v2/projects")
-      } catch (error) {
-        console.warn("Backend project API failed, falling back to mock data:", error)
-        return mockApiClient.getProjects()
-      }
-    } else {
-      console.info("Backend not available, using mock project data")
-      return mockApiClient.getProjects()
-    }
+    return await apiRequest("/v2/projects")
   },
 
   async getProject(id: string): Promise<Project> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${id}`)
-      } catch (error) {
-        console.warn("Backend project API failed, falling back to mock data:", error)
-        return mockApiClient.getProject(id)
-      }
-    } else {
-      console.info("Backend not available, using mock project data")
-      return mockApiClient.getProject(id)
-    }
+    return await apiRequest(`/v2/projects/${id}`)
   },
 
   async createProject(project: CreateProjectRequest): Promise<Project> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest("/v2/projects", {
-          method: "POST",
-          body: JSON.stringify(project),
-        })
-      } catch (error) {
-        console.warn("Backend project API failed, falling back to mock data:", error)
-        return mockApiClient.createProject(project)
-      }
-    } else {
-      console.info("Backend not available, using mock project data")
-      return mockApiClient.createProject(project)
-    }
+    return await apiRequest("/v2/projects", {
+      method: "POST",
+      body: JSON.stringify(project),
+    })
   },
 
-  async updateProject(id: string, project: UpdateProjectRequest): Promise<Project> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${id}`, {
-          method: "PUT",
-          body: JSON.stringify(project),
-        })
-      } catch (error) {
-        console.warn("Backend project API failed, falling back to mock data:", error)
-        return mockApiClient.updateProject(id, project)
-      }
-    } else {
-      console.info("Backend not available, using mock project data")
-      return mockApiClient.updateProject(id, project)
-    }
+  async updateProject(
+    id: string,
+    project: UpdateProjectRequest
+  ): Promise<Project> {
+    return await apiRequest(`/v2/projects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(project),
+    })
   },
 
   async deleteProject(id: string): Promise<void> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${id}`, {
-          method: "DELETE",
-        })
-      } catch (error) {
-        console.warn("Backend project API failed, falling back to mock data:", error)
-        return mockApiClient.deleteProject(id)
-      }
-    } else {
-      console.info("Backend not available, using mock project data")
-      return mockApiClient.deleteProject(id)
-    }
+    return await apiRequest(`/v2/projects/${id}`, {
+      method: "DELETE",
+    })
   },
 
   // Topic methods
   async getTopics(projectId: string): Promise<Topic[]> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${projectId}/topics`)
-      } catch (error) {
-        console.warn("Backend topic API failed, falling back to mock data:", error)
-        return mockApiClient.getTopics(projectId)
-      }
-    } else {
-      console.info("Backend not available, using mock topic data")
-      return mockApiClient.getTopics(projectId)
-    }
+    return await apiRequest(`/v2/projects/${projectId}/topics`)
   },
 
   async getTopic(projectId: string, topicId: string): Promise<Topic> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`)
-      } catch (error) {
-        console.warn("Backend topic API failed, falling back to mock data:", error)
-        return mockApiClient.getTopic(projectId, topicId)
-      }
-    } else {
-      console.info("Backend not available, using mock topic data")
-      return mockApiClient.getTopic(projectId, topicId)
-    }
+    return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`)
   },
 
   async createTopic(topic: CreateTopicRequest): Promise<Topic> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${topic.project_id}/topics`, {
-          method: "POST",
-          body: JSON.stringify(topic),
-        })
-      } catch (error) {
-        console.warn("Backend topic API failed, falling back to mock data:", error)
-        return mockApiClient.createTopic(topic)
-      }
-    } else {
-      console.info("Backend not available, using mock topic data")
-      return mockApiClient.createTopic(topic)
-    }
+    return await apiRequest(`/v2/projects/${topic.project_id}/topics`, {
+      method: "POST",
+      body: JSON.stringify(topic),
+    })
   },
 
-  async updateTopic(projectId: string, topicId: string, topic: UpdateTopicRequest): Promise<Topic> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`, {
-          method: "PUT",
-          body: JSON.stringify(topic),
-        })
-      } catch (error) {
-        console.warn("Backend topic API failed, falling back to mock data:", error)
-        return mockApiClient.updateTopic(projectId, topicId, topic)
-      }
-    } else {
-      console.info("Backend not available, using mock topic data")
-      return mockApiClient.updateTopic(projectId, topicId, topic)
-    }
+  async updateTopic(
+    projectId: string,
+    topicId: string,
+    topic: UpdateTopicRequest
+  ): Promise<Topic> {
+    return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`, {
+      method: "PUT",
+      body: JSON.stringify(topic),
+    })
   },
 
   async deleteTopic(projectId: string, topicId: string): Promise<void> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`, {
-          method: "DELETE",
-        })
-      } catch (error) {
-        console.warn("Backend topic API failed, falling back to mock data:", error)
-        return mockApiClient.deleteTopic(projectId, topicId)
-      }
-    } else {
-      console.info("Backend not available, using mock topic data")
-      return mockApiClient.deleteTopic(projectId, topicId)
-    }
+    return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`, {
+      method: "DELETE",
+    })
   },
 
   async getTopicById(topicId: string): Promise<Topic> {
-    if (await isBackendAvailable()) {
-      try {
-        // In real implementation, this would be a different endpoint or modified to get topic by ID only
-        return await apiRequest(`/v2/topics/${topicId}`)
-      } catch (error) {
-        console.warn("Backend topic API failed, falling back to mock data:", error)
-        return mockApiClient.getTopicById(topicId)
-      }
-    } else {
-      console.info("Backend not available, using mock topic data")
-      return mockApiClient.getTopicById(topicId)
-    }
+    // In real implementation, this would be a different endpoint or modified to get topic by ID only
+    return await apiRequest(`/v2/topics/${topicId}`)
   },
 
   // Research Plan methods
   async getResearchPlans(topicId: string): Promise<ResearchPlan[]> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/topics/${topicId}/plans`)
-      } catch (error) {
-        console.warn("Backend research plan API failed, falling back to mock data:", error)
-        return mockApiClient.getResearchPlans(topicId)
-      }
-    } else {
-      console.info("Backend not available, using mock research plan data")
-      return mockApiClient.getResearchPlans(topicId)
-    }
+    return await apiRequest(`/v2/topics/${topicId}/plans`)
   },
 
   async getResearchPlan(planId: string): Promise<ResearchPlan> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/plans/${planId}`)
-      } catch (error) {
-        console.warn("Backend research plan API failed, falling back to mock data:", error)
-        return mockApiClient.getResearchPlan(planId)
-      }
-    } else {
-      console.info("Backend not available, using mock research plan data")
-      return mockApiClient.getResearchPlan(planId)
-    }
+    return await apiRequest(`/v2/plans/${planId}`)
   },
 
-  async createResearchPlan(topicId: string, plan: CreateResearchPlanRequest): Promise<ResearchPlan> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/topics/${topicId}/plans`, {
-          method: "POST",
-          body: JSON.stringify(plan),
-        })
-      } catch (error) {
-        console.warn("Backend research plan API failed, falling back to mock data:", error)
-        return mockApiClient.createResearchPlan(topicId, plan)
-      }
-    } else {
-      console.info("Backend not available, using mock research plan data")
-      return mockApiClient.createResearchPlan(topicId, plan)
-    }
+  async createResearchPlan(
+    topicId: string,
+    plan: CreateResearchPlanRequest
+  ): Promise<ResearchPlan> {
+    return await apiRequest(`/v2/topics/${topicId}/plans`, {
+      method: "POST",
+      body: JSON.stringify(plan),
+    })
   },
 
-  async updateResearchPlan(planId: string, plan: UpdateResearchPlanRequest): Promise<ResearchPlan> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/plans/${planId}`, {
-          method: "PUT",
-          body: JSON.stringify(plan),
-        })
-      } catch (error) {
-        console.warn("Backend research plan API failed, falling back to mock data:", error)
-        return mockApiClient.updateResearchPlan(planId, plan)
-      }
-    } else {
-      console.info("Backend not available, using mock research plan data")
-      return mockApiClient.updateResearchPlan(planId, plan)
-    }
+  async updateResearchPlan(
+    planId: string,
+    plan: UpdateResearchPlanRequest
+  ): Promise<ResearchPlan> {
+    return await apiRequest(`/v2/plans/${planId}`, {
+      method: "PUT",
+      body: JSON.stringify(plan),
+    })
   },
 
   async deleteResearchPlan(planId: string): Promise<void> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/plans/${planId}`, {
-          method: "DELETE",
-        })
-      } catch (error) {
-        console.warn("Backend research plan API failed, falling back to mock data:", error)
-        return mockApiClient.deleteResearchPlan(planId)
-      }
-    } else {
-      console.info("Backend not available, using mock research plan data")
-      return mockApiClient.deleteResearchPlan(planId)
-    }
+    return await apiRequest(`/v2/plans/${planId}`, {
+      method: "DELETE",
+    })
   },
 
   async approveResearchPlan(planId: string): Promise<ResearchPlan> {
-    if (await isBackendAvailable()) {
-      try {
-        return await apiRequest(`/v2/plans/${planId}/approve`, {
-          method: "POST",
-        })
-      } catch (error) {
-        console.warn("Backend research plan API failed, falling back to mock data:", error)
-        return mockApiClient.approveResearchPlan(planId)
-      }
-    } else {
-      console.info("Backend not available, using mock research plan data")
-      return mockApiClient.approveResearchPlan(planId)
-    }
+    return await apiRequest(`/v2/plans/${planId}/approve`, {
+      method: "POST",
+    })
   },
 
   // Future API methods can be added here
