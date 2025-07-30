@@ -690,17 +690,864 @@ async def delete_research_topic_by_project(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@v2_router.get("/projects/{project_id}/stats", response_model=ProjectStats)
+
+# =============================================================================
+# RESEARCH PLAN ENDPOINTS
+# =============================================================================
+
+@v2_router.post("/topics/{topic_id}/plans", response_model=ResearchPlanResponse)
+async def create_research_plan(
+    plan_request: ResearchPlanRequest,
+    topic_id: str = Path(..., description="Topic ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Create a new research plan within a topic."""
+    try:
+        # First check if topic exists
+        existing_topic = await db.get_research_topic(topic_id)
+        if not existing_topic:
+            raise HTTPException(status_code=404, detail="Research topic not found")
+
+        # Generate ID and timestamps
+        plan_id = str(uuid4())
+        now = datetime.utcnow()
+
+        plan_data = {
+            "id": plan_id,
+            "topic_id": topic_id,
+            "name": plan_request.name,
+            "description": plan_request.description or "",
+            "plan_type": plan_request.plan_type,
+            "status": "draft",
+            "plan_approved": False,
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "estimated_cost": 0.0,
+            "actual_cost": 0.0,
+            "plan_structure": json.dumps(plan_request.plan_structure or {}),
+            "metadata": json.dumps(plan_request.metadata or {}),
+        }
+
+        # Send plan creation via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"plan-{plan_id}",
+                "agent_type": "database",
+                "action": "create_research_plan",
+                "payload": plan_data
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send plan creation to MCP server")
+
+        # Return the plan data we expect to be created
+        plan_response_data = {
+            **plan_data,
+            "tasks_count": 0,
+            "completed_tasks": 0,
+            "progress": 0.0,
+            "plan_structure": plan_request.plan_structure or {},
+            "metadata": plan_request.metadata or {}
+        }
+
+        return ResearchPlanResponse(**plan_response_data)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.get("/topics/{topic_id}/plans", response_model=List[ResearchPlanResponse])
+async def list_research_plans(
+    topic_id: str = Path(..., description="Topic ID"),
+    status: Optional[str] = Query(None, description="Filter by plan status"),
+    db=Depends(get_database),
+):
+    """List all research plans for a topic."""
+    try:
+        # First check if topic exists
+        existing_topic = await db.get_research_topic(topic_id)
+        if not existing_topic:
+            raise HTTPException(status_code=404, detail="Research topic not found")
+
+        # Get plans for the topic using database client
+        plans = await db.get_research_plans(topic_id)
+        
+        # Apply status filter if provided
+        if status:
+            plans = [plan for plan in plans if plan.get("status") == status]
+        
+        # Enhance each plan with task counts
+        enriched_plans = []
+        for plan in plans:
+            try:
+                # Get tasks for this plan to get actual counts
+                tasks = await db.get_tasks(plan["id"])
+                tasks_count = len(tasks) if tasks else 0
+                completed_tasks = len([t for t in (tasks or []) if t.get("status") == "completed"])
+                progress = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+                
+                enhanced_plan = {
+                    **plan,
+                    "tasks_count": tasks_count,
+                    "completed_tasks": completed_tasks,
+                    "progress": progress,
+                }
+                enriched_plans.append(enhanced_plan)
+            except Exception as e:
+                logger.warning(f"Failed to get enhanced stats for plan {plan['id']}: {e}")
+                # Use the original plan data if enhancement fails
+                enhanced_plan = {
+                    **plan,
+                    "tasks_count": 0,
+                    "completed_tasks": 0,
+                    "progress": 0.0,
+                }
+                enriched_plans.append(enhanced_plan)
+        
+        return [ResearchPlanResponse(**plan) for plan in enriched_plans]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.get("/plans/{plan_id}", response_model=ResearchPlanResponse)
+async def get_research_plan(
+    plan_id: str = Path(..., description="Plan ID"),
+    db=Depends(get_database),
+):
+    """Get a specific research plan."""
+    try:
+        # Get plan using database client
+        plan = await db.get_research_plan(plan_id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="Research plan not found")
+
+        # Enhance with task counts
+        try:
+            tasks = await db.get_tasks(plan_id)
+            tasks_count = len(tasks) if tasks else 0
+            completed_tasks = len([t for t in (tasks or []) if t.get("status") == "completed"])
+            progress = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+            
+            enhanced_plan = {
+                **plan,
+                "tasks_count": tasks_count,
+                "completed_tasks": completed_tasks,
+                "progress": progress,
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get enhanced stats for plan {plan_id}: {e}")
+            enhanced_plan = {
+                **plan,
+                "tasks_count": 0,
+                "completed_tasks": 0,
+                "progress": 0.0,
+            }
+
+        return ResearchPlanResponse(**enhanced_plan)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.put("/plans/{plan_id}", response_model=ResearchPlanResponse)
+async def update_research_plan(
+    plan_update: ResearchPlanUpdate,
+    plan_id: str = Path(..., description="Plan ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Update a research plan."""
+    try:
+        # First check if plan exists
+        existing_plan = await db.get_research_plan(plan_id)
+        if not existing_plan:
+            raise HTTPException(status_code=404, detail="Research plan not found")
+
+        # Build update data from non-None fields
+        update_data = {"id": plan_id}
+        if plan_update.name is not None:
+            update_data["name"] = plan_update.name
+        if plan_update.description is not None:
+            update_data["description"] = plan_update.description
+        if plan_update.plan_type is not None:
+            update_data["plan_type"] = plan_update.plan_type
+        if plan_update.status is not None:
+            update_data["status"] = plan_update.status
+        if plan_update.plan_structure is not None:
+            update_data["plan_structure"] = json.dumps(plan_update.plan_structure)
+        if plan_update.metadata is not None:
+            update_data["metadata"] = json.dumps(plan_update.metadata)
+
+        # Send plan update via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"plan-{plan_id}",
+                "agent_type": "database",
+                "action": "update_research_plan",
+                "payload": update_data
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send plan update to MCP server")
+
+        # Return updated plan (we merge existing data with updates)
+        updated_plan = existing_plan.copy()
+        if plan_update.name is not None:
+            updated_plan["name"] = plan_update.name
+        if plan_update.description is not None:
+            updated_plan["description"] = plan_update.description
+        if plan_update.plan_type is not None:
+            updated_plan["plan_type"] = plan_update.plan_type
+        if plan_update.status is not None:
+            updated_plan["status"] = plan_update.status
+        if plan_update.plan_structure is not None:
+            updated_plan["plan_structure"] = plan_update.plan_structure
+        if plan_update.metadata is not None:
+            updated_plan["metadata"] = plan_update.metadata
+        
+        updated_plan["updated_at"] = datetime.utcnow().isoformat()
+
+        # Add enhanced stats
+        try:
+            tasks = await db.get_tasks(plan_id)
+            tasks_count = len(tasks) if tasks else 0
+            completed_tasks = len([t for t in (tasks or []) if t.get("status") == "completed"])
+            progress = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+            
+            updated_plan.update({
+                "tasks_count": tasks_count,
+                "completed_tasks": completed_tasks,
+                "progress": progress,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to get enhanced stats for updated plan {plan_id}: {e}")
+            updated_plan.update({
+                "tasks_count": 0,
+                "completed_tasks": 0,
+                "progress": 0.0,
+            })
+
+        return ResearchPlanResponse(**updated_plan)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.delete("/plans/{plan_id}", response_model=SuccessResponse)
+async def delete_research_plan(
+    plan_id: str = Path(..., description="Plan ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Delete a research plan and all its related data."""
+    try:
+        # First check if plan exists
+        existing_plan = await db.get_research_plan(plan_id)
+        if not existing_plan:
+            raise HTTPException(status_code=404, detail="Research plan not found")
+
+        # Send plan deletion via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"plan-{plan_id}",
+                "agent_type": "database",
+                "action": "delete_research_plan",
+                "payload": {"id": plan_id}
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send plan deletion to MCP server")
+
+        return SuccessResponse(message="Research plan deleted successfully")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.post("/plans/{plan_id}/approve", response_model=ResearchPlanResponse)
+async def approve_research_plan(
+    plan_id: str = Path(..., description="Plan ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Approve a research plan and update its approval status."""
+    try:
+        # First check if the plan exists
+        existing_plan = await db.get_research_plan(plan_id)
+        if not existing_plan:
+            raise HTTPException(status_code=404, detail="Research plan not found")
+
+        # Update the plan to approved status
+        update_data = {
+            "id": plan_id,
+            "plan_approved": True,
+            "status": "active",  # Set to active when approved
+        }
+
+        # Send plan approval via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"plan-{plan_id}",
+                "agent_type": "database",
+                "action": "update_research_plan",
+                "payload": update_data
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send plan approval to MCP server")
+
+        # Return updated plan
+        updated_plan = existing_plan.copy()
+        updated_plan["plan_approved"] = True
+        updated_plan["status"] = "active"
+        updated_plan["updated_at"] = datetime.utcnow().isoformat()
+
+        # Add enhanced stats
+        try:
+            tasks = await db.get_tasks(plan_id)
+            tasks_count = len(tasks) if tasks else 0
+            completed_tasks = len([t for t in (tasks or []) if t.get("status") == "completed"])
+            progress = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+            
+            updated_plan.update({
+                "tasks_count": tasks_count,
+                "completed_tasks": completed_tasks,
+                "progress": progress,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to get enhanced stats for approved plan {plan_id}: {e}")
+            updated_plan.update({
+                "tasks_count": 0,
+                "completed_tasks": 0,
+                "progress": 0.0,
+            })
+
+        return ResearchPlanResponse(**updated_plan)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# TASK ENDPOINTS
+# =============================================================================
+
+@v2_router.post("/plans/{plan_id}/tasks", response_model=TaskResponse)
+async def create_task(
+    task_request: TaskRequest,
+    plan_id: str = Path(..., description="Plan ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Create a new task within a plan."""
+    try:
+        # First check if plan exists
+        existing_plan = await db.get_research_plan(plan_id)
+        if not existing_plan:
+            raise HTTPException(status_code=404, detail="Research plan not found")
+
+        # Generate ID and timestamps
+        task_id = str(uuid4())
+        now = datetime.utcnow()
+
+        task_data = {
+            "id": task_id,
+            "plan_id": plan_id,
+            "name": task_request.name,
+            "description": task_request.description or "",
+            "task_type": task_request.task_type,
+            "task_order": task_request.task_order,
+            "status": "pending",
+            "stage": "planning",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "query": task_request.query,
+            "max_results": task_request.max_results,
+            "single_agent_mode": task_request.single_agent_mode,
+            "estimated_cost": 0.0,
+            "actual_cost": 0.0,
+            "cost_approved": False,
+            "progress": 0.0,
+            "search_results": [],
+            "reasoning_output": None,
+            "execution_results": [],
+            "synthesis": None,
+            "metadata": json.dumps(task_request.metadata or {}),
+        }
+
+        # Send task creation via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data_for_mcp = {
+                "task_id": str(uuid4()),
+                "context_id": f"task-{task_id}",
+                "agent_type": "database",
+                "action": "create_task",
+                "payload": task_data
+            }
+            success = await mcp_client.send_research_action(task_data_for_mcp)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send task creation to MCP server")
+
+        # Return the task data we expect to be created
+        task_response_data = {
+            **task_data,
+            "metadata": task_request.metadata or {}
+        }
+
+        return TaskResponse(**task_response_data)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.get("/plans/{plan_id}/tasks", response_model=List[TaskResponse])
+async def list_tasks(
+    plan_id: str = Path(..., description="Plan ID"),
+    status: Optional[str] = Query(None, description="Filter by task status"),
+    task_type: Optional[str] = Query(None, description="Filter by task type"),
+    db=Depends(get_database),
+):
+    """List all tasks for a plan."""
+    try:
+        # First check if plan exists
+        existing_plan = await db.get_research_plan(plan_id)
+        if not existing_plan:
+            raise HTTPException(status_code=404, detail="Research plan not found")
+
+        # Get tasks for the plan using database client
+        tasks = await db.get_tasks(plan_id)
+        
+        # Apply filters if provided
+        if status:
+            tasks = [task for task in tasks if task.get("status") == status]
+        if task_type:
+            tasks = [task for task in tasks if task.get("task_type") == task_type]
+        
+        return [TaskResponse(**task) for task in tasks]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.get("/tasks/{task_id}", response_model=TaskResponse)
+async def get_task(
+    task_id: str = Path(..., description="Task ID"),
+    db=Depends(get_database),
+):
+    """Get a specific task."""
+    try:
+        # Get task using database client
+        task = await db.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        return TaskResponse(**task)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.put("/tasks/{task_id}", response_model=TaskResponse)
+async def update_task(
+    task_update: TaskUpdate,
+    task_id: str = Path(..., description="Task ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Update a task."""
+    try:
+        # First check if task exists
+        existing_task = await db.get_task(task_id)
+        if not existing_task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Build update data from non-None fields
+        update_data = {"id": task_id}
+        if task_update.name is not None:
+            update_data["name"] = task_update.name
+        if task_update.description is not None:
+            update_data["description"] = task_update.description
+        if task_update.task_type is not None:
+            update_data["task_type"] = task_update.task_type
+        if task_update.task_order is not None:
+            update_data["task_order"] = task_update.task_order
+        if task_update.status is not None:
+            update_data["status"] = task_update.status
+        if task_update.stage is not None:
+            update_data["stage"] = task_update.stage
+        if task_update.query is not None:
+            update_data["query"] = task_update.query
+        if task_update.max_results is not None:
+            update_data["max_results"] = task_update.max_results
+        if task_update.single_agent_mode is not None:
+            update_data["single_agent_mode"] = task_update.single_agent_mode
+        if task_update.metadata is not None:
+            update_data["metadata"] = json.dumps(task_update.metadata)
+
+        # Send task update via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"task-{task_id}",
+                "agent_type": "database",
+                "action": "update_task",
+                "payload": update_data
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send task update to MCP server")
+
+        # Return updated task (we merge existing data with updates)
+        updated_task = existing_task.copy()
+        if task_update.name is not None:
+            updated_task["name"] = task_update.name
+        if task_update.description is not None:
+            updated_task["description"] = task_update.description
+        if task_update.task_type is not None:
+            updated_task["task_type"] = task_update.task_type
+        if task_update.task_order is not None:
+            updated_task["task_order"] = task_update.task_order
+        if task_update.status is not None:
+            updated_task["status"] = task_update.status
+        if task_update.stage is not None:
+            updated_task["stage"] = task_update.stage
+        if task_update.query is not None:
+            updated_task["query"] = task_update.query
+        if task_update.max_results is not None:
+            updated_task["max_results"] = task_update.max_results
+        if task_update.single_agent_mode is not None:
+            updated_task["single_agent_mode"] = task_update.single_agent_mode
+        if task_update.metadata is not None:
+            updated_task["metadata"] = task_update.metadata
+        
+        updated_task["updated_at"] = datetime.utcnow().isoformat()
+
+        return TaskResponse(**updated_task)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.delete("/tasks/{task_id}", response_model=SuccessResponse)
+async def delete_task(
+    task_id: str = Path(..., description="Task ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Delete a task."""
+    try:
+        # First check if task exists
+        existing_task = await db.get_task(task_id)
+        if not existing_task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Send task deletion via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"task-{task_id}",
+                "agent_type": "database",
+                "action": "delete_task",
+                "payload": {"id": task_id}
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send task deletion to MCP server")
+
+        return SuccessResponse(message="Task deleted successfully")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# TASK EXECUTION ENDPOINTS
+# =============================================================================
+
+@v2_router.post("/tasks/{task_id}/execute", response_model=SuccessResponse)
+async def execute_task(
+    task_id: str = Path(..., description="Task ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Execute a research task using the MCP research system."""
+    try:
+        # Get the task
+        task = await db.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Check if task is in a valid state for execution
+        if task["status"] not in ["pending", "failed"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task cannot be executed in status: {task['status']}",
+            )
+
+        # Check if MCP client is available
+        if not mcp_client or not mcp_client.is_connected:
+            raise HTTPException(
+                status_code=503,
+                detail="MCP research system not available",
+            )
+
+        # Send task execution request via MCP
+        execution_data = {
+            "task_id": str(uuid4()),
+            "context_id": f"task-execution-{task_id}",
+            "agent_type": "research",
+            "action": "execute_task",
+            "payload": {
+                "task_id": task_id,
+                "query": task.get("query", ""),
+                "task_type": task.get("task_type", "research"),
+                "max_results": task.get("max_results", 10),
+                "single_agent_mode": task.get("single_agent_mode", False)
+            }
+        }
+        
+        success = await mcp_client.send_research_action(execution_data)
+        if not success:
+            raise HTTPException(status_code=503, detail="Failed to initiate task execution")
+
+        # Update task status to running
+        update_data = {
+            "id": task_id,
+            "status": "running", 
+            "stage": "execution"
+        }
+        
+        update_task_data = {
+            "task_id": str(uuid4()),
+            "context_id": f"task-{task_id}",
+            "agent_type": "database",
+            "action": "update_task",
+            "payload": update_data
+        }
+        await mcp_client.send_research_action(update_task_data)
+
+        return SuccessResponse(message="Task execution initiated successfully")
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.post("/tasks/{task_id}/cancel", response_model=SuccessResponse)
+async def cancel_task(
+    task_id: str = Path(..., description="Task ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Cancel a running task."""
+    try:
+        task = await db.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        if task["status"] != "running":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel task with status: {task['status']}",
+            )
+
+        # Send task cancellation via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"task-{task_id}",
+                "agent_type": "database",
+                "action": "update_task",
+                "payload": {
+                    "id": task_id,
+                    "status": "cancelled", 
+                    "stage": "complete"
+                }
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to send task cancellation to MCP server")
+
+        return SuccessResponse(message="Task cancelled successfully")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# ENHANCED STATISTICS ENDPOINTS  
+# =============================================================================
+
+@v2_router.get("/topics/{topic_id}/stats", response_model=TopicStats)
+async def get_topic_stats(
+    topic_id: str = Path(..., description="Topic ID"),
+    db=Depends(get_database),
+):
+    """Get topic statistics."""
+    try:
+        # First check if topic exists
+        existing_topic = await db.get_research_topic(topic_id)
+        if not existing_topic:
+            raise HTTPException(status_code=404, detail="Topic not found")
+
+        # Calculate statistics using database client
+        plans = await db.get_research_plans(topic_id)
+        plans_count = len(plans) if plans else 0
+        
+        # Aggregate tasks across all plans
+        tasks_count = 0
+        total_cost = 0.0
+        completed_tasks = 0
+        
+        for plan in (plans or []):
+            try:
+                tasks = await db.get_tasks(plan["id"])
+                task_list = tasks if tasks else []
+                tasks_count += len(task_list)
+                completed_tasks += len([t for t in task_list if t.get("status") == "completed"])
+                total_cost += sum(t.get("actual_cost", 0.0) for t in task_list)
+            except Exception as e:
+                logger.warning(f"Failed to get tasks for plan {plan['id']}: {e}")
+        
+        completion_rate = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+        
+        stats = {
+            "plans_count": plans_count,
+            "tasks_count": tasks_count,
+            "total_cost": total_cost,
+            "completion_rate": completion_rate
+        }
+
+        return TopicStats(**stats)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.get("/plans/{plan_id}/stats", response_model=PlanStats)
+async def get_plan_stats(
+    plan_id: str = Path(..., description="Plan ID"),
+    db=Depends(get_database),
+):
+    """Get plan statistics."""
+    try:
+        # First check if plan exists
+        existing_plan = await db.get_research_plan(plan_id)
+        if not existing_plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        # Calculate statistics using database client
+        tasks = await db.get_tasks(plan_id)
+        tasks_count = len(tasks) if tasks else 0
+        completed_tasks = len([t for t in (tasks or []) if t.get("status") == "completed"])
+        total_cost = sum(t.get("actual_cost", 0.0) for t in (tasks or []))
+        progress = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+        
+        stats = {
+            "tasks_count": tasks_count,
+            "completed_tasks": completed_tasks,
+            "total_cost": total_cost,
+            "progress": progress
+        }
+
+        return PlanStats(**stats)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 async def get_project_stats(
     project_id: str = Path(..., description="Project ID"),
     db=Depends(get_database),
 ):
     """Get project statistics."""
     try:
-        # Get project statistics from database
-        stats = await db.get_project_stats(project_id)
-        if not stats:
+        # First check if project exists
+        existing_project = await db.get_project(project_id)
+        if not existing_project:
             raise HTTPException(status_code=404, detail="Project not found")
+
+        # Calculate statistics using database client
+        topics = await db.get_research_topics(project_id=project_id)
+        topics_count = len(topics) if topics else 0
+        
+        # Aggregate plans and tasks across all topics
+        plans_count = 0
+        tasks_count = 0
+        total_cost = 0.0
+        completed_tasks = 0
+        
+        for topic in (topics or []):
+            try:
+                plans = await db.get_research_plans(topic["id"])
+                plans_count += len(plans) if plans else 0
+                
+                for plan in (plans or []):
+                    try:
+                        tasks = await db.get_tasks(plan["id"])
+                        task_list = tasks if tasks else []
+                        tasks_count += len(task_list)
+                        completed_tasks += len([t for t in task_list if t.get("status") == "completed"])
+                        total_cost += sum(t.get("actual_cost", 0.0) for t in task_list)
+                    except Exception as e:
+                        logger.warning(f"Failed to get tasks for plan {plan['id']}: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to get plans for topic {topic['id']}: {e}")
+        
+        completion_rate = (completed_tasks / tasks_count * 100) if tasks_count > 0 else 0.0
+        
+        stats = {
+            "topics_count": topics_count,
+            "plans_count": plans_count,
+            "tasks_count": tasks_count,
+            "total_cost": total_cost,
+            "completion_rate": completion_rate
+        }
 
         return ProjectStats(**stats)
 
