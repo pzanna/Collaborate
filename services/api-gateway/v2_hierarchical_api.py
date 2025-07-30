@@ -34,10 +34,20 @@ def get_database():
     try:
         db_client = get_native_database()
         if not db_client._initialized:
-            raise HTTPException(status_code=503, detail="Database service not available")
+            logger.error("Database client not initialized - cannot process requests")
+            raise HTTPException(
+                status_code=503, 
+                detail="Database service not available - please check database connectivity"
+            )
         return db_client
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
-        raise HTTPException(status_code=503, detail="Database service not available")
+        logger.error(f"Failed to get database client: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail="Database service not available - please check database connectivity"
+        )
 
 
 # MCP client reference (will be set by main app)
@@ -333,7 +343,19 @@ async def create_research_topic(
     """Create a new research topic within a project."""
     try:
         # First check if project exists
-        existing_project = await db.get_project(project_id)
+        # This will raise HTTPException(503) if database is unavailable
+        try:
+            existing_project = await db.get_project(project_id)
+        except HTTPException as db_error:
+            # Re-raise database connectivity errors (503, 500) to avoid masking them as 404
+            if db_error.status_code in [500, 503]:
+                logger.error(f"Database error when checking project {project_id}: {db_error.detail}")
+                raise HTTPException(
+                    status_code=503, 
+                    detail="Database service unavailable - cannot create topic"
+                )
+            raise  # Re-raise other HTTP exceptions
+        
         if not existing_project:
             raise HTTPException(status_code=404, detail="Project not found")
 
@@ -363,7 +385,19 @@ async def create_research_topic(
             }
             success = await mcp_client.send_research_action(task_data)
             if not success:
-                raise HTTPException(status_code=503, detail="Failed to send topic creation to MCP server")
+                logger.error(f"Failed to send topic creation to MCP server for topic {topic_id}")
+                raise HTTPException(
+                    status_code=503, 
+                    detail="Failed to store topic - MCP server unavailable"
+                )
+        else:
+            logger.warning(f"MCP client not available for topic creation {topic_id}")
+            # In a production system, you might want to queue this for later processing
+            # For now, we'll return an error since the topic won't actually be stored
+            raise HTTPException(
+                status_code=503,
+                detail="Cannot store topic - message processing service unavailable"
+            )
 
         # Return the topic response immediately (optimistic response)
         topic_response_data = {
