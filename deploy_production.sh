@@ -119,15 +119,15 @@ cd ..
 
 # Stop any existing containers
 print_info "Stopping existing containers..."
-docker compose down --remove-orphans 2>/dev/null || true
+docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null || true
 
 # Build all services
 print_info "Building Docker images..."
-docker compose build --no-cache
+docker compose -f "$COMPOSE_FILE" build --no-cache
 
 # Start infrastructure services first
 print_info "Starting infrastructure services..."
-docker compose up -d redis postgres
+docker compose -f "$COMPOSE_FILE" up -d redis postgres docker-socket-proxy
 
 # Wait for infrastructure to be ready
 print_info "Waiting for infrastructure to be ready..."
@@ -135,13 +135,13 @@ sleep 10
 
 # Verify infrastructure health
 print_info "Checking infrastructure health..."
-if ! docker compose exec redis redis-cli ping | grep -q PONG; then
+if ! docker compose -f "$COMPOSE_FILE" exec redis redis-cli ping | grep -q PONG; then
     print_error "Redis is not responding"
     exit 1
 fi
 print_status "Redis is healthy"
 
-if ! docker compose exec postgres pg_isready -U postgres | grep -q "accepting connections"; then
+if ! docker compose -f "$COMPOSE_FILE" exec postgres pg_isready -U postgres | grep -q "accepting connections"; then
     print_error "PostgreSQL is not responding"
     exit 1
 fi
@@ -149,14 +149,14 @@ print_status "PostgreSQL is healthy"
 
 # Start core services and executor/memory agents
 print_info "Starting core services and executor/memory agents..."
-docker compose up -d mcp-server database-service auth-service executor-agent memory-agent
+docker compose -f "$COMPOSE_FILE" up -d mcp-server database-service auth-service executor-agent memory-agent
 
 # Wait for core services
 sleep 15
 
 # Start AI service
 print_info "Starting AI service..."
-docker compose up -d ai-service
+docker compose -f "$COMPOSE_FILE" up -d ai-service
 
 # Wait for AI service to initialize
 sleep 10
@@ -167,19 +167,19 @@ if curl -f http://localhost:8010/health >/dev/null 2>&1; then
     print_status "AI service is healthy"
 else
     print_warning "AI service health check failed, checking logs..."
-    docker compose logs ai-service --tail=20
+    docker compose -f "$COMPOSE_FILE" logs ai-service --tail=20
 fi
 
 # Start all research agents
 print_info "Starting all research agents..."
-docker compose up -d planning-agent research-manager-agent literature-agent screening-agent synthesis-agent writer-agent database-agent
+docker compose -f "$COMPOSE_FILE" up -d planning-agent research-manager-agent literature-agent screening-agent synthesis-agent writer-agent database-agent
 
 # Wait for research agents
 sleep 15
 
 # Start API Gateway
 print_info "Starting API Gateway..."
-docker compose up -d api-gateway
+docker compose -f "$COMPOSE_FILE" up -d api-gateway
 
 # Wait for API Gateway to initialize
 sleep 15
@@ -200,7 +200,7 @@ ALL_HEALTHY=true
 for service_info in "${INFRA_SERVICES[@]}"; do
     IFS=':' read -r service_name service_cmd <<< "$service_info"
     
-    if docker compose exec $(echo $service_name | tr '[:upper:]' '[:lower:]') $service_cmd >/dev/null 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec $(echo $service_name | tr '[:upper:]' '[:lower:]') $service_cmd >/dev/null 2>&1; then
         print_status "$service_name is healthy"
     else
         print_error "$service_name health check failed"
@@ -224,6 +224,7 @@ SERVICES=(
     "Database Agent:http://localhost:8011/health"
     "Executor Agent:http://localhost:8008/health"
     "Memory Agent:http://localhost:8009/health"
+    "Docker Socket Proxy:http://localhost:2375/_ping"
 )
 
 for service_info in "${SERVICES[@]}"; do
@@ -239,7 +240,7 @@ done
 
 # Start nginx with frontend
 print_info "Starting nginx with React frontend..."
-docker compose up -d nginx --profile production
+docker compose -f "$COMPOSE_FILE" up -d nginx --profile production
 
 # Wait for nginx to start
 sleep 5
@@ -285,6 +286,9 @@ if [ "$ALL_HEALTHY" = true ]; then
     echo "  • Executor Agent: http://localhost:8008"
     echo "  • Memory Agent: http://localhost:8009"
     echo
+    print_info "🔒 Security Infrastructure:"
+    echo "  • Docker Socket Proxy: http://localhost:2375"
+    echo
     print_info "📡 API Access (via nginx proxy):"
     echo "  • Frontend API calls: http://localhost/api/*"
     echo "  • Direct API access: http://localhost:8001/*"
@@ -294,33 +298,33 @@ if [ "$ALL_HEALTHY" = true ]; then
     echo "  • PostgreSQL: localhost:5433"
     echo
     print_info "📊 Container status:"
-    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+    docker compose -f "$COMPOSE_FILE" ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
     echo
     print_info "🔍 Monitoring:"
-    echo "  • Container logs: docker compose logs -f [service-name]"
-    echo "  • Service status: docker compose ps"
-    echo "  • Stop all: docker compose down"
+    echo "  • Container logs: docker compose -f $COMPOSE_FILE logs -f [service-name]"
+    echo "  • Service status: docker compose -f $COMPOSE_FILE ps"
+    echo "  • Stop all: docker compose -f $COMPOSE_FILE down"
 else
     print_warning "Some services failed health checks. Check logs with:"
-    echo "  docker compose logs [service-name]"
+    echo "  docker compose -f $COMPOSE_FILE logs [service-name]"
     echo
     print_info "🔧 Common troubleshooting commands:"
-    echo "  • Check all container status: docker compose ps"
-    echo "  • View recent logs: docker compose logs --tail=50"
-    echo "  • Restart failed service: docker compose restart [service-name]"
-    echo "  • Rebuild and restart: docker compose up -d --build [service-name]"
+    echo "  • Check all container status: docker compose -f $COMPOSE_FILE ps"
+    echo "  • View recent logs: docker compose -f $COMPOSE_FILE logs --tail=50"
+    echo "  • Restart failed service: docker compose -f $COMPOSE_FILE restart [service-name]"
+    echo "  • Rebuild and restart: docker compose -f $COMPOSE_FILE up -d --build [service-name]"
     echo
     print_info "🐛 Service-specific logs:"
-    echo "  • Frontend (nginx): docker compose logs nginx"
-    echo "  • API Gateway: docker compose logs api-gateway"
-    echo "  • MCP Server: docker compose logs mcp-server"
-    echo "  • AI Service: docker compose logs ai-service"
-    echo "  • Planning Agent: docker compose logs planning-agent"
+    echo "  • Frontend (nginx): docker compose -f $COMPOSE_FILE logs nginx"
+    echo "  • API Gateway: docker compose -f $COMPOSE_FILE logs api-gateway"
+    echo "  • MCP Server: docker compose -f $COMPOSE_FILE logs mcp-server"
+    echo "  • AI Service: docker compose -f $COMPOSE_FILE logs ai-service"
+    echo "  • Planning Agent: docker compose -f $COMPOSE_FILE logs planning-agent"
     echo
     print_info "🌐 Frontend troubleshooting:"
     echo "  • Rebuild frontend: cd frontend && npm run build"
-    echo "  • Check nginx config: docker compose exec nginx nginx -t"
-    echo "  • Access frontend files: docker compose exec nginx ls -la /usr/share/nginx/html"
+    echo "  • Check nginx config: docker compose -f $COMPOSE_FILE exec nginx nginx -t"
+    echo "  • Access frontend files: docker compose -f $COMPOSE_FILE exec nginx ls -la /usr/share/nginx/html"
 fi
 
 echo

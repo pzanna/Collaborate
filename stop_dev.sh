@@ -24,6 +24,7 @@
 #   - MCP Server (port 9000)
 #   - AI Service (internal)
 #   - Database Service (internal)
+#   - Docker Socket Proxy (port 2375)
 #   - PostgreSQL (port 5433)
 #   - Redis (port 6380)
 #   - Frontend Dev Server (port 5173)
