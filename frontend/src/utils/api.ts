@@ -38,8 +38,11 @@ export interface Topic {
   project_id: string
   created_at: string
   updated_at: string
-  plan_count?: number
-  task_count?: number
+  status?: string
+  plans_count?: number
+  tasks_count?: number
+  total_cost?: number
+  completion_rate?: number
   metadata?: Record<string, any>
 }
 

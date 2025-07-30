@@ -359,7 +359,7 @@ export function ProjectDetails() {
                     {/* Plans and Tasks count */}
                     <div className="pt-2 border-t">
                       <div className="text-sm text-muted-foreground">
-                        Plans: {topic.plan_count || 0} • Tasks: {topic.task_count || 0}
+                        Plans: {topic.plans_count || 0} • Tasks: {topic.tasks_count || 0}
                       </div>
                     </div>
                   </div>

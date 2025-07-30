@@ -40,8 +40,8 @@ const mockTopics: Topic[] = [
     project_id: "1",
     created_at: "2024-01-16T09:00:00Z",
     updated_at: "2024-01-18T11:30:00Z",
-    plan_count: 3,
-    task_count: 8,
+    plans_count: 3,
+    tasks_count: 8,
     metadata: {}
   },
   {
@@ -51,8 +51,8 @@ const mockTopics: Topic[] = [
     project_id: "1",
     created_at: "2024-01-17T14:15:00Z",
     updated_at: "2024-01-19T16:45:00Z",
-    plan_count: 2,
-    task_count: 5,
+    plans_count: 2,
+    tasks_count: 5,
     metadata: {}
   },
   {
@@ -62,8 +62,8 @@ const mockTopics: Topic[] = [
     project_id: "2",
     created_at: "2024-01-11T10:30:00Z",
     updated_at: "2024-01-15T12:00:00Z",
-    plan_count: 4,
-    task_count: 12,
+    plans_count: 4,
+    tasks_count: 12,
     metadata: {}
   },
   {
@@ -73,8 +73,8 @@ const mockTopics: Topic[] = [
     project_id: "2",
     created_at: "2024-01-12T08:45:00Z",
     updated_at: "2024-01-16T17:20:00Z",
-    plan_count: 1,
-    task_count: 6,
+    plans_count: 1,
+    tasks_count: 6,
     metadata: {}
   },
   {
@@ -84,8 +84,8 @@ const mockTopics: Topic[] = [
     project_id: "3",
     created_at: "2023-12-02T11:15:00Z",
     updated_at: "2023-12-20T14:30:00Z",
-    plan_count: 2,
-    task_count: 4,
+    plans_count: 2,
+    tasks_count: 4,
     metadata: {}
   }
 ]
@@ -178,8 +178,8 @@ export const mockApiClient = {
       project_id: topic.project_id,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      plan_count: 0,
-      task_count: 0,
+      plans_count: 0,
+      tasks_count: 0,
       metadata: topic.metadata || {}
     }
     mockTopicsState.push(newTopic)
