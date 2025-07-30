@@ -2,13 +2,13 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { 
   Plus, 
-  Edit, 
   Trash2, 
   ArrowLeft,
   Calendar,
   AlertCircle,
   Loader2,
-  FolderOpen
+  FolderOpen,
+  FileText
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,132 +31,93 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { 
   apiClient, 
-  type Project, 
   type Topic, 
-  type CreateTopicRequest, 
-  type UpdateTopicRequest 
+  type ResearchPlan,
+  type CreateResearchPlanRequest 
 } from "@/utils/api"
-import { ROUTES, getTopicDetailsPath } from "@/utils/routes"
+import { ROUTES, getResearchPlanDetailsPath } from "@/utils/routes"
 
-export function ProjectDetails() {
+export function TopicDetails() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   
-  const [project, setProject] = useState<Project | null>(null)
-  const [topics, setTopics] = useState<Topic[]>([])
+  const [topic, setTopic] = useState<Topic | null>(null)
+  const [researchPlans, setResearchPlans] = useState<ResearchPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editingTopic, setEditingTopic] = useState<Topic | null>(null)
-  const [formData, setFormData] = useState<CreateTopicRequest>({
+  const [formData, setFormData] = useState<CreateResearchPlanRequest>({
     name: "",
     description: "",
-    project_id: id || "",
   })
 
-  // Load project and topics on component mount
+  // Load topic and research plans on component mount
   useEffect(() => {
     if (!id) {
       navigate(ROUTES.PROJECTS)
       return
     }
-    loadProjectData()
+    loadTopicData()
   }, [id, navigate])
 
-  const loadProjectData = async () => {
+  const loadTopicData = async () => {
     if (!id) return
     
     try {
       setLoading(true)
       setError(null)
       
-      // Load project and topics in parallel
-      const [projectData, topicsData] = await Promise.all([
-        apiClient.getProject(id),
-        apiClient.getTopics(id)
+      // Load topic and research plans in parallel
+      const [topicData, plansData] = await Promise.all([
+        apiClient.getTopicById(id),
+        apiClient.getResearchPlans(id)
       ])
       
-      setProject(projectData)
-      setTopics(topicsData)
+      setTopic(topicData)
+      setResearchPlans(plansData)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load project data")
-      console.error("Error loading project data:", err)
+      setError(err instanceof Error ? err.message : "Failed to load topic data")
+      console.error("Error loading topic data:", err)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCreateTopic = async () => {
+  const handleCreateResearchPlan = async () => {
     try {
-      if (!formData.name.trim()) {
-        setError("Topic name is required")
+      if (!formData.name.trim() || !id) {
+        setError("Research plan name is required")
         return
       }
 
-      const newTopic = await apiClient.createTopic(formData)
-      setTopics([...topics, newTopic])
-      setFormData({ name: "", description: "", project_id: id || "" })
+      const newPlan = await apiClient.createResearchPlan(id, formData)
+      setResearchPlans([...researchPlans, newPlan])
+      setFormData({ name: "", description: "" })
       setCreateDialogOpen(false)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create topic")
-      console.error("Error creating topic:", err)
+      setError(err instanceof Error ? err.message : "Failed to create research plan")
+      console.error("Error creating research plan:", err)
     }
   }
 
-  const handleEditTopic = async () => {
-    try {
-      if (!editingTopic || !formData.name.trim() || !id) {
-        setError("Topic name is required")
-        return
-      }
-
-      const updateData: UpdateTopicRequest = {
-        name: formData.name,
-        description: formData.description,
-      }
-
-      const updatedTopic = await apiClient.updateTopic(id, editingTopic.id, updateData)
-      setTopics(topics.map(t => t.id === updatedTopic.id ? updatedTopic : t))
-      setEditDialogOpen(false)
-      setEditingTopic(null)
-      setFormData({ name: "", description: "", project_id: id })
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update topic")
-      console.error("Error updating topic:", err)
-    }
-  }
-
-  const handleDeleteTopic = async (topic: Topic) => {
-    if (!window.confirm(`Are you sure you want to delete "${topic.name}"?`)) {
+  const handleDeleteResearchPlan = async (plan: ResearchPlan) => {
+    if (!window.confirm(`Are you sure you want to delete "${plan.name}"?`)) {
       return
     }
 
     try {
-      if (!id) return
-      await apiClient.deleteTopic(id, topic.id)
-      setTopics(topics.filter(t => t.id !== topic.id))
+      await apiClient.deleteResearchPlan(plan.id)
+      setResearchPlans(researchPlans.filter(p => p.id !== plan.id))
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete topic")
-      console.error("Error deleting topic:", err)
+      setError(err instanceof Error ? err.message : "Failed to delete research plan")
+      console.error("Error deleting research plan:", err)
     }
   }
 
-  const openEditDialog = (topic: Topic) => {
-    setEditingTopic(topic)
-    setFormData({
-      name: topic.name,
-      description: topic.description || "",
-      project_id: id || "",
-    })
-    setEditDialogOpen(true)
-  }
-
   const resetForm = () => {
-    setFormData({ name: "", description: "", project_id: id || "" })
+    setFormData({ name: "", description: "" })
     setError(null)
   }
 
@@ -165,20 +126,20 @@ export function ProjectDetails() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex items-center space-x-2">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading project details...</span>
+          <span>Loading topic details...</span>
         </div>
       </div>
     )
   }
 
-  if (!project) {
+  if (!topic) {
     return (
       <div className="px-6 py-8 space-y-6 max-w-7xl mx-auto">
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2 text-red-700">
               <AlertCircle className="h-4 w-4" />
-              <span>Project not found</span>
+              <span>Topic not found</span>
             </div>
           </CardContent>
         </Card>
@@ -195,22 +156,22 @@ export function ProjectDetails() {
       {/* Header with Back Button */}
       <div className="flex items-center space-x-4">
         <Button 
-          onClick={() => navigate(ROUTES.PROJECTS)} 
+          onClick={() => navigate(-1)} 
           variant="outline"
           size="sm"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Projects
+          Back
         </Button>
       </div>
 
-      {/* Project Information */}
+      {/* Topic Information */}
       <div className="space-y-4">
         <div>
-          <h1 className="text-3xl font-bold">{project.name}</h1>
-          {project.description && (
+          <h1 className="text-3xl font-bold">{topic.name}</h1>
+          {topic.description && (
             <p className="text-muted-foreground mt-2 text-lg">
-              {project.description}
+              {topic.description}
             </p>
           )}
         </div>
@@ -218,25 +179,18 @@ export function ProjectDetails() {
         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
           <div className="flex items-center">
             <Calendar className="h-4 w-4 mr-2" />
-            Created {new Date(project.created_at).toLocaleDateString()}
+            Created {new Date(topic.created_at).toLocaleDateString()}
           </div>
-          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-            project.status === 'active' 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-gray-100 text-gray-800'
-          }`}>
-            {project.status}
-          </span>
         </div>
       </div>
 
-      {/* Topics Section */}
+      {/* Research Plans Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Topics</h2>
+            <h2 className="text-2xl font-semibold">Research Plans</h2>
             <p className="text-muted-foreground mt-1">
-              Research topics within this project
+              Research plans within this topic
             </p>
           </div>
           
@@ -244,22 +198,22 @@ export function ProjectDetails() {
             <DialogTrigger asChild>
               <Button onClick={resetForm}>
                 <Plus className="h-4 w-4 mr-2" />
-                New Topic
+                New Research Plan
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Topic</DialogTitle>
+                <DialogTitle>Create New Research Plan</DialogTitle>
                 <DialogDescription>
-                  Create a new research topic for this project.
+                  Create a new research plan for this topic.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Topic Name</Label>
+                  <Label htmlFor="name">Research Plan Name</Label>
                   <Input
                     id="name"
-                    placeholder="Enter topic name..."
+                    placeholder="Enter research plan name..."
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
@@ -268,7 +222,7 @@ export function ProjectDetails() {
                   <Label htmlFor="description">Description</Label>
                   <Textarea
                     id="description"
-                    placeholder="Describe this topic..."
+                    placeholder="Describe this research plan..."
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
@@ -283,8 +237,8 @@ export function ProjectDetails() {
                   <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleCreateTopic}>
-                    Create Topic
+                  <Button onClick={handleCreateResearchPlan}>
+                    Create Research Plan
                   </Button>
                 </div>
               </div>
@@ -293,7 +247,7 @@ export function ProjectDetails() {
         </div>
 
         {/* Error Display */}
-        {error && !createDialogOpen && !editDialogOpen && (
+        {error && !createDialogOpen && (
           <Card className="border-red-200 bg-red-50">
             <CardContent className="pt-6">
               <div className="flex items-center space-x-2 text-red-700">
@@ -304,58 +258,51 @@ export function ProjectDetails() {
           </Card>
         )}
 
-        {/* Topics Grid */}
-        {topics.length === 0 ? (
+        {/* Research Plans Grid */}
+        {researchPlans.length === 0 ? (
           <Card className="border-dashed border-2">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No topics yet</h3>
+              <h3 className="text-lg font-semibold mb-2">No research plans yet</h3>
               <p className="text-muted-foreground text-center mb-4">
-                Get started by creating your first research topic for this project
+                Get started by creating your first research plan for this topic
               </p>
               <Button onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Topic
+                Create Research Plan
               </Button>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {topics.map((topic) => (
+            {researchPlans.map((plan) => (
               <Card 
-                key={topic.id} 
+                key={plan.id} 
                 className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(getTopicDetailsPath(topic.id))}
+                onClick={() => navigate(getResearchPlanDetailsPath(plan.id))}
               >
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{topic.name}</CardTitle>
+                    <CardTitle className="text-lg flex items-center">
+                      <FileText className="h-5 w-5 mr-2" />
+                      {plan.name}
+                    </CardTitle>
                     <div className="flex space-x-1">
                       <Button 
                         variant="ghost" 
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          openEditDialog(topic)
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteTopic(topic)
+                          handleDeleteResearchPlan(plan)
                         }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                  {topic.description && (
+                  {plan.description && (
                     <CardDescription className="line-clamp-2">
-                      {topic.description}
+                      {plan.description}
                     </CardDescription>
                   )}
                 </CardHeader>
@@ -363,14 +310,37 @@ export function ProjectDetails() {
                   <div className="space-y-3">
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Calendar className="h-4 w-4 mr-2" />
-                      Created {new Date(topic.created_at).toLocaleDateString()}
+                      Created {new Date(plan.created_at).toLocaleDateString()}
                     </div>
                     
-                    {/* Plans and Tasks count */}
+                    <div className="text-sm">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        plan.status === 'active' 
+                          ? 'bg-green-100 text-green-800'
+                          : plan.status === 'completed'
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {plan.status}
+                      </span>
+                      {plan.plan_approved && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 ml-2">
+                          Approved
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Tasks count */}
                     <div className="pt-2 border-t">
                       <div className="text-sm text-muted-foreground">
-                        Plans: {topic.plans_count || 0} • Tasks: {topic.tasks_count || 0}
+                        Tasks: {plan.tasks_count || 0} 
+                        {plan.tasks_count && plan.completed_tasks ? ` (${plan.completed_tasks} completed)` : ''}
                       </div>
+                      {plan.progress !== undefined && plan.progress > 0 && (
+                        <div className="text-sm text-muted-foreground">
+                          Progress: {plan.progress.toFixed(0)}%
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -379,52 +349,6 @@ export function ProjectDetails() {
           </div>
         )}
       </div>
-
-      {/* Edit Topic Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Topic</DialogTitle>
-            <DialogDescription>
-              Update your topic information.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="edit-name">Topic Name</Label>
-              <Input
-                id="edit-name"
-                placeholder="Enter topic name..."
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                placeholder="Describe this topic..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </div>
-            {error && (
-              <div className="text-sm text-red-600 flex items-center space-x-1">
-                <AlertCircle className="h-4 w-4" />
-                <span>{error}</span>
-              </div>
-            )}
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleEditTopic}>
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
