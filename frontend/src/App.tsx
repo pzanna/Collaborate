@@ -38,17 +38,16 @@ function App() {
         />
 
         {/* Development-only test route (bypasses auth) */}
-        <Route
-          path="/test-projects"
-          element={
-            <Layout>
-              <Routes>
-                <Route path="/" element={<ProjectManagement />} />
-                <Route path="/:id" element={<ProjectDetails />} />
-              </Routes>
-            </Layout>
-          }
-        />
+        <Route path="/test-projects" element={
+          <Layout>
+            <ProjectManagement />
+          </Layout>
+        } />
+        <Route path="/test-projects/:id" element={
+          <Layout>
+            <ProjectDetails />
+          </Layout>
+        } />
 
         {/* Development-only test route for welcome page */}
         <Route
