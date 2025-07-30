@@ -30,6 +30,35 @@ export interface UpdateProjectRequest {
   metadata?: Record<string, any>
 }
 
+// Types for topic data
+export interface Topic {
+  id: string
+  name: string
+  description?: string
+  project_id: string
+  created_at: string
+  updated_at: string
+  status?: string
+  plans_count?: number
+  tasks_count?: number
+  total_cost?: number
+  completion_rate?: number
+  metadata?: Record<string, any>
+}
+
+export interface CreateTopicRequest {
+  name: string
+  description?: string
+  project_id: string
+  metadata?: Record<string, any>
+}
+
+export interface UpdateTopicRequest {
+  name?: string
+  description?: string
+  metadata?: Record<string, any>
+}
+
 /**
  * Generic API request function
  */
@@ -167,6 +196,85 @@ export const apiClient = {
     } else {
       console.info("Backend not available, using mock project data")
       return mockApiClient.deleteProject(id)
+    }
+  },
+
+  // Topic methods
+  async getTopics(projectId: string): Promise<Topic[]> {
+    if (await isBackendAvailable()) {
+      try {
+        return await apiRequest(`/v2/projects/${projectId}/topics`)
+      } catch (error) {
+        console.warn("Backend topic API failed, falling back to mock data:", error)
+        return mockApiClient.getTopics(projectId)
+      }
+    } else {
+      console.info("Backend not available, using mock topic data")
+      return mockApiClient.getTopics(projectId)
+    }
+  },
+
+  async getTopic(projectId: string, topicId: string): Promise<Topic> {
+    if (await isBackendAvailable()) {
+      try {
+        return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`)
+      } catch (error) {
+        console.warn("Backend topic API failed, falling back to mock data:", error)
+        return mockApiClient.getTopic(projectId, topicId)
+      }
+    } else {
+      console.info("Backend not available, using mock topic data")
+      return mockApiClient.getTopic(projectId, topicId)
+    }
+  },
+
+  async createTopic(topic: CreateTopicRequest): Promise<Topic> {
+    if (await isBackendAvailable()) {
+      try {
+        return await apiRequest(`/v2/projects/${topic.project_id}/topics`, {
+          method: "POST",
+          body: JSON.stringify(topic),
+        })
+      } catch (error) {
+        console.warn("Backend topic API failed, falling back to mock data:", error)
+        return mockApiClient.createTopic(topic)
+      }
+    } else {
+      console.info("Backend not available, using mock topic data")
+      return mockApiClient.createTopic(topic)
+    }
+  },
+
+  async updateTopic(projectId: string, topicId: string, topic: UpdateTopicRequest): Promise<Topic> {
+    if (await isBackendAvailable()) {
+      try {
+        return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`, {
+          method: "PUT",
+          body: JSON.stringify(topic),
+        })
+      } catch (error) {
+        console.warn("Backend topic API failed, falling back to mock data:", error)
+        return mockApiClient.updateTopic(projectId, topicId, topic)
+      }
+    } else {
+      console.info("Backend not available, using mock topic data")
+      return mockApiClient.updateTopic(projectId, topicId, topic)
+    }
+  },
+
+  async deleteTopic(projectId: string, topicId: string): Promise<void> {
+    if (await isBackendAvailable()) {
+      try {
+        return await apiRequest(`/v2/projects/${projectId}/topics/${topicId}`, {
+          method: "DELETE",
+        })
+      } catch (error) {
+        console.warn("Backend topic API failed, falling back to mock data:", error)
+        return mockApiClient.deleteTopic(projectId, topicId)
+      }
+    } else {
+      console.info("Backend not available, using mock topic data")
+      return mockApiClient.deleteTopic(projectId, topicId)
     }
   },
 

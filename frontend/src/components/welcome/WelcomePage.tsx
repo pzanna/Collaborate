@@ -7,7 +7,6 @@ import {
   ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline"
 import { useAuth } from "../../hooks/useAuth"
-import { ROUTES } from "../../utils/routes"
 
 interface PendingItem {
   id: string
