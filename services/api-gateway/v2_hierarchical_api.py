@@ -1084,19 +1084,24 @@ async def update_research_plan(
             raise HTTPException(status_code=404, detail="Research plan not found")
 
         # Build update data from non-None fields
-        update_data = {"id": plan_id}
+        updates = {}
         if plan_update.name is not None:
-            update_data["name"] = plan_update.name
+            updates["name"] = plan_update.name
         if plan_update.description is not None:
-            update_data["description"] = plan_update.description
+            updates["description"] = plan_update.description
         if plan_update.plan_type is not None:
-            update_data["plan_type"] = plan_update.plan_type
+            updates["plan_type"] = plan_update.plan_type
         if plan_update.status is not None:
-            update_data["status"] = plan_update.status
+            updates["status"] = plan_update.status
         if plan_update.plan_structure is not None:
-            update_data["plan_structure"] = json.dumps(plan_update.plan_structure)
+            updates["plan_structure"] = json.dumps(plan_update.plan_structure)
         if plan_update.metadata is not None:
-            update_data["metadata"] = json.dumps(plan_update.metadata)
+            updates["metadata"] = json.dumps(plan_update.metadata)
+
+        update_data = {
+            "id": plan_id,
+            "updates": updates
+        }
 
         # Send plan update via MCP
         if mcp_client and mcp_client.is_connected:
@@ -1208,8 +1213,10 @@ async def approve_research_plan(
         # Update the plan to approved status
         update_data = {
             "id": plan_id,
-            "plan_approved": True,
-            "status": "active",  # Set to active when approved
+            "updates": {
+                "plan_approved": True,
+                "status": "active",  # Set to active when approved
+            }
         }
 
         # Send plan approval via MCP

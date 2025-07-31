@@ -23,7 +23,7 @@ import sys
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import quote
@@ -248,7 +248,9 @@ class LiteratureSearchService:
                 message = await self.websocket.recv()
                 data = json.loads(message)
                 
-                if data.get("type") == "task":
+                if data.get("type") == "task_request":
+                    await self.task_queue.put(data)
+                elif data.get("type") == "task":
                     await self.task_queue.put(data)
                 elif data.get("type") == "ping":
                     await self.websocket.send(json.dumps({"type": "pong"}))
@@ -290,8 +292,13 @@ class LiteratureSearchService:
     async def _process_literature_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process a literature search task."""
         try:
-            action = task_data.get("action", "")
-            payload = task_data.get("payload", {})
+            # Handle both task and task_request formats
+            if task_data.get("type") == "task_request":
+                action = task_data.get("task_type", "")
+                payload = task_data.get("data", {})
+            else:
+                action = task_data.get("action", "")
+                payload = task_data.get("payload", {})
             
             # Route to appropriate handler
             if action == "search_academic_papers":
@@ -1116,6 +1123,14 @@ class LiteratureSearchService:
             logger.info("No AI agent available or no research plan provided, using original query")
             return [original_query]
         
+        # First, check if we have cached search terms for this plan
+        plan_id = research_plan.get("id") or research_plan.get("plan_id")
+        if plan_id:
+            cached_terms = await self._get_cached_search_terms("plan", plan_id, original_query)
+            if cached_terms:
+                logger.info(f"Using {len(cached_terms)} cached search terms for plan {plan_id}")
+                return cached_terms
+        
         try:
             # Send request to AI agent via MCP for search term optimization
             optimization_request = {
@@ -1160,6 +1175,18 @@ class LiteratureSearchService:
                             search_terms = result.get("optimized_terms", [])
                             if search_terms and isinstance(search_terms, list):
                                 logger.info(f"Received {len(search_terms)} optimized search terms from AI agent")
+                                
+                                # Store the optimized terms in database for future use
+                                if plan_id:
+                                    await self._store_search_terms(
+                                        source_type="plan",
+                                        source_id=plan_id,
+                                        original_query=original_query,
+                                        optimized_terms=search_terms,
+                                        optimization_context=result.get("optimization_context", {}),
+                                        target_databases=["PubMed", "arXiv", "Semantic Scholar", "CrossRef"]
+                                    )
+                                
                                 return search_terms
                         else:
                             logger.warning(f"AI agent failed to optimize search terms: {result.get('error', 'Unknown error')}")
@@ -1177,6 +1204,155 @@ class LiteratureSearchService:
         except Exception as e:
             logger.error(f"Error requesting search term optimization from AI agent: {e}")
             return [original_query]
+    
+    async def _get_cached_search_terms(self, source_type: str, source_id: str, original_query: str) -> Optional[List[str]]:
+        """
+        Retrieve cached search terms from database.
+        
+        Args:
+            source_type: 'plan' or 'task'
+            source_id: ID of the plan or task
+            original_query: Original query to match against
+            
+        Returns:
+            List of cached search terms if found and not expired, None otherwise
+        """
+        try:
+            if not self.websocket or not self.mcp_connected:
+                return None
+            
+            # Send request to database agent via MCP
+            db_request = {
+                "type": "task",
+                "task_id": f"get_search_terms_{uuid.uuid4().hex[:8]}",
+                "target_agent": "database_agent",
+                "action": f"get_search_terms_for_{source_type}",
+                "payload": {
+                    f"{source_type}_id": source_id
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            await self.websocket.send(json.dumps(db_request))
+            
+            # Wait for response with timeout
+            response_timeout = 5.0  # 5 seconds for database query
+            start_time = datetime.now()
+            
+            while (datetime.now() - start_time).total_seconds() < response_timeout:
+                try:
+                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+                    data = json.loads(message)
+                    
+                    if (data.get("type") == "task_result" and 
+                        data.get("task_id") == db_request["task_id"]):
+                        
+                        result = data.get("result", {})
+                        if result.get("status") == "completed":
+                            optimizations = result.get("optimizations", [])
+                            
+                            # Find the most recent optimization for this query
+                            for optimization in optimizations:
+                                if optimization.get("original_query") == original_query:
+                                    # Check if expired
+                                    expires_at = optimization.get("expires_at")
+                                    if expires_at:
+                                        expiry_time = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                                        if datetime.now(expiry_time.tzinfo) > expiry_time:
+                                            continue  # Skip expired
+                                    
+                                    return optimization.get("optimized_terms", [])
+                        break
+                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error receiving database response: {e}")
+                    break
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error retrieving cached search terms: {e}")
+            return None
+    
+    async def _store_search_terms(self, source_type: str, source_id: str, original_query: str, 
+                                 optimized_terms: List[str], optimization_context: Dict[str, Any],
+                                 target_databases: List[str]) -> bool:
+        """
+        Store optimized search terms in database.
+        
+        Args:
+            source_type: 'plan' or 'task'
+            source_id: ID of the plan or task
+            original_query: Original query
+            optimized_terms: List of optimized search terms
+            optimization_context: Context from AI optimization
+            target_databases: Target databases for the search
+            
+        Returns:
+            True if stored successfully, False otherwise
+        """
+        try:
+            if not self.websocket or not self.mcp_connected:
+                return False
+            
+            # Send request to database agent via MCP
+            db_request = {
+                "type": "task",
+                "task_id": f"store_search_terms_{uuid.uuid4().hex[:8]}",
+                "target_agent": "database_agent",
+                "action": "store_optimized_search_terms",
+                "payload": {
+                    "source_type": source_type,
+                    "source_id": source_id,
+                    "original_query": original_query,
+                    "optimized_terms": optimized_terms,
+                    "optimization_context": optimization_context,
+                    "target_databases": target_databases,
+                    "expires_at": (datetime.now() + timedelta(hours=24)).isoformat(),  # Cache for 24 hours
+                    "metadata": {
+                        "created_by": "literature_service",
+                        "optimization_version": "1.0"
+                    }
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            await self.websocket.send(json.dumps(db_request))
+            
+            # Wait for response with timeout
+            response_timeout = 5.0  # 5 seconds for database operation
+            start_time = datetime.now()
+            
+            while (datetime.now() - start_time).total_seconds() < response_timeout:
+                try:
+                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+                    data = json.loads(message)
+                    
+                    if (data.get("type") == "task_result" and 
+                        data.get("task_id") == db_request["task_id"]):
+                        
+                        result = data.get("result", {})
+                        if result.get("status") == "completed":
+                            logger.info(f"Successfully stored search terms for {source_type} {source_id}")
+                            return True
+                        else:
+                            logger.warning(f"Failed to store search terms: {result.get('error', 'Unknown error')}")
+                            return False
+                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error receiving database response: {e}")
+                    break
+            
+            logger.warning("Timeout storing search terms in database")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error storing search terms: {e}")
+            return False
     
     def _deduplicate_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

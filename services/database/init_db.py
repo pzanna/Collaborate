@@ -236,12 +236,62 @@ async def initialize_schema():
             )
         """)
         
+        # Create literature_records table for bibliographic data
+        logger.info("Creating literature_records table...")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS literature_records (
+                id VARCHAR(36) PRIMARY KEY,
+                title TEXT,
+                authors JSONB DEFAULT '[]',
+                project_id VARCHAR(36) REFERENCES projects(id) ON DELETE CASCADE,
+                doi VARCHAR(255),
+                pmid VARCHAR(255),
+                arxiv_id VARCHAR(255),
+                year INTEGER,
+                journal TEXT,
+                abstract TEXT,
+                url TEXT,
+                citation_count INTEGER DEFAULT 0,
+                source VARCHAR(50),
+                publication_type VARCHAR(50),
+                mesh_terms JSONB DEFAULT '[]',
+                categories JSONB DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                metadata JSONB DEFAULT '{}'
+            )
+        """)
+        
+        # Create search_term_optimizations table for AI-optimized search terms
+        logger.info("Creating search_term_optimizations table...")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS search_term_optimizations (
+                id VARCHAR(36) PRIMARY KEY,
+                source_type VARCHAR(50) NOT NULL,  -- 'plan', 'task'
+                source_id VARCHAR(36) NOT NULL,     -- plan_id or task_id
+                original_query TEXT NOT NULL,
+                optimized_terms JSONB NOT NULL,     -- Array of optimized search terms
+                optimization_context JSONB DEFAULT '{}',  -- AI optimization metadata
+                target_databases JSONB DEFAULT '[]',      -- Target databases for search
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,               -- Optional expiration for cached terms
+                metadata JSONB DEFAULT '{}'
+            )
+        """)
+        
         # Create indexes for better performance (only if they don't exist)
         logger.info("Creating database indexes...")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_topics_project_id ON research_topics(project_id)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_plans_topic_id ON research_plans(topic_id)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_plan_id ON tasks(plan_id)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_tasks_plan_id ON research_tasks(plan_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_project_id ON literature_records(project_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_doi ON literature_records(doi)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_pmid ON literature_records(pmid)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_source ON literature_records(source)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_search_term_optimizations_source ON search_term_optimizations(source_type, source_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_search_term_optimizations_created ON search_term_optimizations(created_at)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_topics_status ON research_topics(status)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_plans_status ON research_plans(status)")
@@ -458,7 +508,7 @@ async def verify_schema():
         logger.info("Verifying database schema...")
         
         # Check if all required tables exist
-        required_tables = ['projects', 'research_topics', 'research_plans', 'tasks', 'research_tasks']
+        required_tables = ['projects', 'research_topics', 'research_plans', 'tasks', 'research_tasks', 'literature_records', 'search_term_optimizations']
         
         for table in required_tables:
             result = await conn.fetchval("""
@@ -522,6 +572,12 @@ async def verify_schema():
         
         research_task_count = await conn.fetchval("SELECT COUNT(*) FROM research_tasks")
         logger.info(f"✅ Research tasks table has {research_task_count} records")
+        
+        literature_count = await conn.fetchval("SELECT COUNT(*) FROM literature_records")
+        logger.info(f"✅ Literature records table has {literature_count} records")
+        
+        search_term_count = await conn.fetchval("SELECT COUNT(*) FROM search_term_optimizations")
+        logger.info(f"✅ Search term optimizations table has {search_term_count} records")
         
         await conn.close()
         logger.info("Schema verification completed successfully!")
