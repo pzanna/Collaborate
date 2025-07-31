@@ -44,6 +44,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# No AI client imports needed - AI functionality delegated to AI agent via MCP
+
 
 @dataclass
 class SearchQuery:
@@ -54,6 +56,7 @@ class SearchQuery:
     sources: List[str] = field(default_factory=list)
     max_results: int = 100
     search_depth: str = "standard"
+    research_plan: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -94,11 +97,14 @@ class LiteratureSearchService:
         self.rate_limit_delay = config.get("rate_limit_delay", 1.0)
         
         # MCP connection
-        self.websocket = None
+        self.websocket: Optional[websockets.WebSocketClientProtocol] = None
         self.mcp_connected = False
         
         # HTTP session for API calls
-        self.session = None
+        self.session: Optional[aiohttp.ClientSession] = None
+        
+        # AI clients for search term extraction - delegated to AI agent via MCP
+        self.ai_agent_available = False
         
         # Task processing queue
         self.task_queue = asyncio.Queue()
@@ -119,6 +125,11 @@ class LiteratureSearchService:
                 'base_url': 'http://export.arxiv.org/api/query',
                 'rate_limit': 3.0,  # arXiv rate limit recommendation
                 'max_results_per_request': 100
+            },
+            'crossref': {
+                'base_url': 'https://api.crossref.org/works',
+                'rate_limit': 1.0,  # CrossRef rate limit
+                'max_results_per_request': 100
             }
         }
         
@@ -127,14 +138,24 @@ class LiteratureSearchService:
     async def start(self):
         """Start the Literature Search Service."""
         try:
-            # Initialize HTTP session
+            # Initialize HTTP session with SSL context for development
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
             self.session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=30),
-                headers={'User-Agent': 'Eunice-Research-Platform/1.0'}
+                headers={'User-Agent': 'Eunice-Research-Platform/1.0'},
+                connector=connector
             )
             
             # Connect to MCP server
             await self._connect_to_mcp_server()
+            
+            # Check if AI agent is available for search optimization
+            await self._check_ai_agent_availability()
             
             # Start task processing
             asyncio.create_task(self._process_task_queue())
@@ -196,6 +217,10 @@ class LiteratureSearchService:
     
     async def _register_with_mcp_server(self):
         """Register this agent with the MCP server."""
+        if not self.websocket:
+            logger.error("WebSocket connection not established")
+            return
+            
         capabilities = [
             "search_academic_papers",
             "search_literature",
@@ -296,7 +321,7 @@ class LiteratureSearchService:
             query = payload.get("query", "")
             max_results = payload.get("max_results", 10)
             search_depth = payload.get("search_depth", "standard")
-            sources = payload.get("sources", ["semantic_scholar", "arxiv"])
+            sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
             
             if not query:
                 return {
@@ -345,7 +370,7 @@ class LiteratureSearchService:
             lit_review_id = payload.get("lit_review_id", str(uuid.uuid4()))
             query = payload.get("query", "")
             filters = payload.get("filters", {})
-            sources = payload.get("sources", ["semantic_scholar", "arxiv"])
+            sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
             max_results = payload.get("max_results", 100)
             
             if not query:
@@ -438,15 +463,29 @@ class LiteratureSearchService:
         
         logger.info(f"Starting literature search for review {search_query.lit_review_id}")
         
+        # Extract AI-optimized search terms if research plan is available
+        search_terms = []
+        if search_query.research_plan:
+            logger.info("Research plan provided, extracting AI-optimized search terms")
+            search_terms = await self._extract_search_terms_from_research_plan(
+                search_query.research_plan, 
+                search_query.query
+            )
+        else:
+            logger.info("No research plan provided, using original query")
+            search_terms = [search_query.query]
+        
+        logger.info(f"Using search terms: {search_terms}")
+        
         # Search each configured source
-        sources = search_query.sources or ["semantic_scholar", "arxiv"]
+        sources = search_query.sources or ["semantic_scholar", "arxiv", "crossref"]
         
         # Execute searches concurrently but with rate limiting
         search_tasks = []
         for source in sources:
             if source in self.api_configs:
                 task = asyncio.create_task(
-                    self._search_source(source, search_query)
+                    self._search_source_with_terms(source, search_query, search_terms)
                 )
                 search_tasks.append((source, task))
             else:
@@ -507,6 +546,8 @@ class LiteratureSearchService:
                 return await self._search_arxiv(search_query)
             elif source == "pubmed":
                 return await self._search_pubmed(search_query)
+            elif source == "crossref":
+                return await self._search_crossref(search_query)
             else:
                 logger.warning(f"Unsupported source: {source}")
                 return []
@@ -515,9 +556,89 @@ class LiteratureSearchService:
             logger.error(f"Error searching {source}: {e}")
             return []
     
+    async def _search_source_with_terms(self, source: str, search_query: SearchQuery, search_terms: List[str]) -> List[Dict[str, Any]]:
+        """Search a specific source using multiple AI-optimized search terms."""
+        try:
+            all_results = []
+            
+            # Search with each optimized term
+            for term in search_terms:
+                # Create a modified search query with the optimized term
+                modified_query = SearchQuery(
+                    lit_review_id=search_query.lit_review_id,
+                    query=term,
+                    filters=search_query.filters,
+                    sources=search_query.sources,
+                    max_results=max(10, search_query.max_results // len(search_terms)),  # Distribute max results
+                    search_depth=search_query.search_depth,
+                    research_plan=search_query.research_plan
+                )
+                
+                # Search with the modified query
+                if source == "semantic_scholar":
+                    results = await self._search_semantic_scholar(modified_query)
+                elif source == "arxiv":
+                    results = await self._search_arxiv(modified_query)
+                elif source == "pubmed":
+                    results = await self._search_pubmed(modified_query)
+                elif source == "crossref":
+                    results = await self._search_crossref(modified_query)
+                else:
+                    logger.warning(f"Unsupported source: {source}")
+                    results = []
+                
+                if results:
+                    all_results.extend(results)
+                    logger.info(f"Found {len(results)} results for term '{term}' in {source}")
+            
+            # Remove duplicates within this source's results
+            unique_results = self._deduplicate_source_results(all_results)
+            logger.info(f"Total unique results from {source} using AI search terms: {len(unique_results)}")
+            
+            return unique_results
+            
+        except Exception as e:
+            logger.error(f"Error searching {source} with AI terms: {e}")
+            return []
+    
+    def _deduplicate_source_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove duplicates within a single source's results."""
+        seen_identifiers = set()
+        unique_results = []
+        
+        for result in results:
+            # Create a unique identifier for this result
+            identifier = None
+            
+            # Try DOI first (most reliable)
+            if 'doi' in result and result['doi']:
+                identifier = f"doi:{result['doi']}"
+            # Try arXiv ID
+            elif 'id' in result and result['id'] and 'arxiv' in str(result['id']).lower():
+                identifier = f"arxiv:{result['id']}"
+            # Try paper ID (for Semantic Scholar)
+            elif 'paperId' in result and result['paperId']:
+                identifier = f"paperId:{result['paperId']}"
+            # Fall back to title-based identification
+            elif 'title' in result and result['title']:
+                identifier = f"title:{result['title'].lower().strip()}"
+            
+            if identifier and identifier not in seen_identifiers:
+                seen_identifiers.add(identifier)
+                unique_results.append(result)
+            elif not identifier:
+                # If we can't create an identifier, include it anyway
+                unique_results.append(result)
+        
+        return unique_results
+    
     async def _search_semantic_scholar(self, search_query: SearchQuery) -> List[Dict[str, Any]]:
         """Search Semantic Scholar API."""
         try:
+            if not self.session:
+                logger.error("HTTP session not initialized")
+                return []
+                
             config = self.api_configs['semantic_scholar']
             url = config['base_url']
             
@@ -554,6 +675,10 @@ class LiteratureSearchService:
     async def _search_arxiv(self, search_query: SearchQuery) -> List[Dict[str, Any]]:
         """Search arXiv API."""
         try:
+            if not self.session:
+                logger.error("HTTP session not initialized")
+                return []
+                
             config = self.api_configs['arxiv']
             url = config['base_url']
             
@@ -593,6 +718,10 @@ class LiteratureSearchService:
     async def _search_pubmed(self, search_query: SearchQuery) -> List[Dict[str, Any]]:
         """Search PubMed API."""
         try:
+            if not self.session:
+                logger.error("HTTP session not initialized")
+                return []
+                
             config = self.api_configs['pubmed']
             
             # First, search for IDs
@@ -641,6 +770,57 @@ class LiteratureSearchService:
             logger.error(f"Error searching PubMed: {e}")
             return []
     
+    async def _search_crossref(self, search_query: SearchQuery) -> List[Dict[str, Any]]:
+        """Search CrossRef API."""
+        try:
+            if not self.session:
+                logger.error("HTTP session not initialized")
+                return []
+                
+            config = self.api_configs['crossref']
+            url = config['base_url']
+            
+            params = {
+                'query': search_query.query,
+                'rows': min(search_query.max_results, config['max_results_per_request']),
+                'sort': 'relevance',
+                'order': 'desc'
+            }
+            
+            # Apply filters
+            filters = []
+            if 'year_min' in search_query.filters:
+                filters.append(f"from-pub-date:{search_query.filters['year_min']}")
+            if 'year_max' in search_query.filters:
+                filters.append(f"until-pub-date:{search_query.filters['year_max']}")
+            if 'publication_types' in search_query.filters:
+                for pub_type in search_query.filters['publication_types']:
+                    if pub_type == 'journal_article':
+                        filters.append('type:journal-article')
+            
+            if filters:
+                params['filter'] = ','.join(filters)
+            
+            # Rate limiting
+            await asyncio.sleep(config['rate_limit'])
+            
+            headers = {
+                'User-Agent': 'Eunice-Research-Platform/1.0 (mailto:contact@eunice.example.com)',
+                'Accept': 'application/json'
+            }
+            
+            async with self.session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get('message', {}).get('items', [])
+                else:
+                    logger.warning(f"CrossRef API returned status {response.status}")
+                    return []
+                    
+        except Exception as e:
+            logger.error(f"Error searching CrossRef: {e}")
+            return []
+    
     def _parse_arxiv_xml(self, xml_content: str) -> List[Dict[str, Any]]:
         """Parse arXiv XML response."""
         try:
@@ -661,20 +841,33 @@ class LiteratureSearchService:
                     authors = []
                     for author in entry.findall('atom:author', ns):
                         name = author.find('atom:name', ns)
-                        if name is not None:
-                            authors.append(name.text)
+                        if name is not None and name.text:
+                            authors.append(name.text.strip())
                     
                     # Extract arXiv ID from id
                     entry_id = entry.find('atom:id', ns)
-                    arxiv_id = entry_id.text.split('/')[-1] if entry_id is not None else None
+                    arxiv_id = None
+                    if entry_id is not None and entry_id.text:
+                        # Extract ID from URL like http://arxiv.org/abs/2301.12345v1
+                        match = re.search(r'abs/([0-9]+\.[0-9]+)', entry_id.text)
+                        if match:
+                            arxiv_id = match.group(1)
+                    
+                    # Extract categories
+                    categories = []
+                    for category in entry.findall('atom:category', ns):
+                        term = category.get('term')
+                        if term:
+                            categories.append(term)
                     
                     record = {
-                        'title': title.text.strip() if title is not None else None,
-                        'abstract': summary.text.strip() if summary is not None else None,
+                        'title': title.text.strip() if title is not None and title.text else None,
+                        'abstract': summary.text.strip() if summary is not None and summary.text else None,
                         'authors': authors,
                         'published': published.text if published is not None else None,
                         'arxiv_id': arxiv_id,
-                        'url': entry_id.text if entry_id is not None else None
+                        'url': entry_id.text if entry_id is not None else None,
+                        'categories': categories
                     }
                     entries.append(record)
                     
@@ -709,7 +902,8 @@ class LiteratureSearchService:
                         lastname = author.find('LastName')
                         forename = author.find('ForeName')
                         if lastname is not None and forename is not None:
-                            authors.append(f"{forename.text} {lastname.text}")
+                            if lastname.text and forename.text:
+                                authors.append(f"{forename.text} {lastname.text}")
                     
                     # Extract publication year
                     year_elem = article.find('.//PubDate/Year')
@@ -717,13 +911,24 @@ class LiteratureSearchService:
                     # Extract journal
                     journal_elem = article.find('.//Journal/Title')
                     
+                    # Extract DOI
+                    doi_elem = article.find('.//ArticleId[@IdType="doi"]')
+                    
+                    # Extract keywords/MeSH terms
+                    mesh_terms = []
+                    for mesh in article.findall('.//MeshHeading/DescriptorName'):
+                        if mesh.text:
+                            mesh_terms.append(mesh.text)
+                    
                     record = {
-                        'title': title_elem.text if title_elem is not None else None,
-                        'abstract': abstract_elem.text if abstract_elem is not None else None,
+                        'title': title_elem.text if title_elem is not None and title_elem.text else None,
+                        'abstract': abstract_elem.text if abstract_elem is not None and abstract_elem.text else None,
                         'authors': authors,
-                        'pmid': pmid_elem.text if pmid_elem is not None else None,
-                        'year': year_elem.text if year_elem is not None else None,
-                        'journal': journal_elem.text if journal_elem is not None else None
+                        'pmid': pmid_elem.text if pmid_elem is not None and pmid_elem.text else None,
+                        'year': year_elem.text if year_elem is not None and year_elem.text else None,
+                        'journal': journal_elem.text if journal_elem is not None and journal_elem.text else None,
+                        'doi': doi_elem.text if doi_elem is not None and doi_elem.text else None,
+                        'mesh_terms': mesh_terms
                     }
                     entries.append(record)
                     
@@ -761,9 +966,12 @@ class LiteratureSearchService:
                     'pmid': self._extract_field(record, ['pmid', 'PMID', 'externalIds.PubMed']),
                     'arxiv_id': self._extract_field(record, ['arxiv_id', 'id']),
                     'year': self._extract_year(record),
-                    'journal': self._extract_field(record, ['journal', 'venue', 'Journal']),
+                    'journal': self._extract_field(record, ['journal', 'venue', 'Journal', 'container-title']),
                     'url': self._extract_field(record, ['url', 'URL', 'link']),
-                    'citation_count': self._extract_field(record, ['citationCount', 'citations']),
+                    'citation_count': self._extract_field(record, ['citationCount', 'citations', 'is-referenced-by-count']),
+                    'publication_type': self._extract_field(record, ['type', 'publication_type']),
+                    'mesh_terms': record.get('mesh_terms', []) if source == 'pubmed' else [],
+                    'categories': record.get('categories', []) if source == 'arxiv' else [],
                     'raw_data': record,  # Store original data
                     'retrieval_timestamp': datetime.now().isoformat()
                 }
@@ -808,8 +1016,21 @@ class LiteratureSearchService:
                 if isinstance(author_data, list):
                     for author in author_data:
                         if isinstance(author, dict):
-                            name = author.get('name', '') or f"{author.get('firstName', '')} {author.get('lastName', '')}"
-                            if name.strip():
+                            # Handle different author formats
+                            name = None
+                            if 'name' in author:
+                                name = author['name']
+                            elif 'given' in author and 'family' in author:
+                                # CrossRef format
+                                name = f"{author.get('given', '')} {author.get('family', '')}"
+                            elif 'firstName' in author and 'lastName' in author:
+                                # Other formats
+                                name = f"{author.get('firstName', '')} {author.get('lastName', '')}"
+                            elif 'forename' in author and 'lastname' in author:
+                                # PubMed format
+                                name = f"{author.get('forename', '')} {author.get('lastname', '')}"
+                            
+                            if name and name.strip():
                                 authors.append(name.strip())
                         elif isinstance(author, str):
                             authors.append(author)
@@ -838,7 +1059,124 @@ class LiteratureSearchService:
                     if year_match:
                         return int(year_match.group())
         
+        # Handle CrossRef date arrays
+        if 'published-print' in record:
+            date_parts = record['published-print'].get('date-parts', [])
+            if date_parts and len(date_parts[0]) > 0:
+                return int(date_parts[0][0])
+        
+        if 'published-online' in record:
+            date_parts = record['published-online'].get('date-parts', [])
+            if date_parts and len(date_parts[0]) > 0:
+                return int(date_parts[0][0])
+        
+        if 'created' in record:
+            date_parts = record['created'].get('date-parts', [])
+            if date_parts and len(date_parts[0]) > 0:
+                return int(date_parts[0][0])
+        
         return None
+    
+    async def _check_ai_agent_availability(self):
+        """Check if AI agent is available via MCP for search term extraction."""
+        try:
+            if not self.websocket or not self.mcp_connected:
+                logger.info("MCP connection not available, AI search term optimization will be disabled")
+                self.ai_agent_available = False
+                return
+            
+            # Send a ping to check if AI agent is available
+            check_message = {
+                "type": "agent_check",
+                "target_agent": "ai_agent",
+                "capabilities": ["optimize_search_terms"],
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            await self.websocket.send(json.dumps(check_message))
+            logger.info("AI agent availability check sent via MCP")
+            self.ai_agent_available = True  # Assume available for now
+            
+        except Exception as e:
+            logger.warning(f"Error checking AI agent availability: {e}")
+            self.ai_agent_available = False
+
+    async def _extract_search_terms_from_research_plan(self, research_plan: Dict[str, Any], original_query: str) -> List[str]:
+        """
+        Extract optimized search terms from research plan using AI agent via MCP.
+        
+        Args:
+            research_plan: AI-generated research plan with objectives, questions, etc.
+            original_query: The original user query as fallback
+            
+        Returns:
+            List of optimized search terms for academic databases
+        """
+        if not self.ai_agent_available or not research_plan:
+            logger.info("No AI agent available or no research plan provided, using original query")
+            return [original_query]
+        
+        try:
+            # Send request to AI agent via MCP for search term optimization
+            optimization_request = {
+                "type": "task",
+                "task_id": f"search_term_optimization_{uuid.uuid4().hex[:8]}",
+                "target_agent": "ai_agent",
+                "action": "optimize_search_terms",
+                "payload": {
+                    "research_plan": research_plan,
+                    "original_query": original_query,
+                    "context": "literature_search",
+                    "target_databases": ["PubMed", "arXiv", "Semantic Scholar", "CrossRef"],
+                    "max_terms": 5
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            if not self.websocket or not self.mcp_connected:
+                logger.warning("MCP connection not available, using original query")
+                return [original_query]
+            
+            # Send the request
+            await self.websocket.send(json.dumps(optimization_request))
+            logger.info("Search term optimization request sent to AI agent via MCP")
+            
+            # Wait for response with timeout
+            response_timeout = 15.0  # 15 seconds
+            start_time = datetime.now()
+            
+            while (datetime.now() - start_time).total_seconds() < response_timeout:
+                try:
+                    # Check for incoming messages
+                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+                    data = json.loads(message)
+                    
+                    # Check if this is our response
+                    if (data.get("type") == "task_result" and 
+                        data.get("task_id") == optimization_request["task_id"]):
+                        
+                        result = data.get("result", {})
+                        if result.get("status") == "completed":
+                            search_terms = result.get("optimized_terms", [])
+                            if search_terms and isinstance(search_terms, list):
+                                logger.info(f"Received {len(search_terms)} optimized search terms from AI agent")
+                                return search_terms
+                        else:
+                            logger.warning(f"AI agent failed to optimize search terms: {result.get('error', 'Unknown error')}")
+                            break
+                            
+                except asyncio.TimeoutError:
+                    continue  # Keep waiting
+                except Exception as e:
+                    logger.error(f"Error receiving AI agent response: {e}")
+                    break
+            
+            logger.warning("Timeout waiting for AI agent response, using original query")
+            return [original_query]
+                
+        except Exception as e:
+            logger.error(f"Error requesting search term optimization from AI agent: {e}")
+            return [original_query]
     
     def _deduplicate_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -868,24 +1206,22 @@ class LiteratureSearchService:
                     seen_dois.add(doi)
             
             # Check PMID
-            if not is_duplicate:
-                pmid = record.get('pmid')
-                if pmid:
-                    if pmid in seen_pmids:
-                        is_duplicate = True
-                    else:
-                        seen_pmids.add(pmid)
+            pmid = record.get('pmid')
+            if not is_duplicate and pmid:
+                if pmid in seen_pmids:
+                    is_duplicate = True
+                else:
+                    seen_pmids.add(pmid)
             
             # Check arXiv ID
-            if not is_duplicate:
-                arxiv_id = record.get('arxiv_id')
-                if arxiv_id:
-                    if arxiv_id in seen_arxiv_ids:
-                        is_duplicate = True
-                    else:
-                        seen_arxiv_ids.add(arxiv_id)
+            arxiv_id = record.get('arxiv_id')
+            if not is_duplicate and arxiv_id:
+                if arxiv_id in seen_arxiv_ids:
+                    is_duplicate = True
+                else:
+                    seen_arxiv_ids.add(arxiv_id)
             
-            # Check title/author/year hash
+            # Check title/author/year hash if no unique identifiers
             if not is_duplicate and not doi and not pmid and not arxiv_id:
                 content_hash = self._generate_content_hash(record)
                 if content_hash in seen_hashes:
@@ -972,7 +1308,21 @@ def get_additional_metadata() -> Dict[str, Any]:
                 "multi_source_search",
                 "bibliographic_search"
             ],
-            "supported_sources": list(literature_service.api_configs.keys())
+            "supported_sources": list(literature_service.api_configs.keys()),
+            "api_integrations": {
+                "semantic_scholar": "AI-powered academic search with rich metadata",
+                "pubmed": "Medical and life sciences literature",
+                "arxiv": "Preprint server for physics, mathematics, computer science",
+                "crossref": "DOI-based academic publication metadata"
+            },
+            "features": [
+                "multi_source_parallel_search",
+                "intelligent_deduplication",
+                "format_normalization", 
+                "rate_limiting",
+                "error_recovery",
+                "mcp_protocol_integration"
+            ]
         }
     return {}
 

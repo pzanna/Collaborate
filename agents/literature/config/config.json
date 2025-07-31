@@ -28,11 +28,17 @@
       "rate_limit": 3.0,
       "max_results_per_request": 100,
       "timeout": 30
+    },
+    "crossref": {
+      "base_url": "https://api.crossref.org/works",
+      "rate_limit": 1.0,
+      "max_results_per_request": 100,
+      "timeout": 30
     }
   },
   "search_settings": {
     "default_max_results": 100,
-    "default_sources": ["semantic_scholar", "arxiv"],
+    "default_sources": ["semantic_scholar", "arxiv", "crossref"],
     "deduplication_strategy": "doi_pmid_arxiv_hash",
     "normalization_enabled": true
   }
