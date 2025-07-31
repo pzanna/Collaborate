@@ -775,7 +775,38 @@ The Eunice platform implements a comprehensive TOTP-based Two-Factor Authenticat
 - Track performance metrics and usage patterns.
 - Set up alerting for critical system failures.
 
-### 11. Documentation & Testing
+### 11. Cost Estimation & Management
+
+The system implements sophisticated cost estimation and tracking throughout the research workflow:
+
+#### Cost Estimation Components
+
+- **Real-time Cost Tracking**: Monitor AI token usage and traditional research costs as they occur
+- **Multi-provider Support**: OpenAI, XAI, and other AI provider cost models
+- **Complexity Assessment**: Intelligent LOW/MEDIUM/HIGH complexity scoring for accurate estimates
+- **Token Estimation**: Detailed input/output token breakdown with provider-specific pricing
+- **Traditional Cost Integration**: Database access, software licenses, expert consultation costs
+- **Currency Conversion**: USD/AUD conversion with configurable exchange rates
+
+#### Cost Optimization Strategies
+
+- **Single Agent Mode**: 60% cost reduction by using single agent instead of multi-agent approach
+- **Complexity Reduction**: Query optimization to reduce complexity scoring and multipliers
+- **Token Management**: Efficient prompt design and context sharing between agents
+- **Batch Processing**: Group similar operations to minimize API calls
+- **Intelligent Caching**: Reuse previous results and responses when applicable
+
+#### Implementation Guidelines
+
+- **Planning Agent**: Primary cost estimation via `cost_estimator.py` module
+- **Frontend Integration**: Interactive cost breakdown dialogs with real-time updates
+- **API Endpoints**: Dedicated cost estimation, tracking, and optimization endpoints
+- **Configuration Management**: Centralized cost settings, thresholds, and provider pricing
+- **Threshold Monitoring**: Session and daily cost limits with automated warnings
+
+For detailed cost estimation documentation, see [Cost Estimation Documentation](../Agents/Planning_Agent/Cost_Estimation.md).
+
+### 12. Documentation & Testing
 
 - Swagger/OpenAPI for all API endpoints.
 - Integration tests for MCP workflows.

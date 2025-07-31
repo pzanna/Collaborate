@@ -37,9 +37,8 @@ import {
   type ResearchPlan,
   type UpdateResearchPlanRequest,
   type GenerateAIResearchPlanRequest,
-  type GenerateAIResearchPlanResponse,
 } from "@/utils/api"
-import { ROUTES, getTopicDetailsPath } from "@/utils/routes"
+import { ROUTES, getProjectDetailsPath } from "@/utils/routes"
 
 // Component to display structured research plan content
 function PlanStructureDisplay({
@@ -60,7 +59,7 @@ function PlanStructureDisplay({
             {planStructure.objectives.map(
               (objective: string, index: number) => (
                 <li key={index} className="flex items-start">
-                  <span className="inline-block w-6 h-6 bg-blue-100 text-blue-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                  <span className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 flex-shrink-0">
                     {index + 1}
                   </span>
                   <span className="text-sm text-gray-700">{objective}</span>
@@ -79,7 +78,7 @@ function PlanStructureDisplay({
           <ul className="space-y-2">
             {planStructure.key_areas.map((area: string, index: number) => (
               <li key={index} className="flex items-start">
-                <span className="inline-block w-6 h-6 bg-green-100 text-green-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                <span className="w-6 h-6 bg-green-100 text-green-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 flex-shrink-0">
                   {index + 1}
                 </span>
                 <span className="text-sm text-gray-700">{area}</span>
@@ -97,7 +96,7 @@ function PlanStructureDisplay({
           <ul className="space-y-2">
             {planStructure.questions.map((question: string, index: number) => (
               <li key={index} className="flex items-start">
-                <span className="inline-block w-6 h-6 bg-purple-100 text-purple-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                <span className="w-6 h-6 bg-purple-100 text-purple-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 flex-shrink-0">
                   {index + 1}
                 </span>
                 <span className="text-sm text-gray-700">{question}</span>
@@ -177,7 +176,7 @@ function PlanStructureDisplay({
           <ul className="space-y-2">
             {planStructure.outcomes.map((outcome: string, index: number) => (
               <li key={index} className="flex items-start">
-                <span className="inline-block w-6 h-6 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                <span className="w-6 h-6 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium flex items-center justify-center mr-3 flex-shrink-0">
                   {index + 1}
                 </span>
                 <span className="text-sm text-gray-700">{outcome}</span>
@@ -198,11 +197,12 @@ export function ResearchPlanDetails() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [showAIDialog, setShowAIDialog] = useState(false)
+  const [showCostDialog, setShowCostDialog] = useState(false)
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
-  const [aiPlanData, setAiPlanData] =
-    useState<GenerateAIResearchPlanResponse | null>(null)
+  const [aiPlanData, setAiPlanData] = useState<ResearchPlan | null>(null)
   const [editFormData, setEditFormData] = useState({
     name: "",
     description: "",
@@ -222,6 +222,76 @@ export function ResearchPlanDetails() {
     }
     loadResearchPlan()
   }, [id, navigate])
+
+  // Currency conversion (USD to AUD - using approximate rate)
+  const USD_TO_AUD_RATE = 1.55 // This would typically come from an API
+
+  const convertToAUD = (usdAmount: number): number => {
+    return usdAmount * USD_TO_AUD_RATE
+  }
+
+  const formatAUD = (amount: number): string => {
+    return `$${amount.toFixed(2)}`
+  }
+
+  const getCostBreakdown = () => {
+    if (!researchPlan) return null
+
+    const estimatedCostUSD = researchPlan.estimated_cost || 0
+    const actualCostUSD = researchPlan.actual_cost || 0
+
+    // Extract cost estimate from metadata if available
+    const metadata = researchPlan.metadata || {}
+    const costEstimate = metadata.cost_estimate || {}
+
+    // Create breakdown structure
+    const breakdown = {
+      estimated: {
+        total_usd: estimatedCostUSD,
+        total_aud: convertToAUD(estimatedCostUSD),
+        ai_operations: {
+          usd: costEstimate.estimated_cost || estimatedCostUSD * 0.1,
+          aud: convertToAUD(
+            costEstimate.estimated_cost || estimatedCostUSD * 0.1
+          ),
+          complexity: costEstimate.complexity || "MEDIUM",
+        },
+        traditional_costs: {
+          database_access: {
+            usd: estimatedCostUSD * 0.3,
+            aud: convertToAUD(estimatedCostUSD * 0.3),
+          },
+          analysis_software: {
+            usd: estimatedCostUSD * 0.2,
+            aud: convertToAUD(estimatedCostUSD * 0.2),
+          },
+          expert_consultation: {
+            usd: estimatedCostUSD * 0.4,
+            aud: convertToAUD(estimatedCostUSD * 0.4),
+          },
+        },
+      },
+      actual: {
+        total_usd: actualCostUSD,
+        total_aud: convertToAUD(actualCostUSD),
+        ai_operations: {
+          usd: actualCostUSD * 0.1,
+          aud: convertToAUD(actualCostUSD * 0.1),
+        },
+        other_costs: {
+          usd: actualCostUSD * 0.9,
+          aud: convertToAUD(actualCostUSD * 0.9),
+        },
+      },
+      optimization_suggestions: costEstimate.optimization_suggestions || [
+        "Consider breaking down into smaller sub-tasks",
+        "Use caching to avoid redundant analysis",
+        "Optimize AI model usage for cost efficiency",
+      ],
+    }
+
+    return breakdown
+  }
 
   const loadResearchPlan = async () => {
     if (!id) return
@@ -327,17 +397,95 @@ export function ResearchPlanDetails() {
   }
 
   const parsePlanStructure = (structureText: string): Record<string, any> => {
-    // Simple parsing - in a real app this might be more sophisticated
-    const lines = structureText.split("\n")
-    const sections = lines.filter((line) => line.trim().match(/^\d+\./))
-    const details = lines
-      .filter((line) => !line.trim().match(/^\d+\./) && line.trim())
-      .join("\n")
-
-    return {
-      sections: sections.length > 0 ? sections : undefined,
-      details: details || undefined,
+    if (!structureText.trim()) {
+      return {}
     }
+
+    // Try to parse the structured format used by the display component
+    const result: Record<string, any> = {}
+    const lines = structureText.split("\n")
+    let currentSection = ""
+    let currentItems: string[] = []
+
+    for (const line of lines) {
+      const trimmedLine = line.trim()
+
+      if (trimmedLine.startsWith("📋 OBJECTIVES:")) {
+        if (currentSection && currentItems.length > 0) {
+          result[currentSection] = currentItems
+        }
+        currentSection = "objectives"
+        currentItems = []
+      } else if (trimmedLine.startsWith("🎯 KEY RESEARCH AREAS:")) {
+        if (currentSection && currentItems.length > 0) {
+          result[currentSection] = currentItems
+        }
+        currentSection = "key_areas"
+        currentItems = []
+      } else if (trimmedLine.startsWith("❓ RESEARCH QUESTIONS:")) {
+        if (currentSection && currentItems.length > 0) {
+          result[currentSection] = currentItems
+        }
+        currentSection = "questions"
+        currentItems = []
+      } else if (trimmedLine.startsWith("📚 DATA SOURCES:")) {
+        if (currentSection && currentItems.length > 0) {
+          result[currentSection] = currentItems
+        }
+        currentSection = "sources"
+        currentItems = []
+      } else if (trimmedLine.startsWith("🎯 EXPECTED OUTCOMES:")) {
+        if (currentSection && currentItems.length > 0) {
+          result[currentSection] = currentItems
+        }
+        currentSection = "outcomes"
+        currentItems = []
+      } else if (trimmedLine.startsWith("⏱️ TIMELINE:")) {
+        if (currentSection && currentItems.length > 0) {
+          result[currentSection] = currentItems
+        }
+        currentSection = "timeline"
+        currentItems = []
+      } else if (trimmedLine.match(/^\d+\./)) {
+        // Extract numbered list item
+        const item = trimmedLine.replace(/^\d+\.\s*/, "")
+        if (item && currentSection) {
+          currentItems.push(item)
+        }
+      } else if (trimmedLine && currentSection === "timeline") {
+        // Handle timeline content specially
+        if (!result.timeline) {
+          result.timeline = {}
+        }
+        if (trimmedLine.startsWith("Total Duration:")) {
+          const days = trimmedLine.match(/(\d+)\s*days/)
+          if (days) {
+            result.timeline.total_days = parseInt(days[1])
+          }
+        }
+        // Could add more timeline parsing here if needed
+      }
+    }
+
+    // Don't forget the last section
+    if (currentSection && currentItems.length > 0) {
+      result[currentSection] = currentItems
+    }
+
+    // Fallback for simple text format
+    if (Object.keys(result).length === 0 && structureText.trim()) {
+      const sections = lines.filter((line) => line.trim().match(/^\d+\./))
+      const details = lines
+        .filter((line) => !line.trim().match(/^\d+\./) && line.trim())
+        .join("\n")
+
+      return {
+        sections: sections.length > 0 ? sections : undefined,
+        details: details || structureText.trim(),
+      }
+    }
+
+    return result
   }
 
   const handleEdit = () => {
@@ -365,6 +513,9 @@ export function ResearchPlanDetails() {
         return
       }
 
+      setIsSaving(true)
+      setError(null)
+
       const updateData: UpdateResearchPlanRequest = {
         name: editFormData.name,
         description: editFormData.description,
@@ -372,7 +523,18 @@ export function ResearchPlanDetails() {
       }
 
       const updatedPlan = await apiClient.updateResearchPlan(id, updateData)
+
+      // Update the research plan state
       setResearchPlan(updatedPlan)
+
+      // Update the edit form data to match the saved plan to ensure consistency
+      setEditFormData({
+        name: updatedPlan.name,
+        description: updatedPlan.description || "",
+        plan_structure: formatPlanStructure(updatedPlan.plan_structure),
+      })
+
+      // Only exit edit mode after everything is properly updated
       setIsEditing(false)
       setError(null)
     } catch (err) {
@@ -380,6 +542,8 @@ export function ResearchPlanDetails() {
         err instanceof Error ? err.message : "Failed to update research plan"
       )
       console.error("Error updating research plan:", err)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -443,7 +607,7 @@ export function ResearchPlanDetails() {
       setError(null)
 
       // Update the current plan with the AI-generated data
-      setResearchPlan(response.plan)
+      setResearchPlan(response)
       setShowAIDialog(false)
     } catch (err) {
       setError(
@@ -494,14 +658,16 @@ export function ResearchPlanDetails() {
   }
 
   return (
-    <div className="px-6 py-8 space-y-6 max-w-4xl mx-auto">
+    <div className="px-6 pt-4 pb-8 space-y-6 max-w-4xl mx-auto">
       {/* Research Plan Information */}
       <div className="space-y-4">
         <div>
           {isEditing ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
-                <Label htmlFor="edit-name">Research Plan Name</Label>
+                <Label htmlFor="edit-name" className="block text-center mb-3">
+                  Research Plan Name
+                </Label>
                 <Input
                   id="edit-name"
                   value={editFormData.name}
@@ -511,7 +677,12 @@ export function ResearchPlanDetails() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-description">Description</Label>
+                <Label
+                  htmlFor="edit-description"
+                  className="block text-center mb-3"
+                >
+                  Description
+                </Label>
                 <Textarea
                   id="edit-description"
                   value={editFormData.description}
@@ -526,17 +697,17 @@ export function ResearchPlanDetails() {
             </div>
           ) : (
             <>
-              <h1 className="text-3xl font-bold">{researchPlan.name}</h1>
-              {researchPlan.description && (
-                <p className="text-muted-foreground mt-2 text-lg">
-                  {researchPlan.description}
-                </p>
-              )}
+              <div className="text-center">
+                <div className="text-xl font-semibold text-gray-900 mt-2">
+                  Research Plan
+                </div>
+                <h1 className="text-3xl font-bold">{researchPlan.name}</h1>
+              </div>
             </>
           )}
         </div>
 
-        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center space-x-4 text-sm text-muted-foreground">
           <div className="flex items-center">
             <Calendar className="h-4 w-4 mr-2" />
             Created {new Date(researchPlan.created_at).toLocaleDateString()}
@@ -574,19 +745,16 @@ export function ResearchPlanDetails() {
 
       {/* Research Plan Content */}
       <Card>
-        <CardHeader>
-          <CardTitle>Research Plan</CardTitle>
-          <CardDescription>
-            {isEditing
-              ? "Edit the research plan content below"
-              : "Current research plan content"}
-          </CardDescription>
-        </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {isEditing ? (
               <div>
-                <Label htmlFor="plan-content">Plan Content</Label>
+                <Label
+                  htmlFor="plan-content"
+                  className="block text-center mb-3"
+                >
+                  Plan Content
+                </Label>
                 <Textarea
                   id="plan-content"
                   className="min-h-[300px] font-mono text-sm"
@@ -618,16 +786,29 @@ export function ResearchPlanDetails() {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex justify-between items-center">
-        <div className="flex space-x-2">
+      <div className="flex justify-center items-center">
+        <div className="flex space-x-6">
           {isEditing ? (
             <>
-              <Button onClick={handleSaveEdit}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
+              <Button
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                className="w-32 flex items-center justify-center"
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-1" />
+                )}
+                {isSaving ? "Saving..." : "Save"}
               </Button>
-              <Button variant="outline" onClick={handleCancelEdit}>
-                <X className="h-4 w-4 mr-2" />
+              <Button
+                variant="outline"
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+                className="w-32 flex items-center justify-center"
+              >
+                <X className="h-4 w-4 mr-1" />
                 Cancel
               </Button>
             </>
@@ -636,68 +817,71 @@ export function ResearchPlanDetails() {
               <Button
                 onClick={handleEdit}
                 disabled={researchPlan.plan_approved}
+                className="w-32 flex items-center justify-center"
               >
-                <Edit className="h-4 w-4 mr-2" />
+                <Edit className="h-4 w-4 mr-1" />
                 Edit
               </Button>
-              <Button variant="destructive" onClick={handleDelete}>
-                <Trash2 className="h-4 w-4 mr-2" />
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                className="w-32 flex items-center justify-center"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
                 Delete
               </Button>
+              {!researchPlan.plan_approved && (
+                <Button
+                  onClick={handleApprove}
+                  disabled={isApproving}
+                  className="w-32 bg-green-600 hover:bg-green-700 flex items-center justify-center"
+                >
+                  {isApproving ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4 mr-1" />
+                  )}
+                  Approve
+                </Button>
+              )}
             </>
           )}
         </div>
-
-        {!isEditing && !researchPlan.plan_approved && (
-          <Button
-            onClick={handleApprove}
-            disabled={isApproving}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            {isApproving ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Check className="h-4 w-4 mr-2" />
-            )}
-            Approve
-          </Button>
-        )}
       </div>
 
-      {/* Statistics */}
+      {/* Status */}
       <Card>
-        <CardHeader>
-          <CardTitle>Statistics</CardTitle>
+        <CardHeader className="text-center">
+          <CardTitle>Status</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
+            <div className="text-center">
               <div className="text-2xl font-bold">
+                {researchPlan.completed_tasks || 0} /{" "}
                 {researchPlan.tasks_count || 0}
               </div>
               <div className="text-sm text-muted-foreground">Tasks</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">
-                {researchPlan.completed_tasks || 0}
-              </div>
-              <div className="text-sm text-muted-foreground">Completed</div>
-            </div>
-            <div>
+            <div className="text-center">
               <div className="text-2xl font-bold">
                 {researchPlan.progress?.toFixed(0) || 0}%
               </div>
               <div className="text-sm text-muted-foreground">Progress</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">
-                ${researchPlan.estimated_cost?.toFixed(2) || "0.00"}
+            <div className="text-center">
+              <div
+                className="text-2xl font-bold text-black hover:text-gray-700 cursor-pointer"
+                onClick={() => setShowCostDialog(true)}
+                title="Click to view cost breakdown"
+              >
+                {formatAUD(convertToAUD(researchPlan.estimated_cost || 0))}
               </div>
               <div className="text-sm text-muted-foreground">Estimated</div>
             </div>
-            <div>
+            <div className="text-center">
               <div className="text-2xl font-bold">
-                ${researchPlan.actual_cost?.toFixed(2) || "0.00"}
+                {formatAUD(convertToAUD(researchPlan.actual_cost || 0))}
               </div>
               <div className="text-sm text-muted-foreground">Actual</div>
             </div>
@@ -728,7 +912,7 @@ export function ResearchPlanDetails() {
                 onChange={(e) =>
                   setAiFormData({ ...aiFormData, name: e.target.value })
                 }
-                placeholder="Enter a name for the AI-generated plan"
+                placeholder="Enter a name for the researchplan"
               />
             </div>
 
@@ -765,15 +949,22 @@ export function ResearchPlanDetails() {
 
             {aiPlanData && (
               <div className="bg-blue-50 p-4 rounded-md">
-                <div className="flex items-center mb-2">
-                  <DollarSign className="h-4 w-4 mr-2 text-green-600" />
-                  <span className="font-medium">Cost Estimate</span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Estimated cost: $
-                  {aiPlanData.cost_estimate.estimated_cost.toFixed(2)}
-                  (Complexity: {aiPlanData.cost_estimate.complexity})
-                </p>
+                {aiPlanData && aiPlanData.metadata?.cost_estimate && (
+                  <div>
+                    <div className="flex items-center mb-2">
+                      <DollarSign className="h-4 w-4 mr-2 text-green-600" />
+                      <span className="font-medium">Cost Estimate</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Estimated cost: $
+                      {aiPlanData.metadata.cost_estimate.estimated_cost.toFixed(
+                        2
+                      )}
+                      (Complexity:{" "}
+                      {aiPlanData.metadata.cost_estimate.complexity})
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -806,14 +997,231 @@ export function ResearchPlanDetails() {
         </DialogContent>
       </Dialog>
 
-      {/* Back to Topic Button - Centered in Container */}
+      {/* Cost Breakdown Dialog */}
+      <Dialog open={showCostDialog} onOpenChange={setShowCostDialog}>
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader className="text-center">
+            <DialogTitle className="flex items-center justify-center">
+              <DollarSign className="h-5 w-5 mr-2 text-green-600" />
+              Cost Breakdown Analysis
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              Detailed breakdown of research plan costs in Australian dollars
+            </DialogDescription>
+          </DialogHeader>
+
+          {(() => {
+            const breakdown = getCostBreakdown()
+            if (!breakdown) return <div>No cost data available</div>
+
+            return (
+              <div className="space-y-6">
+                {/* Exchange Rate Info */}
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <div className="text-sm text-blue-800 text-center">
+                    <strong>Exchange Rate:</strong> 1 USD = {USD_TO_AUD_RATE}{" "}
+                    AUD (approximate)
+                  </div>
+                </div>
+
+                {/* Estimated Costs */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Estimated Costs
+                  </h3>
+
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium text-green-900">
+                        Total Estimated Cost
+                      </h4>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-green-800">
+                          {formatAUD(breakdown.estimated.total_aud)}
+                        </div>
+                        <div className="text-sm text-green-600">
+                          (${breakdown.estimated.total_usd.toFixed(2)} USD)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Operations Cost */}
+                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-medium text-purple-900">
+                        AI Operations
+                      </h4>
+                      <div className="text-center">
+                        <div className="font-semibold text-purple-800">
+                          {formatAUD(breakdown.estimated.ai_operations.aud)}
+                        </div>
+                        <div className="text-sm text-purple-600">
+                          (${breakdown.estimated.ai_operations.usd.toFixed(2)}{" "}
+                          USD)
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-purple-700">
+                      Complexity Level:{" "}
+                      <span className="font-medium">
+                        {breakdown.estimated.ai_operations.complexity}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Traditional Costs */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-gray-900">
+                      Traditional Research Costs
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="bg-yellow-50 p-3 rounded border border-yellow-200 text-center">
+                        <div className="text-sm font-medium text-yellow-900">
+                          Database Access
+                        </div>
+                        <div className="text-yellow-800 font-semibold">
+                          {formatAUD(
+                            breakdown.estimated.traditional_costs
+                              .database_access.aud
+                          )}
+                        </div>
+                        <div className="text-xs text-yellow-600">
+                          ($
+                          {breakdown.estimated.traditional_costs.database_access.usd.toFixed(
+                            2
+                          )}{" "}
+                          USD)
+                        </div>
+                      </div>
+
+                      <div className="bg-orange-50 p-3 rounded border border-orange-200 text-center">
+                        <div className="text-sm font-medium text-orange-900">
+                          Analysis Software
+                        </div>
+                        <div className="text-orange-800 font-semibold">
+                          {formatAUD(
+                            breakdown.estimated.traditional_costs
+                              .analysis_software.aud
+                          )}
+                        </div>
+                        <div className="text-xs text-orange-600">
+                          ($
+                          {breakdown.estimated.traditional_costs.analysis_software.usd.toFixed(
+                            2
+                          )}{" "}
+                          USD)
+                        </div>
+                      </div>
+
+                      <div className="bg-indigo-50 p-3 rounded border border-indigo-200 text-center">
+                        <div className="text-sm font-medium text-indigo-900">
+                          Expert Consultation
+                        </div>
+                        <div className="text-indigo-800 font-semibold">
+                          {formatAUD(
+                            breakdown.estimated.traditional_costs
+                              .expert_consultation.aud
+                          )}
+                        </div>
+                        <div className="text-xs text-indigo-600">
+                          ($
+                          {breakdown.estimated.traditional_costs.expert_consultation.usd.toFixed(
+                            2
+                          )}{" "}
+                          USD)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actual Costs (if any) */}
+                {breakdown.actual.total_usd > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Actual Costs
+                    </h3>
+
+                    <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-medium text-red-900">
+                          Total Actual Cost
+                        </h4>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-red-800">
+                            {formatAUD(breakdown.actual.total_aud)}
+                          </div>
+                          <div className="text-sm text-red-600">
+                            (${breakdown.actual.total_usd.toFixed(2)} USD)
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        <div className="text-sm">
+                          <span className="text-red-700">AI Operations:</span>
+                          <span className="font-medium ml-1">
+                            {formatAUD(breakdown.actual.ai_operations.aud)}
+                          </span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-red-700">Other Costs:</span>
+                          <span className="font-medium ml-1">
+                            {formatAUD(breakdown.actual.other_costs.aud)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cost Optimization Suggestions */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Cost Optimization Suggestions
+                  </h3>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <ul className="space-y-2">
+                      {breakdown.optimization_suggestions.map(
+                        (suggestion: string, index: number) => (
+                          <li key={index} className="flex items-start">
+                            <span className="w-5 h-5 bg-gray-200 text-gray-700 rounded-full text-xs font-medium flex items-center justify-center mr-3 flex-shrink-0">
+                              {index + 1}
+                            </span>
+                            <span className="text-sm text-gray-700">
+                              {suggestion}
+                            </span>
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Back to Project Button - Centered in Container */}
       <div className="flex justify-center pt-4">
         <Button
           variant="outline"
-          onClick={() => navigate(getTopicDetailsPath(researchPlan.topic_id))}
+          onClick={async () => {
+            try {
+              const topic = await apiClient.getTopicById(researchPlan.topic_id)
+              navigate(getProjectDetailsPath(topic.project_id))
+            } catch (error) {
+              console.error("Failed to fetch topic:", error)
+              // Fallback to projects list if topic fetch fails
+              navigate(ROUTES.PROJECTS)
+            }
+          }}
         >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Topic
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to Project
         </Button>
       </div>
     </div>

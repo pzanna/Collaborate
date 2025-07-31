@@ -88,11 +88,12 @@ class DatabaseAgentService:
         
         # Capabilities
         self.capabilities = [
-            "create_project", "update_project", "delete_project",
-            "create_topic", "update_topic", "delete_topic", 
-            "create_research_topic", "update_research_topic", "delete_research_topic",
-            "create_plan", "create_research_plan", "update_plan", "delete_plan",
-            "create_task", "update_task", "delete_task",
+            "create_project", "update_project", "delete_project", "get_project",
+            "create_topic", "update_topic", "delete_topic", "get_topic", 
+            "create_research_topic", "update_research_topic", "delete_research_topic", "get_research_topic",
+            "create_plan", "update_plan", "delete_plan", "get_plan",
+            "create_research_plan", "update_research_plan", "delete_research_plan", "get_research_plan",
+            "create_task", "update_task", "delete_task", "get_task",
             "create_literature_record", "update_literature_record", "delete_literature_record",
             "database_operations", "data_persistence", "query_execution"
         ]
@@ -245,8 +246,19 @@ class DatabaseAgentService:
                 try:
                     data = json.loads(message)
                     logger.info(f"Received message from MCP server: {data}")
-                    await self.task_queue.put(data)
-                    logger.info("Message added to task queue")
+                    
+                    # Filter out system messages - only queue actual task requests
+                    message_type = data.get("type", "")
+                    if message_type == "task_request":
+                        await self.task_queue.put(data)
+                        logger.info("Task request added to task queue")
+                    elif message_type == "registration_confirmed":
+                        logger.info("Registration confirmed by MCP server")
+                    elif message_type == "heartbeat_ack":
+                        logger.debug("Heartbeat acknowledgment received")
+                    else:
+                        logger.info(f"Received system message type: {message_type} - not queuing as task")
+                        
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse MCP message: {e}")
                 except Exception as e:
@@ -349,9 +361,9 @@ class DatabaseAgentService:
             # Plan operations
             elif task_type == "create_plan" or task_type == "create_research_plan":
                 return await self._handle_create_plan(data)
-            elif task_type == "update_plan":
+            elif task_type == "update_plan" or task_type == "update_research_plan":
                 return await self._handle_update_plan(data)
-            elif task_type == "delete_plan":
+            elif task_type == "delete_plan" or task_type == "delete_research_plan":
                 return await self._handle_delete_plan(data)
             
             # Task operations
@@ -855,7 +867,9 @@ class DatabaseAgentService:
     
     async def _handle_delete_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle plan deletion request."""
-        return await self._generic_delete("research_plans", data.get("plan_id", ""))
+        # Support both 'id' and 'plan_id' for flexibility
+        plan_id = data.get("id") or data.get("plan_id", "")
+        return await self._generic_delete("research_plans", plan_id)
     
     async def _handle_create_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle task creation request."""

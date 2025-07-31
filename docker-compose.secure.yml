@@ -273,6 +273,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
@@ -303,6 +304,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    volumes:
+      - ./agents/literature/src:/app/src
+      - ./agents/literature/start-dev.sh:/app/start-dev.sh
+    command: ["./start-dev.sh"]
 
   # 7. Screening PRISMA Agent (Port 8004) - Security Enhanced
   screening-agent:

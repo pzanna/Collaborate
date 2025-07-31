@@ -266,7 +266,7 @@ export const apiClient = {
   async generateAIResearchPlan(
     topicId: string,
     request: GenerateAIResearchPlanRequest
-  ): Promise<GenerateAIResearchPlanResponse> {
+  ): Promise<ResearchPlan> {
     return await apiRequest(`/v2/topics/${topicId}/ai-plans`, {
       method: "POST",
       body: JSON.stringify(request),

@@ -198,8 +198,8 @@ export function ProjectDetails() {
       setError(null)
 
       const planRequest = {
-        name: `AI-Generated Research Plan for ${topic.name}`,
-        description: `Comprehensive research plan generated for the topic: ${topic.name}`,
+        name: topic.name,
+        description: topic.name,
         plan_type: "comprehensive",
       }
 
@@ -211,11 +211,11 @@ export function ProjectDetails() {
       // Update the topicPlans state with the new plan
       setTopicPlans((prev) => ({
         ...prev,
-        [topic.id]: [...(prev[topic.id] || []), response.plan],
+        [topic.id]: [...(prev[topic.id] || []), response],
       }))
 
       // Navigate to the new plan details page
-      navigate(getResearchPlanDetailsPath(response.plan.id))
+      navigate(getResearchPlanDetailsPath(response.id))
     } catch (err) {
       setError(
         err instanceof Error
@@ -396,33 +396,33 @@ export function ProjectDetails() {
         <Accordion type="multiple" className="w-full space-y-4">
           {topics.map((topic) => (
             <AccordionItem key={topic.id} value={topic.id.toString()}>
-              <AccordionTrigger>
-                <div className="flex items-center justify-between w-full">
+              <div className="flex items-center justify-between w-full">
+                <AccordionTrigger className="flex-1">
                   <span className="font-medium text-lg">{topic.name}</span>
-                  <div className="flex space-x-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openEditDialog(topic)
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteTopic(topic)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                </AccordionTrigger>
+                <div className="flex space-x-1 mr-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      openEditDialog(topic)
+                    }}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteTopic(topic)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              </AccordionTrigger>
+              </div>
               <AccordionContent>
                 <div className="space-y-3">
                   {topic.description && (

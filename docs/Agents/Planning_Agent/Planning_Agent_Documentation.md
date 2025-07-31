@@ -1262,50 +1262,40 @@ logging.getLogger('planning_agent').setLevel(logging.DEBUG)
 
 ## Cost Estimation
 
-### Sophisticated Cost Estimation System
+The Planning Agent includes a sophisticated cost estimation system providing maximum accuracy for research planning. For detailed information about cost calculation, optimization, and configuration, see the dedicated [Cost Estimation Documentation](./Cost_Estimation.md).
 
-The Planning Agent includes a sophisticated cost estimation system providing maximum accuracy for research planning:
+### Quick Overview
 
-#### Features
-
-- **Real-time Cost Tracking**: Monitor costs as they occur
-- **Provider-specific Pricing**: OpenAI and XAI pricing models
+- **Real-time Cost Tracking**: Monitor costs as operations occur
+- **Multi-provider Support**: OpenAI, XAI, and other AI providers  
 - **Complexity Assessment**: Intelligent LOW/MEDIUM/HIGH complexity scoring
-- **Token Estimation**: Detailed input/output token breakdown
+- **Cost Breakdown Analysis**: Detailed breakdown of all cost components
 - **Optimization Recommendations**: Context-aware cost reduction suggestions
-- **Threshold Monitoring**: Session and daily cost limits with alerts
-- **Multi-agent Analysis**: Cost comparison between single vs multi-agent approaches
+- **Interactive Cost Dialog**: Detailed cost breakdown with visual components
+- **Currency Support**: USD/AUD conversion with approximate exchange rates
 
-#### Cost Estimation Response
+### Cost Estimation Features
 
 ```json
 {
   "cost_breakdown": {
     "ai_operations": {
       "estimated_tokens": 35000,
-      "input_tokens": 26250,
-      "output_tokens": 8750,
-      "cost_per_1k_input": 0.00015,
-      "cost_per_1k_output": 0.0006,
       "total_ai_cost": 9.1875,
       "complexity_level": "MEDIUM",
-      "complexity_multiplier": 2.5,
       "provider": "openai",
       "model": "gpt-4o-mini"
     },
-    "summary": {
-      "ai_cost": 9.1875,
-      "traditional_cost": 0.0,
-      "total": 9.1875,
-      "currency": "USD",
-      "cost_per_day": 0.656,
-      "cost_per_agent": 2.297
+    "traditional_costs": {
+      "database_access": 465.0,
+      "analysis_software": 310.0, 
+      "expert_consultation": 775.0
     },
-    "thresholds": {
-      "session_warning": 1.0,
-      "session_limit": 5.0,
-      "daily_limit": 50.0,
-      "emergency_stop": 100.0
+    "summary": {
+      "ai_cost": 9.19,
+      "traditional_cost": 1550.0,
+      "total": 1559.19,
+      "currency": "AUD"
     },
     "optimization_suggestions": [
       "Consider breaking down into smaller sub-tasks",
@@ -1315,53 +1305,15 @@ The Planning Agent includes a sophisticated cost estimation system providing max
 }
 ```
 
-#### Cost Optimization Strategies
+### Cost Optimization Strategies
 
 1. **Single Agent Mode**: 60% cost reduction for focused tasks
-2. **Complexity Reduction**: Lower complexity scoring through query optimization
+2. **Complexity Reduction**: Lower complexity scoring through query optimization  
 3. **Token Management**: Efficient prompt design and context management
 4. **Batch Processing**: Group similar operations to reduce API calls
 5. **Caching**: Reuse previous results when applicable
 
-### Cost Configuration
-
-Cost estimation settings in `config/config.json`:
-
-```json
-{
-  "cost_settings": {
-    "token_costs": {
-      "openai": {
-        "gpt-4o-mini": {
-          "input": 0.00015,
-          "output": 0.0006
-        }
-      },
-      "xai": {
-        "grok-beta": {
-          "input": 0.0001,
-          "output": 0.0005
-        }
-      }
-    },
-    "cost_thresholds": {
-      "session_warning": 1.0,
-      "session_limit": 5.0,
-      "daily_limit": 50.0,
-      "emergency_stop": 100.0
-    },
-    "complexity_multipliers": {
-      "LOW": 1.0,
-      "MEDIUM": 2.5,
-      "HIGH": 5.0
-    }
-  },
-  "research_manager": {
-    "provider": "openai",
-    "model": "gpt-4o-mini"
-  }
-}
-```
+For complete implementation details, configuration options, troubleshooting guides, and API references, see the [Cost Estimation Documentation](./Cost_Estimation.md).
 
 ---
 

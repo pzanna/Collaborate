@@ -554,6 +554,274 @@ GET /v2/tasks/{task_id}
 - `PUT /v2/tasks/{task_id}` - Returns success but changes not persisted
 - `DELETE /v2/tasks/{task_id}` - Returns success but deletion not persisted
 
+## Cost Estimation API ✅ FULLY FUNCTIONAL
+
+The Cost Estimation API provides sophisticated cost analysis for research operations, including AI token usage, traditional research costs, and optimization recommendations.
+
+### Planning Cost Estimation ✅ VERIFIED
+
+#### Estimate Research Planning Costs
+
+```http
+POST /research/plan/estimate-costs
+```
+
+Estimates costs for research planning operations with detailed breakdown.
+
+**Request Body:**
+
+```json
+{
+  "query": "Research question or topic",
+  "context": {
+    "scope": "low|medium|high",
+    "duration_days": 14,
+    "agents": ["research_manager", "literature_agent"],
+    "parallel_execution": true,
+    "budget_limit": 50.0
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": "completed",
+  "cost_estimate": {
+    "estimated_cost": 12.75,
+    "tokens_estimated": 35000,
+    "complexity": "MEDIUM",
+    "breakdown": {
+      "ai_operations": {
+        "estimated_tokens": 35000,
+        "input_tokens": 24500,
+        "output_tokens": 10500,
+        "total_ai_cost": 2.75,
+        "complexity_level": "MEDIUM",
+        "provider": "openai",
+        "model": "gpt-4o-mini"
+      },
+      "traditional_costs": {
+        "database_access": 3.0,
+        "analysis_software": 2.0,
+        "expert_consultation": 5.0
+      },
+      "summary": {
+        "ai_cost": 2.75,
+        "traditional_cost": 10.0,
+        "total": 12.75,
+        "currency": "USD",
+        "cost_per_day": 0.91
+      }
+    },
+    "optimization_suggestions": [
+      "Consider single-agent approach for 60% cost reduction",
+      "Break down into smaller tasks to reduce complexity"
+    ]
+  },
+  "timestamp": "2025-07-31T10:30:00Z"
+}
+```
+
+### Cost Tracking ✅ VERIFIED
+
+#### Start Cost Tracking
+
+```http
+POST /research/cost/start-tracking
+```
+
+Initiates cost tracking for a research session or task.
+
+**Request Body:**
+
+```json
+{
+  "task_id": "task_123",
+  "session_id": "session_456",
+  "project_id": "proj_789"
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": "tracking_started",
+  "task_id": "task_123",
+  "session_id": "session_456",
+  "start_time": "2025-07-31T10:30:00Z"
+}
+```
+
+#### Record Usage
+
+```http
+POST /research/cost/record-usage
+```
+
+Records actual token usage and costs for operations.
+
+**Request Body:**
+
+```json
+{
+  "task_id": "task_123",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "input_tokens": 1500,
+  "output_tokens": 500,
+  "agent_type": "research_manager"
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": "usage_recorded",
+  "cost_calculated": 0.45,
+  "total_session_cost": 2.75,
+  "tokens_used": 2000,
+  "timestamp": "2025-07-31T10:30:00Z"
+}
+```
+
+#### Get Cost Summary
+
+```http
+GET /research/cost/summary/{session_id}
+```
+
+Retrieves detailed cost summary for a research session.
+
+**Response:**
+
+```json
+{
+  "session_id": "session_456",
+  "total_cost": 15.25,
+  "total_tokens": 42000,
+  "active_tasks": 3,
+  "currency": "USD",
+  "start_time": "2025-07-31T10:00:00Z",
+  "duration_minutes": 125.5,
+  "usage_breakdown": [
+    {
+      "task_id": "task_123",
+      "cost": 5.25,
+      "tokens": 15000,
+      "duration": 45.2,
+      "providers": {
+        "openai": {"tokens": 15000, "cost": 5.25}
+      },
+      "agents": {
+        "research_manager": {"tokens": 15000, "cost": 5.25}
+      }
+    }
+  ],
+  "cost_thresholds": {
+    "session_warning": 1.0,
+    "session_limit": 5.0,
+    "daily_limit": 50.0,
+    "status": "within_limits"
+  },
+  "optimization_recommendations": [
+    "Consider using single-agent mode for simpler tasks",
+    "Enable caching to reduce redundant API calls"
+  ]
+}
+```
+
+### Currency Conversion ✅ VERIFIED
+
+#### Get Exchange Rates
+
+```http
+GET /research/cost/exchange-rates
+```
+
+Returns current exchange rates for cost calculations.
+
+**Response:**
+
+```json
+{
+  "base_currency": "USD",
+  "rates": {
+    "AUD": 1.55,
+    "EUR": 0.92,
+    "GBP": 0.79
+  },
+  "last_updated": "2025-07-31T10:00:00Z"
+}
+```
+
+### Cost Optimization ✅ VERIFIED
+
+#### Get Optimization Recommendations
+
+```http
+POST /research/cost/optimize
+```
+
+Analyzes current usage patterns and provides cost optimization suggestions.
+
+**Request Body:**
+
+```json
+{
+  "current_costs": {
+    "daily_usage": 25.50,
+    "session_costs": [5.25, 8.75, 11.50],
+    "complexity_distribution": {
+      "low": 0.3,
+      "medium": 0.5,
+      "high": 0.2
+    }
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "optimization_analysis": {
+    "potential_savings": 15.75,
+    "savings_percentage": 38.2,
+    "recommendations": [
+      {
+        "strategy": "single_agent_mode",
+        "potential_saving": 9.50,
+        "impact": "60% cost reduction for focused tasks"
+      },
+      {
+        "strategy": "complexity_reduction",
+        "potential_saving": 4.25,
+        "impact": "Optimize query structure to reduce complexity scoring"
+      },
+      {
+        "strategy": "batch_processing",
+        "potential_saving": 2.00,
+        "impact": "Group similar operations to reduce API calls"
+      }
+    ]
+  },
+  "cost_breakdown_analysis": {
+    "highest_cost_operations": [
+      "comprehensive_research_planning",
+      "multi_agent_parallel_execution"
+    ],
+    "optimization_opportunities": [
+      "Enable caching for repeated queries",
+      "Use sequential execution for non-time-critical tasks"
+    ]
+  }
+}
+```
+
 ## Data Models
 
 ### Project
