@@ -411,7 +411,7 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata 
+                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata, plan_structure, plan_approved, estimated_cost, actual_cost
                     FROM research_plans 
                     WHERE id = $1
                 """
@@ -426,6 +426,23 @@ class NativeDatabaseClient:
                         except:
                             metadata = {}
                     
+                    # Parse plan_structure from database
+                    plan_structure = row.get('plan_structure')
+                    if plan_structure is None:
+                        plan_structure = {}
+                    elif isinstance(plan_structure, str):
+                        try:
+                            plan_structure = json.loads(plan_structure)
+                        except Exception as e:
+                            print(f"DEBUG: Failed to parse plan_structure string: {e}")
+                            plan_structure = {}
+                    elif isinstance(plan_structure, dict):
+                        # JSONB column returns dict directly
+                        plan_structure = plan_structure
+                    else:
+                        print(f"DEBUG: Unexpected plan_structure type: {type(plan_structure)}")
+                        plan_structure = {}
+                    
                     return {
                         "id": str(row['id']),
                         "topic_id": str(row['topic_id']) if row['topic_id'] else None,
@@ -433,15 +450,15 @@ class NativeDatabaseClient:
                         "description": row['description'] or "",
                         "plan_type": row.get('plan_type', 'comprehensive'),
                         "status": row.get('status', 'active'),
-                        "plan_approved": False,  # Default approval status  
+                        "plan_approved": row.get('plan_approved', False),
                         "created_at": row['created_at'].isoformat() if row['created_at'] else None,
                         "updated_at": row['updated_at'].isoformat() if row['updated_at'] else None,
-                        "estimated_cost": 0.0,  # Default cost values
-                        "actual_cost": 0.0,
+                        "estimated_cost": row.get('estimated_cost', 0.0),
+                        "actual_cost": row.get('actual_cost', 0.0),
                         "tasks_count": 0,  # Count fields
                         "completed_tasks": 0,
                         "progress": 0.0,
-                        "plan_structure": {},  # Additional fields
+                        "plan_structure": plan_structure,
                         "metadata": metadata
                     }
                 return None

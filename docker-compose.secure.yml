@@ -21,6 +21,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
@@ -53,6 +54,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    volumes:
+      - ./services/api-gateway/src:/app/src
+      - ./services/api-gateway/native_database_client.py:/app/native_database_client.py
+      - ./services/api-gateway/v2_hierarchical_api.py:/app/v2_hierarchical_api.py
+      - ./services/api-gateway/main.py:/app/main.py
+      - ./services/api-gateway/mcp_client.py:/app/mcp_client.py
+    command: ["./start-dev.sh"]
 
   # 2. Enhanced MCP Server Service (Port 9000) - Security Enhanced
   mcp-server:
@@ -121,6 +129,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
@@ -145,6 +154,10 @@ services:
     # Security: Prevent privilege escalation
     security_opt:
       - no-new-privileges:true
+    volumes:
+      - ./services/ai-service/src:/app/src
+      - ./services/ai-service/start-dev.sh:/app/start-dev.sh
+    command: ["./start-dev.sh"]
 
   # All Agent Services with Enhanced Security
 
@@ -163,6 +176,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
@@ -193,6 +207,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    volumes:
+      - ./agents/planning/src:/app/src
+      - ./agents/planning/start-dev.sh:/app/start-dev.sh
+    command: ["./start-dev.sh"]
 
   # 5. Research Manager Agent (Port 8002) - Security Enhanced
   research-manager-agent:
@@ -255,6 +273,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
@@ -285,6 +304,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    volumes:
+      - ./agents/literature/src:/app/src
+      - ./agents/literature/start-dev.sh:/app/start-dev.sh
+    command: ["./start-dev.sh"]
 
   # 7. Screening PRISMA Agent (Port 8004) - Security Enhanced
   screening-agent:
@@ -348,6 +371,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
@@ -379,6 +403,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    volumes:
+      - ./agents/database/src:/app/src
+      - ./agents/database/start-dev.sh:/app/start-dev.sh
+    command: ["./start-dev.sh"]
 
   # 9. Executor Agent (Port 8008) - Security Enhanced
   executor-agent:

@@ -11,12 +11,13 @@ This module provides a containerized Database Agent that handles:
 ARCHITECTURE COMPLIANCE:
 - ONLY exposes health check API endpoint (/health)
 - ALL business operations via MCP protocol exclusively
-- NO direct HTTP/REST endpoints for business logic
+- NO direct HTTP/REST endpoints for business logic.
 """
 
 import asyncio
 import json
 import logging
+import traceback
 import uuid
 import sys
 from datetime import datetime
@@ -87,11 +88,12 @@ class DatabaseAgentService:
         
         # Capabilities
         self.capabilities = [
-            "create_project", "update_project", "delete_project",
-            "create_topic", "update_topic", "delete_topic", 
-            "create_research_topic", "update_research_topic", "delete_research_topic",
-            "create_plan", "create_research_plan", "update_plan", "delete_plan",
-            "create_task", "update_task", "delete_task",
+            "create_project", "update_project", "delete_project", "get_project",
+            "create_topic", "update_topic", "delete_topic", "get_topic", 
+            "create_research_topic", "update_research_topic", "delete_research_topic", "get_research_topic",
+            "create_plan", "update_plan", "delete_plan", "get_plan",
+            "create_research_plan", "update_research_plan", "delete_research_plan", "get_research_plan",
+            "create_task", "update_task", "delete_task", "get_task",
             "create_literature_record", "update_literature_record", "delete_literature_record",
             "database_operations", "data_persistence", "query_execution"
         ]
@@ -244,8 +246,19 @@ class DatabaseAgentService:
                 try:
                     data = json.loads(message)
                     logger.info(f"Received message from MCP server: {data}")
-                    await self.task_queue.put(data)
-                    logger.info("Message added to task queue")
+                    
+                    # Filter out system messages - only queue actual task requests
+                    message_type = data.get("type", "")
+                    if message_type == "task_request":
+                        await self.task_queue.put(data)
+                        logger.info("Task request added to task queue")
+                    elif message_type == "registration_confirmed":
+                        logger.info("Registration confirmed by MCP server")
+                    elif message_type == "heartbeat_ack":
+                        logger.debug("Heartbeat acknowledgment received")
+                    else:
+                        logger.info(f"Received system message type: {message_type} - not queuing as task")
+                        
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse MCP message: {e}")
                 except Exception as e:
@@ -348,9 +361,9 @@ class DatabaseAgentService:
             # Plan operations
             elif task_type == "create_plan" or task_type == "create_research_plan":
                 return await self._handle_create_plan(data)
-            elif task_type == "update_plan":
+            elif task_type == "update_plan" or task_type == "update_research_plan":
                 return await self._handle_update_plan(data)
-            elif task_type == "delete_plan":
+            elif task_type == "delete_plan" or task_type == "delete_research_plan":
                 return await self._handle_delete_plan(data)
             
             # Task operations
@@ -451,10 +464,6 @@ class DatabaseAgentService:
     
     async def _handle_update_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle project update request - supports multiple data formats."""
-        logger.error("🚨🚨🚨 ABSOLUTELY CRITICAL ERROR: _handle_update_project was called! 🚨🚨🚨")
-        logger.error("🔥🔥🔥 FORCE REBUILD TEST - THIS SHOULD APPEAR IN LOGS! 🔥🔥🔥")
-        print("🚨 PRINT: _handle_update_project method entry 🚨")
-        print("🔥 PRINT: FORCE REBUILD TEST - THIS SHOULD ALSO APPEAR! 🔥")
         logger.info(f"🔍 ABSOLUTELY FIRST LINE: Received data: {data}")
         try:
             if not self.db_pool:
@@ -783,6 +792,10 @@ class DatabaseAgentService:
             description = data.get("description", "")
             plan_type = data.get("plan_type", "comprehensive") 
             status = data.get("status", "draft")
+            plan_approved = data.get("plan_approved", False)
+            estimated_cost = data.get("estimated_cost", 0.0)
+            actual_cost = data.get("actual_cost", 0.0)
+            plan_structure = data.get("plan_structure", {})
             metadata = data.get("metadata", {})
             
             # Validate required fields
@@ -802,11 +815,30 @@ class DatabaseAgentService:
             else:
                 metadata_json = metadata
             
+            # Convert plan_structure to JSON string if it's a dict or parse it if it's a string
+            if isinstance(plan_structure, str):
+                try:
+                    plan_structure_json = json.loads(plan_structure)
+                except json.JSONDecodeError:
+                    plan_structure_json = {}
+            else:
+                plan_structure_json = plan_structure
+            
+            # Debug logging to check values
+            logger.info(f"Creating plan with plan_structure type: {type(plan_structure)}")
+            logger.info(f"plan_structure_json type: {type(plan_structure_json)}")
+            logger.info(f"plan_structure content preview: {str(plan_structure_json)[:200]}...")
+            
             async with self.db_pool.acquire() as conn:
+                logger.info(f"Executing INSERT for plan {plan_id} with plan_structure length: {len(json.dumps(plan_structure_json))}")
                 await conn.execute("""
-                    INSERT INTO research_plans (id, topic_id, name, description, plan_type, status, created_at, updated_at, metadata)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                """, plan_id, topic_id, name, description, plan_type, status, datetime.now(), datetime.now(), json.dumps(metadata_json))
+                    INSERT INTO research_plans (id, topic_id, name, description, plan_type, status, plan_approved, 
+                                              estimated_cost, actual_cost, plan_structure, metadata, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                """, plan_id, topic_id, name, description, plan_type, status, plan_approved, 
+                estimated_cost, actual_cost, json.dumps(plan_structure_json), json.dumps(metadata_json), 
+                datetime.now(), datetime.now())
+                logger.info(f"Successfully executed INSERT for plan {plan_id}")
             
             self.operations_completed += 1
             
@@ -816,7 +848,7 @@ class DatabaseAgentService:
                 "name": name,
                 "topic_id": topic_id,
                 "plan_type": plan_type,
-                "status": status,
+                "plan_status": status,
                 "timestamp": datetime.now().isoformat()
             }
             
@@ -835,7 +867,9 @@ class DatabaseAgentService:
     
     async def _handle_delete_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle plan deletion request."""
-        return await self._generic_delete("research_plans", data.get("plan_id", ""))
+        # Support both 'id' and 'plan_id' for flexibility
+        plan_id = data.get("id") or data.get("plan_id", "")
+        return await self._generic_delete("research_plans", plan_id)
     
     async def _handle_create_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle task creation request."""

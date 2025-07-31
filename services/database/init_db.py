@@ -191,10 +191,14 @@ async def initialize_schema():
                 name VARCHAR(255) NOT NULL,
                 description TEXT,
                 plan_type VARCHAR(50) DEFAULT 'comprehensive',
-                status VARCHAR(50) DEFAULT 'active',
+                status VARCHAR(50) DEFAULT 'draft',
+                plan_approved BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                metadata JSONB DEFAULT '{}'
+                estimated_cost DECIMAL(10,2) DEFAULT 0.0,
+                actual_cost DECIMAL(10,2) DEFAULT 0.0,
+                metadata JSONB DEFAULT '{}',
+                plan_structure JSONB DEFAULT '{}'
             )
         """)
         
@@ -413,6 +417,39 @@ async def create_sample_data():
         raise
 
 
+async def run_migrations():
+    """Run database migrations to update existing schemas."""
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        
+        logger.info("Running database migrations...")
+        
+        # Check if plan_structure column exists
+        column_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='research_plans' AND column_name='plan_structure'
+            )
+        """)
+        
+        if not column_exists:
+            logger.info("Adding plan_structure column to research_plans table...")
+            await conn.execute("""
+                ALTER TABLE research_plans 
+                ADD COLUMN plan_structure JSONB DEFAULT NULL
+            """)
+            logger.info("Successfully added plan_structure column")
+        else:
+            logger.info("plan_structure column already exists")
+        
+        await conn.close()
+        logger.info("Database migrations completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Failed to run migrations: {e}")
+        raise
+
+
 async def verify_schema():
     """Verify that all required tables exist and have the correct structure."""
     try:
@@ -509,6 +546,9 @@ async def main():
         
         # Initialize schema
         await initialize_schema()
+        
+        # Run migrations
+        await run_migrations()
         
         # Create sample data if requested and database is empty
         if os.getenv("CREATE_SAMPLE_DATA", "false").lower() == "true":

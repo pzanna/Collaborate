@@ -1,5 +1,6 @@
 # API Gateway Service - SECURITY HARDENED with Alpine
-FROM python:3.12-alpine
+# Base stage
+FROM python:3.12-alpine AS base
 
 # Security: Set build arguments for better control
 ARG SERVICE_PORT=8001
@@ -47,9 +48,11 @@ COPY . .
 # Security: Set strict file permissions and ownership
 RUN chown -R apigateway:apigateway /app && \
     chmod -R 750 /app && \
+    chmod 750 /app/start.sh /app/start-dev.sh && \
     chmod 640 /app/*.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
-    find /app -type f -exec chmod 640 {} \;
+    find /app -type f -exec chmod 640 {} \; && \
+    chmod 750 /app/start.sh /app/start-dev.sh
 
 # Security: Create writable temp directory for application
 RUN mkdir -p /app/tmp && \
@@ -62,10 +65,16 @@ USER apigateway
 # Expose port
 EXPOSE 8001
 
-# Security: Enhanced health check with timeout
+# Production stage (default)
+FROM base AS production
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
-
-# Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["python", "-u", "main.py"]
+
+# Development stage
+FROM base AS development
+HEALTHCHECK --interval=60s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["./start-dev.sh"]

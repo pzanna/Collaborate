@@ -1,5 +1,6 @@
 """V2 API endpoints for hierarchical research structure - Clean Implementation for API Gateway Service."""
 
+import asyncio
 import json
 import logging
 from typing import List, Optional
@@ -764,6 +765,210 @@ async def create_research_plan(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@v2_router.post("/topics/{topic_id}/ai-plans", response_model=ResearchPlanResponse)
+async def generate_ai_research_plan(
+    plan_request: ResearchPlanRequest,
+    topic_id: str = Path(..., description="Topic ID"),
+    db=Depends(get_database),
+    mcp_client=Depends(get_mcp_client),
+):
+    """Generate an AI-powered research plan within a topic."""
+    try:
+        # First check if topic exists
+        existing_topic = await db.get_research_topic(topic_id)
+        if not existing_topic:
+            raise HTTPException(status_code=404, detail="Research topic not found")
+
+        # Generate ID and timestamps
+        plan_id = str(uuid4())
+        now = datetime.utcnow()
+
+        # Step 1: Get cost estimate from Planning Agent
+        cost_estimate_data = {
+            "task_id": str(uuid4()),
+            "context_id": f"cost-estimate-{plan_id}",
+            "agent_type": "planning",
+            "action": "cost_estimation",
+            "payload": {
+                "query": plan_request.description or f"Research plan for {plan_request.name}",
+                "scope": "medium",
+                "duration_days": 14,
+                "agents": ["planning"],
+                "context": {
+                    "topic_name": existing_topic.get("name", ""),
+                    "project_context": existing_topic.get("description", "")
+                }
+            }
+        }
+
+        cost_estimate = None
+        if mcp_client and mcp_client.is_connected:
+            success = await mcp_client.send_research_action(cost_estimate_data)
+            if success:
+                # Wait for actual Planning Agent cost estimation response
+                logger.info(f"Waiting for Planning Agent cost estimation for task {cost_estimate_data['task_id']}")
+                try:
+                    cost_result = await mcp_client.wait_for_task_result(
+                        cost_estimate_data['task_id'], 
+                        timeout=30  # 30 seconds timeout for cost estimation
+                    )
+                    
+                    if cost_result and cost_result.get("status") == "completed" and cost_result.get("result"):
+                        # Extract cost estimate from Planning Agent response
+                        agent_response = cost_result["result"]
+                        if isinstance(agent_response, dict) and "result" in agent_response:
+                            cost_breakdown = agent_response["result"]
+                            if "cost_breakdown" in cost_breakdown:
+                                cost_data = cost_breakdown["cost_breakdown"]
+                                cost_estimate = {
+                                    "estimated_cost": cost_data.get("summary", {}).get("total", 5.0),
+                                    "complexity": cost_data.get("ai_operations", {}).get("complexity_level", "MEDIUM"),
+                                    "optimization_suggestions": cost_data.get("cost_optimization", {}).get("suggestions", [])
+                                }
+                                logger.info("Successfully received cost estimate from Planning Agent")
+                            else:
+                                # Fallback parsing
+                                cost_estimate = {
+                                    "estimated_cost": agent_response.get("estimated_cost", 5.0),
+                                    "complexity": agent_response.get("complexity", "MEDIUM"),
+                                    "optimization_suggestions": agent_response.get("optimization_suggestions", [])
+                                }
+                        else:
+                            logger.warning("Unexpected cost estimation response format")
+                            cost_estimate = {"estimated_cost": 5.0, "complexity": "MEDIUM"}
+                    else:
+                        logger.warning(f"Cost estimation task failed or timed out: {cost_result}")
+                        cost_estimate = {"estimated_cost": 5.0, "complexity": "MEDIUM"}
+                        
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout waiting for cost estimation for task {cost_estimate_data['task_id']}")
+                    cost_estimate = {"estimated_cost": 5.0, "complexity": "MEDIUM"}
+            else:
+                logger.warning("Failed to send cost estimate request, proceeding with default")
+                cost_estimate = {"estimated_cost": 5.0, "complexity": "MEDIUM"}
+
+        # Step 2: Generate AI research plan
+        ai_plan_data = {
+            "task_id": str(uuid4()),  
+            "context_id": f"ai-plan-{plan_id}",
+            "agent_type": "planning",
+            "action": "plan_research",
+            "payload": {
+                "query": plan_request.description or f"Create a comprehensive research plan for {plan_request.name}",
+                "scope": "comprehensive",
+                "context": {
+                    "topic_name": existing_topic.get("name", ""),
+                    "topic_description": existing_topic.get("description", ""),
+                    "plan_name": plan_request.name,
+                    "cost_budget": cost_estimate.get("estimated_cost", 10.0) if cost_estimate else 10.0
+                }
+            }
+        }
+
+        # Send AI plan generation request and wait for real response
+        ai_plan_result = None
+        if mcp_client and mcp_client.is_connected:
+            success = await mcp_client.send_research_action(ai_plan_data)
+            if success:
+                # Wait for actual Planning Agent response (with timeout)
+                logger.info(f"Waiting for Planning Agent to generate plan for task {ai_plan_data['task_id']}")
+                try:
+                    task_result = await mcp_client.wait_for_task_result(
+                        ai_plan_data['task_id'], 
+                        timeout=60  # 60 seconds timeout for AI generation
+                    )
+                    
+                    if task_result and task_result.get("status") == "completed" and task_result.get("result"):
+                        # Extract the plan from the Planning Agent response
+                        agent_response = task_result["result"]
+                        if isinstance(agent_response, dict) and "result" in agent_response:
+                            agent_plan_data = agent_response["result"]
+                            if "plan" in agent_plan_data:
+                                ai_plan_result = agent_plan_data["plan"]
+                                logger.info("Successfully received AI-generated plan from Planning Agent")
+                            else:
+                                logger.warning("Planning Agent response missing 'plan' field")
+                                ai_plan_result = agent_plan_data  # Use the full result as plan
+                        else:
+                            logger.warning("Unexpected Planning Agent response format")
+                            ai_plan_result = agent_response
+                    else:
+                        logger.error(f"Planning Agent task failed: {task_result}")
+                        raise HTTPException(status_code=503, detail="Planning Agent failed to generate plan")
+                        
+                except asyncio.TimeoutError:
+                    logger.error(f"Timeout waiting for Planning Agent response for task {ai_plan_data['task_id']}")
+                    raise HTTPException(status_code=504, detail="Timeout waiting for AI plan generation")
+            else:
+                raise HTTPException(status_code=503, detail="Failed to send plan generation request to Planning Agent")
+
+        # Step 3: Create plan with AI-generated structure
+        plan_data = {
+            "id": plan_id,
+            "topic_id": topic_id,
+            "name": plan_request.name,
+            "description": plan_request.description or "",
+            "plan_type": plan_request.plan_type,
+            "status": "draft",
+            "plan_approved": False,
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "estimated_cost": cost_estimate.get("estimated_cost", 5.0) if cost_estimate else 5.0,
+            "actual_cost": 0.0,
+            "plan_structure": json.dumps(ai_plan_result or {}),
+            "metadata": json.dumps({
+                "ai_generated": True,
+                "ai_model_used": "gpt-4o-mini",
+                "generation_cost": cost_estimate.get("estimated_cost", 5.0) if cost_estimate else 5.0,
+                "generation_timestamp": now.isoformat(),
+                "confidence_score": 0.85,
+                "cost_estimate": cost_estimate,
+                **(plan_request.metadata or {})
+            }),
+        }
+
+        # Send plan creation via MCP
+        if mcp_client and mcp_client.is_connected:
+            task_data = {
+                "task_id": str(uuid4()),
+                "context_id": f"plan-{plan_id}",
+                "agent_type": "database",
+                "action": "create_research_plan",
+                "payload": plan_data
+            }
+            success = await mcp_client.send_research_action(task_data)
+            if not success:
+                raise HTTPException(status_code=503, detail="Failed to save AI-generated plan to database")
+
+        # Return the AI-generated plan data
+        plan_response_data = {
+            **plan_data,
+            "tasks_count": 0,
+            "completed_tasks": 0,
+            "progress": 0.0,
+            "plan_structure": ai_plan_result or {},
+            "metadata": {
+                "ai_generated": True,
+                "ai_model_used": "gpt-4o-mini", 
+                "generation_cost": cost_estimate.get("estimated_cost", 5.0) if cost_estimate else 5.0,
+                "generation_timestamp": now.isoformat(),
+                "confidence_score": 0.85,
+                "cost_estimate": cost_estimate,
+                **(plan_request.metadata or {})
+            }
+        }
+
+        return ResearchPlanResponse(**plan_response_data)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error generating AI research plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate AI research plan: {str(e)}")
 
 
 @v2_router.get("/topics/{topic_id}/plans", response_model=List[ResearchPlanResponse])
