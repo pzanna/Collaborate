@@ -17,6 +17,7 @@ ARCHITECTURE COMPLIANCE:
 import asyncio
 import json
 import logging
+import re
 import traceback
 import uuid
 import sys
@@ -293,10 +294,13 @@ class DatabaseAgentService:
 
                 # Send result back to MCP server
                 if self.websocket and self.mcp_connected:
+                    # Convert any datetime objects in result to ISO strings for JSON serialization
+                    serializable_result = _make_json_serializable(result)
+                    
                     response = {
                         "type": "task_result",
                         "task_id": task_data.get("task_id"),
-                        "result": result,
+                        "result": serializable_result,
                         "status": "completed",
                         "timestamp": datetime.now().isoformat()
                     }
@@ -1161,6 +1165,8 @@ class DatabaseAgentService:
                     ORDER BY created_at DESC
                 """, plan_id)
                 
+                # logger.info(f"Retrieved search term optimizations for plan {plan_id} - {results}")
+
                 optimizations = []
                 for result in results:
                     optimization = dict(result)
@@ -1638,6 +1644,17 @@ app = create_health_check_app(
     get_mcp_status=get_mcp_status,
     get_additional_metadata=get_additional_metadata
 )
+
+def _make_json_serializable(obj):
+    """Convert datetime objects to ISO strings for JSON serialization."""
+    if isinstance(obj, dict):
+        return {key: _make_json_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [_make_json_serializable(item) for item in obj]
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    else:
+        return obj
 
 
 async def main():
