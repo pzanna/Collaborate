@@ -6,7 +6,8 @@
 #
 # Cleanly stops all development services and performs cleanup
 #
-# This script stops all Docker Compose services started by start_dev.sh,
+# This script stops all Docker Compose services started by start_dev.sh using
+# the development configuration with file watching and debug features,
 # removes orphaned containers, and cleans up any dangling resources.
 # 
 # Services Stopped:
@@ -64,7 +65,7 @@ print_info() {
 # Gracefully stop all Docker Compose services
 # This sends SIGTERM to containers, allowing them to shutdown cleanly
 print_info "Stopping all services..."
-docker compose -f docker-compose.secure.yml down --remove-orphans
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml down --remove-orphans
 
 # Stop any remaining Eunice containers that might be running independently
 print_info "Stopping any remaining Eunice containers..."

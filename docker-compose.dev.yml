@@ -6,7 +6,7 @@ services:
     build:
       context: ./services/api-gateway
       target: development
-    command: ["tini", "--", "./start-dev.sh"]
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
     environment:
       - LOG_LEVEL=DEBUG
       - DEVELOPMENT_MODE=true
@@ -17,6 +17,45 @@ services:
       - ./services/api-gateway/main.py:/app/main.py:ro
       - ./services/api-gateway/config.py:/app/config.py:ro
       - ./services/api-gateway/mcp_client.py:/app/mcp_client.py:ro
+    # Remove read-only constraints for development
+    read_only: false
+    tmpfs: []
+
+  # MCP Server development configuration
+  mcp-server:
+    build:
+      context: ./services/mcp-server
+      target: development
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT_MODE=true
+      - WATCHFILES_FORCE_POLLING=1
+    volumes:
+      # Mount source code for development
+      - ./services/mcp-server/mcp_server.py:/app/mcp_server.py:ro
+      - ./services/mcp-server/config.py:/app/config.py:ro
+      - ./services/mcp-server/start-dev.sh:/app/start-dev.sh:ro
+    # Remove read-only constraints for development
+    read_only: false
+    tmpfs: []
+
+  # Research Manager Agent development configuration
+  research-manager-agent:
+    build:
+      context: ./agents/research-manager
+      target: development
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT_MODE=true
+      - WATCHFILES_FORCE_POLLING=1
+    volumes:
+      # Mount source code for development
+      - ./agents/research-manager/src:/app/src:ro
+      - ./agents/research-manager/config:/app/config:ro
+      - ./agents/research-manager/health_check_service.py:/app/health_check_service.py:ro
+      - ./agents/research-manager/start-dev.sh:/app/start-dev.sh:ro
     # Remove read-only constraints for development
     read_only: false
     tmpfs: []

@@ -56,18 +56,14 @@ services:
       - redis
       - postgres
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import socket; s = socket.socket(); s.connect(('localhost', 9000)); s.close()",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+    # Health check disabled to prevent WebSocket 400 Bad Request errors
+    # The health check was making raw TCP connections instead of proper WebSocket connections
+    # healthcheck:
+    #   test: ["CMD", "python", "health_check.py"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 15s
 
   # 3. AI Service (Pure MCP Client)
   ai-service:
@@ -138,6 +134,7 @@ services:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=literature
       - LOG_LEVEL=INFO
+      - CORE_API_KEY=${CORE_API_KEY}
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1

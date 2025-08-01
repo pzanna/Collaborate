@@ -17,6 +17,7 @@ ARCHITECTURE COMPLIANCE:
 import asyncio
 import json
 import logging
+import re
 import traceback
 import uuid
 import sys
@@ -95,6 +96,8 @@ class DatabaseAgentService:
             "create_research_plan", "update_research_plan", "delete_research_plan", "get_research_plan",
             "create_task", "update_task", "delete_task", "get_task",
             "create_literature_record", "update_literature_record", "delete_literature_record",
+            "create_search_term_optimization", "update_search_term_optimization", "delete_search_term_optimization", "get_search_term_optimization",
+            "get_search_terms_for_plan", "get_search_terms_for_task", "store_optimized_search_terms",
             "database_operations", "data_persistence", "query_execution"
         ]
         
@@ -291,10 +294,13 @@ class DatabaseAgentService:
 
                 # Send result back to MCP server
                 if self.websocket and self.mcp_connected:
+                    # Convert any datetime objects in result to ISO strings for JSON serialization
+                    serializable_result = _make_json_serializable(result)
+                    
                     response = {
                         "type": "task_result",
                         "task_id": task_data.get("task_id"),
-                        "result": result,
+                        "result": serializable_result,
                         "status": "completed",
                         "timestamp": datetime.now().isoformat()
                     }
@@ -381,6 +387,22 @@ class DatabaseAgentService:
                 return await self._handle_update_literature_record(data)
             elif task_type == "delete_literature_record":
                 return await self._handle_delete_literature_record(data)
+            
+            # Search term optimization operations
+            elif task_type == "create_search_term_optimization":
+                return await self._handle_create_search_term_optimization(data)
+            elif task_type == "update_search_term_optimization":
+                return await self._handle_update_search_term_optimization(data)
+            elif task_type == "delete_search_term_optimization":
+                return await self._handle_delete_search_term_optimization(data)
+            elif task_type == "get_search_term_optimization":
+                return await self._handle_get_search_term_optimization(data)
+            elif task_type == "get_search_terms_for_plan":
+                return await self._handle_get_search_terms_for_plan(data)
+            elif task_type == "get_search_terms_for_task":
+                return await self._handle_get_search_terms_for_task(data)
+            elif task_type == "store_optimized_search_terms":
+                return await self._handle_store_optimized_search_terms(data)
             
             # Generic database operations
             elif task_type == "database_operations":
@@ -932,39 +954,79 @@ class DatabaseAgentService:
             }
     
     async def _handle_update_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle task update request."""
-        return await self._generic_update("tasks", data)
+        """Handle research task update request (use research_tasks table)."""
+        return await self._generic_update("research_tasks", data)
     
     async def _handle_delete_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle task deletion request."""
-        return await self._generic_delete("tasks", data.get("task_id", ""))
+        """Handle research task deletion request (use research_tasks table)."""
+        return await self._generic_delete("research_tasks", data.get("task_id", ""))
     
     async def _handle_create_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle literature record creation request."""
+        """Handle literature record creation request with full field support."""
         try:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
+            # Extract all literature record fields
             title = data.get("title", "")
             authors = data.get("authors", [])
             project_id = data.get("project_id", "")
-            metadata_json = data.get("metadata", {})
+            doi = data.get("doi")
+            pmid = data.get("pmid")
+            arxiv_id = data.get("arxiv_id")
+            year = data.get("year")
+            journal = data.get("journal")
+            abstract = data.get("abstract")
+            url = data.get("url")
+            source = data.get("source")
+            publication_type = data.get("publication_type")
+            mesh_terms = data.get("mesh_terms", [])
+            categories = data.get("categories", [])
+            metadata = data.get("metadata", {})
             
-            if not all([title, project_id]):
+            # Handle citation count conversion to integer
+            citation_count = data.get("citation_count", 0)
+            if citation_count is not None:
+                try:
+                    citation_count = int(citation_count) if citation_count != "" else None
+                except (ValueError, TypeError):
+                    citation_count = None
+            
+            # Validate required fields
+            if not title or not project_id:
                 return {
                     "status": "failed",
                     "error": "Title and project ID are required",
                     "timestamp": datetime.now().isoformat()
                 }
             
-            record_id = str(uuid.uuid4())
-            
+            # Check if project exists before creating literature record
             async with self.db_pool.acquire() as conn:
+                project_exists = await conn.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM projects WHERE id = $1)", project_id
+                )
+                if not project_exists:
+                    return {
+                        "status": "failed",
+                        "error": f"Project with ID {project_id} does not exist",
+                        "timestamp": datetime.now().isoformat()
+                    }
+            
+                record_id = str(uuid.uuid4())
+                now = datetime.now()
+                
+                # Use the existing connection for the insert
                 await conn.execute("""
-                    INSERT INTO literature_records (id, title, authors, project_id, metadata, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                """, record_id, title, json.dumps(authors), project_id, json.dumps(metadata_json), 
-                     datetime.now(), datetime.now())
+                    INSERT INTO literature_records (
+                        id, title, authors, project_id, doi, pmid, arxiv_id, year, 
+                        journal, abstract, url, citation_count, source, publication_type,
+                        mesh_terms, categories, created_at, updated_at, metadata
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                """, 
+                    record_id, title, json.dumps(authors), project_id, doi, pmid, arxiv_id, year,
+                    journal, abstract, url, citation_count, source, publication_type,
+                    json.dumps(mesh_terms), json.dumps(categories), now, now, json.dumps(metadata)
+                )
             
             self.operations_completed += 1
             
@@ -973,6 +1035,7 @@ class DatabaseAgentService:
                 "record_id": record_id,
                 "title": title,
                 "project_id": project_id,
+                "source": source,
                 "timestamp": datetime.now().isoformat()
             }
             
@@ -992,6 +1055,306 @@ class DatabaseAgentService:
     async def _handle_delete_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle literature record deletion request."""
         return await self._generic_delete("literature_records", data.get("record_id", ""))
+    
+    # Search Term Optimization Handlers
+    async def _handle_create_search_term_optimization(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle search term optimization creation request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            # Extract search term optimization data
+            source_type = data.get("source_type", "")  # 'plan' or 'task'
+            source_id = data.get("source_id", "")
+            original_query = data.get("original_query", "")
+            optimized_terms = data.get("optimized_terms", [])
+            optimization_context = data.get("optimization_context", {})
+            target_databases = data.get("target_databases", [])
+            expires_at = data.get("expires_at")
+            expires_at = datetime.fromisoformat(expires_at) if expires_at else None
+            metadata = data.get("metadata", {})
+            
+            if not source_type or not source_id or not original_query or not optimized_terms:
+                return {
+                    "status": "failed",
+                    "error": "source_type, source_id, original_query, and optimized_terms are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            if source_type not in ["plan", "task"]:
+                return {
+                    "status": "failed",
+                    "error": "source_type must be 'plan' or 'task'",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Generate UUID for search term optimization
+            optimization_id = str(uuid.uuid4())
+            now = datetime.now()
+            
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO search_term_optimizations (
+                        id, source_type, source_id, original_query, optimized_terms, 
+                        optimization_context, target_databases, created_at, updated_at, 
+                        expires_at, metadata
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                """, 
+                    optimization_id, source_type, source_id, original_query,
+                    json.dumps(optimized_terms), json.dumps(optimization_context),
+                    json.dumps(target_databases), now, now, expires_at,
+                    json.dumps(metadata)
+                )
+                
+                self.operations_completed += 1
+                
+                return {
+                    "status": "completed",
+                    "optimization_id": optimization_id,
+                    "source_type": source_type,
+                    "source_id": source_id,
+                    "optimized_terms": optimized_terms,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to create search term optimization: {e}")
+            self.operations_failed += 1
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_update_search_term_optimization(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle search term optimization update request."""
+        return await self._generic_update("search_term_optimizations", data)
+    
+    async def _handle_delete_search_term_optimization(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle search term optimization deletion request."""
+        return await self._generic_delete("search_term_optimizations", data.get("optimization_id", ""))
+    
+    async def _handle_get_search_term_optimization(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle search term optimization retrieval request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            optimization_id = data.get("optimization_id", "")
+            
+            if not optimization_id:
+                return {
+                    "status": "failed",
+                    "error": "optimization_id is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as conn:
+                result = await conn.fetchrow("""
+                    SELECT * FROM search_term_optimizations WHERE id = $1
+                """, optimization_id)
+                
+                if result:
+                    # Convert row to dict and parse JSON fields
+                    optimization = dict(result)
+                    optimization["optimized_terms"] = json.loads(optimization["optimized_terms"])
+                    optimization["optimization_context"] = json.loads(optimization["optimization_context"])
+                    optimization["target_databases"] = json.loads(optimization["target_databases"])
+                    optimization["metadata"] = json.loads(optimization["metadata"])
+                    
+                    return {
+                        "status": "completed",
+                        "optimization": optimization,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Search term optimization not found: {optimization_id}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Failed to get search term optimization: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_get_search_terms_for_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle retrieval of search terms for a specific research plan."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            plan_id = data.get("plan_id", "")
+            
+            if not plan_id:
+                return {
+                    "status": "failed",
+                    "error": "plan_id is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as conn:
+                # Get optimizations for this plan
+                results = await conn.fetch("""
+                    SELECT * FROM search_term_optimizations 
+                    WHERE source_type = 'plan' AND source_id = $1
+                    ORDER BY created_at DESC
+                """, plan_id)
+                
+                # logger.info(f"Retrieved search term optimizations for plan {plan_id} - {results}")
+
+                optimizations = []
+                for result in results:
+                    optimization = dict(result)
+                    optimization["optimized_terms"] = json.loads(optimization["optimized_terms"])
+                    optimization["optimization_context"] = json.loads(optimization["optimization_context"])
+                    optimization["target_databases"] = json.loads(optimization["target_databases"])
+                    optimization["metadata"] = json.loads(optimization["metadata"])
+                    optimizations.append(optimization)
+                
+                return {
+                    "status": "completed",
+                    "plan_id": plan_id,
+                    "optimizations": optimizations,
+                    "count": len(optimizations),
+                    "timestamp": datetime.now().isoformat()
+                }
+                    
+        except Exception as e:
+            logger.error(f"Failed to get search terms for plan: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_get_search_terms_for_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle retrieval of search terms for a specific research task."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            task_id = data.get("task_id", "")
+            
+            if not task_id:
+                return {
+                    "status": "failed",
+                    "error": "task_id is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as conn:
+                # Get optimizations for this task
+                results = await conn.fetch("""
+                    SELECT * FROM search_term_optimizations 
+                    WHERE source_type = 'task' AND source_id = $1
+                    ORDER BY created_at DESC
+                """, task_id)
+                
+                optimizations = []
+                for result in results:
+                    optimization = dict(result)
+                    optimization["optimized_terms"] = json.loads(optimization["optimized_terms"])
+                    optimization["optimization_context"] = json.loads(optimization["optimization_context"])
+                    optimization["target_databases"] = json.loads(optimization["target_databases"])
+                    optimization["metadata"] = json.loads(optimization["metadata"])
+                    optimizations.append(optimization)
+                
+                return {
+                    "status": "completed",
+                    "task_id": task_id,
+                    "optimizations": optimizations,
+                    "count": len(optimizations),
+                    "timestamp": datetime.now().isoformat()
+                }
+                    
+        except Exception as e:
+            logger.error(f"Failed to get search terms for task: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_store_optimized_search_terms(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle storage of optimized search terms with automatic source type detection."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            # This is a convenience method that can auto-detect source type
+            source_id = data.get("source_id", "")
+            plan_id = data.get("plan_id", "")
+            task_id = data.get("task_id", "")
+            original_query = data.get("original_query", "")
+            optimized_terms = data.get("optimized_terms", [])
+            optimization_context = data.get("optimization_context", {})
+            target_databases = data.get("target_databases", [])
+            expires_at = data.get("expires_at")
+            metadata = data.get("metadata", {})
+            
+            # Auto-detect source type and source_id
+            if plan_id:
+                source_type = "plan"
+                source_id = plan_id
+            elif task_id:
+                source_type = "task"
+                source_id = task_id
+            elif source_id:
+                # Try to auto-detect based on whether it's found in plans or tasks
+                async with self.db_pool.acquire() as conn:
+                    plan_exists = await conn.fetchval("""
+                        SELECT EXISTS(SELECT 1 FROM research_plans WHERE id = $1)
+                    """, source_id)
+                    
+                    if plan_exists:
+                        source_type = "plan"
+                    else:
+                        task_exists = await conn.fetchval("""
+                            SELECT EXISTS(SELECT 1 FROM research_tasks WHERE id = $1)
+                        """, source_id)
+                        
+                        if task_exists:
+                            source_type = "task"
+                        else:
+                            return {
+                                "status": "failed",
+                                "error": f"Source ID {source_id} not found in plans or tasks",
+                                "timestamp": datetime.now().isoformat()
+                            }
+            else:
+                return {
+                    "status": "failed",
+                    "error": "Either plan_id, task_id, or source_id must be provided",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Use the create handler with detected parameters
+            create_data = {
+                "source_type": source_type,
+                "source_id": source_id,
+                "original_query": original_query,
+                "optimized_terms": optimized_terms,
+                "optimization_context": optimization_context,
+                "target_databases": target_databases,
+                "expires_at": expires_at,
+                "metadata": metadata
+            }
+            
+            return await self._handle_create_search_term_optimization(create_data)
+                    
+        except Exception as e:
+            logger.error(f"Failed to store optimized search terms: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
     
     async def _handle_database_operations(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle generic database operations request."""
@@ -1322,6 +1685,17 @@ app = create_health_check_app(
     get_mcp_status=get_mcp_status,
     get_additional_metadata=get_additional_metadata
 )
+
+def _make_json_serializable(obj):
+    """Convert datetime objects to ISO strings for JSON serialization."""
+    if isinstance(obj, dict):
+        return {key: _make_json_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [_make_json_serializable(item) for item in obj]
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    else:
+        return obj
 
 
 async def main():

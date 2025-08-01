@@ -359,10 +359,13 @@ class MCPAIService:
 
     async def _handle_chat_completion(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle chat completion request"""
+        
         provider = task_data.get("provider", "openai")
         messages = task_data.get("messages", [])
         model = task_data.get("model")
-        
+
+        logger.info(f"Chat completion request details: {task_data}")
+
         if provider == "openai" and self.openai_client:
             if not model:
                 model = "gpt-4o-mini"

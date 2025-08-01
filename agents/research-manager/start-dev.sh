@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# Research Manager Agent Development Startup Script
+# This script starts the containerized Research Manager with file watching for development
+
+set -e
+
+echo "Starting Research Manager Agent in Development Mode..."
+
+# Set default values if not provided
+export SERVICE_HOST=${SERVICE_HOST:-"0.0.0.0"}
+export SERVICE_PORT=${SERVICE_PORT:-"8002"}
+export MCP_SERVER_URL=${MCP_SERVER_URL:-"ws://mcp-server:9000"}
+export AGENT_TYPE=${AGENT_TYPE:-"research_manager"}
+export LOG_LEVEL=${LOG_LEVEL:-"INFO"}
+
+echo "Configuration:"
+echo "  Service Host: ${SERVICE_HOST}"
+echo "  Service Port: ${SERVICE_PORT}"
+echo "  MCP Server URL: ${MCP_SERVER_URL}"
+echo "  Agent Type: ${AGENT_TYPE}"
+echo "  Log Level: ${LOG_LEVEL}"
+echo "  Development Mode: ENABLED"
+
+# Check if watchfiles is available (should be pre-installed)
+echo "Checking watchfiles availability..."
+if ! python -c "import watchfiles" 2>/dev/null; then
+    echo "ERROR: watchfiles not found. This should be pre-installed in requirements.txt"
+    exit 1
+fi
+echo "watchfiles is available"
+
+# Change to app directory
+cd /app
+
+# Start the Research Manager service with file watching
+echo "Starting Research Manager Service with file watching..."
+exec watchfiles --filter python 'python src/research_manager_service.py' /app/src

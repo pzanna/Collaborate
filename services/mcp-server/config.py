@@ -1,6 +1,7 @@
 """
 Enhanced MCP Server Configuration for Version 0.3.1
 Containerized MCP Server with clustering and enhanced monitoring
+Development Test - File watching active
 """
 
 import os

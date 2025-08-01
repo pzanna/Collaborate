@@ -4,11 +4,17 @@
 # Eunice Platform - Development Start Script
 # ==============================================================================
 # 
-# Quick start for development with security-hardened Alpine containers
+# Quick start for development with Docker Compose development configuration
 #
-# This script provides a streamlined way to start the core development 
-# environment for the Eunice Research Platform using Docker Compose with
-# security-hardened Alpine Linux containers.
+# This script provides a streamlined way to start the development environment
+# for the Eunice Research Platform using Docker Compose with development
+# features including file watching, hot-reloading, and debug logging.
+#
+# Development Features:
+#   - File watching with watchfiles for hot-reloading
+#   - Volume mounts for live code updates
+#   - Debug logging and development environment variables
+#   - Development build targets with additional tools
 #
 # Services Started:
 #   - Redis (port 6380)           - Message queue and caching
@@ -81,12 +87,12 @@ mkdir -p logs
 
 # Clean shutdown of any existing containers to ensure fresh start
 print_info "Stopping existing services..."
-docker compose -f docker-compose.secure.yml down --remove-orphans 2>/dev/null || true
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml down --remove-orphans 2>/dev/null || true
 
 # Phase 1: Start core infrastructure services
 # Redis, PostgreSQL, and Docker Socket Proxy must be ready before other services start
 print_info "Starting infrastructure (Redis, PostgreSQL, Docker Socket Proxy)..."
-docker compose -f docker-compose.secure.yml up -d redis postgres docker-socket-proxy
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d redis postgres docker-socket-proxy
 
 # Wait for infrastructure services to be fully ready
 # Database connections require this initialization time
@@ -96,7 +102,7 @@ sleep 10
 # Phase 2: Start MCP server (Model Context Protocol)
 # This is the central communication hub that all agents connect to
 print_info "Starting MCP server..."
-docker compose -f docker-compose.secure.yml up -d mcp-server
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d mcp-server
 
 # Brief wait for MCP server WebSocket to be available
 sleep 5
@@ -104,7 +110,7 @@ sleep 5
 # Phase 3: Start authentication service
 # This handles JWT tokens, user management, and RBAC
 print_info "Starting authentication service..."
-docker compose -f docker-compose.secure.yml up -d auth-service
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d auth-service
 
 # Brief wait for auth service to be ready
 sleep 5
@@ -112,17 +118,17 @@ sleep 5
 # Phase 4: Start core research agents
 # Memory agent handles knowledge graph, Executor handles task processing
 print_info "Starting core agents (Memory, Executor)..."
-docker compose -f docker-compose.secure.yml up -d memory-agent executor-agent
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d memory-agent executor-agent
 
 # Phase 5: Start AI service
 # This provides LLM integration and handles AI API calls
 print_info "Starting AI service..."
-docker compose -f docker-compose.secure.yml up -d ai-service
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d ai-service
 
 # Phase 6: Start all research workflow agents
 # These agents handle the complete research pipeline
 print_info "Starting research workflow agents..."
-docker compose -f docker-compose.secure.yml up -d \
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d \
     planning-agent \
     research-manager-agent \
     literature-agent \
@@ -133,12 +139,12 @@ docker compose -f docker-compose.secure.yml up -d \
 # Phase 7: Start database service
 # This provides database management and maintenance
 print_info "Starting database service..."
-docker compose -f docker-compose.secure.yml up -d database-service database-agent
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d database-service database-agent
 
 # Phase 8: Start API Gateway 
 # This provides the REST API interface and frontend communication
 print_info "Starting API Gateway..."
-docker compose -f docker-compose.secure.yml up -d api-gateway
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d api-gateway
 
 # Phase 9: Start Frontend Development Server
 # This starts the Vite dev server locally for hot-reload development
@@ -296,21 +302,27 @@ if [ "$services_ready" = true ]; then
     echo "   Auth Health:      http://localhost:8013/health"
     echo "   API Docs:         http://localhost:8001/docs"
     echo "   Auth API Docs:    http://localhost:8013/docs"
-    echo "   Container Status: docker compose -f docker-compose.secure.yml ps"
+    echo "   Container Status: docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml ps"
+    echo
+    echo "🔧 Development Features:"
+    echo "   File Watching:    Enabled for MCP Server and API Gateway"
+    echo "   Volume Mounts:    Live code updates without rebuilds"
+    echo "   Debug Logging:    Enhanced logging for all services"
+    echo "   Hot Reload:       Code changes trigger automatic restarts"
     echo
     echo "📝 View Logs:"
-    echo "   All services:     docker compose -f docker-compose.secure.yml logs -f"
-    echo "   Specific service: docker compose -f docker-compose.secure.yml logs -f mcp-server"
+    echo "   All services:     docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml logs -f"
+    echo "   Specific service: docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml logs -f mcp-server"
     echo
     echo "🛑 To stop development environment:"
     echo "   ./stop_dev.sh"
-    echo "   OR: docker compose -f docker-compose.secure.yml down"
+    echo "   OR: docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml down"
     echo
     print_status "Development environment is ready for use!"
 else
     echo "❌ Some services failed to start. Check logs:"
-    echo "   docker compose -f docker-compose.secure.yml logs"
-    echo "   docker compose -f docker-compose.secure.yml ps"
+    echo "   docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml logs"
+    echo "   docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml ps"
     echo
     echo "💡 Common issues:"
     echo "   - Port conflicts: Check if ports 8001, 8008, 8009, 8013, 9000, 5433, 6380 are free"

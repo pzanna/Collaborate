@@ -39,7 +39,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
-COPY start.sh ./
 COPY start-dev.sh ./
 
 # Copy shared health check service
@@ -48,7 +47,7 @@ COPY health_check_service.py ./health_check_service.py
 # Security: Set strict file permissions and ownership
 RUN chown -R literatureagent:literatureagent /app && \
     chmod -R 750 /app && \
-    chmod 750 /app/start.sh /app/start-dev.sh && \
+    chmod 750 /app/start-dev.sh && \
     chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \;

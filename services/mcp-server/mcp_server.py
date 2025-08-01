@@ -196,8 +196,8 @@ class MCPServer:
             task_data = data.get("data", {})
             
             # Debug: Log the complete data structure
-            logger.info(f"Raw research action data: {data}")
-            logger.info(f"Task data: {task_data}")
+            # logger.info(f"Raw research action data: {data}")
+            # logger.info(f"Task data: {task_data}")
             
             # Extract task information
             task_id = task_data.get("task_id", str(uuid.uuid4()))
