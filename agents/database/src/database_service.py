@@ -962,31 +962,71 @@ class DatabaseAgentService:
         return await self._generic_delete("research_tasks", data.get("task_id", ""))
     
     async def _handle_create_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle literature record creation request."""
+        """Handle literature record creation request with full field support."""
         try:
             if not self.db_pool:
                 raise Exception("Database pool not available")
                 
+            # Extract all literature record fields
             title = data.get("title", "")
             authors = data.get("authors", [])
             project_id = data.get("project_id", "")
-            metadata_json = data.get("metadata", {})
+            doi = data.get("doi")
+            pmid = data.get("pmid")
+            arxiv_id = data.get("arxiv_id")
+            year = data.get("year")
+            journal = data.get("journal")
+            abstract = data.get("abstract")
+            url = data.get("url")
+            source = data.get("source")
+            publication_type = data.get("publication_type")
+            mesh_terms = data.get("mesh_terms", [])
+            categories = data.get("categories", [])
+            metadata = data.get("metadata", {})
             
-            if not all([title, project_id]):
+            # Handle citation count conversion to integer
+            citation_count = data.get("citation_count", 0)
+            if citation_count is not None:
+                try:
+                    citation_count = int(citation_count) if citation_count != "" else None
+                except (ValueError, TypeError):
+                    citation_count = None
+            
+            # Validate required fields
+            if not title or not project_id:
                 return {
                     "status": "failed",
                     "error": "Title and project ID are required",
                     "timestamp": datetime.now().isoformat()
                 }
             
-            record_id = str(uuid.uuid4())
-            
+            # Check if project exists before creating literature record
             async with self.db_pool.acquire() as conn:
+                project_exists = await conn.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM projects WHERE id = $1)", project_id
+                )
+                if not project_exists:
+                    return {
+                        "status": "failed",
+                        "error": f"Project with ID {project_id} does not exist",
+                        "timestamp": datetime.now().isoformat()
+                    }
+            
+                record_id = str(uuid.uuid4())
+                now = datetime.now()
+                
+                # Use the existing connection for the insert
                 await conn.execute("""
-                    INSERT INTO literature_records (id, title, authors, project_id, metadata, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                """, record_id, title, json.dumps(authors), project_id, json.dumps(metadata_json), 
-                     datetime.now(), datetime.now())
+                    INSERT INTO literature_records (
+                        id, title, authors, project_id, doi, pmid, arxiv_id, year, 
+                        journal, abstract, url, citation_count, source, publication_type,
+                        mesh_terms, categories, created_at, updated_at, metadata
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                """, 
+                    record_id, title, json.dumps(authors), project_id, doi, pmid, arxiv_id, year,
+                    journal, abstract, url, citation_count, source, publication_type,
+                    json.dumps(mesh_terms), json.dumps(categories), now, now, json.dumps(metadata)
+                )
             
             self.operations_completed += 1
             
@@ -995,6 +1035,7 @@ class DatabaseAgentService:
                 "record_id": record_id,
                 "title": title,
                 "project_id": project_id,
+                "source": source,
                 "timestamp": datetime.now().isoformat()
             }
             

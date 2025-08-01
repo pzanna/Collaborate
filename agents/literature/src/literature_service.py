@@ -21,6 +21,7 @@ import os
 import re
 import ssl
 import sys
+import time
 import uuid
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
@@ -572,6 +573,13 @@ class LiteratureSearchService:
         
         # Deduplicate records
         unique_records = self._deduplicate_records(all_records)
+        
+        # Store literature records in database
+        if unique_records and search_query.lit_review_id:
+            logger.info(f"Storing {len(unique_records)} literature records in database")
+            storage_errors = await self._store_literature_records(unique_records, search_query)
+            if storage_errors:
+                errors.extend(storage_errors)
         
         end_time = datetime.now()
         
@@ -1578,6 +1586,218 @@ class LiteratureSearchService:
         content_string = f"{title}|{author_string}|{year}"
         
         return hashlib.md5(content_string.encode(), usedforsecurity=False).hexdigest()
+
+    async def _store_literature_records(self, records: List[Dict[str, Any]], search_query: SearchQuery) -> List[str]:
+        """
+        Store literature records in database via MCP protocol.
+        
+        Args:
+            records: List of normalized literature records
+            search_query: Original search query for context
+            
+        Returns:
+            List of error messages if any storage failures occurred
+        """
+        storage_errors = []
+        stored_count = 0
+        
+        if not self.websocket or not self.mcp_connected:
+            error_msg = "MCP connection not available for storing literature records"
+            logger.warning(error_msg)
+            return [error_msg]
+        
+        # We need a project_id for the database, but we only have lit_review_id
+        # For now, we'll use the lit_review_id as a temporary project identifier
+        # In a real implementation, you'd want to map lit_review_id to actual project_id
+        potential_project_id = search_query.plan_id or search_query.lit_review_id
+        
+        # Ensure the project exists before trying to store literature records
+        project_id = await self._ensure_project_exists(potential_project_id, search_query)
+        
+        logger.info(f"Storing {len(records)} literature records to database (project_id: {project_id})")
+        
+        # Process records one at a time to avoid overwhelming the database connection pool
+        # This ensures we don't exhaust database connections
+        logger.info(f"Processing {len(records)} records sequentially to avoid connection pool exhaustion")
+        
+        for record_idx, record in enumerate(records):
+            try:
+                # Skip records without an abstract
+                if not record.get("abstract"):
+                    logger.info(f"Skipping record without abstract: {record.get('title', 'Unknown title')[:60]}...")
+                    continue
+
+                # Prepare literature record data for database storage
+                literature_record_data = {
+                    "title": record.get("title", ""),
+                    "authors": record.get("authors", []),
+                    "project_id": project_id,
+                    "doi": record.get("doi"),
+                    "pmid": record.get("pmid"),
+                    "arxiv_id": record.get("arxiv_id"),
+                    "year": record.get("year"),
+                    "journal": record.get("journal"),
+                    "abstract": record.get("abstract"),
+                    "url": record.get("url"),
+                    "citation_count": record.get("citation_count", 0),
+                    "source": record.get("source"),
+                    "publication_type": record.get("publication_type"),
+                    "mesh_terms": record.get("mesh_terms", []),
+                    "categories": record.get("categories", []),
+                    "metadata": {
+                        "lit_review_id": search_query.lit_review_id,
+                        "search_terms": getattr(search_query, 'search_terms', []),
+                        "retrieval_timestamp": record.get("retrieval_timestamp"),
+                        "raw_data": record.get("raw_data", {})
+                    }
+                }
+                
+                # Send to database via MCP
+                task_id = f"store_lit_record_{uuid.uuid4().hex[:8]}"
+                db_request = {
+                    "type": "research_action",
+                    "data": {
+                        "task_id": task_id,
+                        "context_id": f"literature_storage_{record_idx}",
+                        "agent_type": "database",
+                        "action": "create_literature_record",
+                        "payload": literature_record_data
+                    },
+                    "client_id": self.agent_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                await self.websocket.send(json.dumps(db_request))
+                
+                # Wait for response before sending the next record
+                try:
+                    future = asyncio.Future()
+                    self.pending_responses[task_id] = future
+                    
+                    response_data = await asyncio.wait_for(future, timeout=15.0)  # Longer timeout for individual records
+                    
+                    if (response_data.get("type") == "task_result" and 
+                        response_data.get("task_id") == task_id):
+                        
+                        result = response_data.get("result", {})
+                        if result.get("status") == "completed":
+                            stored_count += 1
+                            logger.info(f"✅ Stored record {stored_count}/{len(records)}: {record.get('title', 'Unknown title')[:60]}...")
+                        else:
+                            error_msg = f"Failed to store record {record_idx+1}: {result.get('error', 'Unknown error')}"
+                            storage_errors.append(error_msg)
+                            logger.warning(f"❌ {error_msg}")
+                    else:
+                        error_msg = f"Unexpected response for record {record_idx+1}: {response_data}"
+                        storage_errors.append(error_msg)
+                        logger.warning(f"❌ {error_msg}")
+                        
+                except asyncio.TimeoutError:
+                    error_msg = f"Timeout storing record {record_idx+1}"
+                    storage_errors.append(error_msg)
+                    logger.warning(f"⏰ {error_msg}")
+                except Exception as e:
+                    error_msg = f"Error storing record {record_idx+1}: {e}"
+                    storage_errors.append(error_msg)
+                    logger.error(f"💥 {error_msg}")
+                finally:
+                    # Clean up pending response
+                    self.pending_responses.pop(task_id, None)
+                
+                # Add a delay between each record to prevent overwhelming the database
+                await asyncio.sleep(0.2)  # 200ms delay between records
+                        
+            except Exception as e:
+                error_msg = f"Error preparing record {record_idx+1} for storage: {e}"
+                storage_errors.append(error_msg)
+                logger.error(f"💥 {error_msg}")
+        
+        logger.info(f"Literature record storage completed: {stored_count}/{len(records)} stored successfully")
+        if storage_errors:
+            logger.warning(f"Storage errors encountered: {len(storage_errors)} failures")
+        
+        return storage_errors
+    
+    async def _ensure_project_exists(self, project_id: str, search_query: SearchQuery) -> str:
+        """
+        Ensure a project exists in the database, creating one if needed.
+        Returns the project_id to use for literature records.
+        """
+        try:
+            # For now, we'll create a default project and wait for the response
+            # This prevents foreign key constraint violations
+            logger.info(f"Ensuring project {project_id} exists for literature storage")
+            
+            # Create task to ensure project exists
+            task_id = f"ensure_project_{uuid.uuid4().hex[:8]}"
+            create_request = {
+                "type": "research_action",
+                "data": {
+                    "task_id": task_id,
+                    "context_id": f"project_creation_{int(time.time())}",
+                    "agent_type": "database",
+                    "action": "create_project",
+                    "payload": {
+                        "project_id": project_id,
+                        "name": f"Literature Review Project",
+                        "description": f"Auto-created project for literature search",
+                        "status": "active",
+                        "created_by": "literature-service"
+                    }
+                },
+                "client_id": self.agent_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Send the request via websocket and wait for response
+            if self.websocket:
+                await self.websocket.send(json.dumps(create_request))
+                logger.info(f"Sent project creation request for {project_id}")
+                
+                # Wait for response to get the actual created project ID
+                try:
+                    future = asyncio.Future()
+                    self.pending_responses[task_id] = future
+                    
+                    response_data = await asyncio.wait_for(future, timeout=10.0)
+                    
+                    if (response_data.get("type") == "task_result" and 
+                        response_data.get("task_id") == task_id):
+                        
+                        result = response_data.get("result", {})
+                        if result.get("status") == "completed":
+                            created_project_id = result.get("project_id")
+                            if created_project_id:
+                                logger.info(f"Project created successfully with ID: {created_project_id}")
+                                return created_project_id
+                            else:
+                                logger.warning(f"Project creation succeeded but no project_id returned, using original: {project_id}")
+                                return project_id
+                        else:
+                            error_msg = result.get('error', 'Unknown error')
+                            logger.warning(f"Project creation failed: {error_msg}, using original project_id: {project_id}")
+                            return project_id
+                    else:
+                        logger.warning(f"Unexpected response for project creation: {response_data}")
+                        return project_id
+                        
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout waiting for project creation response, using original project_id: {project_id}")
+                    return project_id
+                except Exception as e:
+                    logger.error(f"Error waiting for project creation response: {e}")
+                    return project_id
+                finally:
+                    # Clean up pending response
+                    self.pending_responses.pop(task_id, None)
+            else:
+                logger.warning("No websocket connection available for project creation")
+                return project_id
+                
+        except Exception as e:
+            logger.error(f"Error ensuring project exists: {e}")
+            # Return the original project_id as fallback
+            return project_id
 
 
 # Request/Response models removed - NO DIRECT API ENDPOINTS ALLOWED
