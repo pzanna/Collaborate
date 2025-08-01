@@ -77,6 +77,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # For watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
@@ -115,6 +116,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    volumes:
+      - ./services/mcp-server/mcp_server.py:/app/mcp_server.py
+      - ./services/mcp-server/config.py:/app/config.py
+      - ./services/mcp-server/start-dev.sh:/app/start-dev.sh
+    command: ["./start-dev.sh"]
 
   # 3. AI Service (MCP Client) - Security Enhanced
   ai-service:

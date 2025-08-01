@@ -20,8 +20,9 @@ TaskStage = Literal[
     "complete",
     "failed",
 ]
-TaskType = Literal["research", "analysis", "synthesis", "validation"]
+TaskType = Literal["research", "analysis", "synthesis", "validation", "literature_review", "systematic_review", "meta_analysis"]
 PlanType = Literal["comprehensive", "quick", "deep", "custom"]
+ResearchDepth = Literal["undergraduate", "masters", "phd"]
 
 
 def generate_uuid() -> str:
@@ -519,4 +520,35 @@ class SuccessResponse(BaseModel):
     success: bool = True
     message: str
     data: Optional[Dict[str, Any]] = None
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# New request/response models for simplified research execution
+class ExecuteResearchRequest(BaseModel):
+    """Request model for executing research tasks."""
+    
+    task_type: TaskType = "literature_review"
+    depth: ResearchDepth = "masters"
+
+    @validator("task_type")
+    def validate_research_task_type(cls, v):
+        """Validate that task_type is a supported research type."""
+        research_types = ["literature_review", "systematic_review", "meta_analysis"]
+        if v not in research_types:
+            raise ValueError(f"task_type must be one of: {', '.join(research_types)}")
+        return v
+
+
+class ResearchExecutionResponse(BaseModel):
+    """Response model for research execution."""
+    
+    execution_id: str
+    topic_name: str
+    research_questions: List[str] = Field(default_factory=list)
+    task_type: str
+    depth: str
+    estimated_cost: float
+    estimated_duration: str
+    status: str = "initiated"
+    progress_url: str
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())

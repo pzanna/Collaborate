@@ -59,8 +59,10 @@ class ResearchStage(Enum):
 class ResearchContext:
     """Research context for tracking task state."""
     task_id: str
-    query: str
+    task_description: str
     user_id: str
+    topic_id: str
+    max_results: int = 10
     project_id: Optional[str] = None
     stage: ResearchStage = ResearchStage.PLANNING
     estimated_cost: float = 0.0
@@ -75,6 +77,9 @@ class ResearchContext:
     max_retries: int = 2
     context_data: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    # Delegation tracking
+    delegated_tasks: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     
     # Results storage
     search_results: List[Dict[str, Any]] = field(default_factory=list)
@@ -165,7 +170,7 @@ class ResearchManagerService:
             "approve_actions"
         ]
         
-        logger.info(f"Research Manager Service initialized on port {self.service_port}")
+        logger.info(f"Research Manager Service initialized on port {self.service_port} - File watching enabled!")
     
     async def start(self):
         """Start the Research Manager Service."""
@@ -269,12 +274,14 @@ class ResearchManagerService:
                     break
                     
                 try:
+                    logger.info(f"Received raw WebSocket message: {message}")
                     data = json.loads(message)
+                    logger.info(f"Parsed message data: {data}")
                     await self.task_queue.put(data)
                 except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse MCP message: {e}")
+                    logger.error(f"Failed to parse MCP message: {e}, raw message: {message}")
                 except Exception as e:
-                    logger.error(f"Error handling MCP message: {e}")
+                    logger.error(f"Error handling MCP message: {e}, message: {message}")
                     
         except ConnectionClosed:
             logger.warning("MCP server connection closed")
@@ -291,66 +298,159 @@ class ResearchManagerService:
         while self.should_run:
             try:
                 # Get task from queue
+                logger.info("Waiting for task from queue...")
                 task_data = await self.task_queue.get()
+                logger.info(f"Got task from queue: {task_data}")
                 
                 # Process the task
+                logger.info("Processing research task...")
                 result = await self._process_research_task(task_data)
+                logger.info(f"Task processing result: {result}")
                 
-                # Send result back to MCP server
-                if self.websocket and self.mcp_connected:
+                # Send result back to MCP server (only for actual tasks, not control messages)
+                message_type = task_data.get("type", "")
+                if self.websocket and self.mcp_connected and message_type not in ["registration_confirmed", "heartbeat", "ping", "pong"]:
                     response = {
-                        "jsonrpc": "2.0",
-                        "id": task_data.get("id"),
-                        "result": result
+                        "type": "task_result",
+                        "task_id": task_data.get("task_id"),
+                        "agent_id": self.agent_id,
+                        "result": result,
+                        "status": result.get("status", "completed") if isinstance(result, dict) else "completed"
                     }
+                    logger.info(f"Sending response to MCP server: {response}")
                     await self.websocket.send(json.dumps(response))
+                elif message_type in ["registration_confirmed", "heartbeat", "ping", "pong"]:
+                    logger.info(f"Skipping response for control message: {message_type}")
                 
                 # Mark task as done
                 self.task_queue.task_done()
                 
             except Exception as e:
                 logger.error(f"Error processing task: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 await asyncio.sleep(1)
     
     async def _process_research_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process a research coordination task."""
         try:
-            method = task_data.get("method", "")
-            params = task_data.get("params", {})
+            # Handle MCP server task format
+            task_type = task_data.get("type", "")
             
-            # Route to appropriate handler
-            if method == "task/execute":
-                task_type = params.get("task_type", "")
-                data = params.get("data", {})
+            logger.info(f"Processing message type: {task_type}")
+            logger.info(f"Full task data: {task_data}")
+            
+            # Handle MCP control messages (don't process as tasks)
+            if task_type in ["registration_confirmed", "heartbeat", "ping", "pong"]:
+                logger.info(f"Received MCP control message: {task_type}")
+                return {
+                    "status": "acknowledged",
+                    "message_type": task_type,
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Handle research_action messages from MCP server
+            if task_type == "research_action":
+                data = task_data.get("data", {})
+                action = data.get("action", "")
+                task_id = data.get("task_id", "")
+                context_id = data.get("context_id", "")
+                payload = data.get("payload", {})
                 
-                if task_type == "coordinate_research":
-                    return await self._handle_coordinate_research(data)
-                elif task_type == "estimate_costs":
-                    return await self._handle_estimate_costs(data)
-                elif task_type == "track_progress":
-                    return await self._handle_track_progress(data)
-                elif task_type == "delegate_tasks":
-                    return await self._handle_delegate_tasks(data)
-                elif task_type == "manage_workflows":
-                    return await self._handle_manage_workflows(data)
-                elif task_type == "approve_actions":
-                    return await self._handle_approve_actions(data)
+                logger.info(f"Processing research action: {action} for task_id: {task_id}")
+                
+                if action == "coordinate_research":
+                    # Add task_id from MCP message structure to payload
+                    payload["task_id"] = task_id
+                    return await self._handle_coordinate_research(payload)
+                elif action == "estimate_costs":
+                    return await self._handle_estimate_costs(payload)
+                elif action == "track_progress":
+                    return await self._handle_track_progress(payload)
+                elif action == "delegate_tasks":
+                    return await self._handle_delegate_tasks(payload)
+                elif action == "manage_workflows":
+                    return await self._handle_manage_workflows(payload)
+                elif action == "approve_actions":
+                    return await self._handle_approve_actions(payload)
                 else:
                     return {
                         "status": "failed",
-                        "error": f"Unknown task type: {task_type}",
+                        "error": f"Unknown research action: {action}",
                         "timestamp": datetime.now().isoformat()
                     }
-            elif method == "agent/ping":
+            
+            # Handle task_result messages from delegated agents
+            elif task_type == "task_result":
+                logger.info(f"Received task result from delegated agent")
+                return await self._handle_task_result(task_data)
+            
+            # Handle legacy formats
+            task_id = task_data.get("task_id", "")
+            action = task_data.get("task_type", "")
+            data = task_data.get("data", {})
+            context_id = task_data.get("context_id", "")
+            
+            # Handle different task types (legacy format)
+            if task_type == "task_request" and action == "coordinate_research":
+                # Include task_id in data for handler
+                data["task_id"] = task_id
+                data["context_id"] = context_id
+                return await self._handle_coordinate_research(data)
+            elif task_type == "task_request" and action == "estimate_costs":
+                data["task_id"] = task_id
+                return await self._handle_estimate_costs(data)
+            elif task_type == "task_request" and action == "track_progress":
+                data["task_id"] = task_id
+                return await self._handle_track_progress(data)
+            elif task_type == "task_request" and action == "delegate_tasks":
+                data["task_id"] = task_id
+                return await self._handle_delegate_tasks(data)
+            elif task_type == "task_request" and action == "manage_workflows":
+                data["task_id"] = task_id
+                return await self._handle_manage_workflows(data)
+            elif task_type == "task_request" and action == "approve_actions":
+                data["task_id"] = task_id
+                return await self._handle_approve_actions(data)
+            elif task_type == "ping":
                 return {"status": "alive", "timestamp": datetime.now().isoformat()}
-            elif method == "agent/status":
-                return await self._get_agent_status()
             else:
-                return {
-                    "status": "failed",
-                    "error": f"Unknown method: {method}",
-                    "timestamp": datetime.now().isoformat()
-                }
+                # Legacy JSON-RPC format support
+                method = task_data.get("method", "")
+                params = task_data.get("params", {})
+                
+                if method == "task/execute":
+                    task_type_legacy = params.get("task_type", "")
+                    data_legacy = params.get("data", {})
+                    
+                    if task_type_legacy == "coordinate_research":
+                        return await self._handle_coordinate_research(data_legacy)
+                    elif task_type_legacy == "estimate_costs":
+                        return await self._handle_estimate_costs(data_legacy)
+                    elif task_type_legacy == "track_progress":
+                        return await self._handle_track_progress(data_legacy)
+                    elif task_type_legacy == "delegate_tasks":
+                        return await self._handle_delegate_tasks(data_legacy)
+                    elif task_type_legacy == "manage_workflows":
+                        return await self._handle_manage_workflows(data_legacy)
+                    elif task_type_legacy == "approve_actions":
+                        return await self._handle_approve_actions(data_legacy)
+                    else:
+                        return {
+                            "status": "failed",
+                            "error": f"Unknown task type: {task_type_legacy}",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                elif method == "agent/ping":
+                    return {"status": "alive", "timestamp": datetime.now().isoformat()}
+                elif method == "agent/status":
+                    return await self._get_agent_status()
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Unknown message format. Task type: {task_type}, Action: {action}, Method: {method}",
+                        "timestamp": datetime.now().isoformat()
+                    }
                 
         except Exception as e:
             logger.error(f"Error processing research task: {e}")
@@ -363,32 +463,68 @@ class ResearchManagerService:
     async def _handle_coordinate_research(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle research coordination request."""
         try:
-            query = data.get("query", "")
-            user_id = data.get("user_id", "anonymous")
-            project_id = data.get("project_id")
-            single_agent_mode = data.get("single_agent_mode", False)
+            # Extract task information from API Gateway payload format
+            task_id = data.get("task_id", "")
             
-            if not query:
+            # Map API Gateway payload to Research Manager expected format
+            topic_id = data.get("topic_id", "")
+            topic_name = data.get("topic_name", "")
+            topic_description = data.get("topic_description", "")
+            research_plan = data.get("research_plan", {})
+            task_type = data.get("task_type", "research")
+            depth = data.get("depth", "standard")
+
+            # API Gateway format - derive parameters from topic data
+            task_name = topic_name
+            task_description = topic_description
+            topic_id = topic_id  # Use topic_id as plan reference
+            user_id = "api_user"  # Default for API requests. TODO: Extract from auth context if available
+            max_results = 50 if depth == "phd" else 25 if depth == "masters" else 10
+            
+            if not task_id:
                 return {
                     "status": "failed",
-                    "error": "Query is required",
+                    "error": "Task ID is required",
                     "timestamp": datetime.now().isoformat()
                 }
             
-            # Create research context
-            task_id = str(uuid.uuid4())
+            logger.info(f"Coordinating research for task {task_id}")
+            logger.info(f"Research plan received: {research_plan}")
+            
+            # Check if research plan is empty and needs to be fetched from database
+            if not research_plan or research_plan == {}:
+                logger.info(f"Research plan is empty, attempting to fetch from database using topic_id: {topic_id}")
+                research_plan = await self._fetch_research_plan_from_database(topic_id)
+                if not research_plan or research_plan == {}:
+                    logger.warning(f"No research plan found for topic_id {topic_id}, will delegate to planning agent")
+                    research_plan = await self._generate_research_plan(topic_name, topic_description)
+            
+            logger.info(f"Final research plan for delegation: {research_plan}")
+            
+            # Create research context using the provided task ID
             context = ResearchContext(
                 task_id=task_id,
-                query=query,
+                task_description=task_description,
                 user_id=user_id,
-                project_id=project_id,
-                single_agent_mode=single_agent_mode
+                topic_id=topic_id,
+                max_results=max_results
             )
+            
+            # Add additional context
+            context.metadata = {
+                "task_name": task_name,
+                "task_type": task_type,
+                "max_results": max_results,
+                "topic_id": topic_id,
+                "topic_name": topic_name,
+                "research_plan": research_plan,
+                "depth": depth
+            }
             
             # Store context
             self.active_contexts[task_id] = context
             
-            # Start research workflow
+            # Start research workflow which will trigger literature search
             workflow_result = await self._start_research_workflow(context)
             
             return {
@@ -595,7 +731,7 @@ class ResearchManagerService:
         """Start the research workflow for a task."""
         try:
             # Initialize workflow state
-            context.stage = ResearchStage.PLANNING
+            context.stage = ResearchStage.LITERATURE_REVIEW
             context.updated_at = datetime.now()
             
             # Estimate initial costs
@@ -604,18 +740,306 @@ class ResearchManagerService:
             
             logger.info(f"Started research workflow for task {context.task_id}")
             
-            return {
-                "workflow_started": True,
-                "initial_stage": context.stage.value,
-                "estimated_cost": estimated_cost,
-                "task_id": context.task_id
-            }
+            # Start the complete workflow - literature search first
+            literature_result = await self._start_literature_search(context)
+            
+            # Store literature search results and continue workflow
+            if literature_result.get("delegated"):
+                # Mark literature stage as initiated
+                context.metadata["literature_delegated"] = True
+                context.metadata["literature_delegation_id"] = literature_result.get("delegation_id")
+                
+                logger.info(f"Literature search delegated for task {context.task_id}, workflow will continue upon completion")
+                
+                return {
+                    "workflow_started": True,
+                    "initial_stage": context.stage.value,
+                    "estimated_cost": estimated_cost,
+                    "task_id": context.task_id,
+                    "literature_search_status": "delegated",
+                    "workflow_status": "literature_search_initiated"
+                }
+            else:
+                logger.error(f"Failed to delegate literature search for task {context.task_id}")
+                context.stage = ResearchStage.FAILED
+                return {
+                    "workflow_started": False,
+                    "error": "Failed to delegate literature search"
+                }
             
         except Exception as e:
             logger.error(f"Failed to start research workflow: {e}")
             context.stage = ResearchStage.FAILED
             return {
                 "workflow_started": False,
+                "error": str(e)
+            }
+    
+    async def _start_literature_search(self, context: ResearchContext) -> Dict[str, Any]:
+        """Start literature search for the research task."""
+        try:
+            if not self.websocket or not self.mcp_connected:
+                logger.error("Cannot start literature search: MCP connection not available")
+                return {"status": "failed", "error": "MCP connection not available"}
+            
+            # Get the actual research plan from context metadata
+            research_plan = context.metadata.get("research_plan", {})
+            
+            logger.info(f"Starting literature search with research plan: {research_plan}")
+            
+            # Use the delegation method to properly route through MCP server
+            delegation_result = await self._delegate_to_agent(
+                task_id=context.task_id,
+                agent_type="literature",
+                action_data={
+                    "action": "search_literature",
+                    "lit_review_id": context.task_id,
+                    "research_plan": research_plan,  # Use the actual research plan
+                    "max_results": context.metadata.get("max_results", 50)
+                }
+            )
+            
+            # Track delegation if successful
+            if delegation_result.get("delegated"):
+                delegation_id = f"literature_search_{delegation_result.get('delegation_id')}"
+                context.delegated_tasks[delegation_id] = {
+                    "agent_type": "literature_search",
+                    "task_id": delegation_result.get("delegation_id"),
+                    "action": "search_literature",
+                    "status": "in_progress",
+                    "started_at": datetime.now().isoformat()
+                }
+                context.metadata["literature_delegation_id"] = delegation_id
+            
+            logger.info(f"Literature search delegation result: {delegation_result}")
+            
+            return delegation_result
+            
+        except Exception as e:
+            logger.error(f"Failed to start literature search: {e}")
+            return {
+                "status": "failed",
+                "error": str(e)
+            }
+
+    async def _continue_workflow_after_literature(self, context: ResearchContext, literature_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Continue the research workflow after literature search completion."""
+        try:
+            logger.info(f"Continuing workflow for task {context.task_id} after literature search")
+            
+            # Store literature search results
+            context.search_results = literature_results.get("records", [])
+            context.metadata["literature_search_completed"] = True
+            context.metadata["literature_results"] = literature_results
+            
+            # Move to synthesis stage
+            context.stage = ResearchStage.SYNTHESIS
+            
+            # Start synthesis process
+            synthesis_result = await self._start_synthesis(context)
+            
+            if synthesis_result.get("delegated"):
+                context.metadata["synthesis_delegated"] = True
+                context.metadata["synthesis_delegation_id"] = synthesis_result.get("delegation_id")
+                logger.info(f"Synthesis delegated for task {context.task_id}")
+                
+                return {
+                    "workflow_continued": True,
+                    "current_stage": context.stage.value,
+                    "synthesis_status": "delegated"
+                }
+            else:
+                logger.error(f"Failed to delegate synthesis for task {context.task_id}")
+                return {
+                    "workflow_continued": False,
+                    "error": "Failed to delegate synthesis"
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to continue workflow after literature search: {e}")
+            return {
+                "workflow_continued": False,
+                "error": str(e)
+            }
+
+    async def _start_synthesis(self, context: ResearchContext) -> Dict[str, Any]:
+        """Start synthesis of literature search results."""
+        try:
+            if not self.websocket or not self.mcp_connected:
+                logger.error("Cannot start synthesis: MCP connection not available")
+                return {"status": "failed", "error": "MCP connection not available"}
+            
+            # Get the actual research plan from context metadata
+            research_plan = context.metadata.get("research_plan", {})
+            
+            # Prepare synthesis payload
+            synthesis_payload = {
+                "action": "synthesize_evidence",
+                "task_id": context.task_id,
+                "literature_results": context.search_results,
+                "research_plan": research_plan,  # Use the actual research plan
+                "synthesis_type": "comprehensive",
+                "include_citations": True
+            }
+            
+            # Delegate to synthesis agent
+            delegation_result = await self._delegate_to_agent(
+                task_id=context.task_id,
+                agent_type="synthesis_review",
+                action_data=synthesis_payload
+            )
+            
+            # Track delegation if successful
+            if delegation_result.get("delegated"):
+                delegation_id = f"synthesis_review_{delegation_result.get('delegation_id')}"
+                context.delegated_tasks[delegation_id] = {
+                    "agent_type": "synthesis_review",
+                    "task_id": delegation_result.get("delegation_id"),
+                    "action": "synthesize_evidence",
+                    "status": "in_progress",
+                    "started_at": datetime.now().isoformat()
+                }
+                context.metadata["synthesis_delegation_id"] = delegation_id
+            
+            logger.info(f"Synthesis delegation result: {delegation_result}")
+            
+            return delegation_result
+            
+        except Exception as e:
+            logger.error(f"Failed to start synthesis: {e}")
+            return {
+                "status": "failed",
+                "error": str(e)
+            }
+
+    async def _continue_workflow_after_synthesis(self, context: ResearchContext, synthesis_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Continue the research workflow after synthesis completion."""
+        try:
+            logger.info(f"Continuing workflow for task {context.task_id} after synthesis")
+            
+            # Store synthesis results
+            context.synthesis = synthesis_results.get("synthesis", "")
+            context.metadata["synthesis_completed"] = True
+            context.metadata["synthesis_results"] = synthesis_results
+            
+            # Move to systematic review stage
+            context.stage = ResearchStage.SYSTEMATIC_REVIEW
+            
+            # Start review process
+            review_result = await self._start_review(context)
+            
+            if review_result.get("delegated"):
+                context.metadata["review_delegated"] = True
+                context.metadata["review_delegation_id"] = review_result.get("delegation_id")
+                logger.info(f"Review delegated for task {context.task_id}")
+                
+                return {
+                    "workflow_continued": True,
+                    "current_stage": context.stage.value,
+                    "review_status": "delegated"
+                }
+            else:
+                logger.error(f"Failed to delegate review for task {context.task_id}")
+                return {
+                    "workflow_continued": False,
+                    "error": "Failed to delegate review"
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to continue workflow after synthesis: {e}")
+            return {
+                "workflow_continued": False,
+                "error": str(e)
+            }
+
+    async def _start_review(self, context: ResearchContext) -> Dict[str, Any]:
+        """Start review of synthesized results."""
+        try:
+            if not self.websocket or not self.mcp_connected:
+                logger.error("Cannot start review: MCP connection not available")
+                return {"status": "failed", "error": "MCP connection not available"}
+            
+            # Get the actual research plan from context metadata
+            research_plan = context.metadata.get("research_plan", {})
+            
+            # Prepare review payload
+            review_payload = {
+                "action": "screen_literature",
+                "task_id": context.task_id,
+                "literature_results": context.search_results,
+                "synthesis_results": context.synthesis,
+                "research_plan": research_plan,  # Use the actual research plan
+                "review_criteria": {
+                    "quality_assessment": True,
+                    "relevance_scoring": True,
+                    "bias_detection": True
+                }
+            }
+            
+            # Delegate to screening agent for review
+            delegation_result = await self._delegate_to_agent(
+                task_id=context.task_id,
+                agent_type="screening",
+                action_data=review_payload
+            )
+            
+            # Track delegation if successful
+            if delegation_result.get("delegated"):
+                delegation_id = f"screening_agent_{delegation_result.get('delegation_id')}"
+                context.delegated_tasks[delegation_id] = {
+                    "agent_type": "screening_agent",
+                    "task_id": delegation_result.get("delegation_id"),
+                    "action": "screen_literature",
+                    "status": "in_progress",
+                    "started_at": datetime.now().isoformat()
+                }
+                context.metadata["review_delegation_id"] = delegation_id
+            
+            logger.info(f"Review delegation result: {delegation_result}")
+            
+            return delegation_result
+            
+        except Exception as e:
+            logger.error(f"Failed to start review: {e}")
+            return {
+                "status": "failed",
+                "error": str(e)
+            }
+
+    async def _complete_workflow(self, context: ResearchContext, review_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Complete the research workflow."""
+        try:
+            logger.info(f"Completing workflow for task {context.task_id}")
+            
+            # Store review results
+            context.metadata["review_completed"] = True
+            context.metadata["review_results"] = review_results
+            context.stage = ResearchStage.COMPLETE
+            
+            # Compile final results
+            final_results = {
+                "task_id": context.task_id,
+                "workflow_status": "completed",
+                "stages_completed": ["literature_search", "synthesis", "review"],
+                "literature_results": context.metadata.get("literature_results", {}),
+                "synthesis_results": context.metadata.get("synthesis_results", {}),
+                "review_results": review_results,
+                "total_duration": (datetime.now() - context.created_at).total_seconds(),
+                "estimated_cost": context.estimated_cost
+            }
+            
+            logger.info(f"Research workflow completed for task {context.task_id}")
+            
+            return {
+                "workflow_completed": True,
+                "final_stage": context.stage.value,
+                "results": final_results
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to complete workflow: {e}")
+            return {
+                "workflow_completed": False,
                 "error": str(e)
             }
     
@@ -668,28 +1092,33 @@ class ResearchManagerService:
             if not self.websocket or not self.mcp_connected:
                 raise Exception("MCP connection not available")
             
-            # Create delegation message
+            # Create research_action message for delegation
             delegation_message = {
-                "jsonrpc": "2.0",
-                "method": "task/delegate",
-                "params": {
-                    "task_id": task_id,
-                    "target_agent": agent_type,
-                    "action_data": action_data,
-                    "from_agent": self.agent_id
+                "type": "research_action",
+                "data": {
+                    "task_id": str(uuid.uuid4()),
+                    "context_id": f"delegation-{task_id}",
+                    "agent_type": agent_type,
+                    "action": action_data.get("action", "search_literature"),
+                    "payload": {
+                        **action_data,
+                        "delegated_from": self.agent_id,
+                        "original_task_id": task_id
+                    }
                 },
-                "id": f"delegate_{task_id}_{agent_type}"
+                "client_id": self.agent_id,
+                "timestamp": datetime.now().isoformat()
             }
             
             # Send delegation
             await self.websocket.send(json.dumps(delegation_message))
             
-            logger.info(f"Delegated task {task_id} to {agent_type}")
+            logger.info(f"Delegated task {task_id} to {agent_type} with action {action_data.get('action', 'search_literature')}")
             
             return {
                 "delegated": True,
                 "target_agent": agent_type,
-                "delegation_id": delegation_message["id"]
+                "delegation_id": delegation_message["data"]["task_id"]
             }
             
         except Exception as e:
@@ -703,9 +1132,9 @@ class ResearchManagerService:
         """Estimate costs for a research task."""
         base_cost = 0.50
         
-        # Adjust based on query complexity
-        query_length = len(context.query.split())
-        complexity_multiplier = min(query_length / 10, 3.0)
+        # Adjust based on task description complexity
+        description_length = len(context.task_description.split())
+        complexity_multiplier = min(description_length / 10, 3.0)
         
         # Adjust based on single agent mode
         mode_multiplier = 0.7 if context.single_agent_mode else 1.0
@@ -717,18 +1146,22 @@ class ResearchManagerService:
     async def _start_workflow(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Start a new workflow."""
         try:
-            query = data.get("query", "")
+            task_description = data.get("task_description", data.get("query", ""))
             user_id = data.get("user_id", "anonymous")
+            topic_id = data.get("topic_id", "default_topic")
+            max_results = data.get("max_results", 10)
             
-            if not query:
-                return {"error": "Query is required"}
+            if not task_description:
+                return {"error": "Task description is required"}
             
             # Create new context
             task_id = str(uuid.uuid4())
             context = ResearchContext(
                 task_id=task_id,
-                query=query,
-                user_id=user_id
+                task_description=task_description,
+                user_id=user_id,
+                topic_id=topic_id,
+                max_results=max_results
             )
             
             self.active_contexts[task_id] = context
@@ -840,6 +1273,192 @@ class ResearchManagerService:
             "agent_availability": self.agent_availability,
             "timestamp": datetime.now().isoformat()
         }
+
+    async def _fetch_research_plan_from_database(self, topic_id: str) -> Dict[str, Any]:
+        """Fetch research plan from database using topic_id."""
+        try:
+            if not self.websocket or not self.mcp_connected:
+                logger.warning("Cannot fetch research plan: MCP connection not available")
+                return {}
+            
+            # Request database agent to fetch research plan for topic
+            db_request = {
+                "type": "task",
+                "task_id": f"fetch_plan_{uuid.uuid4().hex[:8]}",
+                "target_agent": "database_agent",
+                "action": "get_approved_plan_for_topic",
+                "payload": {
+                    "topic_id": topic_id
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            await self.websocket.send(json.dumps(db_request))
+            logger.info(f"Sent request to fetch research plan for topic {topic_id}")
+            
+            # Wait for response with timeout
+            response_timeout = 10.0  # 10 seconds for database query
+            start_time = datetime.now()
+            
+            while (datetime.now() - start_time).total_seconds() < response_timeout:
+                try:
+                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+                    data = json.loads(message)
+                    
+                    if (data.get("type") == "task_result" and 
+                        data.get("task_id") == db_request["task_id"]):
+                        
+                        result = data.get("result", {})
+                        if result.get("status") == "completed":
+                            plan_data = result.get("plan_data", {})
+                            plan_structure = plan_data.get("plan_structure", {})
+                            logger.info(f"Successfully fetched research plan from database: {plan_structure}")
+                            return plan_structure
+                        else:
+                            logger.warning(f"Database agent failed to fetch plan: {result.get('error', 'Unknown error')}")
+                            return {}
+                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error receiving database response: {e}")
+                    break
+            
+            logger.warning("Timeout waiting for database response")
+            return {}
+            
+        except Exception as e:
+            logger.error(f"Error fetching research plan from database: {e}")
+            return {}
+
+    async def _generate_research_plan(self, topic_name: str, topic_description: str) -> Dict[str, Any]:
+        """Generate a research plan using the planning agent."""
+        try:
+            if not self.websocket or not self.mcp_connected:
+                logger.warning("Cannot generate research plan: MCP connection not available")
+                return {}
+            
+            # Request planning agent to generate research plan
+            planning_request = {
+                "type": "task",
+                "task_id": f"generate_plan_{uuid.uuid4().hex[:8]}",
+                "target_agent": "planning_agent",
+                "action": "generate_research_plan",
+                "payload": {
+                    "topic_name": topic_name,
+                    "topic_description": topic_description,
+                    "plan_type": "literature_review",
+                    "depth": "standard"
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            await self.websocket.send(json.dumps(planning_request))
+            logger.info(f"Sent request to generate research plan for topic: {topic_name}")
+            
+            # Wait for response with timeout
+            response_timeout = 30.0  # 30 seconds for AI planning
+            start_time = datetime.now()
+            
+            while (datetime.now() - start_time).total_seconds() < response_timeout:
+                try:
+                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+                    data = json.loads(message)
+                    
+                    if (data.get("type") == "task_result" and 
+                        data.get("task_id") == planning_request["task_id"]):
+                        
+                        result = data.get("result", {})
+                        if result.get("status") == "completed":
+                            generated_plan = result.get("research_plan", {})
+                            logger.info(f"Successfully generated research plan: {generated_plan}")
+                            return generated_plan
+                        else:
+                            logger.warning(f"Planning agent failed to generate plan: {result.get('error', 'Unknown error')}")
+                            return {}
+                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error receiving planning agent response: {e}")
+                    break
+            
+            logger.warning("Timeout waiting for planning agent response")
+            return {}
+            
+        except Exception as e:
+            logger.error(f"Error generating research plan: {e}")
+            return {}
+
+    async def _handle_task_result(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle task result from delegated agents and continue workflow."""
+        try:
+            task_id = task_data.get("task_id")
+            agent_id = task_data.get("agent_id")
+            result = task_data.get("result", {})
+            
+            logger.info(f"Received task result from {agent_id} for task {task_id}")
+            logger.info(f"Result status: {result.get('status')}")
+            
+            # Find the context and delegation info for this task result
+            found_context = None
+            found_delegation_id = None
+            found_agent_type = None
+            
+            # Search through all active contexts to find the matching delegation
+            for ctx_task_id, ctx in self.active_contexts.items():
+                for delegation_id, delegation_info in ctx.delegated_tasks.items():
+                    if delegation_info["task_id"] == task_id:
+                        found_context = ctx
+                        found_delegation_id = delegation_id
+                        found_agent_type = delegation_info["agent_type"]
+                        break
+                if found_context:
+                    break
+            
+            if not found_context or not found_delegation_id:
+                logger.warning(f"No active context found for task result {task_id}")
+                return {
+                    "status": "acknowledged",
+                    "message": "Task result received but no active context found",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Update delegation status
+            found_context.delegated_tasks[found_delegation_id]["status"] = "completed"
+            found_context.delegated_tasks[found_delegation_id]["result"] = result
+            found_context.delegated_tasks[found_delegation_id]["completed_at"] = datetime.now().isoformat()
+            
+            logger.info(f"Found delegation: {found_delegation_id} for agent type: {found_agent_type}")
+            
+            # Continue workflow based on current stage and completed delegation
+            if found_agent_type == "literature_search" and found_context.stage == ResearchStage.LITERATURE_REVIEW:
+                logger.info("Literature search completed, continuing to synthesis")
+                await self._continue_workflow_after_literature(found_context, result)
+            elif found_agent_type == "synthesis_review" and found_context.stage == ResearchStage.SYNTHESIS:
+                logger.info("Synthesis completed, continuing to review")
+                await self._continue_workflow_after_synthesis(found_context, result)
+            elif found_agent_type == "screening_agent" and found_context.stage == ResearchStage.SYSTEMATIC_REVIEW:
+                logger.info("Review completed, finalizing workflow")
+                await self._complete_workflow(found_context, result)
+            else:
+                logger.warning(f"Unexpected task result: agent_type={found_agent_type}, stage={found_context.stage}")
+            
+            return {
+                "status": "acknowledged",
+                "message": f"Task result processed for {found_agent_type}",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error handling task result: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
 
 
 # Global service instance

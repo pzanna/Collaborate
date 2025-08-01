@@ -623,6 +623,8 @@ class AIService:
         start_time = time.time()
         self.request_count += 1
         
+        logger.info(f"Processing chat completion request for model: {request.messages[0].content[:50]}... (total messages: {len(request.messages)})")
+
         # Generate cache key
         cache_data = {
             "model": request.model,
@@ -734,6 +736,8 @@ class AIService:
                 "processing_time": processing_time
             }
             
+            logger.info(f"Chat completion response: {content[:50]}... (usage: {usage})")
+
             # Cache the response
             caching_config = config.get("caching", {})
             if caching_config.get("enabled", False):
@@ -912,16 +916,6 @@ async def health_check():
     """Health check endpoint"""
     health_data = ai_service.get_health_status()
     return HealthResponse(**health_data)
-
-@app.post("/ai/chat/completions", response_model=ChatCompletionResponse)
-async def chat_completions(request: ChatCompletionRequest):
-    """Generate chat completions"""
-    return await ai_service.chat_completion(request)
-
-@app.post("/ai/embeddings", response_model=EmbeddingResponse)
-async def create_embeddings(request: EmbeddingRequest):
-    """Create text embeddings"""
-    return await ai_service.create_embeddings(request)
 
 @app.get("/ai/models/available")
 async def get_available_models():

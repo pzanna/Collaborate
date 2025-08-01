@@ -1,5 +1,6 @@
 # Enhanced MCP Server - SECURITY HARDENED with Alpine
-FROM python:3.12-alpine
+# Base stage
+FROM python:3.12-alpine AS base
 
 # Security: Set build arguments for better control
 ARG SERVICE_PORT=9000
@@ -52,9 +53,14 @@ COPY . .
 RUN mkdir -p logs data tmp && \
     chown -R mcpserver:mcpserver /app && \
     chmod -R 750 /app && \
-    chmod 640 /app/*.py 2>/dev/null || true && \
+    chmod 755 /app/tmp && \
+    chmod 755 /app/start.sh /app/start-dev.sh 2>/dev/null || true && \
+    chmod 755 /app/health_check.py && \
+    chmod 644 /app/*.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
-    find /app -type f -exec chmod 640 {} \;
+    find /app -type f -name "*.py" -exec chmod 644 {} \; && \
+    find /app -type f -name "*.sh" -exec chmod 755 {} \; && \
+    chmod 755 /app/health_check.py
 
 # Set secure environment variables
 ENV PYTHONPATH=/app
@@ -71,10 +77,22 @@ USER mcpserver
 # Expose MCP Server port
 EXPOSE 9000
 
-# Security: Enhanced health check with timeout
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import socket; s = socket.socket(); s.connect(('localhost', 9000)); s.close()" || exit 1
+# Production stage (default)
+FROM base AS production
+# Security: Enhanced health check with proper WebSocket connection
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python health_check.py || exit 1
 
-# Security: Use tini as init system and exec form
-ENTRYPOINT ["/sbin/tini", "--"]
+# Security: Use tini as PID 1 with subreaper for proper zombie reaping
+ENTRYPOINT ["/sbin/tini", "-s", "-g", "--"]
 CMD ["python", "-u", "mcp_server.py"]
+
+# Development stage
+FROM base AS development
+# Security: Enhanced health check with proper WebSocket connection (more lenient for development)
+HEALTHCHECK --interval=60s --timeout=15s --start-period=20s --retries=3 \
+    CMD python health_check.py || exit 1
+
+# Security: Use tini as PID 1 with subreaper for proper zombie reaping
+ENTRYPOINT ["/sbin/tini", "-s", "-g", "--"]
+CMD ["./start-dev.sh"]

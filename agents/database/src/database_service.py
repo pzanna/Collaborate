@@ -950,12 +950,12 @@ class DatabaseAgentService:
             }
     
     async def _handle_update_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle task update request."""
-        return await self._generic_update("tasks", data)
+        """Handle research task update request (use research_tasks table)."""
+        return await self._generic_update("research_tasks", data)
     
     async def _handle_delete_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle task deletion request."""
-        return await self._generic_delete("tasks", data.get("task_id", ""))
+        """Handle research task deletion request (use research_tasks table)."""
+        return await self._generic_delete("research_tasks", data.get("task_id", ""))
     
     async def _handle_create_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle literature record creation request."""

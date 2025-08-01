@@ -230,6 +230,7 @@ async def initialize_schema():
                 task_type VARCHAR(50) DEFAULT 'research',
                 task_order INTEGER DEFAULT 1,
                 status VARCHAR(50) DEFAULT 'pending',
+                stage VARCHAR(50) DEFAULT 'planning',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 metadata JSONB DEFAULT '{}'
@@ -475,14 +476,13 @@ async def run_migrations():
         logger.info("Running database migrations...")
         
         # Check if plan_structure column exists
-        column_exists = await conn.fetchval("""
+        plan_structure_exists = await conn.fetchval("""
             SELECT EXISTS (
                 SELECT 1 FROM information_schema.columns 
                 WHERE table_name='research_plans' AND column_name='plan_structure'
             )
         """)
-        
-        if not column_exists:
+        if not plan_structure_exists:
             logger.info("Adding plan_structure column to research_plans table...")
             await conn.execute("""
                 ALTER TABLE research_plans 
@@ -491,6 +491,23 @@ async def run_migrations():
             logger.info("Successfully added plan_structure column")
         else:
             logger.info("plan_structure column already exists")
+
+        # Check if stage column exists in research_tasks
+        stage_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='research_tasks' AND column_name='stage'
+            )
+        """)
+        if not stage_exists:
+            logger.info("Adding stage column to research_tasks table...")
+            await conn.execute("""
+                ALTER TABLE research_tasks 
+                ADD COLUMN stage VARCHAR(50) DEFAULT 'planning'
+            """)
+            logger.info("Successfully added stage column to research_tasks table")
+        else:
+            logger.info("stage column already exists in research_tasks table")
         
         await conn.close()
         logger.info("Database migrations completed successfully!")

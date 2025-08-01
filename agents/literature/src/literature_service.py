@@ -19,8 +19,10 @@ import json
 import logging
 import os
 import re
+import ssl
 import sys
 import uuid
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -51,12 +53,12 @@ logger = logging.getLogger(__name__)
 class SearchQuery:
     """Search query data model for literature search requests."""
     lit_review_id: str
-    query: str
+    research_plan: str = ""
+    query: str = ""
     filters: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
     max_results: int = 100
     search_depth: str = "standard"
-    research_plan: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -108,6 +110,9 @@ class LiteratureSearchService:
         
         # Task processing queue
         self.task_queue = asyncio.Queue()
+        
+        # Response tracking for AI agent communications
+        self.pending_responses: Dict[str, asyncio.Future] = {}
         
         # API endpoints and configurations
         self.api_configs = {
@@ -248,6 +253,15 @@ class LiteratureSearchService:
                 message = await self.websocket.recv()
                 data = json.loads(message)
                 
+                # Handle task result responses for pending AI requests
+                if data.get("type") == "task_result":
+                    task_id = data.get("task_id")
+                    if task_id in self.pending_responses:
+                        future = self.pending_responses.pop(task_id)
+                        if not future.done():
+                            future.set_result(data)
+                    continue
+                
                 if data.get("type") == "task_request":
                     await self.task_queue.put(data)
                 elif data.get("type") == "task":
@@ -325,22 +339,22 @@ class LiteratureSearchService:
     async def _handle_search_academic_papers(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle academic paper search request."""
         try:
-            query = payload.get("query", "")
+            research_plan = payload.get("research_plan", "")
             max_results = payload.get("max_results", 10)
             search_depth = payload.get("search_depth", "standard")
             sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
-            
-            if not query:
+
+            if not research_plan:
                 return {
                     "status": "failed",
-                    "error": "Query is required",
+                    "error": "Research plan is required",
                     "timestamp": datetime.now().isoformat()
                 }
             
             # Create search query
             search_query = SearchQuery(
                 lit_review_id=str(uuid.uuid4()),
-                query=query,
+                research_plan=research_plan,
                 max_results=max_results,
                 sources=sources,
                 search_depth=search_depth
@@ -375,22 +389,22 @@ class LiteratureSearchService:
         try:
             # Parse search parameters
             lit_review_id = payload.get("lit_review_id", str(uuid.uuid4()))
-            query = payload.get("query", "")
+            research_plan = payload.get("research_plan", "")
             filters = payload.get("filters", {})
             sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
             max_results = payload.get("max_results", 100)
-            
-            if not query:
+
+            if not research_plan:
                 return {
                     "status": "failed",
-                    "error": "Query is required",
+                    "error": "Research plan is required",
                     "timestamp": datetime.now().isoformat()
                 }
             
             # Create search query
             search_query = SearchQuery(
                 lit_review_id=lit_review_id,
-                query=query,
+                research_plan=research_plan,
                 filters=filters,
                 sources=sources,
                 max_results=max_results
@@ -474,17 +488,47 @@ class LiteratureSearchService:
         search_terms = []
         if search_query.research_plan:
             logger.info("Research plan provided, extracting AI-optimized search terms")
-            search_terms = await self._extract_search_terms_from_research_plan(
-                search_query.research_plan, 
-                search_query.query
+            search_topics_response = await self._extract_search_terms_from_research_plan(
+                search_query.research_plan
             )
+            
+            # Parse the AI response - it should be JSON string containing search topics
+            if search_topics_response:
+                try:
+                    if isinstance(search_topics_response, str):
+                        # If it's a string, try to parse as JSON
+                        search_topics_dict = json.loads(search_topics_response)
+                    elif isinstance(search_topics_response, dict):
+                        # If it's already a dict, use it directly
+                        search_topics_dict = search_topics_response
+                    else:
+                        # If it's a list of strings, use them directly
+                        search_terms = search_topics_response if isinstance(search_topics_response, list) else [str(search_topics_response)]
+                        search_topics_dict = None
+                    
+                    # Extract all search terms from the dictionary structure
+                    if search_topics_dict:
+                        for topic, terms in search_topics_dict.items():
+                            if isinstance(terms, list):
+                                search_terms.extend(terms)
+                            else:
+                                search_terms.append(str(terms))
+                                
+                    logger.info(f"Extracted {len(search_terms)} search terms from AI response")
+                    
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse AI response as JSON: {e}. Using fallback.")
+                    search_terms = [search_query.query or "general research"]
+            else:
+                logger.warning("No search terms returned from AI, using fallback")
+                search_terms = [search_query.query or "general research"]
         else:
             logger.info("No research plan provided, using original query")
-            search_terms = [search_query.query]
-        
+            search_terms = [search_query.query or "general research"]
+
         logger.info(f"Using search terms: {search_terms}")
-        
-        # Search each configured source
+
+        # Search each configured source with all terms
         sources = search_query.sources or ["semantic_scholar", "arxiv", "crossref"]
         
         # Execute searches concurrently but with rate limiting
@@ -509,13 +553,14 @@ class LiteratureSearchService:
                     # Normalize records
                     normalized_records = self._normalize_records(source_records, source)
                     all_records.extend(normalized_records)
-                    per_source_counts[source] = len(source_records)
+                    per_source_counts[source] = per_source_counts.get(source, 0) + len(source_records)
                     total_fetched += len(source_records)
                     
                     logger.info(f"Retrieved {len(source_records)} records from {source}")
                 else:
-                    per_source_counts[source] = 0
-                    
+                    if source not in per_source_counts:
+                        per_source_counts[source] = 0
+                        
             except Exception as e:
                 error_msg = f"Error searching {source}: {str(e)}"
                 errors.append(error_msg)
@@ -543,7 +588,7 @@ class LiteratureSearchService:
                    f"{len(unique_records)} unique after deduplication")
         
         return search_report
-    
+        
     async def _search_source(self, source: str, search_query: SearchQuery) -> List[Dict[str, Any]]:
         """Search a specific source."""
         try:
@@ -628,7 +673,11 @@ class LiteratureSearchService:
                 identifier = f"paperId:{result['paperId']}"
             # Fall back to title-based identification
             elif 'title' in result and result['title']:
-                identifier = f"title:{result['title'].lower().strip()}"
+                title_value = result['title']
+                # Handle lists by taking the first element
+                if isinstance(title_value, list):
+                    title_value = title_value[0] if len(title_value) > 0 and title_value[0] else ""
+                identifier = f"title:{str(title_value).lower().strip()}"
             
             if identifier and identifier not in seen_identifiers:
                 seen_identifiers.add(identifier)
@@ -1003,10 +1052,23 @@ class LiteratureSearchService:
                         value = None
                         break
                 if value:
+                    # Handle lists by taking the first element or joining
+                    if isinstance(value, list):
+                        if len(value) > 0:
+                            return str(value[0]) if value[0] else None
+                        else:
+                            return None
                     return str(value)
             else:
                 if field_name in record and record[field_name]:
-                    return str(record[field_name])
+                    value = record[field_name]
+                    # Handle lists by taking the first element or joining
+                    if isinstance(value, list):
+                        if len(value) > 0:
+                            return str(value[0]) if value[0] else None
+                        else:
+                            return None
+                    return str(value)
         return None
     
     def _extract_authors(self, record: Dict[str, Any]) -> List[str]:
@@ -1108,102 +1170,115 @@ class LiteratureSearchService:
             logger.warning(f"Error checking AI agent availability: {e}")
             self.ai_agent_available = False
 
-    async def _extract_search_terms_from_research_plan(self, research_plan: Dict[str, Any], original_query: str) -> List[str]:
+
+    async def _extract_search_terms_from_research_plan(self, research_plan):
         """
         Extract optimized search terms from research plan using AI agent via MCP.
         
         Args:
-            research_plan: AI-generated research plan with objectives, questions, etc.
-            original_query: The original user query as fallback
+            research_plan: AI-generated research plan with objectives, questions, etc. (can be dict or str)
             
         Returns:
             List of optimized search terms for academic databases
         """
-        if not self.ai_agent_available or not research_plan:
-            logger.info("No AI agent available or no research plan provided, using original query")
-            return [original_query]
-        
-        # First, check if we have cached search terms for this plan
-        plan_id = research_plan.get("id") or research_plan.get("plan_id")
-        if plan_id:
-            cached_terms = await self._get_cached_search_terms("plan", plan_id, original_query)
-            if cached_terms:
-                logger.info(f"Using {len(cached_terms)} cached search terms for plan {plan_id}")
-                return cached_terms
-        
-        try:
-            # Send request to AI agent via MCP for search term optimization
-            optimization_request = {
-                "type": "task",
+
+        logger.info(f"Extracting search terms from research plan: {research_plan}")
+
+        # Create research planning prompt
+        prompt = (
+            "You are a scientific search-strategy assistant. When given a research plan, "
+            "reply ONLY with VALID JSON matching the schema in the instruction, "
+            "containing highly targeted literature-search phrases ready for PubMed / "
+            "Web of Science / Google Scholar. Do not add commentary or markdown.\n\n"
+            f"Plan: {research_plan}\n\n"
+            "Format your response in JSON with the following structure:\n"
+            "{\n"
+            '    "topic 1": ["Search String 1", "Search String 2", ...],\n'
+            '    "topic 2": ["Search String 1", "Search String 2", ...],\n'
+            '    "topic 3": ["Search String 1", "Search String 2", ...],\n'
+            "    ...\n"
+            "}\n"
+            "Ensure the search strings are specific, relevant, and suitable for "
+            "academic databases.\n"
+        )
+
+        # Send request to AI agent via MCP for search term optimization
+        optimization_request = {
+            "type": "research_action",
+            "data": {
                 "task_id": f"search_term_optimization_{uuid.uuid4().hex[:8]}",
-                "target_agent": "ai_agent",
-                "action": "optimize_search_terms",
+                "context_id": f"literature_ai_optimization",
+                "agent_type": "ai_service",  # Use correct agent type for AI service
+                "action": "ai_chat_completion",  # Use the actual AI service action
                 "payload": {
-                    "research_plan": research_plan,
-                    "original_query": original_query,
-                    "context": "literature_search",
-                    "target_databases": ["PubMed", "arXiv", "Semantic Scholar", "CrossRef"],
-                    "max_terms": 5
-                },
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            if not self.websocket or not self.mcp_connected:
-                logger.warning("MCP connection not available, using original query")
-                return [original_query]
-            
-            # Send the request
-            await self.websocket.send(json.dumps(optimization_request))
-            logger.info("Search term optimization request sent to AI agent via MCP")
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are an expert research assistant specializing in academic literature search optimization. Extract 3-5 highly targeted search terms from the provided research plan that will be most effective for finding relevant academic papers in databases like PubMed, arXiv, Semantic Scholar, and CrossRef."
+                        },
+                        {
+                            "role": "user", 
+                            "content": prompt
+                        }
+                    ],
+                    "max_tokens": 200,
+                    "temperature": 0.3
+                }
+            },
+            "client_id": self.agent_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        if not self.websocket or not self.mcp_connected:
+            logger.warning("MCP connection not available, unable to perform a search")
+            fallback_query = (research_plan[:100] if isinstance(research_plan, str) else str(research_plan)[:100])
+            return [fallback_query]
+        
+        # Send the request
+        task_id = optimization_request["data"]["task_id"]
+        await self.websocket.send(json.dumps(optimization_request))
+        logger.info("Search term optimization request sent to AI agent via MCP")
+        # Wait for response using Future-based approach
+        try:
+            # Create future for this request
+            future = asyncio.Future()
+            self.pending_responses[task_id] = future
             
             # Wait for response with timeout
-            response_timeout = 15.0  # 15 seconds
-            start_time = datetime.now()
+            response_data = await asyncio.wait_for(future, timeout=30.0)
             
-            while (datetime.now() - start_time).total_seconds() < response_timeout:
-                try:
-                    # Check for incoming messages
-                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
-                    data = json.loads(message)
-                    
-                    # Check if this is our response
-                    if (data.get("type") == "task_result" and 
-                        data.get("task_id") == optimization_request["task_id"]):
-                        
-                        result = data.get("result", {})
-                        if result.get("status") == "completed":
-                            search_terms = result.get("optimized_terms", [])
-                            if search_terms and isinstance(search_terms, list):
-                                logger.info(f"Received {len(search_terms)} optimized search terms from AI agent")
-                                
-                                # Store the optimized terms in database for future use
-                                if plan_id:
-                                    await self._store_search_terms(
-                                        source_type="plan",
-                                        source_id=plan_id,
-                                        original_query=original_query,
-                                        optimized_terms=search_terms,
-                                        optimization_context=result.get("optimization_context", {}),
-                                        target_databases=["PubMed", "arXiv", "Semantic Scholar", "CrossRef"]
-                                    )
-                                
-                                return search_terms
-                        else:
-                            logger.warning(f"AI agent failed to optimize search terms: {result.get('error', 'Unknown error')}")
-                            break
-                            
-                except asyncio.TimeoutError:
-                    continue  # Keep waiting
-                except Exception as e:
-                    logger.error(f"Error receiving AI agent response: {e}")
-                    break
-            
-            logger.warning("Timeout waiting for AI agent response, using original query")
-            return [original_query]
+            if (response_data.get("type") == "task_result" and 
+                response_data.get("task_id") == task_id):
                 
+                if response_data.get("status") == "completed":
+                    chat_response = response_data.get("result", {})
+                    logger.info(f"Raw AI result received: {chat_response}")
+                
+                    if "choices" in chat_response and len(chat_response["choices"]) > 0:
+                        choice = chat_response["choices"][0]
+
+                        if "message" in choice and "content" in choice["message"]:
+                            content = choice["message"]["content"]
+                            logger.info(f"Search topics and terms extracted: {content}")
+                            logger.info(f"Extracted content from OpenAI response: {len(content)} chars")
+                            # Return topics and search terms
+                            return content
+
+            logger.warning("No valid search terms returned from AI agent")
+            return []
+            
+        except asyncio.TimeoutError:
+            logger.warning("Timeout waiting for AI agent response")
+            return []
         except Exception as e:
-            logger.error(f"Error requesting search term optimization from AI agent: {e}")
-            return [original_query]
+            logger.error(f"Error extracting search terms from research plan: {e}")
+            return []
+        finally:
+            # Clean up pending response
+            self.pending_responses.pop(task_id, None)
+            logger.info("Pending response cleaned up for search term optimization request")
+    
     
     async def _get_cached_search_terms(self, source_type: str, source_id: str, original_query: str) -> Optional[List[str]]:
         """
@@ -1222,53 +1297,79 @@ class LiteratureSearchService:
                 return None
             
             # Send request to database agent via MCP
+            task_id = f"get_search_terms_{uuid.uuid4().hex[:8]}"
             db_request = {
-                "type": "task",
-                "task_id": f"get_search_terms_{uuid.uuid4().hex[:8]}",
-                "target_agent": "database_agent",
-                "action": f"get_search_terms_for_{source_type}",
-                "payload": {
-                    f"{source_type}_id": source_id
+                "type": "research_action",
+                "data": {
+                    "task_id": task_id,
+                    "context_id": f"search_terms_cache_{source_type}_{source_id}",
+                    "agent_type": "database",
+                    "action": f"get_search_terms_for_{source_type}",
+                    "payload": {
+                        f"{source_type}_id": source_id
+                    }
                 },
+                "client_id": "literature_search",
                 "timestamp": datetime.now().isoformat()
             }
             
+            task_id = db_request["data"]["task_id"]
             await self.websocket.send(json.dumps(db_request))
             
-            # Wait for response with timeout
-            response_timeout = 5.0  # 5 seconds for database query
-            start_time = datetime.now()
-            
-            while (datetime.now() - start_time).total_seconds() < response_timeout:
-                try:
-                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
-                    data = json.loads(message)
+            # Wait for response using Future-based approach
+            try:
+                # Create future for this request
+                future = asyncio.Future()
+                self.pending_responses[task_id] = future
+                
+                # Wait for response with timeout
+                response_data = await asyncio.wait_for(future, timeout=5.0)
+                
+                if (response_data.get("type") == "task_result" and 
+                    response_data.get("task_id") == task_id):
                     
-                    if (data.get("type") == "task_result" and 
-                        data.get("task_id") == db_request["task_id"]):
+                    result = response_data.get("result", {})
+                    if result.get("status") == "completed":
+                        optimizations = result.get("optimizations", [])
                         
-                        result = data.get("result", {})
-                        if result.get("status") == "completed":
-                            optimizations = result.get("optimizations", [])
-                            
-                            # Find the most recent optimization for this query
-                            for optimization in optimizations:
-                                if optimization.get("original_query") == original_query:
-                                    # Check if expired
-                                    expires_at = optimization.get("expires_at")
-                                    if expires_at:
-                                        expiry_time = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                                        if datetime.now(expiry_time.tzinfo) > expiry_time:
+                        # Find the most recent optimization for this query
+                        for optimization in optimizations:
+                            if optimization.get("original_query") == original_query:
+                                # Check if expired
+                                expires_at = optimization.get("expires_at")
+                                if expires_at:
+                                    try:
+                                        # Handle both timezone-aware and naive datetime strings
+                                        if expires_at.endswith('Z'):
+                                            expires_at = expires_at.replace('Z', '+00:00')
+                                        
+                                        expiry_time = datetime.fromisoformat(expires_at)
+                                        
+                                        # Convert to UTC for comparison if timezone-aware
+                                        if expiry_time.tzinfo:
+                                            current_time = datetime.now(expiry_time.tzinfo)
+                                        else:
+                                            current_time = datetime.now()
+                                            
+                                        if current_time > expiry_time:
                                             continue  # Skip expired
-                                    
-                                    return optimization.get("optimized_terms", [])
-                        break
+                                    except (ValueError, TypeError) as e:
+                                        logger.warning(f"Invalid expires_at format: {expires_at}, error: {e}")
+                                        continue
+                                
+                                return optimization.get("optimized_terms", [])
+                    
+                    return None
                         
-                except asyncio.TimeoutError:
-                    continue
-                except Exception as e:
-                    logger.error(f"Error receiving database response: {e}")
-                    break
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for database response")
+                return None
+            except Exception as e:
+                logger.error(f"Error receiving database response: {e}")
+                return None
+            finally:
+                # Clean up pending response
+                self.pending_responses.pop(task_id, None)
             
             return None
             
@@ -1298,57 +1399,66 @@ class LiteratureSearchService:
                 return False
             
             # Send request to database agent via MCP
+            task_id = f"store_search_terms_{uuid.uuid4().hex[:8]}"
             db_request = {
-                "type": "task",
-                "task_id": f"store_search_terms_{uuid.uuid4().hex[:8]}",
-                "target_agent": "database_agent",
-                "action": "store_optimized_search_terms",
-                "payload": {
-                    "source_type": source_type,
-                    "source_id": source_id,
-                    "original_query": original_query,
-                    "optimized_terms": optimized_terms,
-                    "optimization_context": optimization_context,
-                    "target_databases": target_databases,
-                    "expires_at": (datetime.now() + timedelta(hours=24)).isoformat(),  # Cache for 24 hours
-                    "metadata": {
-                        "created_by": "literature_service",
-                        "optimization_version": "1.0"
+                "type": "research_action",
+                "data": {
+                    "task_id": task_id,
+                    "context_id": f"store_search_terms_{source_type}_{source_id}",
+                    "agent_type": "database",
+                    "action": "store_optimized_search_terms",
+                    "payload": {
+                        "source_type": source_type,
+                        "source_id": source_id,
+                        "original_query": original_query,
+                        "optimized_terms": optimized_terms,
+                        "optimization_context": optimization_context,
+                        "target_databases": target_databases,
+                        "expires_at": (datetime.now() + timedelta(hours=24)).isoformat(),  # Cache for 24 hours
+                        "metadata": {
+                            "created_by": "literature_service",
+                            "optimization_version": "1.0"
+                        }
                     }
                 },
+                "client_id": "literature_search",
                 "timestamp": datetime.now().isoformat()
             }
             
+            task_id = db_request["data"]["task_id"]
             await self.websocket.send(json.dumps(db_request))
             
-            # Wait for response with timeout
-            response_timeout = 5.0  # 5 seconds for database operation
-            start_time = datetime.now()
-            
-            while (datetime.now() - start_time).total_seconds() < response_timeout:
-                try:
-                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
-                    data = json.loads(message)
+            # Wait for response using Future-based approach
+            try:
+                # Create future for this request
+                future = asyncio.Future()
+                self.pending_responses[task_id] = future
+                
+                # Wait for response with timeout
+                response_data = await asyncio.wait_for(future, timeout=5.0)
+                
+                if (response_data.get("type") == "task_result" and 
+                    response_data.get("task_id") == task_id):
                     
-                    if (data.get("type") == "task_result" and 
-                        data.get("task_id") == db_request["task_id"]):
+                    result = response_data.get("result", {})
+                    if result.get("status") == "completed":
+                        logger.info(f"Successfully stored search terms for {source_type} {source_id}")
+                        return True
+                    else:
+                        logger.warning(f"Failed to store search terms: {result.get('error', 'Unknown error')}")
+                        return False
                         
-                        result = data.get("result", {})
-                        if result.get("status") == "completed":
-                            logger.info(f"Successfully stored search terms for {source_type} {source_id}")
-                            return True
-                        else:
-                            logger.warning(f"Failed to store search terms: {result.get('error', 'Unknown error')}")
-                            return False
-                        
-                except asyncio.TimeoutError:
-                    continue
-                except Exception as e:
-                    logger.error(f"Error receiving database response: {e}")
-                    break
+            except asyncio.TimeoutError:
+                logger.warning("Timeout storing search terms in database")
+                return False
+            except Exception as e:
+                logger.error(f"Error receiving database response: {e}")
+                return False
+            finally:
+                # Clean up pending response
+                self.pending_responses.pop(task_id, None)
             
-            logger.warning("Timeout storing search terms in database")
-            return False
+            return False  # Default return if no successful response
             
         except Exception as e:
             logger.error(f"Error storing search terms: {e}")
