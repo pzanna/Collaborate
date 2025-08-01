@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 import aiohttp
 import uvicorn
@@ -118,22 +118,22 @@ class LiteratureSearchService:
         self.api_configs = {
             'semantic_scholar': {
                 'base_url': 'https://api.semanticscholar.org/graph/v1/paper/search',
-                'rate_limit': 1.0,  # seconds between requests
+                'rate_limit': 3,  # seconds between requests
                 'max_results_per_request': 100
             },
             'pubmed': {
                 'base_url': 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
-                'rate_limit': 0.34,  # NCBI rate limit (3 requests per second)
+                'rate_limit': 1,  # NCBI rate limit (3 requests per second)
                 'max_results_per_request': 100
             },
             'arxiv': {
                 'base_url': 'http://export.arxiv.org/api/query',
-                'rate_limit': 3.0,  # arXiv rate limit recommendation
+                'rate_limit': 3,  # arXiv rate limit recommendation
                 'max_results_per_request': 100
             },
             'crossref': {
                 'base_url': 'https://api.crossref.org/works',
-                'rate_limit': 1.0,  # CrossRef rate limit
+                'rate_limit': 1,  # CrossRef rate limit
                 'max_results_per_request': 100
             }
         }
@@ -529,8 +529,8 @@ class LiteratureSearchService:
         logger.info(f"Using search terms: {search_terms}")
 
         # Search each configured source with all terms
-        sources = search_query.sources or ["semantic_scholar", "arxiv", "crossref"]
-        
+        sources = search_query.sources or ["semantic_scholar", "arxiv", "pubmed", "crossref"]
+
         # Execute searches concurrently but with rate limiting
         search_tasks = []
         for source in sources:
@@ -626,6 +626,8 @@ class LiteratureSearchService:
                     research_plan=search_query.research_plan
                 )
                 
+                # logger.info(f"Searching {modified_query}'")
+
                 # Search with the modified query
                 if source == "semantic_scholar":
                     results = await self._search_semantic_scholar(modified_query)
@@ -701,18 +703,12 @@ class LiteratureSearchService:
             params = {
                 'query': search_query.query,
                 'limit': min(search_query.max_results, config['max_results_per_request']),
-                'fields': 'paperId,title,abstract,authors,year,venue,doi,url,citationCount'
             }
             
-            # Apply filters
-            if 'year_min' in search_query.filters:
-                params['year'] = f"{search_query.filters['year_min']}-"
-            if 'year_max' in search_query.filters:
-                if 'year' in params:
-                    params['year'] = f"{search_query.filters.get('year_min', 1900)}-{search_query.filters['year_max']}"
-                else:
-                    params['year'] = f"-{search_query.filters['year_max']}"
-            
+            # Compose the full URL with query parameters for logging/debugging
+            full_url = f"{url}?{urlencode(params)}"
+            logger.info(f"Semantic Scholar full request URL: {full_url}")
+
             # Rate limiting
             await asyncio.sleep(config['rate_limit'])
             
@@ -755,7 +751,10 @@ class LiteratureSearchService:
                 'sortBy': 'relevance',
                 'sortOrder': 'descending'
             }
-            
+
+            full_url = f"{url}?{urlencode(params)}"
+            logger.info(f"arXiv full request URL: {full_url}")
+
             # Rate limiting
             await asyncio.sleep(config['rate_limit'])
             
@@ -788,7 +787,10 @@ class LiteratureSearchService:
                 'retmax': min(search_query.max_results, config['max_results_per_request']),
                 'retmode': 'json'
             }
-            
+
+            full_url = f"{search_url}?{urlencode(search_params)}"
+            logger.info(f"PubMed full request URL: {full_url}")
+
             # Rate limiting
             await asyncio.sleep(config['rate_limit'])
             
@@ -857,6 +859,9 @@ class LiteratureSearchService:
             if filters:
                 params['filter'] = ','.join(filters)
             
+            full_url = f"{url}?{urlencode(params)}"
+            logger.info(f"arXiv full request URL: {full_url}")
+
             # Rate limiting
             await asyncio.sleep(config['rate_limit'])
             

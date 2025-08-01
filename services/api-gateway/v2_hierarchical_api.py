@@ -1290,6 +1290,7 @@ async def execute_research_task(
         # 2. Get approved research plan for this topic
         plans = await db.get_research_plans(topic_id)
         approved_plan = next((p for p in plans if p.get("plan_approved", False)), None)
+        logger.info(f"Approved plan found: {plans}")
         if not approved_plan:
             raise HTTPException(
                 status_code=400, 
