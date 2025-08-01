@@ -54,7 +54,7 @@ services:
       # Mount source code for development
       - ./agents/research-manager/src:/app/src:ro
       - ./agents/research-manager/config:/app/config:ro
-      - ./agents/research-manager/health_check_service.py:/app/health_check_service.py:ro
+      - ./agents/research-manager/health_check.py:/app/health_check.py:ro
       - ./agents/research-manager/start-dev.sh:/app/start-dev.sh:ro
     # Remove read-only constraints for development
     read_only: false

@@ -47,8 +47,7 @@ COPY config/ ./config/
 # Copy shared health check service
 COPY health_check_service.py ./health_check_service.py
 
-# Copy startup scripts
-COPY start.sh ./start.sh
+# Copy startup script
 COPY start-dev.sh ./start-dev.sh
 
 # Security: Set strict file permissions and ownership
