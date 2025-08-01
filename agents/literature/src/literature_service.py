@@ -118,23 +118,23 @@ class LiteratureSearchService:
         self.api_configs = {
             'semantic_scholar': {
                 'base_url': 'https://api.semanticscholar.org/graph/v1/paper/search',
-                'rate_limit': 3,  # seconds between requests
-                'max_results_per_request': 100
+                'rate_limit': 5,  # seconds between requests
+                'max_results_per_request': 10
             },
             'pubmed': {
                 'base_url': 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
                 'rate_limit': 1,  # NCBI rate limit (3 requests per second)
-                'max_results_per_request': 100
+                'max_results_per_request': 10
             },
             'arxiv': {
                 'base_url': 'http://export.arxiv.org/api/query',
                 'rate_limit': 3,  # arXiv rate limit recommendation
-                'max_results_per_request': 100
+                'max_results_per_request': 10
             },
             'crossref': {
                 'base_url': 'https://api.crossref.org/works',
                 'rate_limit': 1,  # CrossRef rate limit
-                'max_results_per_request': 100
+                'max_results_per_request': 10
             }
         }
         
@@ -481,55 +481,49 @@ class LiteratureSearchService:
         per_source_counts = {}
         errors = []
         all_records = []
-        
+        # Search each configured source with all terms
+        sources = search_query.sources or ["semantic_scholar", "arxiv", "pubmed", "crossref"]
+
         logger.info(f"Starting literature search for review {search_query.lit_review_id}")
         
         # Extract AI-optimized search terms if research plan is available
         search_terms = []
         if search_query.research_plan:
-            logger.info("Research plan provided, extracting AI-optimized search terms")
-            search_topics_response = await self._extract_search_terms_from_research_plan(
-                search_query.research_plan
-            )
+            # Check for cached terms first
+            cached_terms = await self._get_cached_search_terms("plan", search_query.lit_review_id, search_query.research_plan)
+            if cached_terms:
+                search_terms = cached_terms
+                logger.info(f"Using {len(search_terms)} cached search terms")
+            else:    
+                logger.info("Research plan provided, extracting AI-optimized search terms")
+                ai_extracted_terms = await self._extract_search_terms_from_research_plan(
+                    search_query.research_plan
+                )
             
-            # Parse the AI response - it should be JSON string containing search topics
-            if search_topics_response:
-                try:
-                    if isinstance(search_topics_response, str):
-                        # If it's a string, try to parse as JSON
-                        search_topics_dict = json.loads(search_topics_response)
-                    elif isinstance(search_topics_response, dict):
-                        # If it's already a dict, use it directly
-                        search_topics_dict = search_topics_response
-                    else:
-                        # If it's a list of strings, use them directly
-                        search_terms = search_topics_response if isinstance(search_topics_response, list) else [str(search_topics_response)]
-                        search_topics_dict = None
-                    
-                    # Extract all search terms from the dictionary structure
-                    if search_topics_dict:
-                        for topic, terms in search_topics_dict.items():
-                            if isinstance(terms, list):
-                                search_terms.extend(terms)
-                            else:
-                                search_terms.append(str(terms))
-                                
+                # AI extraction now returns a list of search terms directly
+                if ai_extracted_terms and isinstance(ai_extracted_terms, list):
+                    search_terms = ai_extracted_terms
                     logger.info(f"Extracted {len(search_terms)} search terms from AI response")
-                    
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Failed to parse AI response as JSON: {e}. Using fallback.")
+                    # Store terms for future use
+                    try:
+                        await self._store_search_terms(
+                            "plan", 
+                            search_query.lit_review_id, 
+                            search_query.research_plan, 
+                            search_terms, 
+                            {"ai_model": "gpt-4o-mini"}, 
+                            sources
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to store search terms: {e}")
+                else:
+                    logger.warning("No valid search terms returned from AI, using fallback")
                     search_terms = [search_query.query or "general research"]
-            else:
-                logger.warning("No search terms returned from AI, using fallback")
-                search_terms = [search_query.query or "general research"]
         else:
             logger.info("No research plan provided, using original query")
             search_terms = [search_query.query or "general research"]
 
         logger.info(f"Using search terms: {search_terms}")
-
-        # Search each configured source with all terms
-        sources = search_query.sources or ["semantic_scholar", "arxiv", "pubmed", "crossref"]
 
         # Execute searches concurrently but with rate limiting
         search_tasks = []
@@ -1267,8 +1261,29 @@ class LiteratureSearchService:
                             content = choice["message"]["content"]
                             logger.info(f"Search topics and terms extracted: {content}")
                             logger.info(f"Extracted content from OpenAI response: {len(content)} chars")
-                            # Return topics and search terms
-                            return content
+                            
+                            # Parse the JSON response to extract search terms
+                            try:
+                                # Try to parse as JSON
+                                search_topics_dict = json.loads(content)
+                                logger.info(f"Parsed search topics: {search_topics_dict}")
+                                
+                                # Extract all search terms from the dictionary structure
+                                search_terms = []
+                                if search_topics_dict:
+                                    for topic, terms in search_topics_dict.items():
+                                        if isinstance(terms, list):
+                                            search_terms.extend(terms)
+                                        else:
+                                            search_terms.append(str(terms))
+                                
+                                logger.info(f"Extracted {len(search_terms)} search terms: {search_terms}")
+                                return search_terms
+                                
+                            except json.JSONDecodeError as e:
+                                logger.warning(f"Failed to parse AI response as JSON: {e}")
+                                # Return raw content as single search term
+                                return [content.strip()]
 
             logger.warning("No valid search terms returned from AI agent")
             return []
@@ -1304,21 +1319,16 @@ class LiteratureSearchService:
             # Send request to database agent via MCP
             task_id = f"get_search_terms_{uuid.uuid4().hex[:8]}"
             db_request = {
-                "type": "research_action",
+                "type": "task_request",
+                "task_id": task_id,
+                "task_type": f"get_search_terms_for_{source_type}",
                 "data": {
-                    "task_id": task_id,
-                    "context_id": f"search_terms_cache_{source_type}_{source_id}",
-                    "agent_type": "database",
-                    "action": f"get_search_terms_for_{source_type}",
-                    "payload": {
-                        f"{source_type}_id": source_id
-                    }
+                    f"{source_type}_id": source_id
                 },
                 "client_id": "literature_search",
                 "timestamp": datetime.now().isoformat()
             }
             
-            task_id = db_request["data"]["task_id"]
             await self.websocket.send(json.dumps(db_request))
             
             # Wait for response using Future-based approach
@@ -1406,31 +1416,25 @@ class LiteratureSearchService:
             # Send request to database agent via MCP
             task_id = f"store_search_terms_{uuid.uuid4().hex[:8]}"
             db_request = {
-                "type": "research_action",
+                "type": "task_request",
+                "task_id": task_id,
+                "task_type": "store_optimized_search_terms",
                 "data": {
-                    "task_id": task_id,
-                    "context_id": f"store_search_terms_{source_type}_{source_id}",
-                    "agent_type": "database",
-                    "action": "store_optimized_search_terms",
-                    "payload": {
-                        "source_type": source_type,
-                        "source_id": source_id,
-                        "original_query": original_query,
-                        "optimized_terms": optimized_terms,
-                        "optimization_context": optimization_context,
-                        "target_databases": target_databases,
-                        "expires_at": (datetime.now() + timedelta(hours=24)).isoformat(),  # Cache for 24 hours
-                        "metadata": {
-                            "created_by": "literature_service",
-                            "optimization_version": "1.0"
-                        }
+                    "source_type": source_type,
+                    "source_id": source_id,
+                    "original_query": original_query,
+                    "optimized_terms": optimized_terms,
+                    "optimization_context": optimization_context,
+                    "target_databases": target_databases,
+                    "expires_at": (datetime.now() + timedelta(hours=24)).isoformat(),  # Cache for 24 hours
+                    "metadata": {
+                        "created_by": "literature_service",
+                        "optimization_version": "1.0"
                     }
                 },
                 "client_id": "literature_search",
                 "timestamp": datetime.now().isoformat()
             }
-            
-            task_id = db_request["data"]["task_id"]
             await self.websocket.send(json.dumps(db_request))
             
             # Wait for response using Future-based approach
