@@ -94,6 +94,8 @@ class LiteratureSearchService:
         self.service_host = config.get("service_host", "0.0.0.0")
         self.service_port = config.get("service_port", 8003)
         self.mcp_server_url = config.get("mcp_server_url", "ws://mcp-server:9000")
+        self.core_api_key = os.environ.get("CORE_API_KEY")
+
         
         # Search configuration
         self.max_concurrent_searches = config.get("max_concurrent_searches", 3)
@@ -136,6 +138,11 @@ class LiteratureSearchService:
             'crossref': {
                 'base_url': 'https://api.crossref.org/works',
                 'rate_limit': 1,  # CrossRef rate limit
+                'max_results_per_request': 10
+            },
+            'core': {
+                'base_url': 'https://api.core.ac.uk/v3/search/works',
+                'rate_limit': 1, # CORE API rate limit
                 'max_results_per_request': 10
             }
         }
@@ -345,7 +352,7 @@ class LiteratureSearchService:
             plan_id = payload.get("plan_id", "")
             max_results = payload.get("max_results", 10)
             search_depth = payload.get("search_depth", "standard")
-            sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
+            sources = payload.get("sources", ["core", "arxiv", "crossref", "semantic_scholar", "pubmed"])
 
             if not research_plan:
                 return {
@@ -396,7 +403,7 @@ class LiteratureSearchService:
             plan_id = payload.get("plan_id", "")
             research_plan = payload.get("research_plan", "")
             filters = payload.get("filters", {})
-            sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
+            sources = payload.get("sources", ["core", "arxiv", "crossref", "semantic_scholar", "pubmed"])
             max_results = payload.get("max_results", 100)
 
             if not research_plan:
@@ -488,7 +495,7 @@ class LiteratureSearchService:
         errors = []
         all_records = []
         # Search each configured source with all terms
-        sources = search_query.sources or ["semantic_scholar", "arxiv", "pubmed", "crossref"]
+        sources = search_query.sources or ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"]
 
         logger.info(f"Starting literature search for review {search_query.lit_review_id}")
         
@@ -611,6 +618,8 @@ class LiteratureSearchService:
                 return await self._search_pubmed(search_query)
             elif source == "crossref":
                 return await self._search_crossref(search_query)
+            elif source == "core":
+                return await self._search_core(search_query)
             else:
                 logger.warning(f"Unsupported source: {source}")
                 return []
@@ -648,6 +657,8 @@ class LiteratureSearchService:
                     results = await self._search_pubmed(modified_query)
                 elif source == "crossref":
                     results = await self._search_crossref(modified_query)
+                elif source == "core":
+                    results = await self._search_core(modified_query)
                 else:
                     logger.warning(f"Unsupported source: {source}")
                     results = []
@@ -893,6 +904,44 @@ class LiteratureSearchService:
             logger.error(f"Error searching CrossRef: {e}")
             return []
     
+    async def _search_core(self, search_query: SearchQuery) -> List[Dict[str, Any]]:
+        """Search CORE API."""
+        try:
+            if not self.session:
+                logger.error("HTTP session not initialized")
+                return []
+                
+            config = self.api_configs['core']
+            url = config['base_url']
+            
+            params = {
+                'q': search_query.query,
+                'limit': min(search_query.max_results, config['max_results_per_request']),
+            }
+            
+            # Compose the full URL with query parameters for logging/debugging
+            full_url = f"{url}?{urlencode(params)}"
+            logger.info(f"CORE full request URL: {full_url}")
+
+            headers = {}
+            if self.core_api_key:
+                headers['Authorization'] = f'Bearer {self.core_api_key}'
+
+            # Rate limiting
+            await asyncio.sleep(config['rate_limit'])
+            
+            async with self.session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get('results', [])
+                else:
+                    logger.warning(f"CORE API returned status {response.status}")
+                    return []
+                    
+        except Exception as e:
+            logger.error(f"Error searching CORE: {e}")
+            return []
+
     def _parse_arxiv_xml(self, xml_content: str) -> List[Dict[str, Any]]:
         """Parse arXiv XML response."""
         try:
