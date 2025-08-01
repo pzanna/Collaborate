@@ -59,6 +59,7 @@ class ResearchStage(Enum):
 class ResearchContext:
     """Research context for tracking task state."""
     task_id: str
+    plan_id: str
     task_description: str
     user_id: str
     topic_id: str
@@ -470,6 +471,7 @@ class ResearchManagerService:
             topic_id = data.get("topic_id", "")
             topic_name = data.get("topic_name", "")
             topic_description = data.get("topic_description", "")
+            plan_id = data.get("plan_id", "")
             research_plan = data.get("research_plan", {})
             task_type = data.get("task_type", "research")
             depth = data.get("depth", "standard")
@@ -504,6 +506,7 @@ class ResearchManagerService:
             # Create research context using the provided task ID
             context = ResearchContext(
                 task_id=task_id,
+                plan_id=plan_id,
                 task_description=task_description,
                 user_id=user_id,
                 topic_id=topic_id,
@@ -794,6 +797,7 @@ class ResearchManagerService:
                 action_data={
                     "action": "search_literature",
                     "lit_review_id": context.task_id,
+                    "plan_id": context.plan_id,
                     "research_plan": research_plan,  # Use the actual research plan
                     "max_results": context.metadata.get("max_results", 50)
                 }

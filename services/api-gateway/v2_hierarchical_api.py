@@ -1308,15 +1308,10 @@ async def execute_research_task(
             "topic_id": topic_id,
             "topic_name": topic.get("name", ""),
             "topic_description": topic.get("description", ""),
+            "plan_id": approved_plan.get("id", ""),
             "research_plan": approved_plan.get("plan_structure", {}),
             "task_type": request.task_type,
             "depth": request.depth
-            # "max_results": depth_config["max_results"],
-            # "sources": depth_config["sources"],
-            # "quality_threshold": depth_config["quality_threshold"],
-            # "synthesis_depth": depth_config["synthesis_depth"],
-            # "search_strategy": depth_config["search_strategy"],
-            # "single_agent_mode": False  # Always use full workflow for research tasks
         }
         
         # 5. Execute via Research Manager

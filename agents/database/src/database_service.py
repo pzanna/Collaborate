@@ -1026,6 +1026,7 @@ class DatabaseAgentService:
             optimization_context = data.get("optimization_context", {})
             target_databases = data.get("target_databases", [])
             expires_at = data.get("expires_at")
+            expires_at = datetime.fromisoformat(expires_at) if expires_at else None
             metadata = data.get("metadata", {})
             
             if not source_type or not source_id or not original_query or not optimized_terms:

@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 class SearchQuery:
     """Search query data model for literature search requests."""
     lit_review_id: str
+    plan_id: str = ""
     research_plan: str = ""
     query: str = ""
     filters: Dict[str, Any] = field(default_factory=dict)
@@ -340,6 +341,7 @@ class LiteratureSearchService:
         """Handle academic paper search request."""
         try:
             research_plan = payload.get("research_plan", "")
+            plan_id = payload.get("plan_id", "")
             max_results = payload.get("max_results", 10)
             search_depth = payload.get("search_depth", "standard")
             sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
@@ -354,6 +356,7 @@ class LiteratureSearchService:
             # Create search query
             search_query = SearchQuery(
                 lit_review_id=str(uuid.uuid4()),
+                plan_id=plan_id,
                 research_plan=research_plan,
                 max_results=max_results,
                 sources=sources,
@@ -389,6 +392,7 @@ class LiteratureSearchService:
         try:
             # Parse search parameters
             lit_review_id = payload.get("lit_review_id", str(uuid.uuid4()))
+            plan_id = payload.get("plan_id", "")
             research_plan = payload.get("research_plan", "")
             filters = payload.get("filters", {})
             sources = payload.get("sources", ["semantic_scholar", "arxiv", "crossref"])
@@ -404,6 +408,7 @@ class LiteratureSearchService:
             # Create search query
             search_query = SearchQuery(
                 lit_review_id=lit_review_id,
+                plan_id=plan_id,
                 research_plan=research_plan,
                 filters=filters,
                 sources=sources,
@@ -490,10 +495,10 @@ class LiteratureSearchService:
         search_terms = []
         if search_query.research_plan:
             # Check for cached terms first
-            cached_terms = await self._get_cached_search_terms("plan", search_query.lit_review_id, search_query.research_plan)
+            cached_terms = await self._get_cached_search_terms("plan", search_query.plan_id, str(search_query.research_plan)[:500])
             if cached_terms:
                 search_terms = cached_terms
-                logger.info(f"Using {len(search_terms)} cached search terms")
+                logger.info(f"Using {len(search_terms)} cached search terms: {search_terms}")
             else:    
                 logger.info("Research plan provided, extracting AI-optimized search terms")
                 ai_extracted_terms = await self._extract_search_terms_from_research_plan(
@@ -503,19 +508,23 @@ class LiteratureSearchService:
                 # AI extraction now returns a list of search terms directly
                 if ai_extracted_terms and isinstance(ai_extracted_terms, list):
                     search_terms = ai_extracted_terms
-                    logger.info(f"Extracted {len(search_terms)} search terms from AI response")
+                    logger.info(f"Extracted {len(search_terms)} search terms from AI response: {search_terms}")
                     # Store terms for future use
                     try:
-                        await self._store_search_terms(
+                        storage_result = await self._store_search_terms(
                             "plan", 
-                            search_query.lit_review_id, 
-                            search_query.research_plan, 
+                            search_query.plan_id, 
+                            str(search_query.research_plan)[:500], # Truncate to avoid issues
                             search_terms, 
-                            {"ai_model": "gpt-4o-mini"}, 
+                            {"ai_model": "gpt-4o-mini", "extraction_method": "topic_based_json"}, 
                             sources
                         )
+                        if storage_result:
+                            logger.info(f"Successfully stored {len(search_terms)} search terms in database")
+                        else:
+                            logger.warning(f"Failed to store search terms in database")
                     except Exception as e:
-                        logger.warning(f"Failed to store search terms: {e}")
+                        logger.error(f"Exception while storing search terms: {e}", exc_info=True)
                 else:
                     logger.warning("No valid search terms returned from AI, using fallback")
                     search_terms = [search_query.query or "general research"]
@@ -1319,13 +1328,17 @@ class LiteratureSearchService:
             # Send request to database agent via MCP
             task_id = f"get_search_terms_{uuid.uuid4().hex[:8]}"
             db_request = {
-                "type": "task_request",
-                "task_id": task_id,
-                "task_type": f"get_search_terms_for_{source_type}",
+                "type": "research_action",  # Use research_action instead of task_request
                 "data": {
-                    f"{source_type}_id": source_id
+                    "task_id": task_id,
+                    "context_id": f"literature_search_cache",
+                    "agent_type": "database",  # Target the database agent
+                    "action": f"get_search_terms_for_{source_type}",
+                    "payload": {
+                        f"{source_type}_id": source_id
+                    }
                 },
-                "client_id": "literature_search",
+                "client_id": self.agent_id,
                 "timestamp": datetime.now().isoformat()
             }
             
@@ -1339,7 +1352,10 @@ class LiteratureSearchService:
                 
                 # Wait for response with timeout
                 response_data = await asyncio.wait_for(future, timeout=5.0)
-                
+
+                # logger.info(f"Received database response for cached search terms: {response_data}")
+                logger.info(f"****** Received database response for cached search terms: {response_data.get('task_id')} : {task_id} - {response_data.get('type')} - {response_data.get('result')} ******")
+
                 if (response_data.get("type") == "task_result" and 
                     response_data.get("task_id") == task_id):
                     
@@ -1411,30 +1427,41 @@ class LiteratureSearchService:
         """
         try:
             if not self.websocket or not self.mcp_connected:
+                logger.warning("MCP connection not available for storing search terms")
                 return False
+            
+            logger.info(f"Attempting to store {len(optimized_terms)} search terms for {source_type} {source_id}")
+            logger.debug(f"Search terms to store: {optimized_terms}")
             
             # Send request to database agent via MCP
             task_id = f"store_search_terms_{uuid.uuid4().hex[:8]}"
             db_request = {
-                "type": "task_request",
-                "task_id": task_id,
-                "task_type": "store_optimized_search_terms",
+                "type": "research_action",  # Use research_action instead of task_request
                 "data": {
-                    "source_type": source_type,
-                    "source_id": source_id,
-                    "original_query": original_query,
-                    "optimized_terms": optimized_terms,
-                    "optimization_context": optimization_context,
-                    "target_databases": target_databases,
-                    "expires_at": (datetime.now() + timedelta(hours=24)).isoformat(),  # Cache for 24 hours
-                    "metadata": {
-                        "created_by": "literature_service",
-                        "optimization_version": "1.0"
+                    "task_id": task_id,
+                    "context_id": f"literature_search_storage",
+                    "agent_type": "database",  # Target the database agent
+                    "action": "create_search_term_optimization",  # Use direct creation instead of store
+                    "payload": {
+                        "source_type": source_type,
+                        "source_id": source_id,
+                        "original_query": original_query,
+                        "optimized_terms": optimized_terms,
+                        "optimization_context": optimization_context,
+                        "target_databases": target_databases,
+                        "expires_at": (datetime.now() + timedelta(hours=24)).isoformat(),
+                        "metadata": {
+                            "created_by": "literature_service",
+                            "optimization_version": "1.0",
+                            "session_type": "temporary_literature_search"
+                        }
                     }
                 },
-                "client_id": "literature_search",
+                "client_id": self.agent_id,
                 "timestamp": datetime.now().isoformat()
             }
+            
+            logger.info(f"Sending store search terms request with task_id: {task_id}")
             await self.websocket.send(json.dumps(db_request))
             
             # Wait for response using Future-based approach
@@ -1443,34 +1470,45 @@ class LiteratureSearchService:
                 future = asyncio.Future()
                 self.pending_responses[task_id] = future
                 
+                logger.info(f"Waiting for database response for task_id: {task_id}")
                 # Wait for response with timeout
                 response_data = await asyncio.wait_for(future, timeout=5.0)
+                
+                logger.info(f"Received database response: {response_data}")
                 
                 if (response_data.get("type") == "task_result" and 
                     response_data.get("task_id") == task_id):
                     
                     result = response_data.get("result", {})
+                    logger.info(f"Database operation result: {result}")
+                    
                     if result.get("status") == "completed":
                         logger.info(f"Successfully stored search terms for {source_type} {source_id}")
                         return True
                     else:
-                        logger.warning(f"Failed to store search terms: {result.get('error', 'Unknown error')}")
+                        error_msg = result.get('error', 'Unknown error')
+                        logger.warning(f"Failed to store search terms: {error_msg}")
                         return False
+                else:
+                    logger.warning(f"Unexpected response format or task_id mismatch: {response_data}")
+                    return False
                         
             except asyncio.TimeoutError:
-                logger.warning("Timeout storing search terms in database")
+                logger.warning(f"Timeout waiting for database response to store search terms (task_id: {task_id})")
                 return False
             except Exception as e:
-                logger.error(f"Error receiving database response: {e}")
+                logger.error(f"Error receiving database response for storing search terms (task_id: {task_id}): {e}", exc_info=True)
                 return False
             finally:
                 # Clean up pending response
-                self.pending_responses.pop(task_id, None)
+                removed_future = self.pending_responses.pop(task_id, None)
+                if removed_future:
+                    logger.debug(f"Cleaned up pending response for task_id: {task_id}")
             
             return False  # Default return if no successful response
             
         except Exception as e:
-            logger.error(f"Error storing search terms: {e}")
+            logger.error(f"Error storing search terms: {e}", exc_info=True)
             return False
     
     def _deduplicate_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
