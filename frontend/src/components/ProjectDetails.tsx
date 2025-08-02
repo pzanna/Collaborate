@@ -258,7 +258,7 @@ export function ProjectDetails() {
       }
     } else {
       return {
-        text: "Start Research",
+        text: "Create a plan",
         variant: "default" as const,
         onClick: () => handleGenerateAIPlan(topic),
         className: "bg-green-600 hover:bg-green-700",
@@ -324,7 +324,7 @@ export function ProjectDetails() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="name">Topic Name</Label>
                 <Input
                   id="name"
@@ -335,7 +335,7 @@ export function ProjectDetails() {
                   }
                 />
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
@@ -468,7 +468,7 @@ export function ProjectDetails() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="edit-name">Topic Name</Label>
               <Input
                 id="edit-name"
@@ -479,7 +479,7 @@ export function ProjectDetails() {
                 }
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="edit-description">Description</Label>
               <Textarea
                 id="edit-description"

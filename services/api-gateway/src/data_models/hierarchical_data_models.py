@@ -7,7 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, validator
 
 # Status type definitions for consistency
-ProjectStatus = Literal["active", "archived"]
+ProjectStatus = Literal["pending", "active", "complete", "archived"]
 TopicStatus = Literal["active", "paused", "completed", "archived"]
 PlanStatus = Literal["draft", "active", "completed", "cancelled"]
 TaskStatus = Literal["pending", "running", "completed", "failed", "cancelled"]
@@ -36,7 +36,7 @@ class Project(BaseModel):
     id: str = Field(default_factory=generate_uuid)
     name: str
     description: str = ""
-    status: ProjectStatus = "active"
+    status: ProjectStatus = "pending"
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -97,6 +97,8 @@ class ResearchPlan(BaseModel):
     estimated_cost: float = 0.0
     actual_cost: float = 0.0
     plan_structure: Dict[str, Any] = Field(default_factory=dict)
+    initial_literature_results: Dict[str, Any] = Field(default_factory=dict)
+    reviewed_literature_results: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @validator("name")
@@ -250,6 +252,8 @@ class ResearchPlanRequest(BaseModel):
     description: str = ""
     plan_type: PlanType = "comprehensive"
     plan_structure: Dict[str, Any] = Field(default_factory=dict)
+    initial_literature_results: Dict[str, Any] = Field(default_factory=dict)
+    reviewed_literature_results: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @validator("name")
@@ -328,6 +332,8 @@ class ResearchPlanUpdate(BaseModel):
     plan_type: Optional[PlanType] = None
     status: Optional[PlanStatus] = None
     plan_structure: Optional[Dict[str, Any]] = None
+    initial_literature_results: Optional[Dict[str, Any]] = None
+    reviewed_literature_results: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
 
     @validator("name")
@@ -420,6 +426,8 @@ class ResearchPlanResponse(BaseModel):
     completed_tasks: int = 0
     progress: float = 0.0
     plan_structure: Dict[str, Any] = Field(default_factory=dict)
+    initial_literature_results: Dict[str, Any] = Field(default_factory=dict)
+    reviewed_literature_results: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -528,7 +536,7 @@ class ExecuteResearchRequest(BaseModel):
     """Request model for executing research tasks."""
     
     task_type: TaskType = "literature_review"
-    depth: ResearchDepth = "masters"
+    depth: ResearchDepth = "undergraduate"
 
     @validator("task_type")
     def validate_research_task_type(cls, v):

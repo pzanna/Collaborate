@@ -82,7 +82,7 @@ async def create_project(
             "id": project_id,
             "name": project_request.name,
             "description": project_request.description,
-            "status": "active",
+            "status": "pending",
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
             "metadata": json.dumps(project_request.metadata or {}),
@@ -106,7 +106,7 @@ async def create_project(
             "id": project_id,
             "name": project_request.name,
             "description": project_request.description,
-            "status": "active",
+            "status": "pending",
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
             "topics_count": 0,
@@ -731,6 +731,8 @@ async def create_research_plan(
             "estimated_cost": 0.0,
             "actual_cost": 0.0,
             "plan_structure": json.dumps(plan_request.plan_structure or {}),
+            "initial_literature_results": json.dumps(plan_request.initial_literature_results or {}),
+            "reviewed_literature_results": json.dumps(plan_request.reviewed_literature_results or {}),
             "metadata": json.dumps(plan_request.metadata or {}),
         }
 
@@ -754,6 +756,8 @@ async def create_research_plan(
             "completed_tasks": 0,
             "progress": 0.0,
             "plan_structure": plan_request.plan_structure or {},
+            "initial_literature_results": plan_request.initial_literature_results or {},
+            "reviewed_literature_results": plan_request.reviewed_literature_results or {},
             "metadata": plan_request.metadata or {}
         }
 
@@ -918,6 +922,8 @@ async def generate_ai_research_plan(
             "estimated_cost": cost_estimate.get("estimated_cost", 5.0) if cost_estimate else 5.0,
             "actual_cost": 0.0,
             "plan_structure": json.dumps(ai_plan_result or {}),
+            "initial_literature_results": json.dumps(plan_request.initial_literature_results or {}),
+            "reviewed_literature_results": json.dumps(plan_request.reviewed_literature_results or {}),
             "metadata": json.dumps({
                 "ai_generated": True,
                 "ai_model_used": "gpt-4o-mini",
@@ -949,6 +955,8 @@ async def generate_ai_research_plan(
             "completed_tasks": 0,
             "progress": 0.0,
             "plan_structure": ai_plan_result or {},
+            "initial_literature_results": plan_request.initial_literature_results or {},
+            "reviewed_literature_results": plan_request.reviewed_literature_results or {},
             "metadata": {
                 "ai_generated": True,
                 "ai_model_used": "gpt-4o-mini", 
@@ -1095,6 +1103,10 @@ async def update_research_plan(
             updates["status"] = plan_update.status
         if plan_update.plan_structure is not None:
             updates["plan_structure"] = json.dumps(plan_update.plan_structure)
+        if plan_update.initial_literature_results is not None:
+            updates["initial_literature_results"] = json.dumps(plan_update.initial_literature_results)
+        if plan_update.reviewed_literature_results is not None:
+            updates["reviewed_literature_results"] = json.dumps(plan_update.reviewed_literature_results)
         if plan_update.metadata is not None:
             updates["metadata"] = json.dumps(plan_update.metadata)
 
@@ -1231,6 +1243,35 @@ async def approve_research_plan(
             success = await mcp_client.send_research_action(task_data)
             if not success:
                 raise HTTPException(status_code=503, detail="Failed to send plan approval to MCP server")
+
+        # Update project status to 'active' when first plan is approved
+        try:
+            # Get the topic to find the project_id
+            topic = await db.get_research_topic(existing_plan["topic_id"])
+            if topic:
+                project_id = topic["project_id"]
+                # Check current project status
+                project = await db.get_project(project_id)
+                if project and project.get("status") == "pending":
+                    # Update project status to active
+                    project_update_data = {
+                        "project_id": project_id,
+                        "updates": {
+                            "status": "active"
+                        }
+                    }
+                    
+                    project_task_data = {
+                        "task_id": str(uuid4()),
+                        "context_id": f"project-{project_id}",
+                        "agent_type": "database",
+                        "action": "update_project",
+                        "payload": project_update_data
+                    }
+                    await mcp_client.send_research_action(project_task_data)
+                    logger.info(f"Updated project {project_id} status to 'active' after plan approval")
+        except Exception as e:
+            logger.warning(f"Failed to update project status after plan approval: {e}")
 
         # Return updated plan
         updated_plan = existing_plan.copy()

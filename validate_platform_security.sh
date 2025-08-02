@@ -19,7 +19,7 @@ NC='\033[0m'
 CONTAINERS=(
     "eunice/planning-agent:alpine-secure"
     "eunice/screening-agent:alpine-secure"
-    "eunice/memory-agent:alpine-secure"
+    "eunice/memory-service:alpine-secure"
     "eunice/executor-agent:alpine-secure"
     "eunice/literature-agent:alpine-secure"
     "eunice/database-agent:alpine-secure"

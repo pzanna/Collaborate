@@ -350,7 +350,7 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata, plan_structure, plan_approved, estimated_cost, actual_cost
+                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata, plan_structure, plan_approved, estimated_cost, actual_cost, initial_literature_results, reviewed_literature_results
                     FROM research_plans 
                     WHERE topic_id = $1
                 """
@@ -389,6 +389,38 @@ class NativeDatabaseClient:
                     else:
                         plan_structure = {}
                     
+                    # Parse initial_literature_results from database
+                    initial_literature_results = row.get('initial_literature_results')
+                    if initial_literature_results is None:
+                        initial_literature_results = {}
+                    elif isinstance(initial_literature_results, str):
+                        try:
+                            initial_literature_results = json.loads(initial_literature_results)
+                        except Exception as e:
+                            print(f"DEBUG: Failed to parse initial_literature_results string: {e}")
+                            initial_literature_results = {}
+                    elif isinstance(initial_literature_results, dict):
+                        # JSONB column returns dict directly
+                        initial_literature_results = initial_literature_results
+                    else:
+                        initial_literature_results = {}
+                    
+                    # Parse reviewed_literature_results from database
+                    reviewed_literature_results = row.get('reviewed_literature_results')
+                    if reviewed_literature_results is None:
+                        reviewed_literature_results = {}
+                    elif isinstance(reviewed_literature_results, str):
+                        try:
+                            reviewed_literature_results = json.loads(reviewed_literature_results)
+                        except Exception as e:
+                            print(f"DEBUG: Failed to parse reviewed_literature_results string: {e}")
+                            reviewed_literature_results = {}
+                    elif isinstance(reviewed_literature_results, dict):
+                        # JSONB column returns dict directly
+                        reviewed_literature_results = reviewed_literature_results
+                    else:
+                        reviewed_literature_results = {}
+                    
                     plans.append({
                         "id": str(row['id']),
                         "topic_id": str(row['topic_id']) if row['topic_id'] else None,
@@ -405,6 +437,8 @@ class NativeDatabaseClient:
                         "completed_tasks": 0,
                         "progress": 0.0,
                         "plan_structure": plan_structure,  # Use parsed structure
+                        "initial_literature_results": initial_literature_results,
+                        "reviewed_literature_results": reviewed_literature_results,
                         "metadata": metadata
                     })
                 
@@ -427,7 +461,7 @@ class NativeDatabaseClient:
         try:
             async with self.get_connection() as conn:
                 query = """
-                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata, plan_structure, plan_approved, estimated_cost, actual_cost
+                    SELECT id, name, description, topic_id, plan_type, status, created_at, updated_at, metadata, plan_structure, plan_approved, estimated_cost, actual_cost, initial_literature_results, reviewed_literature_results
                     FROM research_plans 
                     WHERE id = $1
                 """
@@ -459,6 +493,38 @@ class NativeDatabaseClient:
                         print(f"DEBUG: Unexpected plan_structure type: {type(plan_structure)}")
                         plan_structure = {}
                     
+                    # Parse initial_literature_results from database
+                    initial_literature_results = row.get('initial_literature_results')
+                    if initial_literature_results is None:
+                        initial_literature_results = {}
+                    elif isinstance(initial_literature_results, str):
+                        try:
+                            initial_literature_results = json.loads(initial_literature_results)
+                        except Exception as e:
+                            print(f"DEBUG: Failed to parse initial_literature_results string: {e}")
+                            initial_literature_results = {}
+                    elif isinstance(initial_literature_results, dict):
+                        # JSONB column returns dict directly
+                        initial_literature_results = initial_literature_results
+                    else:
+                        initial_literature_results = {}
+                    
+                    # Parse reviewed_literature_results from database
+                    reviewed_literature_results = row.get('reviewed_literature_results')
+                    if reviewed_literature_results is None:
+                        reviewed_literature_results = {}
+                    elif isinstance(reviewed_literature_results, str):
+                        try:
+                            reviewed_literature_results = json.loads(reviewed_literature_results)
+                        except Exception as e:
+                            print(f"DEBUG: Failed to parse reviewed_literature_results string: {e}")
+                            reviewed_literature_results = {}
+                    elif isinstance(reviewed_literature_results, dict):
+                        # JSONB column returns dict directly
+                        reviewed_literature_results = reviewed_literature_results
+                    else:
+                        reviewed_literature_results = {}
+                    
                     return {
                         "id": str(row['id']),
                         "topic_id": str(row['topic_id']) if row['topic_id'] else None,
@@ -475,6 +541,8 @@ class NativeDatabaseClient:
                         "completed_tasks": 0,
                         "progress": 0.0,
                         "plan_structure": plan_structure,
+                        "initial_literature_results": initial_literature_results,
+                        "reviewed_literature_results": reviewed_literature_results,
                         "metadata": metadata
                     }
                 return None

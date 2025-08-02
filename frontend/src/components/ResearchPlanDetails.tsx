@@ -14,13 +14,7 @@ import {
   DollarSign,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -37,6 +31,7 @@ import {
   type ResearchPlan,
   type UpdateResearchPlanRequest,
   type GenerateAIResearchPlanRequest,
+  type ExecuteResearchRequest,
 } from "@/utils/api"
 import { ROUTES, getProjectDetailsPath } from "@/utils/routes"
 
@@ -199,8 +194,14 @@ export function ResearchPlanDetails() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
+  const [isStartingResearch, setIsStartingResearch] = useState(false)
+  const [researchExecuted, setResearchExecuted] = useState(false)
   const [showAIDialog, setShowAIDialog] = useState(false)
   const [showCostDialog, setShowCostDialog] = useState(false)
+  const [showDepthDialog, setShowDepthDialog] = useState(false)
+  const [selectedDepth, setSelectedDepth] = useState<
+    "undergraduate" | "masters" | "phd"
+  >("masters")
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [aiPlanData, setAiPlanData] = useState<ResearchPlan | null>(null)
   const [editFormData, setEditFormData] = useState({
@@ -222,6 +223,19 @@ export function ResearchPlanDetails() {
     }
     loadResearchPlan()
   }, [id, navigate])
+
+  // Check if research has been executed based on plan status or metadata
+  useEffect(() => {
+    if (researchPlan) {
+      // Check if plan status is "completed" or if there's execution metadata
+      const statusCompleted = researchPlan.status === "completed"
+      const executionMetadata =
+        researchPlan.metadata?.execution_started || false
+
+      // Research is considered executed if status is completed OR execution has started
+      setResearchExecuted(statusCompleted || executionMetadata)
+    }
+  }, [researchPlan])
 
   // Currency conversion (USD to AUD - using approximate rate)
   const USD_TO_AUD_RATE = 1.55 // This would typically come from an API
@@ -584,6 +598,103 @@ export function ResearchPlanDetails() {
     }
   }
 
+  const handleStartResearch = async () => {
+    if (!researchPlan) return
+
+    setIsStartingResearch(true)
+    try {
+      const executeRequest: ExecuteResearchRequest = {
+        task_type: "literature_review", // Default to literature review
+        depth: selectedDepth, // Use selected depth
+      }
+
+      const response = await apiClient.executeResearch(
+        researchPlan.topic_id,
+        executeRequest
+      )
+
+      // Update the research plan metadata to mark execution as started
+      try {
+        const updatedMetadata = {
+          ...researchPlan.metadata,
+          execution_started: true,
+          execution_id: response.execution_id,
+          execution_timestamp: new Date().toISOString(),
+        }
+
+        const updateRequest: UpdateResearchPlanRequest = {
+          metadata: updatedMetadata,
+        }
+
+        const updatedPlan = await apiClient.updateResearchPlan(
+          researchPlan.id,
+          updateRequest
+        )
+        setResearchPlan(updatedPlan)
+      } catch (metadataError) {
+        console.warn("Failed to update research plan metadata:", metadataError)
+        // Continue anyway since the main execution succeeded
+      }
+
+      // Mark research as executed and close the dialog
+      setResearchExecuted(true)
+      setShowDepthDialog(false)
+      setError(null)
+
+      // Show success message
+      console.log("Research execution started successfully:", response)
+
+      // Start polling for status updates to detect completion
+      startStatusPolling()
+
+      // You could add a success notification here or redirect to progress page
+      // For now, we'll just disable the button to show it's been executed
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to start research execution"
+      )
+      console.error("Error starting research execution:", err)
+    } finally {
+      setIsStartingResearch(false)
+    }
+  }
+
+  const handleConfirmDepthAndStartResearch = () => {
+    setShowDepthDialog(false)
+    handleStartResearch()
+  }
+
+  const startStatusPolling = () => {
+    // Poll every 30 seconds to check for completion
+    const pollInterval = setInterval(async () => {
+      try {
+        if (!id) return
+
+        const updatedPlan = await apiClient.getResearchPlan(id)
+
+        // Check if status has changed to completed
+        if (
+          updatedPlan.status === "completed" &&
+          researchPlan?.status !== "completed"
+        ) {
+          console.log("Research plan completed!")
+          setResearchPlan(updatedPlan)
+          clearInterval(pollInterval) // Stop polling once completed
+        }
+      } catch (error) {
+        console.warn("Failed to poll plan status:", error)
+        // Continue polling even if individual requests fail
+      }
+    }, 30000) // Poll every 30 seconds
+
+    // Auto-cleanup after 1 hour to prevent infinite polling
+    setTimeout(() => {
+      clearInterval(pollInterval)
+    }, 3600000) // 1 hour
+  }
+
   const handleConfirmAIGeneration = async () => {
     if (!researchPlan || !aiFormData.name.trim()) {
       setError("Plan name is required")
@@ -721,10 +832,14 @@ export function ResearchPlanDetails() {
                 : "bg-gray-100 text-gray-800"
             }`}
           >
-            {researchPlan.status}
+            {researchPlan.status === "active"
+              ? "In Progress"
+              : researchPlan.status === "completed"
+              ? "Complete"
+              : researchPlan.status}
           </span>
           {researchPlan.plan_approved && (
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               Approved
             </span>
           )}
@@ -793,12 +908,12 @@ export function ResearchPlanDetails() {
               <Button
                 onClick={handleSaveEdit}
                 disabled={isSaving}
-                className="w-32 flex items-center justify-center"
+                className="w-36 flex items-center justify-center"
               >
                 {isSaving ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-0.5 animate-spin" />
                 ) : (
-                  <Save className="h-4 w-4 mr-1" />
+                  <Save className="h-4 w-4 mr-0.5" />
                 )}
                 {isSaving ? "Saving..." : "Save"}
               </Button>
@@ -806,9 +921,9 @@ export function ResearchPlanDetails() {
                 variant="outline"
                 onClick={handleCancelEdit}
                 disabled={isSaving}
-                className="w-32 flex items-center justify-center"
+                className="w-36 flex items-center justify-center"
               >
-                <X className="h-4 w-4 mr-1" />
+                <X className="h-4 w-4 mr-0.5" />
                 Cancel
               </Button>
             </>
@@ -817,31 +932,45 @@ export function ResearchPlanDetails() {
               <Button
                 onClick={handleEdit}
                 disabled={researchPlan.plan_approved}
-                className="w-32 flex items-center justify-center"
+                className="w-36 flex items-center justify-center"
               >
-                <Edit className="h-4 w-4 mr-1" />
+                <Edit className="h-4 w-4 mr-0.5" />
                 Edit
               </Button>
               <Button
                 variant="destructive"
                 onClick={handleDelete}
-                className="w-32 flex items-center justify-center"
+                className="w-36 flex items-center justify-center"
               >
-                <Trash2 className="h-4 w-4 mr-1" />
+                <Trash2 className="h-4 w-4 mr-0.5" />
                 Delete
               </Button>
               {!researchPlan.plan_approved && (
                 <Button
                   onClick={handleApprove}
                   disabled={isApproving}
-                  className="w-32 bg-green-600 hover:bg-green-700 flex items-center justify-center"
+                  className="w-36 bg-green-600 hover:bg-green-700 flex items-center justify-center"
                 >
                   {isApproving ? (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    <Loader2 className="h-4 w-4 mr-0.5 animate-spin" />
                   ) : (
-                    <Check className="h-4 w-4 mr-1" />
+                    <Check className="h-4 w-4 mr-0.5" />
                   )}
                   Approve
+                </Button>
+              )}
+              {researchPlan.plan_approved && !researchExecuted && (
+                <Button
+                  onClick={() => setShowDepthDialog(true)}
+                  disabled={isStartingResearch}
+                  className="w-36 bg-blue-600 hover:bg-blue-700 flex items-center justify-center"
+                >
+                  {isStartingResearch ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  Start Research
                 </Button>
               )}
             </>
@@ -888,6 +1017,65 @@ export function ResearchPlanDetails() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Depth Selection Dialog */}
+      <Dialog open={showDepthDialog} onOpenChange={setShowDepthDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Research Depth Selection</DialogTitle>
+            <DialogDescription>
+              What depth of research would you like to perform?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="depth-select">Select Research Depth</Label>
+              <select
+                id="depth-select"
+                value={selectedDepth}
+                onChange={(e) =>
+                  setSelectedDepth(
+                    e.target.value as "undergraduate" | "masters" | "phd"
+                  )
+                }
+                className="w-full p-2 border border-input rounded-md bg-background"
+              >
+                <option value="undergraduate">Undergraduate</option>
+                <option value="masters">Masters</option>
+                <option value="phd">PhD</option>
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={handleConfirmDepthAndStartResearch}
+              disabled={isStartingResearch}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isStartingResearch ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting Research...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Start Research
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowDepthDialog(false)}
+              disabled={isStartingResearch}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* AI Generation Dialog */}
       <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
@@ -983,12 +1171,12 @@ export function ResearchPlanDetails() {
             >
               {isGeneratingAI ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-0.5 animate-spin" />
                   Generating...
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-4 w-4 mr-2" />
+                  <Sparkles className="h-4 w-4 mr-0.5" />
                   Generate Plan
                 </>
               )}
@@ -1220,7 +1408,7 @@ export function ResearchPlanDetails() {
             }
           }}
         >
-          <ArrowLeft className="h-4 w-4 mr-1" />
+          <ArrowLeft className="h-4 w-4 mr-0.5" />
           Back to Project
         </Button>
       </div>

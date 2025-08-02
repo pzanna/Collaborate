@@ -940,7 +940,7 @@ def get_additional_metadata() -> Dict[str, Any]:
 # Create health check only FastAPI application
 app = create_health_check_app(
     agent_type="memory",
-    agent_id="memory-agent",
+    agent_id="memory-service",
     version="1.0.0",
     get_mcp_status=get_mcp_status,
     get_additional_metadata=get_additional_metadata

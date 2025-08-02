@@ -392,6 +392,8 @@ class MCPAIService:
                     "finish_reason": choice.finish_reason
                 })
             
+            logger.info(f"Chat completion response details: {processed_choices}")
+
             return {
                 "id": response.id,
                 "choices": processed_choices,

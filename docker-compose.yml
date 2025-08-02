@@ -231,10 +231,10 @@ services:
       retries: 3
       start_period: 15s
 
-  # Memory Agent - Pure MCP Client
-  memory-agent:
-    build: ./agents/memory
-    container_name: eunice-memory-agent
+  # Memory Service - Pure MCP Client
+  memory-service:
+    build: ./services/memory
+    container_name: eunice-memory-service
     ports:
       - "8009:8009"
     environment:

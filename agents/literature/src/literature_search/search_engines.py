@@ -4,6 +4,7 @@ Search engine implementations for various academic databases.
 
 import asyncio
 import logging
+import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
@@ -36,7 +37,7 @@ class SearchEngines:
             },
             'pubmed': {
                 'base_url': 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
-                'rate_limit': 1,  # NCBI rate limit (3 requests per second)
+                'rate_limit': 1,  # NCBI rate limit (1 requests per second)
                 'max_results_per_request': 10
             },
             'arxiv': {
@@ -55,6 +56,33 @@ class SearchEngines:
                 'max_results_per_request': 10
             }
         }
+    
+    def _clean_xml_content(self, xml_content: str) -> str:
+        """
+        Clean XML content by removing tags and normalizing whitespace.
+        
+        Args:
+            xml_content: Raw XML content that may contain tags
+            
+        Returns:
+            Cleaned text content
+        """
+        if not xml_content or not isinstance(xml_content, str):
+            return ""
+        
+        # 1) Remove title tags and their content (e.g. <jats:title>…</jats:title>)
+        no_titles = re.sub(
+            r'<\s*[^>]*title[^>]*>.*?</\s*[^>]*title[^>]*>',
+            '',
+            xml_content,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+
+        # 2) Remove any other tags
+        no_tags = re.sub(r'<[^>]+>', '', no_titles)
+
+        # 3) Collapse whitespace and trim
+        return ' '.join(no_tags.split()).strip()
     
     async def search_semantic_scholar(self, search_query: SearchQuery) -> List[Dict[str, Any]]:
         """Search Semantic Scholar API."""
@@ -239,7 +267,14 @@ class SearchEngines:
             async with self.session.get(url, params=params, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get('message', {}).get('items', [])
+                    items = data.get('message', {}).get('items', [])
+                    
+                    # Clean XML content from abstracts in CrossRef results
+                    for item in items:
+                        if 'abstract' in item and item['abstract']:
+                            item['abstract'] = self._clean_xml_content(item['abstract'])
+                    
+                    return items
                 else:
                     logger.warning(f"CrossRef API returned status {response.status}")
                     return []
@@ -261,6 +296,7 @@ class SearchEngines:
             params = {
                 'q': search_query.query,
                 'limit': min(search_query.max_results, config['max_results_per_request']),
+                'citationCount': '>0', # Filter for articles with citations
             }
             
             # Compose the full URL with query parameters for logging/debugging

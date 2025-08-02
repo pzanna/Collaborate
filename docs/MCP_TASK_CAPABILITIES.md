@@ -96,7 +96,6 @@ This document collates and documents all task capabilities across MCP agents and
 
 #### Task Types
 
-- `search_academic_papers` - Search for academic publications
 - `search_literature` - Comprehensive literature search
 - `normalize_records` - Normalize bibliographic records
 - `deduplicate_results` - Remove duplicate publications
@@ -141,9 +140,9 @@ This document collates and documents all task capabilities across MCP agents and
 
 ---
 
-### 6. Memory Agent (`memory`)
+### 6. Memory Service (`memory`)
 
-**Location**: `/agents/memory/`  
+**Location**: `/services/memory/`  
 **Agent Type**: `memory`
 
 #### Task Types

@@ -199,7 +199,7 @@ Responsibilities:
   - Data extraction and evidence synthesis
   - Meta-analysis and statistical aggregation
   - Evidence table generation and management
-Dependencies: [mcp-server, ai-service, memory-agent]
+Dependencies: [mcp-server, ai-service, memory-service]
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
@@ -225,7 +225,7 @@ Responsibilities:
   - Research planning and strategy
   - Task breakdown and synthesis
   - Resource requirement analysis
-Dependencies: [mcp-server, ai-service, memory-agent]
+Dependencies: [mcp-server, ai-service, memory-service]
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
@@ -242,10 +242,10 @@ Dependencies: [mcp-server, security-service, storage-service]
 MCP_Connection: WebSocket to mcp-server:9000
 ```
 
-#### 7. Memory Agent Service (MCP Client)
+#### 7. Memory Service (MCP Client)
 
 ```yaml
-Service: memory-agent
+Service: memory-service
 Port: 8009
 Responsibilities:
   - Knowledge base management
@@ -415,7 +415,7 @@ services:
   synthesis-review-agent:
     build: ./services/synthesis-review-agent
     ports: ["8005:8005"]
-    depends_on: [mcp-server, ai-service, memory-agent]
+    depends_on: [mcp-server, ai-service, memory-service]
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=synthesis_review
@@ -432,7 +432,7 @@ services:
   planning-agent:
     build: ./services/planning-agent
     ports: ["8007:8007"]
-    depends_on: [mcp-server, ai-service, memory-agent]
+    depends_on: [mcp-server, ai-service, memory-service]
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=planning
@@ -445,8 +445,8 @@ services:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=executor
 
-  memory-agent:
-    build: ./services/memory-agent
+  memory-service:
+    build: ./services/memory
     ports: ["8009:8009"]
     depends_on: [mcp-server, vector-database, storage-service]
     environment:

@@ -38,7 +38,7 @@
     "core": {
       "base_url": "https://api.core.ac.uk/v3/search/works",
       "rate_limit": 1,
-      "max_results_per_request": 10
+      "max_results_per_request": 100
     }
   },
   "search_settings": {

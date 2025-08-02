@@ -270,13 +270,13 @@ Resources:
 Environment:
   - MCP_SERVER_URL=ws://mcp-server:9000
   - AGENT_TYPE=synthesis_review
-  - MEMORY_SERVICE_URL=http://memory-agent:8009
+  - MEMORY_SERVICE_URL=http://memory-service:8009
 Endpoints:
   - GET  /health
   - GET  /status
 Dependencies:
   - mcp-server
-  - memory-agent
+  - memory-service
   - database-service
 MCP_Connection: WebSocket to mcp-server:9000
 AI_Access: Via MCP Server routing to ai-service
@@ -322,13 +322,13 @@ Resources:
 Environment:
   - MCP_SERVER_URL=ws://mcp-server:9000
   - AGENT_TYPE=planning
-  - MEMORY_SERVICE_URL=http://memory-agent:8009
+  - MEMORY_SERVICE_URL=http://memory-service:8009
 Endpoints:
   - GET  /health
   - GET  /status
 Dependencies:
   - mcp-server
-  - memory-agent
+  - memory-service
   - database-service
 MCP_Connection: WebSocket to mcp-server:9000
 AI_Access: Via MCP Server routing to ai-service
@@ -369,9 +369,9 @@ MCP_Connection: WebSocket to mcp-server:9000
 **Purpose**: Knowledge base management as containerized MCP client agent.
 
 ```yaml
-Container: memory-agent
+Container: memory-service
 Port: 8009
-Image: eunice/memory-agent:latest
+Image: eunice/memory-service:latest
 Resources:
   CPU: 800m
   Memory: 2Gi
@@ -901,8 +901,8 @@ services:
     depends_on: [mcp-server, file-storage, ai-service]
     networks: [eunice-network]
 
-  memory-agent:
-    build: ./agents/memory
+  memory-service:
+    build: ./services/memory
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - VECTOR_DB_URL=http://vector-database:8080

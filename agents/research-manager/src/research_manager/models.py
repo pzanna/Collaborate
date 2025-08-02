@@ -15,14 +15,14 @@ class ResearchStage(Enum):
     """Research task stages."""
     PLANNING = "planning"
     LITERATURE_REVIEW = "literature_review"
+    SYSTEMATIC_REVIEW = "systematic_review"
     REASONING = "reasoning"
     EXECUTION = "execution"
     SYNTHESIS = "synthesis"
-    SYSTEMATIC_REVIEW = "systematic_review"
     COMPLETE = "complete"
     FAILED = "failed"
 
-
+    
 @dataclass
 class ResearchContext:
     """Research context for tracking task state."""

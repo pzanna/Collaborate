@@ -198,7 +198,9 @@ async def initialize_schema():
                 estimated_cost DECIMAL(10,2) DEFAULT 0.0,
                 actual_cost DECIMAL(10,2) DEFAULT 0.0,
                 metadata JSONB DEFAULT '{}',
-                plan_structure JSONB DEFAULT '{}'
+                plan_structure JSONB DEFAULT '{}',
+                initial_literature_results JSONB DEFAULT '{}',
+                reviewed_literature_results JSONB DEFAULT '{}'
             )
         """)
         
@@ -246,8 +248,7 @@ async def initialize_schema():
                 authors JSONB DEFAULT '[]',
                 project_id VARCHAR(36) REFERENCES projects(id) ON DELETE CASCADE,
                 doi VARCHAR(255),
-                pmid VARCHAR(255),
-                arxiv_id VARCHAR(255),
+                external_id VARCHAR(255),
                 year INTEGER,
                 journal TEXT,
                 abstract TEXT,
@@ -289,7 +290,7 @@ async def initialize_schema():
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_research_tasks_plan_id ON research_tasks(plan_id)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_project_id ON literature_records(project_id)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_doi ON literature_records(doi)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_pmid ON literature_records(pmid)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_external_id ON literature_records(external_id)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_literature_records_source ON literature_records(source)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_search_term_optimizations_source ON search_term_optimizations(source_type, source_id)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_search_term_optimizations_created ON search_term_optimizations(created_at)")
@@ -427,8 +428,9 @@ async def create_sample_data():
             # Sample research plan for each topic
             plan_id = str(uuid.uuid4())
             await conn.execute("""
-                INSERT INTO research_plans (id, topic_id, name, description, plan_type, status, created_at, updated_at, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                INSERT INTO research_plans (id, topic_id, name, description, plan_type, status, created_at, updated_at, 
+                                          plan_structure, initial_literature_results, reviewed_literature_results, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             """,
                 plan_id,
                 topic_id,
@@ -438,7 +440,10 @@ async def create_sample_data():
                 "active", 
                 now,
                 now,
-                json.dumps({})  # Convert dict to JSON string
+                json.dumps({}),  # plan_structure
+                json.dumps({}),  # initial_literature_results
+                json.dumps({}),  # reviewed_literature_results
+                json.dumps({})   # metadata
             )
             
             # Sample tasks for each plan
@@ -508,6 +513,40 @@ async def run_migrations():
             logger.info("Successfully added stage column to research_tasks table")
         else:
             logger.info("stage column already exists in research_tasks table")
+        
+        # Check if initial_literature_results column exists in research_plans
+        initial_literature_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='research_plans' AND column_name='initial_literature_results'
+            )
+        """)
+        if not initial_literature_exists:
+            logger.info("Adding initial_literature_results column to research_plans table...")
+            await conn.execute("""
+                ALTER TABLE research_plans 
+                ADD COLUMN initial_literature_results JSONB DEFAULT '{}'
+            """)
+            logger.info("Successfully added initial_literature_results column")
+        else:
+            logger.info("initial_literature_results column already exists")
+        
+        # Check if reviewed_literature_results column exists in research_plans
+        reviewed_literature_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='research_plans' AND column_name='reviewed_literature_results'
+            )
+        """)
+        if not reviewed_literature_exists:
+            logger.info("Adding reviewed_literature_results column to research_plans table...")
+            await conn.execute("""
+                ALTER TABLE research_plans 
+                ADD COLUMN reviewed_literature_results JSONB DEFAULT '{}'
+            """)
+            logger.info("Successfully added reviewed_literature_results column")
+        else:
+            logger.info("reviewed_literature_results column already exists")
         
         await conn.close()
         logger.info("Database migrations completed successfully!")

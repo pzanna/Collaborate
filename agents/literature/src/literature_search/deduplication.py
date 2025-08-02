@@ -14,7 +14,7 @@ class RecordDeduplicator:
     
     def deduplicate_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Deduplicate records using DOI, PMID, arXiv ID, or title/author/year heuristics.
+        Deduplicate records using DOI, external_id, internal_id, or title/author/year heuristics.
         
         Args:
             records: List of normalized records
@@ -23,8 +23,8 @@ class RecordDeduplicator:
             List of unique records
         """
         seen_dois = set()
-        seen_pmids = set()
-        seen_arxiv_ids = set()
+        seen_external_ids = set()
+        seen_internal_ids = set()
         seen_hashes = set()
         unique_records = []
         
@@ -39,24 +39,24 @@ class RecordDeduplicator:
                 else:
                     seen_dois.add(doi)
             
-            # Check PMID
-            pmid = record.get('pmid')
-            if not is_duplicate and pmid:
-                if pmid in seen_pmids:
+            # Check external_id (pmid: or arxiv: prefixed)
+            external_id = record.get('external_id')
+            if not is_duplicate and external_id:
+                if external_id in seen_external_ids:
                     is_duplicate = True
                 else:
-                    seen_pmids.add(pmid)
+                    seen_external_ids.add(external_id)
             
-            # Check arXiv ID
-            arxiv_id = record.get('arxiv_id')
-            if not is_duplicate and arxiv_id:
-                if arxiv_id in seen_arxiv_ids:
+            # Check internal_id (UUID-based)
+            internal_id = record.get('internal_id')
+            if not is_duplicate and internal_id:
+                if internal_id in seen_internal_ids:
                     is_duplicate = True
                 else:
-                    seen_arxiv_ids.add(arxiv_id)
+                    seen_internal_ids.add(internal_id)
             
             # Check title/author/year hash if no unique identifiers
-            if not is_duplicate and not doi and not pmid and not arxiv_id:
+            if not is_duplicate and not doi and not external_id and not internal_id:
                 content_hash = self._generate_content_hash(record)
                 if content_hash in seen_hashes:
                     is_duplicate = True
@@ -114,3 +114,27 @@ class RecordDeduplicator:
         content_string = f"{title}|{author_string}|{year}"
         
         return hashlib.md5(content_string.encode(), usedforsecurity=False).hexdigest()
+    
+    def filter_records_with_abstracts(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out records that have empty or missing abstracts.
+        
+        Args:
+            records: List of records to filter
+            
+        Returns:
+            List of records with non-empty abstracts
+        """
+        filtered_records = []
+        
+        for record in records:
+            abstract = record.get('abstract', '')
+            if abstract and abstract.strip():
+                filtered_records.append(record)
+            else:
+                logger.debug(f"Filtering out record with empty abstract: {record.get('title', 'Unknown title')}")
+        
+        logger.info(f"Filtered {len(records) - len(filtered_records)} records with empty abstracts. "
+                   f"Remaining: {len(filtered_records)} records")
+        
+        return filtered_records

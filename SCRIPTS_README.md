@@ -145,7 +145,7 @@ This directory contains various scripts for managing the Eunice Research Platfor
 
 - `eunice/planning-agent:alpine-secure`
 - `eunice/screening-agent:alpine-secure`
-- `eunice/memory-agent:alpine-secure`
+- `eunice/memory-service:alpine-secure`
 - `eunice/executor-agent:alpine-secure`
 - `eunice/literature-agent:alpine-secure`
 - `eunice/database-agent:alpine-secure`

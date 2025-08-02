@@ -225,136 +225,312 @@ class DatabaseIntegration:
             logger.error(f"Error storing search terms: {e}", exc_info=True)
             return False
     
-    async def store_literature_records(self, records: List[Dict[str, Any]], search_query: SearchQuery) -> List[str]:
+    async def store_initial_literature_results(self, lit_review_id: str, plan_id: str, records: List[Dict[str, Any]]) -> bool:
         """
-        Store literature records in database via MCP protocol.
+        Store initial literature results (before AI review) in the research plan.
         
         Args:
-            records: List of normalized literature records
+            lit_review_id: ID of the literature review
+            plan_id: ID of the research plan
+            records: List of initial literature records (with abstracts, before AI review)
+            
+        Returns:
+            True if storage was successful, False otherwise
+        """
+        logger.info(f"📥 INITIAL LITERATURE STORAGE: storing {len(records)} records for plan_id={plan_id}")
+        
+        if not self.websocket:
+            logger.error("❌ WebSocket connection not available for storing initial literature results")
+            return False
+        
+        if not plan_id:
+            logger.error("❌ plan_id is required for storing initial literature results")
+            return False
+        
+        if not lit_review_id:
+            logger.error("❌ lit_review_id is required for storing initial literature results")
+            return False
+        
+        if not records:
+            logger.warning("⚠️ No initial records provided for storage")
+            return True  # Empty results is not an error
+        
+        try:
+            task_id = f"store_initial_literature_{uuid.uuid4().hex[:8]}"
+            
+            # Prepare the JSON payload to store in initial_literature_results column
+            initial_results_json = {
+                "lit_review_id": lit_review_id,
+                "records": records,
+                "metadata": {
+                    "stored_by": "literature-service",
+                    "storage_timestamp": datetime.now().isoformat(),
+                    "record_count": len(records),
+                    "records_with_abstracts": True,
+                    "pre_ai_review": True
+                }
+            }
+            
+            # Send request to database agent via MCP
+            db_request = {
+                "type": "research_action",
+                "data": {
+                    "task_id": task_id,
+                    "context_id": f"initial_literature_storage_{int(time.time())}",
+                    "agent_type": "database",
+                    "action": "store_initial_literature_results",
+                    "payload": {
+                        "plan_id": plan_id,
+                        "initial_literature_results": initial_results_json
+                    }
+                },
+                "client_id": self.agent_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            logger.info(f"📤 Sending initial literature results storage request (task_id: {task_id})")
+            logger.info(f"   └─ Storing {len(records)} records in research_plans.initial_literature_results (plan_id={plan_id})")
+            await self.websocket.send(json.dumps(db_request))
+            
+            # Wait for response
+            try:
+                future = asyncio.Future()
+                self.pending_responses[task_id] = future
+                
+                response_data = await asyncio.wait_for(future, timeout=10.0)
+                
+                logger.info(f"📥 Received initial storage response: {response_data}")
+                
+                if (response_data.get("type") == "task_result" and 
+                    response_data.get("task_id") == task_id):
+                    
+                    result = response_data.get("result", {})
+                    if result.get("status") == "completed":
+                        logger.info(f"🎉 INITIAL LITERATURE JSON STORED: {len(records)} records → research_plans.initial_literature_results")
+                        logger.info(f"   └─ Plan ID: {plan_id}, Lit Review ID: {lit_review_id}")
+                        return True
+                    else:
+                        error_msg = result.get('error', 'Unknown error')
+                        logger.error(f"❌ Failed to store initial literature results: {error_msg}")
+                        return False
+                else:
+                    logger.error(f"❌ Unexpected response format for initial literature storage: {response_data}")
+                    return False
+                    
+            except asyncio.TimeoutError:
+                logger.error(f"⏰ Timeout waiting for initial literature storage response (task_id: {task_id})")
+                return False
+            except Exception as e:
+                logger.error(f"❌ Error receiving initial literature storage response: {e}")
+                return False
+            finally:
+                self.pending_responses.pop(task_id, None)
+                
+        except Exception as e:
+            logger.error(f"❌ Error storing initial literature results: {e}", exc_info=True)
+            return False
+
+    async def store_reviewed_literature_results(self, plan_id: str, reviewed_results: List[Dict[str, Any]]) -> bool:
+        """
+        Store reviewed literature results in the database.
+        
+        Args:
+            plan_id: ID of the research plan
+            reviewed_results: List of AI-reviewed literature results
+            
+        Returns:
+            True if storage was successful, False otherwise
+        """
+        logger.info(f"🗄️ store_reviewed_literature_results called with plan_id: {plan_id}, {len(reviewed_results)} results")
+        
+        if not self.websocket:
+            logger.error("❌ WebSocket connection not available for storing reviewed results")
+            return False
+        
+        if not plan_id:
+            logger.error("❌ plan_id is required for storing reviewed literature results")
+            return False
+        
+        if not reviewed_results:
+            logger.warning("⚠️ No reviewed results provided for storage")
+            return True  # Empty results is not an error
+        
+        try:
+            task_id = f"store_reviewed_literature_{uuid.uuid4().hex[:8]}"
+            
+            # Send request to database agent via MCP
+            db_request = {
+                "type": "research_action",
+                "data": {
+                    "task_id": task_id,
+                    "context_id": f"literature_review_storage_{int(time.time())}",
+                    "agent_type": "database",
+                    "action": "store_reviewed_literature_results",
+                    "payload": {
+                        "plan_id": plan_id,
+                        "reviewed_results": reviewed_results,
+                        "metadata": {
+                            "stored_by": "literature-service",
+                            "storage_timestamp": datetime.now().isoformat(),
+                            "result_count": len(reviewed_results)
+                        }
+                    }
+                },
+                "client_id": self.agent_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            logger.info(f"📤 Sending reviewed literature results storage request (task_id: {task_id})")
+            await self.websocket.send(json.dumps(db_request))
+            
+            # Wait for response
+            try:
+                future = asyncio.Future()
+                self.pending_responses[task_id] = future
+                
+                response_data = await asyncio.wait_for(future, timeout=10.0)
+                
+                logger.info(f"📥 Received storage response: {response_data}")
+                
+                if (response_data.get("type") == "task_result" and 
+                    response_data.get("task_id") == task_id):
+                    
+                    result = response_data.get("result", {})
+                    if result.get("status") == "completed":
+                        logger.info(f"✅ Successfully stored {len(reviewed_results)} reviewed literature results")
+                        return True
+                    else:
+                        error_msg = result.get('error', 'Unknown error')
+                        logger.error(f"❌ Failed to store reviewed literature results: {error_msg}")
+                        return False
+                else:
+                    logger.error(f"❌ Unexpected response format: {response_data}")
+                    return False
+                    
+            except asyncio.TimeoutError:
+                logger.error(f"⏰ Timeout waiting for reviewed literature storage response (task_id: {task_id})")
+                return False
+            except Exception as e:
+                logger.error(f"❌ Error receiving storage response: {e}")
+                return False
+            finally:
+                self.pending_responses.pop(task_id, None)
+                
+        except Exception as e:
+            logger.error(f"❌ Error storing reviewed literature results: {e}", exc_info=True)
+            return False
+    
+    async def store_literature_records(self, records: List[Dict[str, Any]], search_query: SearchQuery) -> List[str]:
+        """
+        Store literature records in the database.
+        
+        Args:
+            records: List of literature records to store
             search_query: Original search query for context
             
         Returns:
-            List of error messages if any storage failures occurred
+            List of error messages if any storage operations failed
         """
-        storage_errors = []
-        stored_count = 0
+        logger.info(f"🗄️ store_literature_records called with {len(records)} records")
+        logger.info(f"   search_query.lit_review_id: {search_query.lit_review_id}")
+        logger.info(f"   search_query.plan_id: {search_query.plan_id}")
+        
+        if not records:
+            logger.warning("No records provided for storage")
+            return ["No records provided"]
         
         if not self.websocket:
-            error_msg = "MCP connection not available for storing literature records"
-            logger.warning(error_msg)
-            return [error_msg]
+            logger.error("❌ WebSocket connection not available for storing literature records")
+            return ["WebSocket connection not available"]
         
-        # We need a project_id for the database, but we only have lit_review_id
-        # For now, we'll use the lit_review_id as a temporary project identifier
-        # In a real implementation, you'd want to map lit_review_id to actual project_id
-        potential_project_id = search_query.plan_id or search_query.lit_review_id
+        if not search_query.lit_review_id:
+            logger.error("❌ lit_review_id is required for storing literature records")
+            return ["lit_review_id is required"]
         
-        # Ensure the project exists before trying to store literature records
-        project_id = await self._ensure_project_exists(potential_project_id, search_query)
+        errors = []
         
-        logger.info(f"Storing {len(records)} literature records to database (project_id: {project_id})")
-        
-        # Process records one at a time to avoid overwhelming the database connection pool
-        # This ensures we don't exhaust database connections
-        logger.info(f"Processing {len(records)} records sequentially to avoid connection pool exhaustion")
-        
-        for record_idx, record in enumerate(records):
-            try:
-                # Skip records without an abstract
-                if not record.get("abstract"):
-                    logger.info(f"Skipping record without abstract: {record.get('title', 'Unknown title')[:60]}...")
-                    continue
-
-                # Prepare literature record data for database storage
-                literature_record_data = {
-                    "title": record.get("title", ""),
-                    "authors": record.get("authors", []),
-                    "project_id": project_id,
-                    "doi": record.get("doi"),
-                    "pmid": record.get("pmid"),
-                    "arxiv_id": record.get("arxiv_id"),
-                    "year": record.get("year"),
-                    "journal": record.get("journal"),
-                    "abstract": record.get("abstract"),
-                    "url": record.get("url"),
-                    "citation_count": record.get("citation_count", 0),
-                    "source": record.get("source"),
-                    "publication_type": record.get("publication_type"),
-                    "mesh_terms": record.get("mesh_terms", []),
-                    "categories": record.get("categories", []),
-                    "metadata": {
+        try:
+            # Ensure project exists first if we have a plan_id
+            project_id = None
+            if search_query.plan_id:
+                project_id = await self._ensure_project_exists(search_query.plan_id, search_query)
+            
+            task_id = f"store_literature_{uuid.uuid4().hex[:8]}"
+            
+            # Send request to database agent via MCP
+            db_request = {
+                "type": "research_action",
+                "data": {
+                    "task_id": task_id,
+                    "context_id": f"literature_storage_{int(time.time())}",
+                    "agent_type": "database",
+                    "action": "store_literature_records",
+                    "payload": {
                         "lit_review_id": search_query.lit_review_id,
-                        "search_terms": getattr(search_query, 'search_terms', []),
-                        "retrieval_timestamp": record.get("retrieval_timestamp"),
-                        "raw_data": record.get("raw_data", {})
+                        "plan_id": search_query.plan_id,
+                        "project_id": project_id,
+                        "records": records,
+                        "search_context": {
+                            "query": search_query.query,
+                            "sources": search_query.sources,
+                            "filters": search_query.filters
+                        },
+                        "metadata": {
+                            "stored_by": "literature-service",
+                            "storage_timestamp": datetime.now().isoformat(),
+                            "record_count": len(records)
+                        }
                     }
-                }
+                },
+                "client_id": self.agent_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            logger.info(f"📤 Sending literature records storage request (task_id: {task_id})")
+            await self.websocket.send(json.dumps(db_request))
+            
+            # Wait for response
+            try:
+                future = asyncio.Future()
+                self.pending_responses[task_id] = future
                 
-                # Send to database via MCP
-                task_id = f"store_lit_record_{uuid.uuid4().hex[:8]}"
-                db_request = {
-                    "type": "research_action",
-                    "data": {
-                        "task_id": task_id,
-                        "context_id": f"literature_storage_{record_idx}",
-                        "agent_type": "database",
-                        "action": "create_literature_record",
-                        "payload": literature_record_data
-                    },
-                    "client_id": self.agent_id,
-                    "timestamp": datetime.now().isoformat()
-                }
+                response_data = await asyncio.wait_for(future, timeout=10.0)
                 
-                await self.websocket.send(json.dumps(db_request))
+                logger.info(f"📥 Received storage response: {response_data}")
                 
-                # Wait for response before sending the next record
-                try:
-                    future = asyncio.Future()
-                    self.pending_responses[task_id] = future
+                if (response_data.get("type") == "task_result" and 
+                    response_data.get("task_id") == task_id):
                     
-                    response_data = await asyncio.wait_for(future, timeout=15.0)  # Longer timeout for individual records
-                    
-                    if (response_data.get("type") == "task_result" and 
-                        response_data.get("task_id") == task_id):
+                    result = response_data.get("result", {})
+                    if result.get("status") == "completed":
+                        stored_count = result.get("stored_count", 0)
+                        logger.info(f"✅ Successfully stored {stored_count} literature records")
                         
-                        result = response_data.get("result", {})
-                        if result.get("status") == "completed":
-                            stored_count += 1
-                            logger.info(f"✅ Stored record {stored_count}/{len(records)}: {record.get('title', 'Unknown title')[:60]}...")
-                        else:
-                            error_msg = f"Failed to store record {record_idx+1}: {result.get('error', 'Unknown error')}"
-                            storage_errors.append(error_msg)
-                            logger.warning(f"❌ {error_msg}")
+                        # Check if all records were stored
+                        if stored_count < len(records):
+                            errors.append(f"Only {stored_count} of {len(records)} records were stored")
                     else:
-                        error_msg = f"Unexpected response for record {record_idx+1}: {response_data}"
-                        storage_errors.append(error_msg)
-                        logger.warning(f"❌ {error_msg}")
-                        
-                except asyncio.TimeoutError:
-                    error_msg = f"Timeout storing record {record_idx+1}"
-                    storage_errors.append(error_msg)
-                    logger.warning(f"⏰ {error_msg}")
-                except Exception as e:
-                    error_msg = f"Error storing record {record_idx+1}: {e}"
-                    storage_errors.append(error_msg)
-                    logger.error(f"💥 {error_msg}")
-                finally:
-                    # Clean up pending response
-                    self.pending_responses.pop(task_id, None)
-                
-                # Add a delay between each record to prevent overwhelming the database
-                await asyncio.sleep(0.2)  # 200ms delay between records
-                        
+                        error_msg = result.get('error', 'Unknown error')
+                        logger.error(f"❌ Failed to store literature records: {error_msg}")
+                        errors.append(f"Storage failed: {error_msg}")
+                else:
+                    logger.error(f"❌ Unexpected response format: {response_data}")
+                    errors.append("Unexpected response format from database")
+                    
+            except asyncio.TimeoutError:
+                logger.error(f"⏰ Timeout waiting for literature storage response (task_id: {task_id})")
+                errors.append("Timeout waiting for database response")
             except Exception as e:
-                error_msg = f"Error preparing record {record_idx+1} for storage: {e}"
-                storage_errors.append(error_msg)
-                logger.error(f"💥 {error_msg}")
+                logger.error(f"❌ Error receiving storage response: {e}")
+                errors.append(f"Error receiving storage response: {e}")
+            finally:
+                self.pending_responses.pop(task_id, None)
+                
+        except Exception as e:
+            logger.error(f"❌ Error storing literature records: {e}", exc_info=True)
+            errors.append(f"Error storing literature records: {e}")
         
-        logger.info(f"Literature record storage completed: {stored_count}/{len(records)} stored successfully")
-        if storage_errors:
-            logger.warning(f"Storage errors encountered: {len(storage_errors)} failures")
-        
-        return storage_errors
+        return errors
     
     async def _ensure_project_exists(self, project_id: str, search_query: SearchQuery) -> str:
         """
@@ -439,11 +615,25 @@ class DatabaseIntegration:
     
     def handle_task_result(self, data: Dict[str, Any]) -> bool:
         """Handle task result responses for pending database requests."""
+        logger.info(f"🔄 Database integration received task result: type={data.get('type')}, task_id={data.get('task_id')}")
+        logger.info(f"   Pending responses: {list(self.pending_responses.keys())}")
+        
         if data.get("type") == "task_result":
             task_id = data.get("task_id")
+            # Only handle task results that we're actually waiting for
             if task_id in self.pending_responses:
                 future = self.pending_responses.pop(task_id)
                 if not future.done():
                     future.set_result(data)
-                return True
+                    logger.info(f"✅ Successfully resolved future for task_id: {task_id}")
+                    return True
+                else:
+                    logger.warning(f"⚠️ Future already done for task_id: {task_id}")
+                    return True  # We handled it, even if already done
+            else:
+                logger.warning(f"❌ No pending response found for task_id: {task_id}")
+                return False  # We didn't handle this task result
+        else:
+            logger.debug(f"🔍 Non-task_result message: {data.get('type')}")
+            return False  # We didn't handle this message
         return False

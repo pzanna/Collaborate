@@ -11,8 +11,8 @@ from typing import Dict, Any, List
 # Research depth configurations mapped to academic levels
 RESEARCH_DEPTH_CONFIG: Dict[str, Dict[str, Any]] = {
     "undergraduate": {
-        "max_results": 25,
-        "sources": ["semantic_scholar", "arxiv"],
+        "max_results": 10,
+        "sources": ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"],
         "quality_threshold": "basic",
         "synthesis_depth": "overview",
         "estimated_cost": 0.15,
@@ -22,8 +22,8 @@ RESEARCH_DEPTH_CONFIG: Dict[str, Dict[str, Any]] = {
         "citation_depth": "primary"
     },
     "masters": {
-        "max_results": 75,
-        "sources": ["semantic_scholar", "arxiv", "pubmed"],
+        "max_results": 25,
+        "sources": ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"],
         "quality_threshold": "standard",
         "synthesis_depth": "analytical", 
         "estimated_cost": 0.35,
@@ -33,8 +33,8 @@ RESEARCH_DEPTH_CONFIG: Dict[str, Dict[str, Any]] = {
         "citation_depth": "secondary"
     },
     "phd": {
-        "max_results": 200,
-        "sources": ["semantic_scholar", "arxiv", "pubmed", "crossref"],
+        "max_results": 50,
+        "sources": ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"],
         "quality_threshold": "rigorous",
         "synthesis_depth": "comprehensive",
         "estimated_cost": 0.75,

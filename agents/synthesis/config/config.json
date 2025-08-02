@@ -13,7 +13,7 @@
     "evidence_table_generation",
     "outcome_extraction"
   ],
-  "dependencies": ["mcp-server", "ai-service", "memory-agent"],
+  "dependencies": ["mcp-server", "ai-service", "memory-service"],
   "logging": {
     "level": "INFO",
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

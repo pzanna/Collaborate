@@ -149,7 +149,7 @@ print_status "PostgreSQL is healthy"
 
 # Start core services and executor/memory agents
 print_info "Starting core services and executor/memory agents..."
-docker compose -f "$COMPOSE_FILE" up -d mcp-server database-service auth-service executor-agent memory-agent
+docker compose -f "$COMPOSE_FILE" up -d mcp-server database-service auth-service executor-agent memory-service
 
 # Wait for core services
 sleep 15

@@ -116,6 +116,25 @@ export interface GenerateAIResearchPlanResponse {
   }
 }
 
+// Types for research execution
+export interface ExecuteResearchRequest {
+  task_type: "literature_review" | "systematic_review" | "meta_analysis"
+  depth: "undergraduate" | "masters" | "phd"
+}
+
+export interface ResearchExecutionResponse {
+  execution_id: string
+  topic_name: string
+  research_questions: string[]
+  task_type: string
+  depth: string
+  estimated_cost: number
+  estimated_duration: string
+  status: string
+  progress_url: string
+  timestamp: string
+}
+
 /**
  * Generic API request function
  */
@@ -268,6 +287,17 @@ export const apiClient = {
     request: GenerateAIResearchPlanRequest
   ): Promise<ResearchPlan> {
     return await apiRequest(`/v2/topics/${topicId}/ai-plans`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    })
+  },
+
+  // Research execution method
+  async executeResearch(
+    topicId: string,
+    request: ExecuteResearchRequest
+  ): Promise<ResearchExecutionResponse> {
+    return await apiRequest(`/v2/topics/${topicId}/execute`, {
       method: "POST",
       body: JSON.stringify(request),
     })

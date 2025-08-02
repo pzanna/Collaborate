@@ -29,7 +29,7 @@ class LiteratureSearchService:
     """
     Literature Search Service for discovering and collecting bibliographic records.
     
-    Handles academic literature search across multiple sources, normalization,
+    Handles literature search across multiple sources, normalization,
     deduplication, and integration with MCP protocol.
     """
     
@@ -96,6 +96,9 @@ class LiteratureSearchService:
             # Initialize MCP-dependent components
             self.ai_integration = AIIntegration(self.websocket, self.agent_id)
             self.database_integration = DatabaseIntegration(self.websocket, self.agent_id)
+            
+            # Set database integration reference in AI integration
+            self.ai_integration.database_integration = self.database_integration
             
             # Check if AI agent is available for search optimization
             await self._check_ai_agent_availability()
@@ -165,7 +168,6 @@ class LiteratureSearchService:
             return
             
         capabilities = [
-            "search_academic_papers",
             "search_literature",
             "normalize_records",
             "deduplicate_results",
@@ -192,10 +194,24 @@ class LiteratureSearchService:
                 data = json.loads(message)
                 
                 # Handle task result responses for pending AI/DB requests
-                if self.ai_integration and self.ai_integration.handle_task_result(data):
-                    continue
-                if self.database_integration and self.database_integration.handle_task_result(data):
-                    continue
+                ai_handled = False
+                db_handled = False
+                
+                if self.ai_integration:
+                    ai_handled = self.ai_integration.handle_task_result(data)
+                    if ai_handled:
+                        logger.debug(f"✅ AI integration handled message: {data.get('type')} task_id={data.get('task_id')}")
+                        continue
+                
+                if self.database_integration:
+                    db_handled = self.database_integration.handle_task_result(data)
+                    if db_handled:
+                        logger.debug(f"✅ Database integration handled message: {data.get('type')} task_id={data.get('task_id')}")
+                        continue
+                
+                # Log unhandled task results for debugging
+                if data.get("type") == "task_result" and not ai_handled and not db_handled:
+                    logger.warning(f"⚠️ Unhandled task result: task_id={data.get('task_id')}, neither AI nor DB integration claimed it")
                 
                 if data.get("type") == "task_request":
                     await self.task_queue.put(data)
@@ -250,9 +266,7 @@ class LiteratureSearchService:
                 payload = task_data.get("payload", {})
             
             # Route to appropriate handler
-            if action == "search_academic_papers":
-                return await self._handle_search_academic_papers(payload)
-            elif action == "search_literature":
+            if action == "search_literature":
                 return await self._handle_search_literature(payload)
             elif action == "normalize_records":
                 return await self._handle_normalize_records(payload)
@@ -271,56 +285,7 @@ class LiteratureSearchService:
                 "timestamp": datetime.now().isoformat()
             }
     
-    async def _handle_search_academic_papers(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle academic paper search request."""
-        try:
-            research_plan = payload.get("research_plan", "")
-            plan_id = payload.get("plan_id", "")
-            max_results = payload.get("max_results", 10)
-            search_depth = payload.get("search_depth", "standard")
-            sources = payload.get("sources", ["core", "arxiv", "crossref", "semantic_scholar", "pubmed"])
-
-            if not research_plan:
-                return {
-                    "status": "failed",
-                    "error": "Research plan is required",
-                    "timestamp": datetime.now().isoformat()
-                }
-            
-            # Create search query
-            search_query = SearchQuery(
-                lit_review_id=str(uuid.uuid4()),
-                plan_id=plan_id,
-                research_plan=research_plan,
-                max_results=max_results,
-                sources=sources,
-                search_depth=search_depth
-            )
-            
-            # Execute search
-            search_report = await self.search_literature(search_query)
-            
-            return {
-                "status": "completed",
-                "results": search_report.records,
-                "summary": {
-                    "total_found": search_report.total_fetched,
-                    "total_unique": search_report.total_unique,
-                    "sources": search_report.per_source_counts,
-                    "search_duration": (search_report.end_time - search_report.start_time).total_seconds()
-                },
-                "errors": search_report.errors,
-                "timestamp": datetime.now().isoformat()
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to handle search academic papers: {e}")
-            return {
-                "status": "failed",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-    
+        
     async def _handle_search_literature(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle literature search request."""
         try:
@@ -330,15 +295,14 @@ class LiteratureSearchService:
             research_plan = payload.get("research_plan", "")
             filters = payload.get("filters", {})
             sources = payload.get("sources", ["core", "arxiv", "crossref", "semantic_scholar", "pubmed"])
-            max_results = payload.get("max_results", 100)
+            max_results = payload.get("max_results", 10)
 
             if not research_plan:
                 return {
                     "status": "failed",
                     "error": "Research plan is required",
                     "timestamp": datetime.now().isoformat()
-                }
-            
+                }            
             # Create search query
             search_query = SearchQuery(
                 lit_review_id=lit_review_id,
@@ -509,12 +473,102 @@ class LiteratureSearchService:
         # Deduplicate records
         unique_records = self.deduplicator.deduplicate_records(all_records)
         
-        # Store literature records in database
-        if unique_records and search_query.lit_review_id and self.database_integration:
-            logger.info(f"Storing {len(unique_records)} literature records in database")
-            storage_errors = await self.database_integration.store_literature_records(unique_records, search_query)
-            if storage_errors:
-                errors.extend(storage_errors)
+        # Filter out records with empty abstracts
+        # This ensures we only keep literature with meaningful content for review
+        records_with_abstracts = self.deduplicator.filter_records_with_abstracts(unique_records)
+        
+        # Create simplified JSON records with only id, title, and abstract
+        # This is done BEFORE storing in the database as per the workflow requirements
+        simplified_json_records = self._create_simplified_json_records(records_with_abstracts)
+        
+        # Store initial literature results in research plan (before AI review)
+        logger.info(f"📊 INITIAL LITERATURE STORAGE CHECK:")
+        logger.info(f"  ├─ full_records_with_abstracts: {len(records_with_abstracts)} records")
+        logger.info(f"  ├─ simplified_json_records: {len(simplified_json_records)} records")
+        logger.info(f"  ├─ plan_id: {search_query.plan_id}")
+        logger.info(f"  ├─ lit_review_id: {search_query.lit_review_id}")
+        logger.info(f"  └─ database_integration: {'✅ Available' if self.database_integration else '❌ None'}")
+        
+        if search_query.plan_id and search_query.lit_review_id and self.database_integration and simplified_json_records:
+            logger.info(f"📤 STORING INITIAL LITERATURE RESULTS: {len(simplified_json_records)} simplified JSON records → plan_id={search_query.plan_id}")
+            try:
+                initial_storage_success = await self.database_integration.store_initial_literature_results(
+                    lit_review_id=search_query.lit_review_id,
+                    plan_id=search_query.plan_id,
+                    records=simplified_json_records  # Store simplified JSON instead of full records
+                )
+                if initial_storage_success:
+                    logger.info(f"🎉 INITIAL LITERATURE JSON STORED: {len(simplified_json_records)} simplified records in research_plans.initial_literature_results")
+                else:
+                    logger.error("💥 INITIAL LITERATURE STORAGE FAILED: store_initial_literature_results returned False")
+                    errors.append("Failed to store initial literature results")
+            except Exception as e:
+                logger.error(f"💥 INITIAL LITERATURE STORAGE EXCEPTION: {type(e).__name__}: {e}")
+                logger.error(f"   └─ Failed to store initial literature results for plan_id={search_query.plan_id}")
+                errors.append(f"Exception storing initial literature results: {e}")
+        else:
+            missing_conditions = []
+            if not search_query.plan_id:
+                missing_conditions.append("no plan_id")
+            if not search_query.lit_review_id:
+                missing_conditions.append("no lit_review_id")
+            if not self.database_integration:
+                missing_conditions.append("no database_integration")
+            if not simplified_json_records:
+                missing_conditions.append("no simplified_json_records")
+            logger.warning(f"⚠️ SKIPPING INITIAL LITERATURE STORAGE: {', '.join(missing_conditions)}")
+        
+        # Review literature results using AI if research plan is available
+        # Pass the simplified JSON records to AI for review
+        reviewed_records = await self._review_and_filter_records(search_query, simplified_json_records)
+        
+        # Store reviewed literature results in database JSON format
+        logger.info(f"Checking storage conditions:")
+        logger.info(f"  - reviewed_records: {len(reviewed_records) if reviewed_records else 0} records")
+        logger.info(f"  - search_query.lit_review_id: {search_query.lit_review_id}")
+        logger.info(f"  - self.database_integration: {'Available' if self.database_integration else 'None'}")
+        
+        if reviewed_records and search_query.lit_review_id and self.database_integration:
+            logger.info(f"✅ All conditions met - storing {len(reviewed_records)} reviewed literature results in database JSON format")
+            success = await self.database_integration.store_reviewed_literature_results(search_query.plan_id, reviewed_records)
+            if not success:
+                error_msg = "Failed to store reviewed literature results in JSON format"
+                logger.error(f"❌ {error_msg}")
+                errors.append(error_msg)
+            else:
+                logger.info(f"🎉 REVIEWED LITERATURE JSON STORED: {len(reviewed_records)} records in research_plans.reviewed_literature_results")
+                
+                # Final step: Reconcile full records with reviewed records and store in literature_records table
+                # This matches the reviewed articles with their full record data for complete storage
+                reviewed_ids = {record.get("id") for record in reviewed_records if record.get("id")}
+                matching_full_records = [
+                    record for record in records_with_abstracts 
+                    if record.get("internal_id") in reviewed_ids
+                ]
+                
+                logger.info(f"🔄 RECONCILIATION: {len(reviewed_records)} reviewed articles → {len(matching_full_records)} full records matched")
+                
+                if matching_full_records:
+                    literature_storage_errors = await self.database_integration.store_literature_records(
+                        records=matching_full_records, 
+                        search_query=search_query
+                    )
+                    if literature_storage_errors:
+                        logger.error(f"❌ Errors storing full literature records: {literature_storage_errors}")
+                        errors.extend(literature_storage_errors)
+                    else:
+                        logger.info(f"🎉 FULL LITERATURE RECORDS STORED: {len(matching_full_records)} complete records in literature_records table")
+                else:
+                    logger.warning("⚠️ No matching full records found for reviewed articles")
+        else:
+            missing_conditions = []
+            if not reviewed_records:
+                missing_conditions.append("no reviewed_records")
+            if not search_query.lit_review_id:
+                missing_conditions.append("no lit_review_id")
+            if not self.database_integration:
+                missing_conditions.append("no database_integration")
+            logger.warning(f"❌ Skipping literature storage due to: {', '.join(missing_conditions)}")
         
         end_time = datetime.now()
         
@@ -522,18 +576,184 @@ class LiteratureSearchService:
         search_report = SearchReport(
             lit_review_id=search_query.lit_review_id,
             total_fetched=total_fetched,
-            total_unique=len(unique_records),
+            total_unique=len(records_with_abstracts),  # Updated to reflect filtering
             per_source_counts=per_source_counts,
             start_time=start_time,
             end_time=end_time,
             errors=errors,
-            records=unique_records
+            records=reviewed_records  # Use reviewed records instead of unique_records
         )
         
         logger.info(f"Literature search completed. Fetched {total_fetched} records, "
-                   f"{len(unique_records)} unique after deduplication")
+                   f"{len(unique_records)} unique after deduplication, "
+                   f"{len(records_with_abstracts)} with abstracts, "
+                   f"{len(reviewed_records)} after AI review")
         
         return search_report
+    
+    async def _review_and_filter_records(self, search_query: SearchQuery, unique_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Review literature results using AI and filter to most relevant articles.
+        
+        Args:
+            search_query: The original search query containing research plan
+            unique_records: List of unique deduplicated records to review
+            
+        Returns:
+            List of filtered records based on AI review, or original records if review fails
+        """
+        # Default to all unique records
+        reviewed_records = unique_records
+        
+        if not search_query.research_plan or not self.ai_integration or not unique_records:
+            logger.info("Skipping AI review: missing research plan, AI integration, or no records to review")
+            return reviewed_records
+        
+        logger.info(f"Reviewing {len(unique_records)} unique records using AI agent")
+        
+        try:
+            reviewed_articles = await self.ai_integration.review_literature_results(
+                research_plan=search_query.research_plan,
+                search_results=unique_records,
+                plan_id=search_query.plan_id
+            )
+            
+            if not reviewed_articles:
+                logger.warning("AI review returned no results, using all unique records")
+                return reviewed_records
+            
+            logger.info(f"AI review completed: {len(reviewed_articles)} articles selected from {len(unique_records)} candidates")
+            
+            # Debug: Log a sample of what the AI returned
+            if reviewed_articles:
+                sample_article = reviewed_articles[0]
+                logger.debug(f"Sample AI-returned article: {sample_article}")
+                logger.debug(f"AI returned internal_id: {sample_article.get('id')}")
+            
+            # Debug: Log a sample of what we're trying to match against
+            if unique_records:
+                sample_record = unique_records[0]
+                logger.debug(f"Sample original record IDs: internal_id={sample_record.get('internal_id')}, external_id={sample_record.get('external_id')}, doi={sample_record.get('doi')}, url={sample_record.get('url')}")
+            
+            # Convert reviewed articles back to the same format as unique_records
+            # The AI returns articles in format [{"id": "...", "title": "...", "Abstract": "..."}]
+            # where "id" is now the internal_id, and we need to find matching records from unique_records
+            
+            # Create lookup sets for efficient matching
+            reviewed_internal_ids = set()
+            reviewed_titles = set()
+            
+            for article in reviewed_articles:
+                if article.get("id"):
+                    reviewed_internal_ids.add(article.get("id"))
+                if article.get("title"):
+                    reviewed_titles.add(article.get("title"))
+            
+            # Also create normalized title lookups for better matching
+            reviewed_titles_normalized = {self._normalize_title(article.get("title", "")) for article in reviewed_articles if article.get("title")}
+            
+            filtered_records = []
+            matched_count = 0
+            
+            for record in unique_records:
+                # Primary matching strategy: use internal_id (most reliable)
+                if record.get("internal_id") and record.get("internal_id") in reviewed_internal_ids:
+                    filtered_records.append(record)
+                    matched_count += 1
+                    continue
+                
+                # Fallback matching strategies for robustness
+                # 2. Match by external_id (if internal_id matching fails)
+                if record.get("external_id") and record.get("external_id") in reviewed_internal_ids:
+                    filtered_records.append(record)
+                    matched_count += 1
+                    continue
+                
+                # 3. Match by DOI (very reliable)
+                if record.get("doi") and record.get("doi") in reviewed_internal_ids:
+                    filtered_records.append(record)
+                    matched_count += 1
+                    continue
+                
+                # 4. Match by URL (fairly reliable)
+                if record.get("url") and record.get("url") in reviewed_internal_ids:
+                    filtered_records.append(record)
+                    matched_count += 1
+                    continue
+                
+                # 5. Match by exact title (good but can have formatting issues)
+                if record.get("title") and record.get("title") in reviewed_titles:
+                    filtered_records.append(record)
+                    matched_count += 1
+                    continue
+                
+                # 6. Match by normalized title (handles minor formatting differences)
+                normalized_record_title = self._normalize_title(record.get("title", ""))
+                if normalized_record_title and normalized_record_title in reviewed_titles_normalized:
+                    filtered_records.append(record)
+                    matched_count += 1
+                    continue
+            
+            logger.info(f"Record matching details: {matched_count} matches found from {len(reviewed_articles)} AI-selected articles")
+            
+            if filtered_records:
+                reviewed_records = filtered_records
+                logger.info(f"Successfully matched {len(filtered_records)} complete records from AI review")
+            else:
+                logger.warning("Could not match any AI-reviewed articles to original records, using all unique records")
+                
+        except Exception as e:
+            logger.error(f"Error during AI literature review: {e}")
+            logger.info("Falling back to using all unique records")
+        
+        return reviewed_records
+    
+    def _create_simplified_json_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Create simplified JSON records with only id, title, and abstract fields.
+        This is used for storing in the initial_literature_results column and for AI review.
+        
+        Args:
+            records: List of full normalized records
+            
+        Returns:
+            List of simplified records with only id, title, and abstract
+        """
+        simplified_records = []
+        for record in records:
+            simplified_record = {
+                "id": record.get("internal_id"),  # Use internal_id for consistency
+                "title": record.get("title", ""),
+                "abstract": record.get("abstract", "")
+            }
+            simplified_records.append(simplified_record)
+        
+        logger.info(f"Created {len(simplified_records)} simplified JSON records for storage/AI review")
+        return simplified_records
+    
+    def _normalize_title(self, title: str) -> str:
+        """
+        Normalize a title for better matching by removing common formatting differences.
+        
+        Args:
+            title: The title to normalize
+            
+        Returns:
+            Normalized title for matching
+        """
+        if not title:
+            return ""
+        
+        # Convert to lowercase and strip whitespace
+        normalized = title.lower().strip()
+        
+        # Remove common punctuation and extra spaces
+        import re
+        normalized = re.sub(r'[^\w\s]', ' ', normalized)  # Replace punctuation with spaces
+        normalized = re.sub(r'\s+', ' ', normalized)      # Collapse multiple spaces
+        normalized = normalized.strip()
+        
+        return normalized
     
     async def _search_source_with_terms(self, source: str, search_query: SearchQuery, search_terms: List[str]) -> List[Dict[str, Any]]:
         """Search a specific source using multiple AI-optimized search terms."""
@@ -552,7 +772,7 @@ class LiteratureSearchService:
                     query=term,
                     filters=search_query.filters,
                     sources=search_query.sources,
-                    max_results=max(10, search_query.max_results // len(search_terms)),  # Distribute max results
+                    max_results=max(10, search_query.max_results),
                     search_depth=search_query.search_depth,
                     research_plan=search_query.research_plan
                 )

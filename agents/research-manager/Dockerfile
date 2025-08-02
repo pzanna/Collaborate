@@ -44,19 +44,16 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY src/ ./src/
 COPY config/ ./config/
 
-# Copy shared health check service
-COPY health_check_service.py ./health_check_service.py
-
 # Copy startup script
 COPY start-dev.sh ./start-dev.sh
 
 # Security: Set strict file permissions and ownership
 RUN chown -R researchmanager:researchmanager /app && \
     chmod -R 750 /app && \
-    chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
+    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \; && \
-    chmod 750 /app/start.sh /app/start-dev.sh
+    chmod 750 /app/start-dev.sh
 
 # Security: Create writable temp directory for application
 RUN mkdir -p /app/tmp && \

@@ -462,10 +462,10 @@ services:
       retries: 3
       start_period: 15s
 
-  # 10. Memory Agent Service (Port 8009) - Security Enhanced
-  memory-agent:
-    build: ./agents/memory
-    container_name: eunice-memory-agent
+  # 10. Memory Service (Port 8009) - Security Enhanced
+  memory-service:
+    build: ./services/memory
+    container_name: eunice-memory-service
     ports:
       - "8009:8009"
     environment:

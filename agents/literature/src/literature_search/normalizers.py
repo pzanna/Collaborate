@@ -4,6 +4,7 @@ Record normalization functionality for standardizing data from different sources
 
 import logging
 import re
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -22,23 +23,37 @@ class RecordNormalizer:
             source: Source identifier
             
         Returns:
-            List of normalized records
+            List of normalized records (excluding those with empty abstracts)
         """
         normalized = []
         
         for record in records:
             try:
+                # Extract external ID (pmid or arxiv_id)
+                external_id = self._extract_external_id(record, source)
+                
+                # Generate PDF URL based on the external ID and source
+                pdf_url = self._generate_pdf_url(record, source, external_id)
+                
+                # Extract abstract and check if it's empty
+                abstract = self._extract_field(record, ['abstract', 'Abstract', 'summary'])
+                
+                # Filter out records with empty abstracts
+                if not abstract or not abstract.strip():
+                    logger.debug(f"Skipping record from {source} with empty abstract: {self._extract_field(record, ['title', 'Title'])}")
+                    continue
+                
                 normalized_record = {
+                    'internal_id': str(uuid.uuid4()),  # Generate unique internal ID
                     'source': source,
                     'title': self._extract_field(record, ['title', 'Title']),
                     'authors': self._extract_authors(record),
-                    'abstract': self._extract_field(record, ['abstract', 'Abstract', 'summary']),
+                    'abstract': abstract,
                     'doi': self._extract_field(record, ['doi', 'DOI', 'externalIds.DOI']),
-                    'pmid': self._extract_field(record, ['pmid', 'PMID', 'externalIds.PubMed']),
-                    'arxiv_id': self._extract_field(record, ['arxiv_id', 'id']),
+                    'external_id': external_id,
                     'year': self._extract_year(record),
                     'journal': self._extract_field(record, ['journal', 'venue', 'Journal', 'container-title']),
-                    'url': self._extract_field(record, ['url', 'URL', 'link']),
+                    'url': pdf_url or self._extract_field(record, ['url', 'URL', 'link']),
                     'citation_count': self._extract_field(record, ['citationCount', 'citations', 'is-referenced-by-count']),
                     'publication_type': self._extract_field(record, ['type', 'publication_type']),
                     'mesh_terms': record.get('mesh_terms', []) if source == 'pubmed' else [],
@@ -53,6 +68,30 @@ class RecordNormalizer:
                 continue
         
         return normalized
+    
+    def filter_records_with_abstracts(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out records that have empty or missing abstracts.
+        
+        Args:
+            records: List of normalized records
+            
+        Returns:
+            List of records with non-empty abstracts
+        """
+        filtered_records = []
+        
+        for record in records:
+            abstract = record.get('abstract', '')
+            if abstract and abstract.strip():
+                filtered_records.append(record)
+            else:
+                logger.debug(f"Filtering out record with empty abstract: {record.get('title', 'Unknown title')}")
+        
+        logger.info(f"Filtered {len(records) - len(filtered_records)} records with empty abstracts. "
+                   f"Remaining: {len(filtered_records)} records")
+        
+        return filtered_records
     
     def _extract_field(self, record: Dict[str, Any], field_names: List[str]) -> Optional[str]:
         """Extract field value using multiple possible field names."""
@@ -159,4 +198,117 @@ class RecordNormalizer:
             if date_parts and len(date_parts[0]) > 0:
                 return int(date_parts[0][0])
         
+        return None
+    
+    def _extract_external_id(self, record: Dict[str, Any], source: str) -> Optional[str]:
+        """Extract external ID based on source type."""
+        if source == 'pubmed':
+            pmid = self._extract_field(record, ['pmid', 'PMID', 'externalIds.PubMed'])
+            if pmid:
+                return f"pmid:{pmid}"
+        elif source == 'arxiv':
+            arxiv_id = self._extract_field(record, ['arxiv_id', 'id'])
+            if arxiv_id:
+                # Clean arXiv ID - extract just the ID part if it's a full URL
+                if 'arxiv.org/abs/' in str(arxiv_id):
+                    arxiv_id = str(arxiv_id).split('abs/')[-1]
+                # Remove version number if present (e.g., 2301.12345v1 -> 2301.12345)
+                if 'v' in str(arxiv_id):
+                    arxiv_id = str(arxiv_id).split('v')[0]
+                return f"arxiv:{arxiv_id}"
+        elif source == 'semantic_scholar':
+            # Check for DOI, PMID, or arXiv ID in external IDs
+            if 'externalIds' in record:
+                ext_ids = record['externalIds']
+                if ext_ids.get('PubMed'):
+                    return f"pmid:{ext_ids['PubMed']}"
+                elif ext_ids.get('ArXiv'):
+                    arxiv_id = ext_ids['ArXiv']
+                    # Clean arXiv ID
+                    if 'v' in str(arxiv_id):
+                        arxiv_id = str(arxiv_id).split('v')[0]
+                    return f"arxiv:{arxiv_id}"
+        elif source == 'crossref':
+            # CrossRef primarily uses DOI, but check for other external IDs
+            pmid = self._extract_field(record, ['pmid', 'PMID'])
+            if pmid:
+                return f"pmid:{pmid}"
+        elif source == 'core':
+            # CORE uses its own id system
+            core_id = self._extract_field(record, ['id', 'coreId'])
+            if core_id:
+                return f"core:{core_id}"
+            
+        return None
+    
+    def _generate_pdf_url(self, record: Dict[str, Any], source: str, external_id: Optional[str]) -> Optional[str]:
+        """Generate PDF download URL based on source and external ID."""
+        # First, check for source-specific PDF URLs
+        if source == 'semantic_scholar':
+            # Check if Semantic Scholar provides a PDF URL
+            if 'openAccessPdf' in record and record['openAccessPdf']:
+                if isinstance(record['openAccessPdf'], dict):
+                    pdf_url = record['openAccessPdf'].get('url')
+                    if pdf_url:
+                        return pdf_url
+                elif isinstance(record['openAccessPdf'], str):
+                    return record['openAccessPdf']
+        elif source == 'crossref':
+            # Check for open access PDF URL
+            if 'link' in record:
+                for link in record['link']:
+                    if link.get('content-type') == 'application/pdf':
+                        return link.get('URL')
+        elif source == 'core':
+            # CORE provides downloadUrl for PDF access
+            download_url = self._extract_field(record, ['downloadUrl', 'fullTextUrl', 'pdf_url'])
+            if download_url:
+                return download_url
+        
+        # Then fall back to external_id-based URLs
+        if not external_id:
+            return None
+            
+        if external_id.startswith('arxiv:'):
+            arxiv_id = external_id[6:]  # Remove 'arxiv:' prefix
+            return f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+        elif external_id.startswith('pmid:'):
+            pmid = external_id[5:]  # Remove 'pmid:' prefix
+            # Try to get PMC ID for PDF access
+            pmc_id = record.get('pmc_id') or record.get('PMC')
+            if pmc_id:
+                # Clean PMC ID
+                if pmc_id.startswith('PMC'):
+                    pmc_id = pmc_id[3:]
+                return f"https://www.ncbi.nlm.nih.gov/pmc/articles/PMC{pmc_id}/pdf/"
+            else:
+                # Fallback to PubMed page (not PDF, but accessible)
+                return f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+        elif external_id.startswith('core:'):
+            core_id = external_id[5:]  # Remove 'core:' prefix
+            # For CORE, check if record has a DOI first (more reliable)
+            doi = record.get('doi') or record.get('DOI')
+            if doi:
+                return f"https://doi.org/{doi}"
+            # Otherwise use CORE direct access URL
+            return f"https://core.ac.uk/download/{core_id}.pdf"
+        
+        # Final fallback to generic URL fields
+        if source == 'semantic_scholar' and 'url' in record:
+            return record['url']
+        elif source == 'crossref':
+            # Check DOI-based PDF access
+            doi = record.get('DOI')
+            if doi:
+                return f"https://doi.org/{doi}"
+        elif source == 'core':
+            # CORE fallback - try to construct URL from any available identifier
+            doi = record.get('doi')
+            if doi:
+                return f"https://doi.org/{doi}"
+            # Or fallback to CORE page
+            core_id = record.get('id')
+            if core_id:
+                return f"https://core.ac.uk/works/{core_id}"
+                
         return None

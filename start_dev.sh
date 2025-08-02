@@ -118,7 +118,7 @@ sleep 5
 # Phase 4: Start core research agents
 # Memory agent handles knowledge graph, Executor handles task processing
 print_info "Starting core agents (Memory, Executor)..."
-docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d memory-agent executor-agent
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d memory-service executor-agent
 
 # Phase 5: Start AI service
 # This provides LLM integration and handles AI API calls
