@@ -31,7 +31,7 @@ class ResearchContext:
     task_description: str
     user_id: str
     topic_id: str
-    max_results: int = 10
+    max_results: int = 25
     project_id: Optional[str] = None
     stage: ResearchStage = ResearchStage.PLANNING
     estimated_cost: float = 0.0

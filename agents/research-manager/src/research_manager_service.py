@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -48,7 +49,7 @@ def get_mcp_status() -> Dict[str, Any]:
     if research_manager_service:
         return {
             "connected": research_manager_service.mcp_communicator.mcp_connected,
-            "last_heartbeat": "2025-08-02T00:00:00Z"  # Would be actual timestamp in production
+            "last_heartbeat": datetime.now().isoformat()
         }
     return {"connected": False, "last_heartbeat": "never"}
 

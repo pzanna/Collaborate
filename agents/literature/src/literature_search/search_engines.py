@@ -33,27 +33,27 @@ class SearchEngines:
             'semantic_scholar': {
                 'base_url': 'https://api.semanticscholar.org/graph/v1/paper/search',
                 'rate_limit': 5,  # seconds between requests
-                'max_results_per_request': 10
+                'max_results_per_request': 100
             },
             'pubmed': {
                 'base_url': 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
-                'rate_limit': 1,  # NCBI rate limit (1 requests per second)
-                'max_results_per_request': 10
+                'rate_limit': 2,  # NCBI rate limit (1 requests per second)
+                'max_results_per_request': 100
             },
             'arxiv': {
                 'base_url': 'http://export.arxiv.org/api/query',
-                'rate_limit': 3,  # arXiv rate limit recommendation
-                'max_results_per_request': 10
+                'rate_limit': 5,  # arXiv rate limit recommendation
+                'max_results_per_request': 100
             },
             'crossref': {
                 'base_url': 'https://api.crossref.org/works',
-                'rate_limit': 1,  # CrossRef rate limit
-                'max_results_per_request': 10
+                'rate_limit': 2,  # CrossRef rate limit
+                'max_results_per_request': 100
             },
             'core': {
                 'base_url': 'https://api.core.ac.uk/v3/search/works',
-                'rate_limit': 1, # CORE API rate limit
-                'max_results_per_request': 10
+                'rate_limit': 2, # CORE API rate limit
+                'max_results_per_request': 100
             }
         }
     

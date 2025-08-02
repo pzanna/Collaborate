@@ -1245,13 +1245,6 @@ class DatabaseAgentService:
                         }
                     }
                     
-                    # Update research plan with initial literature results
-                    if plan_id:
-                        await conn.execute("""
-                            UPDATE research_plans 
-                            SET initial_literature_results = $1, updated_at = $2
-                            WHERE id = $3
-                        """, json.dumps(initial_literature_json), datetime.now(), plan_id)
                     
                     logger.info(f"Successfully stored {stored_count} literature records and updated research plan")
                     

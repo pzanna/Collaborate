@@ -36,20 +36,25 @@ class AIIntegration:
 
         # Create research planning prompt
         prompt = (
-            "You are a scientific search-strategy assistant. When given a research plan, "
-            "reply ONLY with VALID JSON matching the schema in the instruction, "
-            "containing highly targeted literature-search phrases ready for PubMed / "
-            "Web of Science / Google Scholar. Do not add commentary or markdown.\n\n"
-            f"Plan: {research_plan}\n\n"
-            "Format your response in JSON with the following structure:\n"
+            "You are an expert scientific search-strategy assistant. "
+            "When given a research plan in the variable `research_plan`, "
+            "you must reply **only** with valid JSON —no commentary, no markdown—"
+            "structured as:\n"
             "{\n"
-            '    "topic 1": ["Search String 1", "Search String 2", ...],\n'
-            '    "topic 2": ["Search String 1", "Search String 2", ...],\n'
-            '    "topic 3": ["Search String 1", "Search String 2", ...],\n'
-            "    ...\n"
-            "}\n"
-            "Ensure the search strings are specific, relevant, and suitable for "
-            "academic databases.\n"
+            '  "Topic A": ["Search String 1", "Search String 2", ...],\n'
+            '  "Topic B": ["Search String 1", "Search String 2", ...],\n'
+            "  ...\n"
+            "}\n\n"
+            "For each topic in the plan, generate 4-6 database-ready search queries "
+            "that use:\n"
+            "- Boolean operators (AND, OR)\n"
+            "- Phrase quotes for exact terms\n"
+            "- Synonyms joined by OR\n"
+            "- Field tags or MeSH terms where applicable (e.g., [Title/Abstract], MeSH)\n"
+            "- Controlled vocabulary and truncation (*) where helpful\n\n"
+            "Ensure each query is concise, specific, and optimized for PubMed, CORE, Semantic Scholar, arXiv, and CrossRef. "
+            "Do not include any extra text.\n\n"
+            f"Plan: {research_plan}"
         )
 
         # Send request to AI agent via MCP for search term optimization

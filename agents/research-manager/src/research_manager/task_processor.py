@@ -52,17 +52,17 @@ class TaskProcessor:
                 logger.info(f"Received task result from delegated agent")
                 return await self._handle_task_result(task_data)
             
-            # Handle legacy task_request format
-            elif task_type == "task_request":
-                return await self._handle_legacy_task_request(task_data)
-            
             # Handle ping
             elif task_type == "ping":
                 return {"status": "alive", "timestamp": datetime.now().isoformat()}
             
-            # Handle legacy JSON-RPC format
+            # Unknown message type
             else:
-                return await self._handle_legacy_jsonrpc(task_data)
+                return {
+                    "status": "failed",
+                    "error": f"Unknown message type: {task_type}",
+                    "timestamp": datetime.now().isoformat()
+                }
                 
         except Exception as e:
             logger.error(f"Error processing research task: {e}")
@@ -103,76 +103,6 @@ class TaskProcessor:
                 "timestamp": datetime.now().isoformat()
             }
     
-    async def _handle_legacy_task_request(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle legacy task_request format."""
-        task_id = task_data.get("task_id", "")
-        action = task_data.get("task_type", "")
-        data = task_data.get("data", {})
-        context_id = task_data.get("context_id", "")
-        
-        # Include task_id in data for handler
-        data["task_id"] = task_id
-        data["context_id"] = context_id
-        
-        if action == "coordinate_research":
-            return await self._handle_coordinate_research(data)
-        elif action == "estimate_costs":
-            return await self.service.task_handlers.handle_estimate_costs(data)
-        elif action == "track_progress":
-            return await self.service.task_handlers.handle_track_progress(data)
-        elif action == "delegate_tasks":
-            return await self.service.task_handlers.handle_delegate_tasks(data)
-        elif action == "manage_workflows":
-            return await self.service.task_handlers.handle_manage_workflows(data)
-        elif action == "approve_actions":
-            return await self.service.task_handlers.handle_approve_actions(data)
-        else:
-            return {
-                "status": "failed",
-                "error": f"Unknown task type: {action}",
-                "timestamp": datetime.now().isoformat()
-            }
-    
-    async def _handle_legacy_jsonrpc(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle legacy JSON-RPC format."""
-        method = task_data.get("method", "")
-        params = task_data.get("params", {})
-        
-        if method == "task/execute":
-            task_type_legacy = params.get("task_type", "")
-            data_legacy = params.get("data", {})
-            
-            if task_type_legacy == "coordinate_research":
-                return await self._handle_coordinate_research(data_legacy)
-            elif task_type_legacy == "estimate_costs":
-                return await self.service.task_handlers.handle_estimate_costs(data_legacy)
-            elif task_type_legacy == "track_progress":
-                return await self.service.task_handlers.handle_track_progress(data_legacy)
-            elif task_type_legacy == "delegate_tasks":
-                return await self.service.task_handlers.handle_delegate_tasks(data_legacy)
-            elif task_type_legacy == "manage_workflows":
-                return await self.service.task_handlers.handle_manage_workflows(data_legacy)
-            elif task_type_legacy == "approve_actions":
-                return await self.service.task_handlers.handle_approve_actions(data_legacy)
-            else:
-                return {
-                    "status": "failed",
-                    "error": f"Unknown task type: {task_type_legacy}",
-                    "timestamp": datetime.now().isoformat()
-                }
-        elif method == "agent/ping":
-            return {"status": "alive", "timestamp": datetime.now().isoformat()}
-        elif method == "agent/status":
-            return await self._get_agent_status()
-        else:
-            task_type = task_data.get("type", "")
-            action = task_data.get("task_type", "")
-            return {
-                "status": "failed",
-                "error": f"Unknown message format. Task type: {task_type}, Action: {action}, Method: {method}",
-                "timestamp": datetime.now().isoformat()
-            }
-    
     async def _handle_coordinate_research(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle research coordination request."""
         try:
@@ -193,7 +123,7 @@ class TaskProcessor:
             task_description = topic_description
             topic_id = topic_id  # Use topic_id as plan reference
             user_id = "api_user"  # Default for API requests. TODO: Extract from auth context if available
-            max_results = 50 if depth == "phd" else 25 if depth == "masters" else 10
+            max_results = 100 if depth == "phd" else 50 if depth == "masters" else 25
             
             if not task_id:
                 return {
