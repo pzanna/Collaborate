@@ -13,7 +13,8 @@
   "api_configs": {
     "semantic_scholar": {
       "base_url": "https://api.semanticscholar.org/graph/v1/paper/search",
-      "rate_limit": 1.0,
+      "retries": 5,
+      "rate_limit": 10,
       "max_results_per_request": 100,
       "timeout": 30
     },

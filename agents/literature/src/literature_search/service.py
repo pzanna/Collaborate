@@ -11,6 +11,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import numpy as np
+import pandas as pd
+from sentence_transformers import SentenceTransformer, util
 
 import aiohttp
 import websockets
@@ -295,7 +298,7 @@ class LiteratureSearchService:
             research_plan = payload.get("research_plan", "")
             filters = payload.get("filters", {})
             sources = payload.get("sources", ["core", "arxiv", "crossref", "semantic_scholar", "pubmed"])
-            max_results = payload.get("max_results", 10)
+            max_results = payload.get("max_results", 50)
 
             if not research_plan:
                 return {
@@ -518,10 +521,33 @@ class LiteratureSearchService:
                 missing_conditions.append("no simplified_json_records")
             logger.warning(f"⚠️ SKIPPING INITIAL LITERATURE STORAGE: {', '.join(missing_conditions)}")
         
-        # Review literature results using AI if research plan is available
-        # Pass the simplified JSON records to AI for review
-        reviewed_records = await self._review_and_filter_records(search_query, simplified_json_records)
-        
+        # Rank documents by similarity to averaged query vector
+        # Load sentence transformer model
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+
+        # Average query vector
+        query_embeddings = model.encode(search_terms)
+        avg_query_vector = np.mean(query_embeddings, axis=0)
+
+        ranked = []
+        for doc in simplified_json_records:
+            title = doc.get("title") or ""
+            abstract = doc.get("abstract") or ""
+            text = f"{title} {abstract}"
+            doc_vector = model.encode(text)
+            score = util.cos_sim(avg_query_vector, doc_vector)[0][0].item()
+            ranked.append({
+                "Relevance Score": round(score, 4),
+                "Title": title,
+                "Year": doc.get("year"),
+                # "URL": doc.get("url"),
+                "Abstract": abstract[:300] + "..." if len(abstract) > 300 else abstract
+            })
+
+        # Create and sort DataFrame
+        df = pd.DataFrame(sorted(ranked, key=lambda x: x["Relevance Score"], reverse=True))
+        reviewed_records = df.head(20).to_dict(orient='records')  # Use top 20 for review
+
         # Store reviewed literature results in database JSON format
         logger.info(f"Checking storage conditions:")
         logger.info(f"  - reviewed_records: {len(reviewed_records) if reviewed_records else 0} records")
@@ -719,14 +745,20 @@ class LiteratureSearchService:
         Returns:
             List of simplified records with only id, title, and abstract
         """
+        # Limit to maximum of 250 records
+        limited_records = records[:250]
+        
         simplified_records = []
-        for record in records:
+        for record in limited_records:
             simplified_record = {
                 "id": record.get("internal_id"),  # Use internal_id for consistency
                 "title": record.get("title", ""),
                 "abstract": record.get("abstract", "")
             }
             simplified_records.append(simplified_record)
+        
+        if len(records) > 250:
+            logger.info(f"Limited records from {len(records)} to 250 for simplified JSON creation")
         
         logger.info(f"Created {len(simplified_records)} simplified JSON records for storage/AI review")
         return simplified_records

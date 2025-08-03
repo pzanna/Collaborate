@@ -258,7 +258,7 @@ class TaskHandlers:
             task_description = data.get("task_description", data.get("query", ""))
             user_id = data.get("user_id", "anonymous")
             topic_id = data.get("topic_id", "default_topic")
-            max_results = data.get("max_results", 25)
+            max_results = data.get("max_results", 50)
             plan_id = data.get("plan_id", "")
             
             if not task_description:

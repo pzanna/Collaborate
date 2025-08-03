@@ -11,7 +11,7 @@ from typing import Dict, Any, List
 # Research depth configurations mapped to academic levels
 RESEARCH_DEPTH_CONFIG: Dict[str, Dict[str, Any]] = {
     "undergraduate": {
-        "max_results": 25,
+        "max_results": 10,
         "sources": ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"],
         "quality_threshold": "basic",
         "synthesis_depth": "overview",
@@ -22,7 +22,7 @@ RESEARCH_DEPTH_CONFIG: Dict[str, Dict[str, Any]] = {
         "citation_depth": "primary"
     },
     "masters": {
-        "max_results": 50,
+        "max_results": 25,
         "sources": ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"],
         "quality_threshold": "standard",
         "synthesis_depth": "analytical", 
@@ -33,7 +33,7 @@ RESEARCH_DEPTH_CONFIG: Dict[str, Dict[str, Any]] = {
         "citation_depth": "secondary"
     },
     "phd": {
-        "max_results": 100,
+        "max_results": 50,
         "sources": ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"],
         "quality_threshold": "rigorous",
         "synthesis_depth": "comprehensive",

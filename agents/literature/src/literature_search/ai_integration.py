@@ -38,24 +38,33 @@ class AIIntegration:
         prompt = (
             "You are an expert scientific search-strategy assistant. "
             "When given a research plan in the variable `research_plan`, "
-            "you must reply **only** with valid JSON —no commentary, no markdown—"
-            "structured as:\n"
+            "your task is to generate search strings for academic literature databases. "
+            "Reply **only** with valid JSON in the following format:\n\n"
+
             "{\n"
             '  "Topic A": ["Search String 1", "Search String 2", ...],\n'
             '  "Topic B": ["Search String 1", "Search String 2", ...],\n'
             "  ...\n"
             "}\n\n"
-            "For each topic in the plan, generate 4-6 database-ready search queries "
-            "that use:\n"
-            "- Boolean operators (AND, OR)\n"
-            "- Phrase quotes for exact terms\n"
-            "- Synonyms joined by OR\n"
-            "- Field tags or MeSH terms where applicable (e.g., [Title/Abstract], MeSH)\n"
-            "- Controlled vocabulary and truncation (*) where helpful\n\n"
-            "Ensure each query is concise, specific, and optimized for PubMed, CORE, Semantic Scholar, arXiv, and CrossRef. "
-            "Do not include any extra text.\n\n"
+
+            "Instructions:\n"
+            "- For each high-level topic in the plan, generate 4-6 **concise**, **domain-specific** search queries.\n"
+            "- Use terminology directly relevant to academic indexing in neuroscience, cell culture, or biomedical literature.\n"
+            "- Prefer exact phrases in double quotes only when targeting specific concepts (e.g. `avian cerebral neurons`).\n"
+            "- Avoid vague, overly generic, or blog-style terms such as `ingredient sourcing`, `budget constraints`, or `common household ingredients`.\n"
+            "- Combine keywords intelligently using AND/OR when needed, but avoid overuse.\n"
+            "- Ensure queries are optimised for scientific databases including PubMed, CORE, Semantic Scholar, CrossRef, and ArXiv.\n"
+            "- Do not include any extra text, explanation, or markdown—only JSON.\n\n"
+
+            "The generated queries should prioritise:\n"
+            "- Scientific precision.\n"
+            "- Methodological relevance.\n"
+            "- Retrievability from academic databases.\n"
+            "- Alignment with the goals and constraints of the research plan.\n\n"
+
             f"Plan: {research_plan}"
         )
+
 
         # Send request to AI agent via MCP for search term optimization
         optimization_request = {
@@ -66,18 +75,19 @@ class AIIntegration:
                 "agent_type": "ai_service",  # Use correct agent type for AI service
                 "action": "ai_chat_completion",  # Use the actual AI service action
                 "payload": {
+                    "provider": "openai",
                     "model": "gpt-4o-mini",
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are an expert research assistant specializing in academic literature search optimization. Extract 3-5 highly targeted search terms from the provided research plan that will be most effective for finding relevant academic papers in databases like PubMed, arXiv, Semantic Scholar, and CrossRef."
+                            "content": "You are an expert research assistant specializing in academic literature search optimization. Extract 3-4 highly targeted search terms from the provided research plan that will be most effective for finding relevant academic papers in databases like PubMed, arXiv, Semantic Scholar, and CrossRef."
                         },
                         {
                             "role": "user", 
                             "content": prompt
                         }
                     ],
-                    "max_tokens": 500,
+                    "max_tokens": 3000,
                     "temperature": 0.3
                 }
             },
@@ -185,14 +195,13 @@ class AIIntegration:
             "Format your response as a JSON array with the following structure:\n"
             "[\n"
             "  {\n"
-            '    "id": "<ID>",\n'
+            '    "id": "<id>",\n'
             '    "title": "<Title>",\n'
-            '    "abstract": "<Abstract>"\n'
             "  },\n"
             "  ...\n"
             "]\n"
             "Ensure to only include articles that are relevant to the research plan and suitable for "
-            "academic research. Each article must have all three fields: id, title, and abstract.\n\n"
+            "academic research. Only include the fields specified in the instructions, do not include the abstracts in your response.\n\n"
             f"Search Results: {simplified_results}\n\n"
         )
 
@@ -206,6 +215,7 @@ class AIIntegration:
                 "agent_type": "ai_service",  # Use correct agent type for AI service
                 "action": "ai_chat_completion",  # Use the actual AI service action
                 "payload": {
+                    "provider": "openai",
                     "model": "gpt-4o-mini",
                     "messages": [
                         {
@@ -217,7 +227,7 @@ class AIIntegration:
                             "content": prompt
                         }
                     ],
-                    "max_tokens": 2000,
+                    "max_tokens": 16000,
                     "temperature": 0.3
                 }
             },
@@ -369,72 +379,4 @@ class AIIntegration:
             return False  # We didn't handle this message
         return False
 
-    async def test_review_literature_results(self, test_research_plan: str, test_search_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Test function to validate the review_literature_results functionality.
-        
-        Args:
-            test_research_plan: Sample research plan for testing
-            test_search_results: Sample search results for testing
-            
-        Returns:
-            Dict with test results and validation info
-        """
-        logger.info("Starting test of review_literature_results function")
-        
-        try:
-            # Call the review function
-            start_time = datetime.now()
-            reviewed_results = await self.review_literature_results(
-                research_plan=test_research_plan,
-                search_results=test_search_results,
-                plan_id="test_plan_123"  # Use test plan ID
-            )
-            end_time = datetime.now()
-            
-            # Validate the results
-            validation_results = {
-                "test_status": "completed",
-                "execution_time_seconds": (end_time - start_time).total_seconds(),
-                "input_count": len(test_search_results),
-                "output_count": len(reviewed_results) if reviewed_results else 0,
-                "output_format_valid": True,
-                "required_fields_present": True,
-                "errors": []
-            }
-            
-            # Validate format
-            if not isinstance(reviewed_results, list):
-                validation_results["output_format_valid"] = False
-                validation_results["errors"].append("Output is not a list")
-            
-            # Validate each article has required fields
-            for i, article in enumerate(reviewed_results or []):
-                if not isinstance(article, dict):
-                    validation_results["output_format_valid"] = False
-                    validation_results["errors"].append(f"Article {i} is not a dictionary")
-                    continue
-                    
-                required_fields = ["id", "title", "abstract"]
-                missing_fields = [field for field in required_fields if field not in article]
-                if missing_fields:
-                    validation_results["required_fields_present"] = False
-                    validation_results["errors"].append(f"Article {i} missing fields: {missing_fields}")
-            
-            # Overall test result
-            validation_results["test_passed"] = (
-                validation_results["output_format_valid"] and 
-                validation_results["required_fields_present"] and
-                len(validation_results["errors"]) == 0
-            )
-            
-            logger.info(f"Test completed: {validation_results}")
-            return validation_results
-            
-        except Exception as e:
-            logger.error(f"Test failed with exception: {e}")
-            return {
-                "test_status": "failed",
-                "error": str(e),
-                "test_passed": False
-            }
+   

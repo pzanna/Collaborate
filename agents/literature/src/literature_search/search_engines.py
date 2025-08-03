@@ -33,27 +33,27 @@ class SearchEngines:
             'semantic_scholar': {
                 'base_url': 'https://api.semanticscholar.org/graph/v1/paper/search',
                 'rate_limit': 5,  # seconds between requests
-                'max_results_per_request': 100
+                'max_results_per_request': 50
             },
             'pubmed': {
                 'base_url': 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
                 'rate_limit': 2,  # NCBI rate limit (1 requests per second)
-                'max_results_per_request': 100
+                'max_results_per_request': 50
             },
             'arxiv': {
                 'base_url': 'http://export.arxiv.org/api/query',
                 'rate_limit': 5,  # arXiv rate limit recommendation
-                'max_results_per_request': 100
+                'max_results_per_request': 50
             },
             'crossref': {
                 'base_url': 'https://api.crossref.org/works',
                 'rate_limit': 2,  # CrossRef rate limit
-                'max_results_per_request': 100
+                'max_results_per_request': 50
             },
             'core': {
                 'base_url': 'https://api.core.ac.uk/v3/search/works',
                 'rate_limit': 2, # CORE API rate limit
-                'max_results_per_request': 100
+                'max_results_per_request': 50
             }
         }
     
@@ -104,16 +104,22 @@ class SearchEngines:
             logger.info(f"Semantic Scholar full request URL: {full_url}")
 
             # Rate limiting
-            await asyncio.sleep(config['rate_limit'])
-            
-            async with self.session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get('data', [])
-                else:
-                    logger.warning(f"Semantic Scholar API returned status {response.status}")
-                    return []
-                    
+
+            retries = config['retries'] if 'retries' in config else 5
+            delay = config['rate_limit']
+
+            for i in range(retries):
+                async with self.session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data.get('data', [])
+                    elif response.status == 429:
+                        wait_time = delay * (2 ** i)
+                        logger.warning(f"[Rate Limit] Retrying in {wait_time} seconds...")
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.warning(f"[Error] Query failed: {params} (HTTP {response.status})")
+                        return []
         except Exception as e:
             logger.error(f"Error searching Semantic Scholar: {e}")
             return []

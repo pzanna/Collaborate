@@ -368,7 +368,7 @@ class MCPAIService:
 
         if provider == "openai" and self.openai_client:
             if not model:
-                model = "gpt-4o-mini"
+                model = "gpt-4.1-nano"
             
             response = await self.openai_client.chat.completions.create(
                 model=model,
@@ -466,7 +466,7 @@ class MCPAIService:
         
         elif provider == "xai" and self.xai_client:
             if not model:
-                model = "grok-beta"
+                model = "grok-3-mini"
             
             response = await self.xai_client.chat.completions.create(
                 model=model,
@@ -545,7 +545,7 @@ class MCPAIService:
         
         if self.openai_client:
             available_models.extend([
-                {"provider": "openai", "model": "gpt-4o", "type": "chat"},
+                {"provider": "openai", "model": "gpt-4.1-nano", "type": "chat"},
                 {"provider": "openai", "model": "gpt-4o-mini", "type": "chat"},
                 {"provider": "openai", "model": "text-embedding-3-small", "type": "embedding"},
                 {"provider": "openai", "model": "text-embedding-3-large", "type": "embedding"}
@@ -560,7 +560,7 @@ class MCPAIService:
         
         if self.xai_client:
             available_models.extend([
-                {"provider": "xai", "model": "grok-beta", "type": "chat"}
+                {"provider": "xai", "model": "grok-3-mini", "type": "chat"}
             ])
         
         return {

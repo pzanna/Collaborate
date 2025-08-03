@@ -427,7 +427,7 @@ class PlanningAgentService:
             "objectives": ["Objective 1", "Objective 2", "Objective 3"],
             "key_areas": ["Area 1", "Area 2", "Area 3", "Area 4"],
             "questions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
-            "sources": ["PubMed", "ArXiv", "Semantic Scholar", "Google Scholar", "IEEE Xplore"],
+            "sources": ["PubMed", "ArXiv", "Semantic Scholar", "CORE", "CrossRef"],
             "timeline": {{
                 "total_days": 14,
                 "phases": {{
@@ -437,7 +437,7 @@ class PlanningAgentService:
                     "synthesis": 2
                 }}
             }},
-            "outcomes": ["Literature review", "Data analysis", "Research synthesis", "Final report"]
+            "outcomes": ["Literature review", "Data analysis", "Experiment design", "Research synthesis", "Final report"]
         }}
         
         Please be thorough and consider all relevant aspects of the research topic.
@@ -618,7 +618,7 @@ class PlanningAgentService:
                     "cost_breakdown": {
                         "summary": {
                             "total": basic_cost,
-                            "currency": "USD",
+                            "currency": "AUD",
                             "cost_per_day": 50
                         },
                         "cost_optimization": {
@@ -647,7 +647,8 @@ class PlanningAgentService:
                     "action": "ai_chat_completion",
                     "context_id": f"ai-request-{task_id}",
                     "payload": {
-                        "model": "gpt-4o-mini",
+                        "provider": "xai",
+                        "model": "grok-3-mini",
                         "messages": [
                             {"role": "system", "content": "You are a research planning assistant. Provide detailed, structured responses in JSON format."},
                             {"role": "user", "content": prompt}

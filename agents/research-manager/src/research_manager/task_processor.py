@@ -47,6 +47,11 @@ class TaskProcessor:
             if task_type == "research_action":
                 return await self._handle_research_action(task_data)
             
+            # Handle task_request messages from MCP server
+            elif task_type == "task_request":
+                logger.info(f"Received task request from MCP server")
+                return await self._handle_task_request(task_data)
+            
             # Handle task_result messages from delegated agents
             elif task_type == "task_result":
                 logger.info(f"Received task result from delegated agent")
@@ -102,7 +107,37 @@ class TaskProcessor:
                 "error": f"Unknown research action: {action}",
                 "timestamp": datetime.now().isoformat()
             }
-    
+
+    async def _handle_task_request(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle legacy task_request format."""
+        task_id = task_data.get("task_id", "")
+        action = task_data.get("task_type", "")
+        data = task_data.get("data", {})
+        context_id = task_data.get("context_id", "")
+        
+        # Include task_id in data for handler
+        data["task_id"] = task_id
+        data["context_id"] = context_id
+        
+        if action == "coordinate_research":
+            return await self._handle_coordinate_research(data)
+        elif action == "estimate_costs":
+            return await self.service.task_handlers.handle_estimate_costs(data)
+        elif action == "track_progress":
+            return await self.service.task_handlers.handle_track_progress(data)
+        elif action == "delegate_tasks":
+            return await self.service.task_handlers.handle_delegate_tasks(data)
+        elif action == "manage_workflows":
+            return await self.service.task_handlers.handle_manage_workflows(data)
+        elif action == "approve_actions":
+            return await self.service.task_handlers.handle_approve_actions(data)
+        else:
+            return {
+                "status": "failed",
+                "error": f"Unknown task type: {action}",
+                "timestamp": datetime.now().isoformat()
+            }
+           
     async def _handle_coordinate_research(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle research coordination request."""
         try:
@@ -123,7 +158,7 @@ class TaskProcessor:
             task_description = topic_description
             topic_id = topic_id  # Use topic_id as plan reference
             user_id = "api_user"  # Default for API requests. TODO: Extract from auth context if available
-            max_results = 100 if depth == "phd" else 50 if depth == "masters" else 25
+            max_results = 50 if depth == "phd" else 25 if depth == "masters" else 10
             
             if not task_id:
                 return {

@@ -8,7 +8,7 @@ research workflow orchestration service via MCP protocol.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from .models import ResearchContext
 from .mcp_communicator import MCPCommunicator
@@ -53,6 +53,10 @@ class ResearchManagerService:
         self.agent_capabilities: Dict[str, List[str]] = {}
         self.agent_availability: Dict[str, bool] = {}
         
+        # Callbacks for UI updates
+        self.progress_callbacks: List[Callable] = []
+        self.completion_callbacks: List[Callable] = []
+
         # Capabilities
         self.capabilities = [
             "coordinate_research",

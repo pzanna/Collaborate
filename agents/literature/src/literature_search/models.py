@@ -16,7 +16,7 @@ class SearchQuery:
     query: str = ""
     filters: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
-    max_results: int = 100
+    max_results: int = 50
     search_depth: str = "standard"
 
 
