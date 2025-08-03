@@ -556,7 +556,10 @@ class LiteratureSearchService:
         
         if reviewed_records and search_query.lit_review_id and self.database_integration:
             logger.info(f"✅ All conditions met - storing {len(reviewed_records)} reviewed literature results in database JSON format")
-            success = await self.database_integration.store_reviewed_literature_results(search_query.plan_id, reviewed_records)
+            success = await self.database_integration.store_reviewed_literature_results(
+                plan_id=search_query.plan_id, 
+                reviewed_results=reviewed_records
+            )
             if not success:
                 error_msg = "Failed to store reviewed literature results in JSON format"
                 logger.error(f"❌ {error_msg}")
