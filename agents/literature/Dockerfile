@@ -40,26 +40,18 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
+COPY onnx_models/ /app/onnx_models/
 COPY start-dev.sh ./
 
-# Copy model cache to proper user directory
-RUN mkdir -p /home/literatureagent/.cache/huggingface /home/literatureagent/.cache/torch
-COPY .cache/huggingface /home/literatureagent/.cache/huggingface
-COPY .cache/torch /home/literatureagent/.cache/torch
-
-# Security: Create writable temp directory for application FIRST
-RUN mkdir -p /app/tmp && \
-    chown literatureagent:literatureagent /app/tmp && \
-    chmod 755 /app/tmp
-
 # Security: Set strict file permissions and ownership
-RUN chown -R literatureagent:literatureagent /app /home/literatureagent && \
+RUN chown -R literatureagent:literatureagent /app && \
     chmod -R 750 /app && \
     chmod 750 /app/start-dev.sh && \
     chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
     find /app -type d -not -path "/app/tmp" -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \; && \
-    chmod 755 /app/tmp
+    find /app -type d -exec chmod 750 {} \; && \
+    chmod 750 /app/start-dev.sh
 
 # Switch to non-root user
 USER literatureagent
@@ -68,8 +60,6 @@ USER literatureagent
 ENV TMPDIR=/app/tmp
 ENV TMP=/app/tmp
 ENV TEMP=/app/tmp
-ENV PYTORCH_CACHE_DIR=/home/literatureagent/.cache/torch
-ENV TRANSFORMERS_CACHE=/home/literatureagent/.cache/huggingface
 
 # Expose port
 EXPOSE 8003

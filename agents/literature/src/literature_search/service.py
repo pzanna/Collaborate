@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
+
+import onnxruntime as ort
+from transformers import AutoTokenizer
 from sentence_transformers import SentenceTransformer, util
 
 import aiohttp
@@ -372,6 +375,7 @@ class LiteratureSearchService:
                 "timestamp": datetime.now().isoformat()
             }
     
+    
     async def search_literature(self, search_query: SearchQuery) -> SearchReport:
         """
         Execute a literature search across multiple sources.
@@ -522,31 +526,65 @@ class LiteratureSearchService:
             logger.warning(f"⚠️ SKIPPING INITIAL LITERATURE STORAGE: {', '.join(missing_conditions)}")
         
         # Rank documents by similarity to averaged query vector
-        # Load sentence transformer model
-        model = SentenceTransformer('all-MiniLM-L6-v2')
+        # Load sentence transformer model with offline fallback
+        try:
+            # Load tokenizer and ONNX session
+            tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+            session = ort.InferenceSession("onnx_models/model.onnx")
 
-        # Average query vector
-        query_embeddings = model.encode(search_terms)
-        avg_query_vector = np.mean(query_embeddings, axis=0)
+            def get_embedding(text: str) -> np.ndarray:
+                inputs = tokenizer(text, return_tensors="np", padding=True, truncation=True)
+                outputs = session.run(None, {
+                    "input_ids": inputs["input_ids"],
+                    "attention_mask": inputs["attention_mask"]
+                })
+                return np.mean(outputs[0], axis=1).squeeze()
 
-        ranked = []
-        for doc in simplified_json_records:
-            title = doc.get("title") or ""
-            abstract = doc.get("abstract") or ""
-            text = f"{title} {abstract}"
-            doc_vector = model.encode(text)
-            score = util.cos_sim(avg_query_vector, doc_vector)[0][0].item()
-            ranked.append({
-                "Relevance Score": round(score, 4),
-                "Title": title,
-                "Year": doc.get("year"),
-                # "URL": doc.get("url"),
-                "Abstract": abstract[:300] + "..." if len(abstract) > 300 else abstract
-            })
+            # Compute average embedding for all search terms
+            query_embeddings = [get_embedding(term) for term in search_terms]
+            avg_query_vector = np.mean(query_embeddings, axis=0)
 
-        # Create and sort DataFrame
-        df = pd.DataFrame(sorted(ranked, key=lambda x: x["Relevance Score"], reverse=True))
-        reviewed_records = df.head(20).to_dict(orient='records')  # Use top 20 for review
+            # Rank all documents
+            ranked = []
+            for doc in simplified_json_records:
+                title = doc.get("title") or ""
+                abstract = doc.get("abstract") or ""
+                text = f"{title} {abstract}"
+                doc_vector = get_embedding(text)
+
+                # Cosine similarity
+                norm_q = np.linalg.norm(avg_query_vector)
+                norm_d = np.linalg.norm(doc_vector)
+                score = np.dot(avg_query_vector, doc_vector) / (norm_q * norm_d + 1e-9)
+
+                ranked.append({
+                    "Relevance Score": round(float(score), 4),
+                    "Title": title,
+                    "Year": doc.get("year"),
+                    "Abstract": abstract[:300] + "..." if len(abstract) > 300 else abstract
+                })
+
+            # Sort and return top 10
+            df = pd.DataFrame(sorted(ranked, key=lambda x: x["Relevance Score"], reverse=True))
+            reviewed_records = df.head(10).to_dict(orient='records')
+
+            logger.info(f"✅ Successfully ranked {len(reviewed_records)} records using SentenceTransformer model")
+            
+        except Exception as model_error:
+            logger.warning(f"⚠️ Failed to load SentenceTransformer model: {model_error}")
+            logger.info("📄 Using fallback ranking (first 20 records without semantic scoring)")
+            
+            # Fallback: Use first 20 records without ranking
+            reviewed_records = []
+            for doc in simplified_json_records[:20]:
+                title = doc.get("title") or ""
+                abstract = doc.get("abstract") or ""
+                reviewed_records.append({
+                    "Relevance Score": "N/A (No Model)",
+                    "Title": title,
+                    "Year": doc.get("year"),
+                    "Abstract": abstract
+                })
 
         # Store reviewed literature results in database JSON format
         logger.info(f"Checking storage conditions:")
@@ -557,8 +595,8 @@ class LiteratureSearchService:
         if reviewed_records and search_query.lit_review_id and self.database_integration:
             logger.info(f"✅ All conditions met - storing {len(reviewed_records)} reviewed literature results in database JSON format")
             success = await self.database_integration.store_reviewed_literature_results(
-                plan_id=search_query.plan_id, 
-                reviewed_results=reviewed_records
+                plan_id = search_query.plan_id, 
+                reviewed_results = reviewed_records
             )
             if not success:
                 error_msg = "Failed to store reviewed literature results in JSON format"

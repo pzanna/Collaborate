@@ -272,14 +272,14 @@ npm test  # Frontend tests
 
 ```bash
 # Build and start development environment
-docker-compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml up --build
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Reset environment
-docker-compose down -v
-docker-compose up --build
+docker compose down -v
+docker compose up --build
 ```
 
 ## 📈 Performance Characteristics

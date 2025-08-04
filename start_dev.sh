@@ -91,7 +91,7 @@ mkdir -p /Users/paulzanna/Github/Eunice/agents/literature/.cache/torch
 
 # Copy the model files to the literature agent cache
 cp -R ~/.cache/huggingface/ /Users/paulzanna/Github/Eunice/agents/literature/.cache/huggingface
-cp -R ~/.cache/torch/ /Users/paulzanna/Github/Eunice/agents/literature/.cache/torch
+# cp -R ~/.cache/torch/ /Users/paulzanna/Github/Eunice/agents/literature/.cache/torch
 
 # Clean shutdown of any existing containers to ensure fresh start
 print_info "Stopping existing services..."

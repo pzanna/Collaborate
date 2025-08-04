@@ -280,14 +280,6 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
       - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
-      - TRANSFORMERS_OFFLINE=1 # Set environment variables for offline Hugging Face usage
-      - HF_DATASETS_OFFLINE=1
-      - HF_HOME=/home/literatureagent/.cache/huggingface
-      - TMPDIR=/app/tmp
-      - TMP=/app/tmp
-      - TEMP=/app/tmp
-      - PYTORCH_CACHE_DIR=/home/literatureagent/.cache/torch
-      - TRANSFORMERS_CACHE=/home/literatureagent/.cache/huggingface
     networks:
       - eunice-microservices
     depends_on:
@@ -306,7 +298,6 @@ services:
     read_only: true
     tmpfs:
       - /app/tmp:exec,nosuid,size=200m,uid=1000,gid=1000
-      - /home/literatureagent/.cache:exec,nosuid,size=300m,uid=1000,gid=1000
     # Security: Drop all capabilities
     cap_drop:
       - ALL
