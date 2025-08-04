@@ -275,7 +275,7 @@ services:
       - SERVICE_PORT=8003
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=literature
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=DEBUG
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
@@ -289,11 +289,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "2.0"
           memory: 512M
         reservations:
-          cpus: "0.1"
-          memory: 128M
+          cpus: "1.0"
+          memory: 256M
     # Security: Read-only root filesystem with writable temp dirs
     read_only: true
     tmpfs:

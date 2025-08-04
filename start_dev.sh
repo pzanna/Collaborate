@@ -85,14 +85,6 @@ fi
 # Ensure logs directory exists for container logging
 mkdir -p logs
 
-# Create the model directories for the literature agent
-mkdir -p /Users/paulzanna/Github/Eunice/agents/literature/.cache/huggingface
-mkdir -p /Users/paulzanna/Github/Eunice/agents/literature/.cache/torch
-
-# Copy the model files to the literature agent cache
-cp -R ~/.cache/huggingface/ /Users/paulzanna/Github/Eunice/agents/literature/.cache/huggingface
-# cp -R ~/.cache/torch/ /Users/paulzanna/Github/Eunice/agents/literature/.cache/torch
-
 # Clean shutdown of any existing containers to ensure fresh start
 print_info "Stopping existing services..."
 docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml down --remove-orphans 2>/dev/null || true
@@ -177,7 +169,7 @@ fi
 
 # Final wait for all services to complete initialization
 print_info "Waiting for services to initialize..."
-sleep 10
+sleep 20
 
 # Health check phase - verify critical services are responding
 print_info "Testing service health..."

@@ -16,7 +16,6 @@ import pandas as pd
 
 import onnxruntime as ort
 from transformers import AutoTokenizer
-from sentence_transformers import SentenceTransformer, util
 
 import aiohttp
 import websockets
@@ -526,65 +525,142 @@ class LiteratureSearchService:
             logger.warning(f"⚠️ SKIPPING INITIAL LITERATURE STORAGE: {', '.join(missing_conditions)}")
         
         # Rank documents by similarity to averaged query vector
+        # Initialize reviewed_records with fallback to simplified records (properly formatted)
+        reviewed_records: List[Dict[str, Any]] = []
+        if simplified_json_records:
+            # Create fallback records with the same format as ranked records
+            fallback_records = []
+            for i, doc in enumerate(simplified_json_records[:10]):
+                fallback_records.append({
+                    "Relevance Score": 0.0,  # Default score for fallback
+                    "Title": doc.get("title", ""),
+                    "Year": doc.get("year"),
+                    "Abstract": (doc.get("abstract", "")[:300] + "...") if len(doc.get("abstract", "")) > 300 else doc.get("abstract", "")
+                })
+            reviewed_records = fallback_records
+        
         # Load sentence transformer model with offline fallback
         try:
+            logger.info("Loading tokenizer and ONNX model...")
             # Load tokenizer and ONNX session
-            tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-            session = ort.InferenceSession("onnx_models/model.onnx")
+            tokenizer = AutoTokenizer.from_pretrained("/app/onnx_models/")
+            session = ort.InferenceSession("/app/onnx_models/model.onnx")
 
+            logger.info("Reviewing results...")
             def get_embedding(text: str) -> np.ndarray:
-                inputs = tokenizer(text, return_tensors="np", padding=True, truncation=True)
-                outputs = session.run(None, {
-                    "input_ids": inputs["input_ids"],
-                    "attention_mask": inputs["attention_mask"]
-                })
-                return np.mean(outputs[0], axis=1).squeeze()
-
+                try:
+                    if not text or not text.strip():
+                        # Return zero vector for empty text
+                        logger.debug("Empty text provided, returning zero vector")
+                        return np.zeros(384)  # MiniLM-L6-v2 has 384 dimensions
+                    
+                    # Truncate very long text to avoid memory issues
+                    max_length = 512  # BERT-style models typically handle 512 tokens max
+                    if len(text) > max_length * 4:  # Rough estimate: 4 chars per token
+                        text = text[:max_length * 4]
+                        logger.debug(f"Truncated text to {len(text)} characters")
+                    
+                    logger.debug(f"Tokenizing text of length {len(text)}")
+                    inputs = tokenizer(text, return_tensors="np", padding=True, truncation=True, max_length=max_length)
+                    
+                    logger.debug("Running ONNX inference...")
+                    outputs = session.run(None, {
+                        "input_ids": inputs["input_ids"],
+                        "attention_mask": inputs["attention_mask"]
+                    })
+                    
+                    logger.debug(f"ONNX inference completed, output shape: {outputs[0].shape}")
+                    result = np.mean(outputs[0], axis=1).squeeze()
+                    logger.debug(f"Final embedding shape: {result.shape}")
+                    return result
+                    
+                except Exception as e:
+                    logger.error(f"Error in get_embedding: {e}")
+                    logger.debug(f"Text that caused error: '{text[:100]}...'")
+                    # Return zero vector as fallback
+                    return np.zeros(384)
+            
+            logger.info("Computing embeddings...")
             # Compute average embedding for all search terms
-            query_embeddings = [get_embedding(term) for term in search_terms]
+            query_embeddings = []
+            for term in search_terms:
+                try:
+                    embedding = get_embedding(term)
+                    if np.any(embedding):  # Only add non-zero embeddings
+                        query_embeddings.append(embedding)
+                except Exception as e:
+                    logger.warning(f"Failed to compute embedding for term '{term}': {e}")
+                    
+            if not query_embeddings:
+                logger.warning("No valid query embeddings generated, skipping ranking")
+                raise ValueError("No valid query embeddings")
+                
             avg_query_vector = np.mean(query_embeddings, axis=0)
 
+            logger.info("Ranking documents by relevance...")
+            logger.info(f"Processing {len(simplified_json_records)} documents for ranking...")
             # Rank all documents
             ranked = []
-            for doc in simplified_json_records:
-                title = doc.get("title") or ""
-                abstract = doc.get("abstract") or ""
-                text = f"{title} {abstract}"
-                doc_vector = get_embedding(text)
+            for i, doc in enumerate(simplified_json_records):
+                try:
+                    if i % 10 == 0:  # Log progress every 10 documents
+                        logger.info(f"Processing document {i+1}/{len(simplified_json_records)}")
+                    
+                    title = doc.get("title") or ""
+                    abstract = doc.get("abstract") or ""
+                    text = f"{title} {abstract}".strip()
+                    
+                    if not text:
+                        logger.debug(f"Skipping document {i+1} - no text content")
+                        continue  # Skip empty documents
+                    
+                    logger.debug(f"Computing embedding for document {i+1}: '{title[:50]}...'")
+                    doc_vector = get_embedding(text)
+                    logger.debug(f"Embedding computed for document {i+1}, shape: {doc_vector.shape}")
 
-                # Cosine similarity
-                norm_q = np.linalg.norm(avg_query_vector)
-                norm_d = np.linalg.norm(doc_vector)
-                score = np.dot(avg_query_vector, doc_vector) / (norm_q * norm_d + 1e-9)
+                    # Check for zero vectors to avoid division by zero
+                    norm_q = np.linalg.norm(avg_query_vector)
+                    norm_d = np.linalg.norm(doc_vector)
+                    
+                    if norm_q == 0 or norm_d == 0:
+                        score = 0.0
+                        logger.debug(f"Zero vector detected for document {i+1}, setting score to 0.0")
+                    else:
+                        # Cosine similarity
+                        score = np.dot(avg_query_vector, doc_vector) / (norm_q * norm_d)
+                        logger.debug(f"Computed similarity score for document {i+1}: {score}")
 
-                ranked.append({
-                    "Relevance Score": round(float(score), 4),
-                    "Title": title,
-                    "Year": doc.get("year"),
-                    "Abstract": abstract[:300] + "..." if len(abstract) > 300 else abstract
-                })
+                    ranked.append({
+                        "Relevance Score": round(float(score), 4),
+                        "Title": title,
+                        "Year": doc.get("year"),
+                        "Abstract": abstract[:300] + "..." if len(abstract) > 300 else abstract
+                    })
+                    logger.debug(f"Document {i+1} successfully ranked with score: {round(float(score), 4)}")
+                except Exception as e:
+                    logger.warning(f"Failed to rank document {i+1} '{doc.get('title', 'Unknown')}': {e}")
+                    # Continue with next document
 
+            if not ranked:
+                logger.warning("No documents could be ranked successfully")
+                raise ValueError("No documents ranked")
+
+            logger.info(f"Successfully ranked {len(ranked)} documents")
+            logger.info(f"Creating DataFrame and sorting by relevance scores...")
             # Sort and return top 10
             df = pd.DataFrame(sorted(ranked, key=lambda x: x["Relevance Score"], reverse=True))
-            reviewed_records = df.head(10).to_dict(orient='records')
+            logger.info(f"DataFrame created with {len(df)} rows")
+            # Convert to proper type to avoid type errors
+            df_records = df.head(10).to_dict(orient='records')
+            logger.info(f"Converted top 10 records to dictionary format")
+            reviewed_records = [{str(k): v for k, v in record.items()} for record in df_records]
+            logger.info(f"Final reviewed_records prepared: {len(reviewed_records)} records")
 
-            logger.info(f"✅ Successfully ranked {len(reviewed_records)} records using SentenceTransformer model")
+            logger.info(f"✅ Successfully ranked {len(reviewed_records)} records using ONNX model")
             
         except Exception as model_error:
-            logger.warning(f"⚠️ Failed to load SentenceTransformer model: {model_error}")
-            logger.info("📄 Using fallback ranking (first 20 records without semantic scoring)")
-            
-            # Fallback: Use first 20 records without ranking
-            reviewed_records = []
-            for doc in simplified_json_records[:20]:
-                title = doc.get("title") or ""
-                abstract = doc.get("abstract") or ""
-                reviewed_records.append({
-                    "Relevance Score": "N/A (No Model)",
-                    "Title": title,
-                    "Year": doc.get("year"),
-                    "Abstract": abstract
-                })
+            logger.warning(f"⚠️ Failed to load ONNX model: {model_error}")
+            logger.info(f"Using fallback: first {len(reviewed_records)} records without ranking")
 
         # Store reviewed literature results in database JSON format
         logger.info(f"Checking storage conditions:")
