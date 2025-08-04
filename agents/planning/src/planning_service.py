@@ -441,7 +441,8 @@ class PlanningAgentService:
         }}
         
         Please be thorough and consider all relevant aspects of the research topic.
-        Ensure the plan is realistic and executable within the given timeframe.
+        Ensure the plan is realistic and executable within the given timeframe. 
+        Do NOT include the labels `Questions 1`, `Objective 1`, etc. in the output.
         """
         
         # Get AI response via MCP

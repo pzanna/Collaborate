@@ -144,8 +144,8 @@ class LiteratureSearchService:
                 
                 self.websocket = await websockets.connect(
                     self.mcp_server_url,
-                    ping_interval=30,
-                    ping_timeout=10
+                    ping_interval=20,  # More frequent pings during long operations
+                    ping_timeout=15    # Longer timeout for ping responses
                 )
                 
                 # Register with MCP server
@@ -228,9 +228,73 @@ class LiteratureSearchService:
         except websockets.exceptions.ConnectionClosed:
             logger.warning("MCP server connection closed")
             self.mcp_connected = False
+            # Attempt to reconnect
+            asyncio.create_task(self._reconnect_to_mcp_server())
         except Exception as e:
             logger.error(f"Error handling MCP messages: {e}")
             self.mcp_connected = False
+            # Attempt to reconnect
+            asyncio.create_task(self._reconnect_to_mcp_server())
+    
+    async def _reconnect_to_mcp_server(self):
+        """Attempt to reconnect to MCP server after connection loss."""
+        logger.info("Attempting to reconnect to MCP server...")
+        max_retries = 5
+        retry_delay = 3
+        
+        for attempt in range(max_retries):
+            try:
+                await asyncio.sleep(retry_delay)  # Wait before retry
+                
+                logger.info(f"Reconnection attempt {attempt + 1}/{max_retries}")
+                
+                # Close existing connection if any
+                if self.websocket:
+                    try:
+                        await self.websocket.close()
+                    except:
+                        pass
+                
+                # Create new connection
+                self.websocket = await websockets.connect(
+                    self.mcp_server_url,
+                    ping_interval=20,  # More frequent pings during long operations
+                    ping_timeout=15    # Longer timeout for ping responses
+                )
+                
+                # Re-register with MCP server
+                await self._register_with_mcp_server()
+                
+                # Restart message handler
+                asyncio.create_task(self._handle_mcp_messages())
+                
+                self.mcp_connected = True
+                logger.info("✅ Successfully reconnected to MCP server")
+                
+                # Update integrations with new websocket
+                if self.ai_integration:
+                    self.ai_integration.websocket = self.websocket
+                if self.database_integration:
+                    self.database_integration.websocket = self.websocket
+                
+                return
+                
+            except Exception as e:
+                logger.warning(f"Reconnection attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    retry_delay = min(retry_delay * 2, 30)  # Exponential backoff, max 30s
+                else:
+                    logger.error("❌ Failed to reconnect to MCP server after all attempts")
+                    self.mcp_connected = False
+    
+    async def _ensure_mcp_connection(self) -> bool:
+        """Ensure MCP connection is active, reconnect if necessary."""
+        if self.mcp_connected and self.websocket and not self.websocket.closed:
+            return True
+            
+        logger.info("MCP connection not active, attempting to reconnect...")
+        await self._reconnect_to_mcp_server()
+        return self.mcp_connected
     
     async def _process_task_queue(self):
         """Process tasks from the MCP queue."""
@@ -497,21 +561,28 @@ class LiteratureSearchService:
         
         if search_query.plan_id and search_query.lit_review_id and self.database_integration and simplified_json_records:
             logger.info(f"📤 STORING INITIAL LITERATURE RESULTS: {len(simplified_json_records)} simplified JSON records → plan_id={search_query.plan_id}")
-            try:
-                initial_storage_success = await self.database_integration.store_initial_literature_results(
-                    lit_review_id=search_query.lit_review_id,
-                    plan_id=search_query.plan_id,
-                    records=simplified_json_records  # Store simplified JSON instead of full records
-                )
-                if initial_storage_success:
-                    logger.info(f"🎉 INITIAL LITERATURE JSON STORED: {len(simplified_json_records)} simplified records in research_plans.initial_literature_results")
-                else:
-                    logger.error("💥 INITIAL LITERATURE STORAGE FAILED: store_initial_literature_results returned False")
-                    errors.append("Failed to store initial literature results")
-            except Exception as e:
-                logger.error(f"💥 INITIAL LITERATURE STORAGE EXCEPTION: {type(e).__name__}: {e}")
-                logger.error(f"   └─ Failed to store initial literature results for plan_id={search_query.plan_id}")
-                errors.append(f"Exception storing initial literature results: {e}")
+            
+            # Ensure MCP connection is active
+            connection_ready = await self._ensure_mcp_connection()
+            if not connection_ready:
+                logger.error("❌ Failed to establish MCP connection for initial literature storage")
+                errors.append("Failed to establish MCP connection for initial literature storage")
+            else:
+                try:
+                    initial_storage_success = await self.database_integration.store_initial_literature_results(
+                        lit_review_id=search_query.lit_review_id,
+                        plan_id=search_query.plan_id,
+                        records=simplified_json_records  # Store simplified JSON instead of full records
+                    )
+                    if initial_storage_success:
+                        logger.info(f"🎉 INITIAL LITERATURE JSON STORED: {len(simplified_json_records)} simplified records in research_plans.initial_literature_results")
+                    else:
+                        logger.error("💥 INITIAL LITERATURE STORAGE FAILED: store_initial_literature_results returned False")
+                        errors.append("Failed to store initial literature results")
+                except Exception as e:
+                    logger.error(f"💥 INITIAL LITERATURE STORAGE EXCEPTION: {type(e).__name__}: {e}")
+                    logger.error(f"   └─ Failed to store initial literature results for plan_id={search_query.plan_id}")
+                    errors.append(f"Exception storing initial literature results: {e}")
         else:
             missing_conditions = []
             if not search_query.plan_id:
@@ -670,39 +741,70 @@ class LiteratureSearchService:
         
         if reviewed_records and search_query.lit_review_id and self.database_integration:
             logger.info(f"✅ All conditions met - storing {len(reviewed_records)} reviewed literature results in database JSON format")
-            success = await self.database_integration.store_reviewed_literature_results(
-                plan_id = search_query.plan_id, 
-                reviewed_results = reviewed_records
-            )
-            if not success:
-                error_msg = "Failed to store reviewed literature results in JSON format"
+            
+            # Ensure MCP connection is active before attempting storage
+            connection_ready = await self._ensure_mcp_connection()
+            if not connection_ready:
+                error_msg = "Failed to establish MCP connection for database storage"
                 logger.error(f"❌ {error_msg}")
                 errors.append(error_msg)
             else:
-                logger.info(f"🎉 REVIEWED LITERATURE JSON STORED: {len(reviewed_records)} records in research_plans.reviewed_literature_results")
+                # Retry storage operation
+                storage_success = False
+                max_storage_retries = 3
                 
-                # Final step: Reconcile full records with reviewed records and store in literature_records table
-                # This matches the reviewed articles with their full record data for complete storage
-                reviewed_ids = {record.get("id") for record in reviewed_records if record.get("id")}
-                matching_full_records = [
-                    record for record in records_with_abstracts 
-                    if record.get("internal_id") in reviewed_ids
-                ]
+                for storage_attempt in range(max_storage_retries):
+                    try:
+                        logger.info(f"📤 Database storage attempt {storage_attempt + 1}/{max_storage_retries}")
+                        success = await self.database_integration.store_reviewed_literature_results(
+                            plan_id = search_query.plan_id, 
+                            reviewed_results = reviewed_records
+                        )
+                        
+                        if success:
+                            storage_success = True
+                            logger.info(f"🎉 REVIEWED LITERATURE JSON STORED: {len(reviewed_records)} records in research_plans.reviewed_literature_results")
+                            break
+                        else:
+                            logger.warning(f"⚠️ Storage attempt {storage_attempt + 1} failed, retrying...")
+                            if storage_attempt < max_storage_retries - 1:
+                                await asyncio.sleep(2)  # Wait before retry
+                                # Re-check connection before retry
+                                await self._ensure_mcp_connection()
+                                
+                    except Exception as storage_error:
+                        logger.error(f"❌ Storage attempt {storage_attempt + 1} failed with exception: {storage_error}")
+                        if storage_attempt < max_storage_retries - 1:
+                            await asyncio.sleep(2)
+                            await self._ensure_mcp_connection()
                 
-                logger.info(f"🔄 RECONCILIATION: {len(reviewed_records)} reviewed articles → {len(matching_full_records)} full records matched")
-                
-                if matching_full_records:
-                    literature_storage_errors = await self.database_integration.store_literature_records(
-                        records=matching_full_records, 
-                        search_query=search_query
-                    )
-                    if literature_storage_errors:
-                        logger.error(f"❌ Errors storing full literature records: {literature_storage_errors}")
-                        errors.extend(literature_storage_errors)
-                    else:
-                        logger.info(f"🎉 FULL LITERATURE RECORDS STORED: {len(matching_full_records)} complete records in literature_records table")
+                if not storage_success:
+                    error_msg = f"Failed to store reviewed literature results after {max_storage_retries} attempts"
+                    logger.error(f"❌ {error_msg}")
+                    errors.append(error_msg)
                 else:
-                    logger.warning("⚠️ No matching full records found for reviewed articles")
+                    # Final step: Reconcile full records with reviewed records and store in literature_records table
+                    # This matches the reviewed articles with their full record data for complete storage
+                    reviewed_ids = {record.get("id") for record in reviewed_records if record.get("id")}
+                    matching_full_records = [
+                        record for record in records_with_abstracts 
+                        if record.get("internal_id") in reviewed_ids
+                    ]
+                    
+                    logger.info(f"🔄 RECONCILIATION: {len(reviewed_records)} reviewed articles → {len(matching_full_records)} full records matched")
+                    
+                    if matching_full_records:
+                        literature_storage_errors = await self.database_integration.store_literature_records(
+                            records=matching_full_records, 
+                            search_query=search_query
+                        )
+                        if literature_storage_errors:
+                            logger.error(f"❌ Errors storing full literature records: {literature_storage_errors}")
+                            errors.extend(literature_storage_errors)
+                        else:
+                            logger.info(f"🎉 FULL LITERATURE RECORDS STORED: {len(matching_full_records)} complete records in literature_records table")
+                    else:
+                        logger.warning("⚠️ No matching full records found for reviewed articles")
         else:
             missing_conditions = []
             if not reviewed_records:
