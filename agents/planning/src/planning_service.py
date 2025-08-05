@@ -427,7 +427,7 @@ class PlanningAgentService:
             "objectives": ["Objective 1", "Objective 2", "Objective 3"],
             "key_areas": ["Area 1", "Area 2", "Area 3", "Area 4"],
             "questions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
-            "sources": ["PubMed", "ArXiv", "Semantic Scholar", "CORE", "CrossRef"],
+            "sources": ["PubMed", "ArXiv", "Semantic Scholar", "CORE", "CrossRef", "OpenAlex"],
             "timeline": {{
                 "total_days": 14,
                 "phases": {{

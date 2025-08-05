@@ -37,7 +37,7 @@ print(f"OpenAlex Email: {OPENALEX_EMAIL}")
 print("Note: OpenAlex email provides access to the polite pool for better performance")
 
 # --- Embedding Model ---
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
+model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # --- Term Extraction ---
 def extract_phrases(text):

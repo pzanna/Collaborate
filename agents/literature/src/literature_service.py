@@ -97,7 +97,7 @@ def get_additional_metadata() -> Dict[str, Any]:
                 "multi_source_search",
                 "bibliographic_search"
             ],
-            "supported_sources": ["semantic_scholar", "pubmed", "arxiv", "crossref", "core"],
+            "supported_sources": ["semantic_scholar", "pubmed", "arxiv", "crossref", "openalex"],
             "api_integrations": {
                 "semantic_scholar": "AI-powered academic search with rich metadata",
                 "pubmed": "Medical and life sciences literature",

@@ -7,7 +7,7 @@
   "search_timeout": 300,
   "rate_limit_delay": 1.0,
   "logging": {
-    "level": "INFO",
+    "level": "DEBUG",
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   },
   "api_configs": {

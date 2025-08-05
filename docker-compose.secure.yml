@@ -276,6 +276,8 @@ services:
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=literature
       - LOG_LEVEL=DEBUG
+      - CORE_API_KEY=${CORE_API_KEY}
+      - OPENALEX_EMAIL=${OPENALEX_EMAIL}
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
