@@ -9,7 +9,6 @@ import xml.etree.ElementTree as ET
 import re
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
-from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -17,7 +16,7 @@ load_dotenv()
 
 # --- Configuration ---
 SIMILARITY_QUANTILE = 0.8
-TOP_K_TERMS = 2
+TOP_K_TERMS = 5
 MAX_RETRIES = 5
 BACKOFF_BASE = 5
 SEARCH_LIMIT = 25
@@ -387,17 +386,10 @@ def parse_core_json(json_content):
     """Parse CORE API JSON response."""
     try:
         data = json.loads(json_content)
-        # print(f"CORE JSON structure keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
-        
         entries = []
         
         # CORE API v3 returns results in 'results' array
         results = data.get('results', [])
-        # print(f"CORE results count: {len(results)}")
-        
-        # if len(results) > 0:
-            # print(f"First result keys: {list(results[0].keys()) if isinstance(results[0], dict) else 'Not a dict'}")
-            # print(f"Sample result: {results[0] if len(results) > 0 else 'No results'}")
         
         for result in results:
             try:
@@ -469,7 +461,7 @@ def score_documents(plan, docs):
     scores = util.cos_sim(plan_emb, doc_embs)[0].cpu().numpy()
     for doc, score in zip(docs, scores):
         doc['score'] = float(score)
-    print(f"Scored {len(docs)} documents - {docs}")
+    print(f"Scored {len(docs)} documents")
     return docs
 
 def filter_high_docs(docs, quantile):
@@ -643,6 +635,51 @@ def fetch_abstract(paper_id):
     
     return None
 
+def fetch_and_score_papers(paper_ids, plan_text, expansion_type, description):
+    """Fetch abstracts for papers and score them against the plan."""
+    if not paper_ids:
+        print(f"[WARN] {description}: No papers to fetch. Skipping.")
+        return []
+    
+    print(f"{description}: Fetching {len(paper_ids)} papers...")
+    docs = []
+    failed_fetches = 0
+    empty_abstracts = 0
+    null_abstracts = 0
+    
+    for pid in tqdm(paper_ids, desc=f"{description}: Fetching abstracts"):
+        d = fetch_abstract(pid)
+        if d is None:
+            failed_fetches += 1
+        elif not d.get('abstract'):
+            if d.get('abstract') is None:
+                null_abstracts += 1
+            else:
+                empty_abstracts += 1
+        else:
+            d['expansion_type'] = expansion_type
+            docs.append(d)
+    
+    print(f"{description}: Fetched {len(docs)} abstracts with non-empty content.")
+    print(f"{description}: Data quality summary:")
+    print(f"  - Successful fetches: {len(paper_ids) - failed_fetches}")
+    print(f"  - Failed API calls: {failed_fetches}")
+    print(f"  - Null abstracts: {null_abstracts}")
+    print(f"  - Empty abstracts: {empty_abstracts}")
+    print(f"  - Valid abstracts: {len(docs)}")
+    print(f"  - Abstract availability rate: {len(docs)/len(paper_ids)*100:.1f}%")
+    
+    if not docs:
+        print(f"[WARN] {description}: No docs found. Skipping scoring.")
+        return []
+    
+    print(f"{description}: Scoring {len(docs)} abstracts...")
+    scored_docs = score_documents(plan_text, docs)
+    high_docs, cutoff = filter_high_docs(scored_docs, SIMILARITY_QUANTILE)
+    print(f"{description}: {len(high_docs)} docs above quantile cutoff ({SIMILARITY_QUANTILE}) (cutoff={cutoff:.3f})")
+    
+    return high_docs
+
 # --- Main Pipeline ---
 def main():
 
@@ -682,46 +719,33 @@ def main():
 
     print("Querying initial papers from all databases...")
     all_docs = []
+    
+    # Define database queries
+    databases = [
+        ('OpenAlex', query_openalex, 'openalex'),
+        ('PubMed', query_pubmed, 'pubmed'),
+        ('arXiv', query_arxiv, 'arxiv'),
+        ('CORE', query_core, 'core')
+    ]
+    
     for term in top_terms:
         print(f"Searching for term: '{term}'")
-        
-        # Search OpenAlex
-        openalex_papers = query_openalex(term)
-        print(f"  OpenAlex: {len(openalex_papers)} papers found.")
-        for paper in openalex_papers:
-            paper['source'] = 'openalex'
-        all_docs.extend(openalex_papers)
-        
-        # Search PubMed
-        pm_papers = query_pubmed(term)
-        print(f"  PubMed: {len(pm_papers)} papers found.")
-        for paper in pm_papers:
-            paper['source'] = 'pubmed'
-        all_docs.extend(pm_papers)
-        
-        # Search arXiv
-        ar_papers = query_arxiv(term)
-        print(f"  arXiv: {len(ar_papers)} papers found.")
-        for paper in ar_papers:
-            paper['source'] = 'arxiv'
-        all_docs.extend(ar_papers)
-
-        # Search CORE
-        cr_papers = query_core(term)
-        print(f"  CORE: {len(cr_papers)} papers found.")
-        for paper in cr_papers:
-            paper['source'] = 'core'
-        all_docs.extend(cr_papers)
+        for db_name, query_func, source_name in databases:
+            papers = query_func(term)
+            print(f"  {db_name}: {len(papers)} papers found.")
+            for paper in papers:
+                paper['source'] = source_name
+            all_docs.extend(papers)
         
     print(f"Total papers found across all databases: {len(all_docs)}")
     if not all_docs:
         print("[WARN] No papers found for any top term across all databases. Exiting.")
         return
 
-    # Remove duplicates based on title similarity
-    print("Removing duplicates...")
-    deduplicated_docs = []
+    # Remove duplicates and score documents
+    print("Removing duplicates and scoring documents...")
     seen_titles = set()
+    unique_docs = []
     
     for doc in all_docs:
         title = doc.get('title', '')
@@ -730,129 +754,70 @@ def main():
             normalized_title = re.sub(r'[^\w\s]', '', title.lower()).strip()
             if normalized_title not in seen_titles:
                 seen_titles.add(normalized_title)
-                deduplicated_docs.append(doc)
+                unique_docs.append(doc)
     
-    all_docs = deduplicated_docs
-    print(f"After deduplication: {len(all_docs)} unique papers")
-
-    print(f"Scoring {len(all_docs)} documents...")
-    all_docs = score_documents(plan_text, all_docs)
-    high_docs, cutoff = filter_high_docs(all_docs, SIMILARITY_QUANTILE)
+    print(f"After deduplication: {len(unique_docs)} unique papers")
+    
+    if not unique_docs:
+        print("[WARN] No unique papers after deduplication. Exiting.")
+        return
+    
+    # Score and filter documents
+    scored_docs = score_documents(plan_text, unique_docs)
+    high_docs, cutoff = filter_high_docs(scored_docs, SIMILARITY_QUANTILE)
     print(f"Docs above quantile cutoff ({SIMILARITY_QUANTILE}): {len(high_docs)} (cutoff={cutoff:.3f})")
+    
     if not high_docs:
         print("[WARN] No high scoring docs after filtering. Exiting.")
         return
 
     print(f"Top score cutoff: {cutoff:.3f}. Expanding via references and citations...")
     
-    # Extract references (papers cited by high-scoring papers)
+    # Extract references and citations from high-scoring papers
     print("Extracting references...")
     paper_ids = extract_references(high_docs)
     print(f"Extracted {len(paper_ids)} unique reference paper IDs.")
     
-    # Extract citing papers (papers that cite high-scoring papers)
     print("Extracting citing papers...")
     citing_paper_ids = extract_citing_papers(high_docs, limit_per_paper=10)
     print(f"Extracted {len(citing_paper_ids)} unique citing paper IDs.")
     
-    # Combine references and citations, removing duplicates
+    # Combine and process expansion papers
     all_expansion_ids = list(set(paper_ids + citing_paper_ids))
     print(f"Total unique papers for expansion: {len(all_expansion_ids)} (references + citations)")
     
-    if not all_expansion_ids:
-        print("[WARN] No references or citations found to expand. Skipping expansion.")
-        new_docs = []
-    else:
-        new_docs = []
-        failed_fetches = 0
-        empty_abstracts = 0
-        null_abstracts = 0
-        
-        for pid in tqdm(all_expansion_ids, desc="Fetching abstracts for references and citations"):
-            d = fetch_abstract(pid)
-            if d is None:
-                failed_fetches += 1
-            elif not d.get('abstract'):
-                if d.get('abstract') is None:
-                    null_abstracts += 1
-                else:
-                    empty_abstracts += 1
-            else:
-                d['expansion_type'] = 'reference' if pid in paper_ids else 'citation'
-                if pid in paper_ids and pid in citing_paper_ids:
-                    d['expansion_type'] = 'both'
-                new_docs.append(d)
-        
-        print(f"Fetched {len(new_docs)} abstracts with non-empty content.")
-        print(f"Data quality summary:")
-        print(f"  - Successful fetches: {len(all_expansion_ids) - failed_fetches}")
-        print(f"  - Failed API calls: {failed_fetches}")
-        print(f"  - Null abstracts: {null_abstracts}")
-        print(f"  - Empty abstracts: {empty_abstracts}")
-        print(f"  - Valid abstracts: {len(new_docs)}")
-        print(f"  - Abstract availability rate: {len(new_docs)/len(all_expansion_ids)*100:.1f}%")
-
-    if not new_docs:
-        print("[WARN] No new reference or citation docs found. Skipping final scoring.")
-        high_docs = []
-    else:
-        print(f"Scoring {len(new_docs)} reference and citation abstracts...")
-        scored_refs = score_documents(plan_text, new_docs)
-        high_docs, final_cutoff = filter_high_docs(scored_refs, SIMILARITY_QUANTILE)
-        print(f"Final docs above quantile cutoff ({SIMILARITY_QUANTILE}): {len(high_docs)} (cutoff={final_cutoff:.3f})")
-
-    # In round 2, we take the high relevance documents and get their citing papers only,
-    # then the abstracts of those citing papers and score them against the plan text. Next,
-    # we filter again by quantile and save the final results.
-    final_docs = []
-    citing_paper_ids_round2 = extract_citing_papers(high_docs, limit_per_paper=10)
-    print(f"Round 2: Extracted {len(citing_paper_ids_round2)} unique citing paper IDs.")
-    # Remove duplicates
-    new_expansion_ids = list(set(citing_paper_ids_round2))
-    print(f"Round 2: Total unique papers for expansion: {len(new_expansion_ids)} (citations)")
-    
-    # Get abstracts for citing papers in round 2
-    if not new_expansion_ids:
-        print("[WARN] Round 2: No citations found to expand. Skipping expansion.")
-        final_docs = []
-    else:
-        round2_docs = []
-        failed_fetches = 0
-        empty_abstracts = 0
-        null_abstracts = 0
-        
-        for pid in tqdm(new_expansion_ids, desc="Round 2: Fetching abstracts for citing papers"):
-            d = fetch_abstract(pid)
-            if d is None:
-                failed_fetches += 1
-            elif not d.get('abstract'):
-                if d.get('abstract') is None:
-                    null_abstracts += 1
-                else:
-                    empty_abstracts += 1
-            else:
-                d['expansion_type'] = 'citation_round2'
-                round2_docs.append(d)
-        
-        print(f"Round 2: Fetched {len(round2_docs)} abstracts with non-empty content.")
-        print(f"Round 2: Data quality summary:")
-        print(f"  - Successful fetches: {len(new_expansion_ids) - failed_fetches}")
-        print(f"  - Failed API calls: {failed_fetches}")
-        print(f"  - Null abstracts: {null_abstracts}")
-        print(f"  - Empty abstracts: {empty_abstracts}")
-        print(f"  - Valid abstracts: {len(round2_docs)}")
-        print(f"  - Abstract availability rate: {len(round2_docs)/len(new_expansion_ids)*100:.1f}%")
-
-        if not round2_docs:
-            print("[WARN] Round 2: No new citation docs found. Skipping final scoring.")
-            final_docs = []
+    # Mark expansion type for each paper
+    expansion_papers = []
+    for pid in all_expansion_ids:
+        if pid in paper_ids and pid in citing_paper_ids:
+            expansion_type = 'both'
+        elif pid in paper_ids:
+            expansion_type = 'reference'
         else:
-            # Score the final documents
-            print(f"Round 2: Scoring {len(round2_docs)} citing paper abstracts...")
-            final_scored_refs = score_documents(plan_text, round2_docs)
-            # Filter by quantile again
-            final_docs, final_cutoff = filter_high_docs(final_scored_refs, SIMILARITY_QUANTILE)
-            print(f"Final docs above quantile cutoff ({SIMILARITY_QUANTILE}): {len(final_docs)} (cutoff={final_cutoff:.3f})")
+            expansion_type = 'citation'
+        expansion_papers.append((pid, expansion_type))
+    
+    # Fetch and score round 1 expansion papers
+    round1_docs = []
+    for pid, exp_type in tqdm(expansion_papers, desc="Round 1: Fetching expansion papers"):
+        d = fetch_abstract(pid)
+        if d and d.get('abstract'):
+            d['expansion_type'] = exp_type
+            round1_docs.append(d)
+    
+    if round1_docs:
+        print(f"Round 1: Scoring {len(round1_docs)} expansion papers...")
+        scored_docs = score_documents(plan_text, round1_docs)
+        high_round1_docs, cutoff1 = filter_high_docs(scored_docs, SIMILARITY_QUANTILE)
+        print(f"Round 1: {len(high_round1_docs)} docs above quantile cutoff (cutoff={cutoff1:.3f})")
+        
+        # Round 2: Get citing papers from high-scoring round 1 papers
+        print("Round 2: Extracting citing papers from round 1 results...")
+        round2_citing_ids = extract_citing_papers(high_round1_docs, limit_per_paper=10)
+        final_docs = fetch_and_score_papers(round2_citing_ids, plan_text, 'citation_round2', "Round 2")
+    else:
+        print("[WARN] No valid papers found in round 1 expansion.")
+        final_docs = []
 
     with open("output.json", "w") as f:
         json.dump(final_docs, f, indent=2)
