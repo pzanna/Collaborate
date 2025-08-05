@@ -213,3 +213,4 @@ __marimo__/
 docs/Commands.txt
 /logs
 /temp
+experiments/output.json

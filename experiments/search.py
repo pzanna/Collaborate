@@ -5,7 +5,6 @@ import time
 import json
 import requests
 import numpy as np
-import spacy
 import xml.etree.ElementTree as ET
 import re
 from tqdm import tqdm
@@ -16,11 +15,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-nlp = spacy.load("en_core_web_sm")
-
 # --- Configuration ---
-SIMILARITY_QUANTILE = 0.9
-TOP_K_TERMS = 5
+SIMILARITY_QUANTILE = 0.8
+TOP_K_TERMS = 2
 MAX_RETRIES = 5
 BACKOFF_BASE = 5
 SEARCH_LIMIT = 25
@@ -28,26 +25,19 @@ YEAR_RANGE = (2000, 2025)  # Adjust as needed
 
 # API Keys
 NCBI_API_KEY = os.getenv('NCBI_API_KEY')
-OPENALEX_EMAIL = os.getenv('OPENALEX_EMAIL', 'research@example.com')
+OPENALEX_EMAIL = os.getenv('OPENALEX_EMAIL')
+CORE_API_KEY = os.getenv('CORE_API_KEY')
 
 
 # Print API key status
 print(f"NCBI API Key: {'✓ Found' if NCBI_API_KEY else '✗ Not found'}")
 print(f"OpenAlex Email: {OPENALEX_EMAIL}")
-print("Note: OpenAlex email provides access to the polite pool for better performance")
+print(f"CORE API Key: {'✓ Found' if CORE_API_KEY else '✗ Not found'}")
 
 # --- Embedding Model ---
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-# --- Term Extraction ---
-def extract_phrases(text):
-    phrases = set()
-    for chunk in nlp(text).noun_chunks:
-        phrase = chunk.text.strip().lower()
-        if 1 <= len(phrase.split()) <= 4:
-            phrases.add(phrase)
-    return list(phrases)
-
+# --- Rank Phrases ---
 def rank_phrases(plan, phrases, top_k):
     plan_emb = model.encode(plan, convert_to_tensor=True)
     phrase_embs = model.encode(phrases, convert_to_tensor=True)
@@ -242,6 +232,42 @@ def query_arxiv(term, limit=SEARCH_LIMIT):
     print(f"Failed to query arXiv for term: {term}")
     return []
 
+def query_core(term, limit=SEARCH_LIMIT):
+    """Search CORE API."""
+    retries = 0
+    while retries < MAX_RETRIES:
+        try:
+            url = "https://api.core.ac.uk/v3/search/works"
+
+            # Simplify the query - remove complex syntax that's causing issues
+            params = {
+                'q': term,  # Use simple term without complex syntax
+                'limit': limit,
+            }
+            
+            # Add API key as query parameter if available
+            if CORE_API_KEY:
+                params['apiKey'] = CORE_API_KEY
+
+            r = requests.get(url, params=params)
+
+            if r.status_code == 200:
+                return parse_core_json(r.text)
+            elif r.status_code == 429:
+                delay = BACKOFF_BASE * 2**retries
+                print(f"  CORE rate limited. Retrying in {delay}s...")
+                time.sleep(delay)
+                retries += 1
+            else:
+                break
+                
+        except Exception as e:
+            print(f"Error querying CORE: {e}")
+            break
+
+    print(f"  Failed to query CORE for term: {term}")
+    return []
+        
 # --- XML Parsers ---
 def parse_pubmed_xml(xml_content):
     """Parse PubMed XML response."""
@@ -357,6 +383,77 @@ def parse_arxiv_xml(xml_content):
         print(f"Error parsing arXiv XML: {e}")
         return []
 
+def parse_core_json(json_content):
+    """Parse CORE API JSON response."""
+    try:
+        data = json.loads(json_content)
+        # print(f"CORE JSON structure keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+        
+        entries = []
+        
+        # CORE API v3 returns results in 'results' array
+        results = data.get('results', [])
+        # print(f"CORE results count: {len(results)}")
+        
+        # if len(results) > 0:
+            # print(f"First result keys: {list(results[0].keys()) if isinstance(results[0], dict) else 'Not a dict'}")
+            # print(f"Sample result: {results[0] if len(results) > 0 else 'No results'}")
+        
+        for result in results:
+            try:
+                # Extract basic information
+                title = result.get('title')
+                abstract = result.get('abstract')
+                
+                # Extract authors
+                authors = []
+                for author in result.get('authors', []):
+                    if isinstance(author, dict):
+                        name = author.get('name')
+                        if name:
+                            authors.append({'name': name})
+                    elif isinstance(author, str):
+                        authors.append({'name': author})
+                
+                # Extract publication year
+                year = result.get('yearPublished')
+                if isinstance(year, str):
+                    try:
+                        year = int(year)
+                    except:
+                        year = None
+                
+                # Extract DOI and other IDs
+                external_ids = {}
+                doi = result.get('doi')
+                if doi:
+                    external_ids['DOI'] = doi
+                
+                # Extract URLs
+                download_url = result.get('downloadUrl')
+                
+                record = {
+                    'paperId': result.get('id'),
+                    'title': title,
+                    'abstract': abstract,
+                    'authors': authors,
+                    'year': year,
+                    'externalIds': external_ids,
+                    'references': [],  # CORE doesn't include references in basic search
+                    'url': download_url
+                }
+                entries.append(record)
+                
+            except Exception as e:
+                print(f"Error parsing CORE entry: {e}")
+                continue
+        
+        return entries
+        
+    except Exception as e:
+        print(f"Error parsing CORE JSON: {e}")
+        return []
+
 # --- Document Scoring ---
 def score_documents(plan, docs):
     missing_title = sum(1 for doc in docs if not doc.get('title'))
@@ -418,6 +515,9 @@ def extract_citing_papers(docs, limit_per_paper=10):
         paper_id = doc.get('paperId')
         if not paper_id:
             continue
+        
+        # Convert paper_id to string if it's not already
+        paper_id = str(paper_id)
             
         # Ensure we have a full OpenAlex ID
         if not paper_id.startswith('https://openalex.org/'):
@@ -471,6 +571,9 @@ def fetch_abstract(paper_id):
     """Fetch paper details from OpenAlex API using paper ID."""
     retries = 0
     while retries < MAX_RETRIES:
+        # Convert paper_id to string if it's not already
+        paper_id = str(paper_id)
+        
         # Clean the paper ID to get just the ID part
         if paper_id.startswith('https://openalex.org/'):
             clean_id = paper_id.replace('https://openalex.org/', '')
@@ -543,6 +646,16 @@ def fetch_abstract(paper_id):
 # --- Main Pipeline ---
 def main():
 
+    candidates = ["avian neuron culturing techniques", 
+            "culturing media for avian neurons", 
+            "ingredients for avian neuronal culture", 
+            "biochemical properties of neuronal culturing media", 
+            "impact of media formulations on neuronal viability", 
+            "optimal concentrations for avian neuron growth", 
+            "growth and viability assays for avian neurons", 
+            "methodologies for assessing neuronal health", 
+            "neuron differentiation in avian culture systems"]
+
     with open("plan.json") as f:
         plan_data = json.load(f)
 
@@ -554,12 +667,7 @@ def main():
     print(f"Loaded plan.json: outcomes={len(plan_data.get('outcomes', []))}, objectives={len(plan_data.get('objectives', []))}, key_areas={len(plan_data.get('key_areas', []))}, questions={len(plan_data.get('questions', []))}")
     plan_text = " ".join(plan_sections)
     print(f"Combined plan text length: {len(plan_text)}")
-    if not plan_text.strip():
-        print("[WARN] Plan text is empty after combining sections. Exiting.")
-        return
 
-    print("Extracting candidate terms...")
-    candidates = extract_phrases(plan_text)
     print(f"Extracted {len(candidates)} candidate terms.")
     if not candidates:
         print("[WARN] No candidate terms extracted. Exiting.")
@@ -597,6 +705,13 @@ def main():
         for paper in ar_papers:
             paper['source'] = 'arxiv'
         all_docs.extend(ar_papers)
+
+        # Search CORE
+        cr_papers = query_core(term)
+        print(f"  CORE: {len(cr_papers)} papers found.")
+        for paper in cr_papers:
+            paper['source'] = 'core'
+        all_docs.extend(cr_papers)
         
     print(f"Total papers found across all databases: {len(all_docs)}")
     if not all_docs:
@@ -679,12 +794,65 @@ def main():
 
     if not new_docs:
         print("[WARN] No new reference or citation docs found. Skipping final scoring.")
-        final_docs = []
+        high_docs = []
     else:
         print(f"Scoring {len(new_docs)} reference and citation abstracts...")
         scored_refs = score_documents(plan_text, new_docs)
-        final_docs, final_cutoff = filter_high_docs(scored_refs, SIMILARITY_QUANTILE)
-        print(f"Final docs above quantile cutoff ({SIMILARITY_QUANTILE}): {len(final_docs)} (cutoff={final_cutoff:.3f})")
+        high_docs, final_cutoff = filter_high_docs(scored_refs, SIMILARITY_QUANTILE)
+        print(f"Final docs above quantile cutoff ({SIMILARITY_QUANTILE}): {len(high_docs)} (cutoff={final_cutoff:.3f})")
+
+    # In round 2, we take the high relevance documents and get their citing papers only,
+    # then the abstracts of those citing papers and score them against the plan text. Next,
+    # we filter again by quantile and save the final results.
+    final_docs = []
+    citing_paper_ids_round2 = extract_citing_papers(high_docs, limit_per_paper=10)
+    print(f"Round 2: Extracted {len(citing_paper_ids_round2)} unique citing paper IDs.")
+    # Remove duplicates
+    new_expansion_ids = list(set(citing_paper_ids_round2))
+    print(f"Round 2: Total unique papers for expansion: {len(new_expansion_ids)} (citations)")
+    
+    # Get abstracts for citing papers in round 2
+    if not new_expansion_ids:
+        print("[WARN] Round 2: No citations found to expand. Skipping expansion.")
+        final_docs = []
+    else:
+        round2_docs = []
+        failed_fetches = 0
+        empty_abstracts = 0
+        null_abstracts = 0
+        
+        for pid in tqdm(new_expansion_ids, desc="Round 2: Fetching abstracts for citing papers"):
+            d = fetch_abstract(pid)
+            if d is None:
+                failed_fetches += 1
+            elif not d.get('abstract'):
+                if d.get('abstract') is None:
+                    null_abstracts += 1
+                else:
+                    empty_abstracts += 1
+            else:
+                d['expansion_type'] = 'citation_round2'
+                round2_docs.append(d)
+        
+        print(f"Round 2: Fetched {len(round2_docs)} abstracts with non-empty content.")
+        print(f"Round 2: Data quality summary:")
+        print(f"  - Successful fetches: {len(new_expansion_ids) - failed_fetches}")
+        print(f"  - Failed API calls: {failed_fetches}")
+        print(f"  - Null abstracts: {null_abstracts}")
+        print(f"  - Empty abstracts: {empty_abstracts}")
+        print(f"  - Valid abstracts: {len(round2_docs)}")
+        print(f"  - Abstract availability rate: {len(round2_docs)/len(new_expansion_ids)*100:.1f}%")
+
+        if not round2_docs:
+            print("[WARN] Round 2: No new citation docs found. Skipping final scoring.")
+            final_docs = []
+        else:
+            # Score the final documents
+            print(f"Round 2: Scoring {len(round2_docs)} citing paper abstracts...")
+            final_scored_refs = score_documents(plan_text, round2_docs)
+            # Filter by quantile again
+            final_docs, final_cutoff = filter_high_docs(final_scored_refs, SIMILARITY_QUANTILE)
+            print(f"Final docs above quantile cutoff ({SIMILARITY_QUANTILE}): {len(final_docs)} (cutoff={final_cutoff:.3f})")
 
     with open("output.json", "w") as f:
         json.dump(final_docs, f, indent=2)
