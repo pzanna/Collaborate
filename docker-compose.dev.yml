@@ -40,6 +40,26 @@ services:
     read_only: false
     tmpfs: []
 
+  # Network Agent development configuration
+  network-agent:
+    build:
+      context: ./agents/network
+      target: development
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT_MODE=true
+      - WATCHFILES_FORCE_POLLING=1
+    volumes:
+      # Mount source code for development
+      - ./agents/network/src:/app/src:ro
+      - ./agents/network/config:/app/config:ro
+      - ./agents/network/health_check.py:/app/health_check.py:ro
+      - ./agents/network/start-dev.sh:/app/start-dev.sh:ro
+    # Remove read-only constraints for development
+    read_only: false
+    tmpfs: []
+
   # Research Manager Agent development configuration
   research-manager-agent:
     build:

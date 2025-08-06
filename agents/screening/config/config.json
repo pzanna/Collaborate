@@ -1,12 +1,12 @@
 {
   "service_host": "0.0.0.0",
-  "service_port": 8004,
+  "service_port": 8012,
   "mcp_server_url": "ws://mcp-server:9000",
   "service": {
     "name": "screening-agent",
     "type": "screening",
     "host": "0.0.0.0",
-    "port": 8004
+    "port": 8012
   },
   "mcp_server": {
     "url": "ws://mcp-server:9000",
