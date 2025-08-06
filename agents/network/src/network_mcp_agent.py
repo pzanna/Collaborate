@@ -69,14 +69,6 @@ class NetworkMCPAgent:
             "search_capabilities": self._handle_search_capabilities
         }
         
-        # Message handlers
-        self.message_handlers = {
-            "task/execute": self._handle_task_execution,
-            "agent/ping": self._handle_ping,
-            "agent/status": self._handle_status_request,
-            "agent/shutdown": self._handle_shutdown
-        }
-        
         logger.info(f"Network MCP Agent {self.agent_id} initialized")
     
     def get_capabilities(self) -> List[str]:
@@ -155,22 +147,15 @@ class NetworkMCPAgent:
     async def _register_agent(self):
         """Register agent with MCP server."""
         registration_message = {
-            "id": str(uuid.uuid4()),
-            "method": "agent/register",
-            "params": {
-                "agent_id": self.agent_id,
-                "agent_type": self.agent_type,
-                "capabilities": self.get_capabilities(),
-                "version": self.config.get("service", {}).get("version", "1.0.0"),
-                "metadata": {
-                    "search_engine": "google_custom_search",
-                    "api_configured": self.search_service.is_api_configured()
-                }
-            }
+            "type": "agent_register",
+            "agent_id": self.agent_id,
+            "agent_type": self.agent_type,
+            "capabilities": self.get_capabilities(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         await self._send_message(registration_message)
-        logger.info(f"Agent registered: {self.agent_id}")
+        logger.info(f"Agent registered: {self.agent_id} with capabilities: {self.get_capabilities()}")
     
     async def _message_loop(self):
         """Main message handling loop."""
@@ -193,37 +178,68 @@ class NetworkMCPAgent:
     
     async def _handle_message(self, data: Dict[str, Any]):
         """Handle incoming MCP message."""
-        method = data.get("method")
-        message_id = data.get("id")
-        params = data.get("params", {})
+        message_type = data.get("type")
         
-        logger.debug(f"Received message: {method}")
+        logger.debug(f"Received message: {message_type}")
         
-        if method in self.message_handlers:
-            try:
-                result = await self.message_handlers[method](params)
-                
-                if message_id:
-                    response = {
-                        "id": message_id,
-                        "result": result
-                    }
-                    await self._send_message(response)
-                    
-            except Exception as e:
-                logger.error(f"Error handling {method}: {e}")
-                
-                if message_id:
-                    error_response = {
-                        "id": message_id,
-                        "error": {
-                            "code": -32603,
-                            "message": str(e)
-                        }
-                    }
-                    await self._send_message(error_response)
+        if message_type == "task_request":
+            await self._handle_task_request(data)
+        elif message_type == "task":
+            await self._handle_task_request(data)
+        elif message_type == "ping":
+            await self._send_message({"type": "pong"})
+        elif message_type == "registration_confirmed":
+            logger.info("✅ Agent registration confirmed by MCP server")
         else:
-            logger.warning(f"Unknown method: {method}")
+            logger.warning(f"Unknown message type: {message_type}")
+    
+    async def _handle_task_request(self, data: Dict[str, Any]):
+        """Handle incoming task request."""
+        try:
+            task_id = data.get("task_id")
+            task_type = data.get("task_type") or data.get("action")
+            task_data = data.get("data") or data.get("payload", {})
+            
+            logger.info(f"Processing task: {task_type} (ID: {task_id})")
+            
+            # Execute the task
+            if task_type in self.task_handlers:
+                result = await self.task_handlers[task_type](task_data)
+                
+                # Send result back to MCP server
+                response = {
+                    "type": "task_result",
+                    "task_id": task_id,
+                    "status": "completed",
+                    "result": result
+                }
+                await self._send_message(response)
+                
+                logger.info(f"✅ Task completed: {task_type}")
+                
+            else:
+                # Task type not supported
+                error_response = {
+                    "type": "task_result", 
+                    "task_id": task_id,
+                    "status": "error",
+                    "error": f"Unsupported task type: {task_type}"
+                }
+                await self._send_message(error_response)
+                logger.error(f"❌ Unsupported task type: {task_type}")
+                
+        except Exception as e:
+            logger.error(f"Error processing task: {e}")
+            
+            task_id = data.get("task_id")
+            if task_id:
+                error_response = {
+                    "type": "task_result",
+                    "task_id": task_id, 
+                    "status": "error",
+                    "error": str(e)
+                }
+                await self._send_message(error_response)
     
     async def _send_message(self, message: Dict[str, Any]):
         """Send message to MCP server."""
@@ -245,54 +261,6 @@ class NetworkMCPAgent:
             except Exception as e:
                 logger.error(f"Heartbeat error: {e}")
                 await asyncio.sleep(5)
-    
-    # Message Handlers
-    
-    async def _handle_task_execution(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle task execution request."""
-        task_type = params.get("task_type")
-        task_params = params.get("params", {})
-        
-        logger.info(f"Executing task: {task_type}")
-        
-        if task_type in self.task_handlers:
-            result = await self.task_handlers[task_type](task_params)
-            return {
-                "status": "completed",
-                "result": result,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-        else:
-            raise ValueError(f"Unknown task type: {task_type}")
-    
-    async def _handle_ping(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle ping request."""
-        self.last_heartbeat = datetime.now(timezone.utc).isoformat()
-        return {
-            "status": "alive",
-            "agent_id": self.agent_id,
-            "timestamp": self.last_heartbeat
-        }
-    
-    async def _handle_status_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle status request."""
-        return {
-            "agent_id": self.agent_id,
-            "agent_type": self.agent_type,
-            "connected": self.connected,
-            "capabilities": self.get_capabilities(),
-            "search_service": {
-                "api_configured": self.search_service.is_api_configured(),
-                "capabilities": self.search_service.get_capabilities()
-            },
-            "last_heartbeat": self.last_heartbeat
-        }
-    
-    async def _handle_shutdown(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle shutdown request."""
-        logger.info("Shutdown requested")
-        asyncio.create_task(self.stop())
-        return {"status": "shutting_down"}
     
     # Task Handlers
     

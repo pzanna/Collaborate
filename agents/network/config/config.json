@@ -26,7 +26,10 @@
     }
   },
   "capabilities": [
+    "google_search",
     "web_search",
+    "multi_page_search",
+    "search_capabilities",
     "google_custom_search",
     "search_result_parsing"
   ],

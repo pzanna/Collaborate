@@ -116,6 +116,8 @@ class MCPServer:
                 await self._handle_gateway_registration(client_id, data)
             elif message_type == "research_action":
                 await self._handle_research_action(client_id, data)
+            elif message_type == "task_request":
+                await self._handle_task_request_from_ai(client_id, data)
             elif message_type == "task_result":
                 await self._handle_task_result(client_id, data)
             elif message_type == "heartbeat":
@@ -273,6 +275,76 @@ class MCPServer:
             
         except Exception as e:
             error_msg = f"Error processing research action: {str(e)}"
+            await self._send_error(client_id, error_msg)
+            logger.error(error_msg)
+    
+    async def _handle_task_request_from_ai(self, client_id: str, data: Dict[str, Any]):
+        """Handle task request from AI service"""
+        try:
+            task_data = data.get("data", {})
+            
+            # Extract task information
+            task_id = task_data.get("task_id", str(uuid.uuid4()))
+            agent_type = task_data.get("agent_type")
+            action = task_data.get("action")
+            payload = task_data.get("payload", {})
+            context_id = task_data.get("context_id")
+            
+            logger.info(f"Processing AI task request: {action} for agent type: {agent_type}")
+            
+            if not agent_type or not action:
+                await self._send_error(client_id, "Missing agent_type or action")
+                return
+            
+            # Find suitable agents
+            suitable_agents = [
+                agent_id for agent_id, info in self.agent_registry.items()
+                if (info["agent_type"] == agent_type and 
+                    info["status"] == "active" and 
+                    action in info.get("capabilities", []))
+            ]
+            
+            if not suitable_agents:
+                error_msg = f"No active {agent_type} agents found with capability: {action}"
+                await self._send_message(client_id, {
+                    "type": "task_result",
+                    "task_id": task_id,
+                    "status": "error",
+                    "error": error_msg
+                })
+                logger.warning(error_msg)
+                return
+            
+            # Select first available agent
+            selected_agent = suitable_agents[0]
+            agent_client_id = self.agent_registry[selected_agent]["client_id"]
+            
+            # Store task
+            self.active_tasks[task_id] = {
+                "id": task_id,
+                "type": action,
+                "agent_type": agent_type,
+                "data": payload,
+                "context_id": context_id,
+                "client_id": client_id,
+                "assigned_agent": selected_agent,
+                "status": "processing",
+                "created_at": datetime.now(),
+            }
+            
+            # Send task to agent
+            await self._send_message(agent_client_id, {
+                "type": "task_request",
+                "task_id": task_id,
+                "task_type": action,
+                "data": payload,
+                "context_id": context_id
+            })
+            
+            logger.info(f"AI task routed: {task_id} -> {selected_agent}")
+            
+        except Exception as e:
+            error_msg = f"Error processing AI task request: {str(e)}"
             await self._send_error(client_id, error_msg)
             logger.error(error_msg)
     
