@@ -80,13 +80,40 @@ class AIIntegration:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are an expert research assistant specializing in academic literature search optimization. Extract 3-4 highly targeted search terms from the provided research plan that will be most effective for finding relevant academic papers in databases like PubMed, arXiv, Semantic Scholar, and CrossRef."
+                            "content": "You are an expert research assistant specializing in academic literature search optimization. Extract 3-4 highly targeted search terms from the provided research plan that will be most effective for finding relevant academic papers in databases like PubMed, arXiv, Semantic Scholar, and CrossRef. You have access to Google search to find recent research and validate terminology."
                         },
                         {
                             "role": "user", 
                             "content": prompt
                         }
                     ],
+                    "tools": [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "google_search",
+                                "description": "Search the web using Google Custom Search to find recent research papers, validate scientific terminology, and discover current trends in research topics.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "query": {
+                                            "type": "string",
+                                            "description": "The search query to find relevant research and information"
+                                        },
+                                        "num_results": {
+                                            "type": "integer",
+                                            "description": "Number of search results to return (default: 10, max: 10)",
+                                            "default": 10,
+                                            "minimum": 1,
+                                            "maximum": 10
+                                        }
+                                    },
+                                    "required": ["query"]
+                                }
+                            }
+                        }
+                    ],
+                    "tool_choice": "auto",
                     "max_tokens": 3000,
                     "temperature": 0.3
                 }
@@ -246,13 +273,40 @@ class AIIntegration:
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "You are an expert research assistant specializing in academic literature search optimization. Extract 3-4 highly targeted search terms from the provided research plan that will be most effective for finding relevant academic papers in databases like PubMed, arXiv, Semantic Scholar, and CrossRef."
+                                "content": "You are an expert research assistant specializing in academic literature review and analysis. You can search the web to find additional relevant papers, validate research gaps, and discover recent publications that complement the existing literature collection."
                             },
                             {
                                 "role": "user", 
                                 "content": prompt
                             }
                         ],
+                        "tools": [
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": "google_search",
+                                    "description": "Search the web using Google Custom Search to find recent research papers, discover additional relevant studies, and fill gaps in the literature collection.",
+                                    "parameters": {
+                                        "type": "object",
+                                        "properties": {
+                                            "query": {
+                                                "type": "string",
+                                                "description": "The search query to find relevant research papers and studies"
+                                            },
+                                            "num_results": {
+                                                "type": "integer",
+                                                "description": "Number of search results to return (default: 10, max: 10)",
+                                                "default": 10,
+                                                "minimum": 1,
+                                                "maximum": 10
+                                            }
+                                        },
+                                        "required": ["query"]
+                                    }
+                                }
+                            }
+                        ],
+                        "tool_choice": "auto",
                         "max_tokens": 3000,
                         "temperature": 0.3
                     }
