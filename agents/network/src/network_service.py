@@ -27,7 +27,6 @@ import uvicorn
 from fastapi import FastAPI
 
 # Import the standardized health check service
-sys.path.append(str(Path(__file__).parent.parent))
 from health_check import create_health_check_app
 
 # Import the Google search service and MCP agent

@@ -1,5 +1,5 @@
 # Network Agent Container - SECURITY HARDENED with Alpine
-FROM python:3.12-alpine
+FROM python:3.12-alpine AS base
 
 # Security: Set build arguments for better control
 ARG SERVICE_PORT=8004
@@ -42,14 +42,13 @@ COPY config/ ./config/
 COPY start.sh ./
 COPY start-dev.sh ./
 
-# Copy shared health check service
-COPY health_check.py ./health_check.py
+# Note: health_check.py is already in src/ directory
 
 # Security: Set strict file permissions and ownership
 RUN chown -R network:network /app && \
     chmod -R 750 /app && \
     chmod 750 /app/start-dev.sh && \
-    chmod 640 /app/src/*.py /app/config/*.json /app/health_check.py 2>/dev/null || true && \
+    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \; && \
     chmod 750 /app/start-dev.sh
@@ -61,6 +60,23 @@ RUN mkdir -p /app/tmp && \
 
 # Switch to non-root user
 USER network
+
+# Expose port
+EXPOSE 8004
+
+# Development stage
+FROM base AS development
+
+# Install development dependencies for file watching
+USER root
+RUN pip install --no-cache-dir watchfiles
+USER network
+
+# Development command with file watching
+CMD ["./start-dev.sh"]
+
+# Production stage (default)
+FROM base AS production
 
 # Security: Enhanced health check with timeout
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
