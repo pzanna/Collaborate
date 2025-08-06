@@ -27,11 +27,11 @@ import uvicorn
 from fastapi import FastAPI
 
 # Import the standardized health check service
-from health_check import create_health_check_app
+from .health_check import create_health_check_app
 
 # Import the Google search service and MCP agent
-from google_search_service import GoogleSearchService
-from network_mcp_agent import NetworkMCPAgent
+from .google_search_service import GoogleSearchService
+from .network_mcp_agent import NetworkMCPAgent
 
 # Configure logging
 logging.basicConfig(

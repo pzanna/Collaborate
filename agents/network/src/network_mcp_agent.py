@@ -22,7 +22,7 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 
 import websockets
-from google_search_service import GoogleSearchService
+from .google_search_service import GoogleSearchService
 
 logger = logging.getLogger(__name__)
 
