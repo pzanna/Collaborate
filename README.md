@@ -12,6 +12,7 @@ The Eunice Research Platform is a sophisticated research automation system that 
 ### Key Capabilities
 
 - 🔍 **Literature Discovery**: Multi-database academic search across PubMed, arXiv, Semantic Scholar, and CrossRef
+- 🌐 **Web Search Integration**: Google Custom Search API integration for real-time web search capabilities
 - 📊 **Systematic Reviews**: PRISMA-compliant systematic review workflows with automated screening
 - 📝 **Research Planning**: AI-powered research plan generation with cost estimation and optimization
 - ✍️ **Manuscript Generation**: Automated academic writing with proper citation formatting
@@ -53,16 +54,17 @@ The platform implements a **hybrid microservices architecture** with:
 
 ### Research Agent Ecosystem
 
-The platform includes 8 specialized research agents:
+The platform includes 9 specialized research agents:
 
 - **Research Manager** (8002): Workflow orchestration and multi-agent coordination
 - **Literature Search** (8003): Academic database search and bibliographic management
-- **Screening & PRISMA** (8004): Systematic review screening with compliance tracking
+- **Screening & PRISMA** (8012): Systematic review screening with compliance tracking
 - **Synthesis & Review** (8005): Evidence synthesis and meta-analysis capabilities
 - **Writer** (8006): Academic manuscript generation and formatting
 - **Planning** (8007): Research planning with cost estimation and optimization
 - **Executor** (8008): Secure code execution and data processing
 - **Memory** (8009): Knowledge base management and semantic search
+- **Network** (8004): Google Custom Search integration and web research capabilities
 
 ## 🚀 Quick Start
 
@@ -111,6 +113,10 @@ The platform includes 8 specialized research agents:
 OPENAI_API_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
 XAI_API_KEY=your_xai_key
+
+# Google Search Configuration (Required for Network Agent)
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_SEARCH_ENGINE_ID=your_google_search_engine_id
 
 # Database Configuration
 POSTGRES_DB=eunice
