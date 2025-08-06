@@ -4,7 +4,7 @@ Data models for literature search functionality.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 
 @dataclass
@@ -12,8 +12,8 @@ class SearchQuery:
     """Search query data model for literature search requests."""
     lit_review_id: str
     plan_id: str = ""
-    research_plan: str = ""
-    query: str = ""
+    research_plan: Union[str, Dict[str, Any]] = ""
+    query: Union[str, List[str]] = ""
     filters: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
     max_results: int = 50

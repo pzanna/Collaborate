@@ -8,24 +8,37 @@ import logging
 import os
 import ssl
 import uuid
+import re
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
-import numpy as np
 import pandas as pd
-
-import onnxruntime as ort
-from transformers import AutoTokenizer
 
 import aiohttp
 import websockets
 
 from .ai_integration import AIIntegration
 from .database_integration import DatabaseIntegration
-from .deduplication import RecordDeduplicator
 from .models import SearchQuery, SearchReport
 from .normalizers import RecordNormalizer
-from .search_engines import SearchEngines
+from .search_pipeline import LiteratureSearchPipeline
+
+# Import constants from experiments search_engines
+try:
+    from experiments.search_engines import (
+        SIMILARITY_QUANTILE, TOP_K_TERMS, MAX_RETRIES, BACKOFF_BASE, 
+        SEARCH_LIMIT, YEAR_RANGE, NCBI_API_KEY, OPENALEX_EMAIL, CORE_API_KEY
+    )
+except ImportError:
+    # Fallback constants if experiments module not available
+    SIMILARITY_QUANTILE = 0.8
+    TOP_K_TERMS = 1
+    MAX_RETRIES = 5
+    BACKOFF_BASE = 5
+    SEARCH_LIMIT = 25
+    YEAR_RANGE = (2000, 2025)
+    NCBI_API_KEY = os.getenv('NCBI_API_KEY')
+    OPENALEX_EMAIL = os.getenv('OPENALEX_EMAIL')
+    CORE_API_KEY = os.getenv('CORE_API_KEY')
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +82,8 @@ class LiteratureSearchService:
         self.task_queue = asyncio.Queue()
         
         # Initialize service components
-        self.search_engines: Optional[SearchEngines] = None
         self.normalizer = RecordNormalizer()
-        self.deduplicator = RecordDeduplicator()
+        self.search_pipeline = LiteratureSearchPipeline()
         self.ai_integration: Optional[AIIntegration] = None
         self.database_integration: Optional[DatabaseIntegration] = None
         
@@ -92,8 +104,8 @@ class LiteratureSearchService:
                 connector=connector
             )
             
-            # Initialize service components
-            self.search_engines = SearchEngines(self.session, self.core_api_key)
+            # Initialize service components (SearchEngines now handled by search_pipeline)
+            # self.search_engines = SearchEngines(self.session, self.core_api_key)
             
             # Connect to MCP server
             await self._connect_to_mcp_server()
@@ -450,537 +462,228 @@ class LiteratureSearchService:
             SearchReport with results summary
         """
         start_time = datetime.now()
-        total_fetched = 0
-        per_source_counts = {}
         errors = []
-        all_records = []
+        
         # Search each configured source with all terms
-        sources = search_query.sources or ["semantic_scholar", "arxiv", "pubmed", "crossref", "core"]
+        sources = search_query.sources or ["semantic_scholar", "arxiv", "pubmed", "crossref", "core", "openalex"]
 
         logger.info(f"Starting literature search for review {search_query.lit_review_id}")
         
         # Extract AI-optimized search terms if research plan is available
-        search_terms = []
-        if search_query.research_plan and self.database_integration and self.ai_integration:
-            # Check for cached terms first
-            cached_terms = await self.database_integration.get_cached_search_terms(
-                "plan", search_query.plan_id, str(search_query.research_plan)[:500]
-            )
-            if cached_terms:
-                search_terms = cached_terms
-                logger.info(f"Using {len(search_terms)} cached search terms: {search_terms}")
-            else:    
-                logger.info("Research plan provided, extracting AI-optimized search terms")
-                ai_extracted_terms = await self.ai_integration.extract_search_terms_from_research_plan(
-                    search_query.research_plan
-                )
-            
-                # AI extraction now returns a list of search terms directly
-                if ai_extracted_terms and isinstance(ai_extracted_terms, list):
-                    search_terms = ai_extracted_terms
-                    logger.info(f"Extracted {len(search_terms)} search terms from AI response: {search_terms}")
-                    # Store terms for future use
-                    try:
-                        storage_result = await self.database_integration.store_search_terms(
-                            "plan", 
-                            search_query.plan_id, 
-                            str(search_query.research_plan)[:500], # Truncate to avoid issues
-                            search_terms, 
-                            {"ai_model": "gpt-4o-mini", "extraction_method": "topic_based_json"}, 
-                            sources
-                        )
-                        if storage_result:
-                            logger.info(f"Successfully stored {len(search_terms)} search terms in database")
-                        else:
-                            logger.warning(f"Failed to store search terms in database")
-                    except Exception as e:
-                        logger.error(f"Exception while storing search terms: {e}", exc_info=True)
-                else:
-                    logger.warning("No valid search terms returned from AI, using fallback")
-                    search_terms = [search_query.query or "general research"]
-        else:
+        search_terms = await self._get_or_extract_search_terms(search_query, sources)
+        logger.info(f"🔍 DEBUG: _get_or_extract_search_terms returned {len(search_terms)} terms:")
+        for i, term in enumerate(search_terms):
+            logger.info(f"🔍 DEBUG: Term {i+1}: '{term}' (type: {type(term)}, length: {len(str(term))})")
+        
+        # Additional safety check: ensure no terms contain OR combinations
+        final_terms = []
+        for term in search_terms:
+            if " OR " in str(term):
+                logger.warning(f"Found OR combination in term, splitting: '{term}'")
+                split_terms = [t.strip() for t in str(term).split(" OR ") if t.strip()]
+                final_terms.extend(split_terms)
+            else:
+                final_terms.append(term)
+        
+        if len(final_terms) != len(search_terms):
+            logger.info(f"Split OR-combined terms: {len(search_terms)} -> {len(final_terms)} individual terms")
+        
+        search_query.query = final_terms  # Pass as list for individual ranking
+        logger.info(f"🔍 DEBUG: search_query.query now contains {len(search_query.query)} items:")
+        for i, item in enumerate(search_query.query):
+            logger.info(f"🔍 DEBUG: Item {i+1}: '{item}' (type: {type(item)}, length: {len(str(item))})")
+
+        # Main search loop via pipeline
+        search_results = await self.search_pipeline.search_source(search_query)
+
+        # AI review of results
+        literature_list = await self._review_with_ai(search_query, search_results)
+
+        # Store results in database
+        await self._store_literature_results(search_query, literature_list, errors)
+        
+        end_time = datetime.now()
+        
+        # Create search report with actual metrics
+        search_report = SearchReport(
+            lit_review_id=search_query.lit_review_id,
+            total_fetched=len(search_results) if search_results else 0,
+            total_unique=len(literature_list),
+            per_source_counts={},  # TODO: Implement if needed by pipeline
+            start_time=start_time,
+            end_time=end_time,
+            errors=errors,
+            records=literature_list
+        )
+        
+        logger.info(f"Literature search completed. Found {len(search_results) if search_results else 0} results, "
+                   f"{len(literature_list)} after AI review in {(end_time - start_time).total_seconds():.1f}s")
+
+        return search_report
+    
+    async def _get_or_extract_search_terms(self, search_query: SearchQuery, sources: List[str]) -> List[str]:
+        """Extract or retrieve cached search terms for the research plan."""
+        if not (search_query.research_plan and self.database_integration and self.ai_integration):
             logger.info("No research plan provided, using original query")
-            search_terms = [search_query.query or "general research"]
-
-        logger.info(f"Using search terms: {search_terms}")
-
-        # Execute searches concurrently but with rate limiting
-        search_tasks = []
-        if self.search_engines:
-            for source in sources:
-                task = asyncio.create_task(
-                    self._search_source_with_terms(source, search_query, search_terms)
-                )
-                search_tasks.append((source, task))
-        else:
-            error_msg = "Search engines not initialized"
-            errors.append(error_msg)
-            logger.error(error_msg)
+            if isinstance(search_query.query, list):
+                return search_query.query
+            else:
+                return [search_query.query or "general research"]
+            
+        # Check for cached terms first
+        cached_terms = await self.database_integration.get_cached_search_terms(
+            "plan", search_query.plan_id, str(search_query.research_plan)[:500]
+        )
+        if cached_terms:
+            logger.info(f"Using {len(cached_terms)} cached search terms: {cached_terms}")
+            logger.info(f"🔍 DEBUG: Examining each cached term:")
+            for i, term in enumerate(cached_terms):
+                logger.info(f"🔍 DEBUG: Cached term {i+1}: '{term}' (type: {type(term)}, length: {len(str(term))})")
+                if " OR " in str(term):
+                    logger.info(f"🔍 DEBUG: Term {i+1} contains OR - this is a combined query!")
+            
+            # Handle legacy cached terms that might contain OR-combined queries
+            expanded_terms = []
+            for term in cached_terms:
+                if " OR " in term:
+                    # Split combined OR query back into individual terms
+                    individual_terms = [t.strip() for t in term.split(" OR ")]
+                    expanded_terms.extend(individual_terms)
+                    logger.info(f"Split legacy OR query into {len(individual_terms)} individual terms")
+                else:
+                    expanded_terms.append(term)
+            
+            logger.info(f"🔍 DEBUG: After processing, returning {len(expanded_terms)} terms:")
+            for i, term in enumerate(expanded_terms):
+                logger.info(f"🔍 DEBUG: Final term {i+1}: '{term}' (length: {len(str(term))})")
+            return expanded_terms
+            
+        # Extract new terms using AI
+        logger.info("Research plan provided, extracting AI-optimized search terms")
+        ai_extracted_terms = await self.ai_integration.extract_search_terms_from_research_plan(
+            search_query.research_plan
+        )
         
-        # Wait for all searches to complete
-        for source, task in search_tasks:
+        if ai_extracted_terms and isinstance(ai_extracted_terms, list):
+            search_terms = ai_extracted_terms
+            logger.info(f"Extracted {len(search_terms)} search terms from AI response: {search_terms}")
+            
+            # Store terms for future use
             try:
-                source_records = await task
-                
-                if source_records:
-                    # Normalize records
-                    normalized_records = self.normalizer.normalize_records(source_records, source)
-                    all_records.extend(normalized_records)
-                    per_source_counts[source] = per_source_counts.get(source, 0) + len(source_records)
-                    total_fetched += len(source_records)
-                    
-                    logger.info(f"Retrieved {len(source_records)} records from {source}")
+                storage_result = await self.database_integration.store_search_terms(
+                    "plan", 
+                    search_query.plan_id, 
+                    str(search_query.research_plan)[:500],
+                    search_terms, 
+                    {"ai_model": "gpt-4o-mini", "extraction_method": "topic_based_json"}, 
+                    sources
+                )
+                if storage_result:
+                    logger.info(f"Successfully stored {len(search_terms)} search terms in database")
                 else:
-                    if source not in per_source_counts:
-                        per_source_counts[source] = 0
-                        
+                    logger.warning("Failed to store search terms in database")
             except Exception as e:
-                error_msg = f"Error searching {source}: {str(e)}"
-                errors.append(error_msg)
-                logger.error(error_msg, exc_info=True)
-                per_source_counts[source] = 0
-        
-        # Deduplicate records
-        unique_records = self.deduplicator.deduplicate_records(all_records)
-        
-        # Filter out records with empty abstracts
-        # This ensures we only keep literature with meaningful content for review
-        records_with_abstracts = self.deduplicator.filter_records_with_abstracts(unique_records)
-        
-        # Create simplified JSON records with only id, title, and abstract
-        # This is done BEFORE storing in the database as per the workflow requirements
-        simplified_json_records = self._create_simplified_json_records(records_with_abstracts)
-        
-        # Store initial literature results in research plan (before AI review)
-        logger.info(f"📊 INITIAL LITERATURE STORAGE CHECK:")
-        logger.info(f"  ├─ full_records_with_abstracts: {len(records_with_abstracts)} records")
-        logger.info(f"  ├─ simplified_json_records: {len(simplified_json_records)} records")
-        logger.info(f"  ├─ plan_id: {search_query.plan_id}")
-        logger.info(f"  ├─ lit_review_id: {search_query.lit_review_id}")
-        logger.info(f"  └─ database_integration: {'✅ Available' if self.database_integration else '❌ None'}")
-        
-        if search_query.plan_id and search_query.lit_review_id and self.database_integration and simplified_json_records:
-            logger.info(f"📤 STORING INITIAL LITERATURE RESULTS: {len(simplified_json_records)} simplified JSON records → plan_id={search_query.plan_id}")
-            
-            # Ensure MCP connection is active
-            connection_ready = await self._ensure_mcp_connection()
-            if not connection_ready:
-                logger.error("❌ Failed to establish MCP connection for initial literature storage")
-                errors.append("Failed to establish MCP connection for initial literature storage")
-            else:
-                try:
-                    initial_storage_success = await self.database_integration.store_initial_literature_results(
-                        lit_review_id=search_query.lit_review_id,
-                        plan_id=search_query.plan_id,
-                        records=simplified_json_records  # Store simplified JSON instead of full records
-                    )
-                    if initial_storage_success:
-                        logger.info(f"🎉 INITIAL LITERATURE JSON STORED: {len(simplified_json_records)} simplified records in research_plans.initial_literature_results")
-                    else:
-                        logger.error("💥 INITIAL LITERATURE STORAGE FAILED: store_initial_literature_results returned False")
-                        errors.append("Failed to store initial literature results")
-                except Exception as e:
-                    logger.error(f"💥 INITIAL LITERATURE STORAGE EXCEPTION: {type(e).__name__}: {e}")
-                    logger.error(f"   └─ Failed to store initial literature results for plan_id={search_query.plan_id}")
-                    errors.append(f"Exception storing initial literature results: {e}")
+                logger.error(f"Exception while storing search terms: {e}", exc_info=True)
+                
+            return search_terms
         else:
-            missing_conditions = []
-            if not search_query.plan_id:
-                missing_conditions.append("no plan_id")
-            if not search_query.lit_review_id:
-                missing_conditions.append("no lit_review_id")
-            if not self.database_integration:
-                missing_conditions.append("no database_integration")
-            if not simplified_json_records:
-                missing_conditions.append("no simplified_json_records")
-            logger.warning(f"⚠️ SKIPPING INITIAL LITERATURE STORAGE: {', '.join(missing_conditions)}")
-        
-        # Rank documents by similarity to averaged query vector
-        # Initialize reviewed_records with fallback to simplified records (properly formatted)
-        reviewed_records: List[Dict[str, Any]] = []
-        if simplified_json_records:
-            # Create fallback records with the same format as ranked records
-            fallback_records = []
-            for i, doc in enumerate(simplified_json_records[:10]):
-                fallback_records.append({
-                    "Relevance Score": 0.0,  # Default score for fallback
-                    "Title": doc.get("title", ""),
-                    "Year": doc.get("year"),
-                    "Abstract": (doc.get("abstract", "")[:300] + "...") if len(doc.get("abstract", "")) > 300 else doc.get("abstract", "")
-                })
-            reviewed_records = fallback_records
-        
-        # Load sentence transformer model with offline fallback
-        try:
-            logger.info("Loading tokenizer and ONNX model...")
-            # Load tokenizer and ONNX session
-            tokenizer = AutoTokenizer.from_pretrained("/app/onnx_models/")
-            session = ort.InferenceSession("/app/onnx_models/model.onnx")
-
-            logger.info("Reviewing results...")
-            def get_embedding(text: str) -> np.ndarray:
-                try:
-                    if not text or not text.strip():
-                        # Return zero vector for empty text
-                        logger.debug("Empty text provided, returning zero vector")
-                        return np.zeros(384)  # MiniLM-L6-v2 has 384 dimensions
-                    
-                    # Truncate very long text to avoid memory issues
-                    max_length = 512  # BERT-style models typically handle 512 tokens max
-                    if len(text) > max_length * 4:  # Rough estimate: 4 chars per token
-                        text = text[:max_length * 4]
-                        logger.debug(f"Truncated text to {len(text)} characters")
-                    
-                    logger.debug(f"Tokenizing text of length {len(text)}")
-                    inputs = tokenizer(text, return_tensors="np", padding=True, truncation=True, max_length=max_length)
-                    
-                    logger.debug("Running ONNX inference...")
-                    outputs = session.run(None, {
-                        "input_ids": inputs["input_ids"],
-                        "attention_mask": inputs["attention_mask"]
-                    })
-                    
-                    logger.debug(f"ONNX inference completed, output shape: {outputs[0].shape}")
-                    result = np.mean(outputs[0], axis=1).squeeze()
-                    logger.debug(f"Final embedding shape: {result.shape}")
-                    return result
-                    
-                except Exception as e:
-                    logger.error(f"Error in get_embedding: {e}")
-                    logger.debug(f"Text that caused error: '{text[:100]}...'")
-                    # Return zero vector as fallback
-                    return np.zeros(384)
-            
-            logger.info("Computing embeddings...")
-            # Compute average embedding for all search terms
-            query_embeddings = []
-            for term in search_terms:
-                try:
-                    embedding = get_embedding(term)
-                    if np.any(embedding):  # Only add non-zero embeddings
-                        query_embeddings.append(embedding)
-                except Exception as e:
-                    logger.warning(f"Failed to compute embedding for term '{term}': {e}")
-                    
-            if not query_embeddings:
-                logger.warning("No valid query embeddings generated, skipping ranking")
-                raise ValueError("No valid query embeddings")
-                
-            avg_query_vector = np.mean(query_embeddings, axis=0)
-
-            logger.info("Ranking documents by relevance...")
-            logger.info(f"Processing {len(simplified_json_records)} documents for ranking...")
-            # Rank all documents
-            ranked = []
-            for i, doc in enumerate(simplified_json_records):
-                try:
-                    if i % 10 == 0:  # Log progress every 10 documents
-                        logger.info(f"Processing document {i+1}/{len(simplified_json_records)}")
-                    
-                    title = doc.get("title") or ""
-                    abstract = doc.get("abstract") or ""
-                    text = f"{title} {abstract}".strip()
-                    
-                    if not text:
-                        logger.debug(f"Skipping document {i+1} - no text content")
-                        continue  # Skip empty documents
-                    
-                    logger.debug(f"Computing embedding for document {i+1}: '{title[:50]}...'")
-                    doc_vector = get_embedding(text)
-                    logger.debug(f"Embedding computed for document {i+1}, shape: {doc_vector.shape}")
-
-                    # Check for zero vectors to avoid division by zero
-                    norm_q = np.linalg.norm(avg_query_vector)
-                    norm_d = np.linalg.norm(doc_vector)
-                    
-                    if norm_q == 0 or norm_d == 0:
-                        score = 0.0
-                        logger.debug(f"Zero vector detected for document {i+1}, setting score to 0.0")
-                    else:
-                        # Cosine similarity
-                        score = np.dot(avg_query_vector, doc_vector) / (norm_q * norm_d)
-                        logger.debug(f"Computed similarity score for document {i+1}: {score}")
-
-                    ranked.append({
-                        "Relevance Score": round(float(score), 4),
-                        "Title": title,
-                        "Year": doc.get("year"),
-                        "Abstract": abstract[:300] + "..." if len(abstract) > 300 else abstract
-                    })
-                    logger.debug(f"Document {i+1} successfully ranked with score: {round(float(score), 4)}")
-                except Exception as e:
-                    logger.warning(f"Failed to rank document {i+1} '{doc.get('title', 'Unknown')}': {e}")
-                    # Continue with next document
-
-            if not ranked:
-                logger.warning("No documents could be ranked successfully")
-                raise ValueError("No documents ranked")
-
-            logger.info(f"Successfully ranked {len(ranked)} documents")
-            logger.info(f"Creating DataFrame and sorting by relevance scores...")
-            # Sort and return top 10
-            df = pd.DataFrame(sorted(ranked, key=lambda x: x["Relevance Score"], reverse=True))
-            logger.info(f"DataFrame created with {len(df)} rows")
-            # Convert to proper type to avoid type errors
-            df_records = df.head(10).to_dict(orient='records')
-            logger.info(f"Converted top 10 records to dictionary format")
-            reviewed_records = [{str(k): v for k, v in record.items()} for record in df_records]
-            logger.info(f"Final reviewed_records prepared: {len(reviewed_records)} records")
-
-            logger.info(f"✅ Successfully ranked {len(reviewed_records)} records using ONNX model")
-            
-        except Exception as model_error:
-            logger.warning(f"⚠️ Failed to load ONNX model: {model_error}")
-            logger.info(f"Using fallback: first {len(reviewed_records)} records without ranking")
-
-        # Store reviewed literature results in database JSON format
-        logger.info(f"Checking storage conditions:")
-        logger.info(f"  - reviewed_records: {len(reviewed_records) if reviewed_records else 0} records")
-        logger.info(f"  - search_query.lit_review_id: {search_query.lit_review_id}")
-        logger.info(f"  - self.database_integration: {'Available' if self.database_integration else 'None'}")
-        
-        if reviewed_records and search_query.lit_review_id and self.database_integration:
-            logger.info(f"✅ All conditions met - storing {len(reviewed_records)} reviewed literature results in database JSON format")
-            
-            # Ensure MCP connection is active before attempting storage
-            connection_ready = await self._ensure_mcp_connection()
-            if not connection_ready:
-                error_msg = "Failed to establish MCP connection for database storage"
-                logger.error(f"❌ {error_msg}")
-                errors.append(error_msg)
+            logger.warning("No valid search terms returned from AI, using fallback")
+            if isinstance(search_query.query, list):
+                return search_query.query
             else:
-                # Retry storage operation
-                storage_success = False
-                max_storage_retries = 3
-                
-                for storage_attempt in range(max_storage_retries):
-                    try:
-                        logger.info(f"📤 Database storage attempt {storage_attempt + 1}/{max_storage_retries}")
-                        success = await self.database_integration.store_reviewed_literature_results(
-                            plan_id = search_query.plan_id, 
-                            reviewed_results = reviewed_records
-                        )
-                        
-                        if success:
-                            storage_success = True
-                            logger.info(f"🎉 REVIEWED LITERATURE JSON STORED: {len(reviewed_records)} records in research_plans.reviewed_literature_results")
-                            break
-                        else:
-                            logger.warning(f"⚠️ Storage attempt {storage_attempt + 1} failed, retrying...")
-                            if storage_attempt < max_storage_retries - 1:
-                                await asyncio.sleep(2)  # Wait before retry
-                                # Re-check connection before retry
-                                await self._ensure_mcp_connection()
-                                
-                    except Exception as storage_error:
-                        logger.error(f"❌ Storage attempt {storage_attempt + 1} failed with exception: {storage_error}")
-                        if storage_attempt < max_storage_retries - 1:
-                            await asyncio.sleep(2)
-                            await self._ensure_mcp_connection()
-                
-                if not storage_success:
-                    error_msg = f"Failed to store reviewed literature results after {max_storage_retries} attempts"
-                    logger.error(f"❌ {error_msg}")
-                    errors.append(error_msg)
-                else:
-                    # Final step: Reconcile full records with reviewed records and store in literature_records table
-                    # This matches the reviewed articles with their full record data for complete storage
-                    reviewed_ids = {record.get("id") for record in reviewed_records if record.get("id")}
-                    matching_full_records = [
-                        record for record in records_with_abstracts 
-                        if record.get("internal_id") in reviewed_ids
-                    ]
-                    
-                    logger.info(f"🔄 RECONCILIATION: {len(reviewed_records)} reviewed articles → {len(matching_full_records)} full records matched")
-                    
-                    if matching_full_records:
-                        literature_storage_errors = await self.database_integration.store_literature_records(
-                            records=matching_full_records, 
-                            search_query=search_query
-                        )
-                        if literature_storage_errors:
-                            logger.error(f"❌ Errors storing full literature records: {literature_storage_errors}")
-                            errors.extend(literature_storage_errors)
-                        else:
-                            logger.info(f"🎉 FULL LITERATURE RECORDS STORED: {len(matching_full_records)} complete records in literature_records table")
-                    else:
-                        logger.warning("⚠️ No matching full records found for reviewed articles")
+                return [search_query.query or "general research"]
+    
+    async def _review_with_ai(self, search_query: SearchQuery, search_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Review search results with AI agent and return filtered list."""
+        if search_results and self.ai_integration:
+            logger.info(f"Reviewing {len(search_results)} search results with AI agent")
+            literature_list = await self.ai_integration.review_literature_results(
+                plan=search_query.research_plan,
+                search_results=search_results
+            )
+            if not literature_list:
+                logger.warning("AI review returned no results, using original search results")
+                return search_results
+            return literature_list
         else:
+            logger.info("No AI integration available or no search results, using original search results")
+            return search_results or []
+    
+    async def _store_literature_results(self, search_query: SearchQuery, literature_list: List[Dict[str, Any]], errors: List[str]):
+        """Store literature results in database with retry logic."""
+        if not (literature_list and search_query.lit_review_id and self.database_integration):
             missing_conditions = []
-            if not reviewed_records:
-                missing_conditions.append("no reviewed_records")
+            if not literature_list:
+                missing_conditions.append("no literature_list")
             if not search_query.lit_review_id:
                 missing_conditions.append("no lit_review_id")
             if not self.database_integration:
                 missing_conditions.append("no database_integration")
             logger.warning(f"❌ Skipping literature storage due to: {', '.join(missing_conditions)}")
-        
-        end_time = datetime.now()
-        
-        # Create search report
-        search_report = SearchReport(
-            lit_review_id=search_query.lit_review_id,
-            total_fetched=total_fetched,
-            total_unique=len(records_with_abstracts),  # Updated to reflect filtering
-            per_source_counts=per_source_counts,
-            start_time=start_time,
-            end_time=end_time,
-            errors=errors,
-            records=reviewed_records  # Use reviewed records instead of unique_records
-        )
-        
-        logger.info(f"Literature search completed. Fetched {total_fetched} records, "
-                   f"{len(unique_records)} unique after deduplication, "
-                   f"{len(records_with_abstracts)} with abstracts, "
-                   f"{len(reviewed_records)} after AI review")
-        
-        return search_report
-    
-    async def _review_and_filter_records(self, search_query: SearchQuery, unique_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Review literature results using AI and filter to most relevant articles.
-        
-        Args:
-            search_query: The original search query containing research plan
-            unique_records: List of unique deduplicated records to review
+            return
             
-        Returns:
-            List of filtered records based on AI review, or original records if review fails
-        """
-        # Default to all unique records
-        reviewed_records = unique_records
+        logger.info(f"✅ Storing {len(literature_list)} reviewed literature results in database")
         
-        if not search_query.research_plan or not self.ai_integration or not unique_records:
-            logger.info("Skipping AI review: missing research plan, AI integration, or no records to review")
-            return reviewed_records
+        # Ensure MCP connection is active
+        connection_ready = await self._ensure_mcp_connection()
+        if not connection_ready:
+            error_msg = "Failed to establish MCP connection for database storage"
+            logger.error(f"❌ {error_msg}")
+            errors.append(error_msg)
+            return
         
-        logger.info(f"Reviewing {len(unique_records)} unique records using AI agent")
+        # Retry storage operation
+        max_storage_retries = 3
+        for storage_attempt in range(max_storage_retries):
+            try:
+                logger.info(f"📤 Database storage attempt {storage_attempt + 1}/{max_storage_retries}")
+                success = await self.database_integration.store_reviewed_literature_results(
+                    plan_id=search_query.plan_id, 
+                    reviewed_results=literature_list
+                )
+                
+                if success:
+                    logger.info(f"🎉 REVIEWED LITERATURE JSON STORED: {len(literature_list)} records")
+                    await self._store_full_records(search_query, literature_list, errors)
+                    return
+                else:
+                    logger.warning(f"⚠️ Storage attempt {storage_attempt + 1} failed, retrying...")
+                    if storage_attempt < max_storage_retries - 1:
+                        await asyncio.sleep(2)
+                        await self._ensure_mcp_connection()
+                        
+            except Exception as storage_error:
+                logger.error(f"❌ Storage attempt {storage_attempt + 1} failed with exception: {storage_error}")
+                if storage_attempt < max_storage_retries - 1:
+                    await asyncio.sleep(2)
+                    await self._ensure_mcp_connection()
+        
+        error_msg = f"Failed to store reviewed literature results after {max_storage_retries} attempts"
+        logger.error(f"❌ {error_msg}")
+        errors.append(error_msg)
+    
+    async def _store_full_records(self, search_query: SearchQuery, literature_list: List[Dict[str, Any]], errors: List[str]):
+        """Store full literature records."""
+        if not (literature_list and self.database_integration):
+            logger.warning("❌ Skipping full record storage: missing literature_list or database_integration")
+            return
+
+        logger.info(f"🔄 Storing {len(literature_list)} full literature records")
         
         try:
-            reviewed_articles = await self.ai_integration.review_literature_results(
-                research_plan=search_query.research_plan,
-                search_results=unique_records,
-                plan_id=search_query.plan_id
+            literature_storage_errors = await self.database_integration.store_literature_records(
+                records=literature_list, 
+                search_query=search_query
             )
-            
-            if not reviewed_articles:
-                logger.warning("AI review returned no results, using all unique records")
-                return reviewed_records
-            
-            logger.info(f"AI review completed: {len(reviewed_articles)} articles selected from {len(unique_records)} candidates")
-            
-            # Debug: Log a sample of what the AI returned
-            if reviewed_articles:
-                sample_article = reviewed_articles[0]
-                logger.debug(f"Sample AI-returned article: {sample_article}")
-                logger.debug(f"AI returned internal_id: {sample_article.get('id')}")
-            
-            # Debug: Log a sample of what we're trying to match against
-            if unique_records:
-                sample_record = unique_records[0]
-                logger.debug(f"Sample original record IDs: internal_id={sample_record.get('internal_id')}, external_id={sample_record.get('external_id')}, doi={sample_record.get('doi')}, url={sample_record.get('url')}")
-            
-            # Convert reviewed articles back to the same format as unique_records
-            # The AI returns articles in format [{"id": "...", "title": "...", "Abstract": "..."}]
-            # where "id" is now the internal_id, and we need to find matching records from unique_records
-            
-            # Create lookup sets for efficient matching
-            reviewed_internal_ids = set()
-            reviewed_titles = set()
-            
-            for article in reviewed_articles:
-                if article.get("id"):
-                    reviewed_internal_ids.add(article.get("id"))
-                if article.get("title"):
-                    reviewed_titles.add(article.get("title"))
-            
-            # Also create normalized title lookups for better matching
-            reviewed_titles_normalized = {self._normalize_title(article.get("title", "")) for article in reviewed_articles if article.get("title")}
-            
-            filtered_records = []
-            matched_count = 0
-            
-            for record in unique_records:
-                # Primary matching strategy: use internal_id (most reliable)
-                if record.get("internal_id") and record.get("internal_id") in reviewed_internal_ids:
-                    filtered_records.append(record)
-                    matched_count += 1
-                    continue
-                
-                # Fallback matching strategies for robustness
-                # 2. Match by external_id (if internal_id matching fails)
-                if record.get("external_id") and record.get("external_id") in reviewed_internal_ids:
-                    filtered_records.append(record)
-                    matched_count += 1
-                    continue
-                
-                # 3. Match by DOI (very reliable)
-                if record.get("doi") and record.get("doi") in reviewed_internal_ids:
-                    filtered_records.append(record)
-                    matched_count += 1
-                    continue
-                
-                # 4. Match by URL (fairly reliable)
-                if record.get("url") and record.get("url") in reviewed_internal_ids:
-                    filtered_records.append(record)
-                    matched_count += 1
-                    continue
-                
-                # 5. Match by exact title (good but can have formatting issues)
-                if record.get("title") and record.get("title") in reviewed_titles:
-                    filtered_records.append(record)
-                    matched_count += 1
-                    continue
-                
-                # 6. Match by normalized title (handles minor formatting differences)
-                normalized_record_title = self._normalize_title(record.get("title", ""))
-                if normalized_record_title and normalized_record_title in reviewed_titles_normalized:
-                    filtered_records.append(record)
-                    matched_count += 1
-                    continue
-            
-            logger.info(f"Record matching details: {matched_count} matches found from {len(reviewed_articles)} AI-selected articles")
-            
-            if filtered_records:
-                reviewed_records = filtered_records
-                logger.info(f"Successfully matched {len(filtered_records)} complete records from AI review")
+            if literature_storage_errors:
+                logger.error(f"❌ Errors storing full literature records: {literature_storage_errors}")
+                errors.extend(literature_storage_errors)
             else:
-                logger.warning("Could not match any AI-reviewed articles to original records, using all unique records")
-                
+                logger.info(f"🎉 FULL LITERATURE RECORDS STORED: {len(literature_list)} complete records")
         except Exception as e:
-            logger.error(f"Error during AI literature review: {e}")
-            logger.info("Falling back to using all unique records")
-        
-        return reviewed_records
-    
-    def _create_simplified_json_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Create simplified JSON records with only id, title, and abstract fields.
-        This is used for storing in the initial_literature_results column and for AI review.
-        
-        Args:
-            records: List of full normalized records
-            
-        Returns:
-            List of simplified records with only id, title, and abstract
-        """
-        # Limit to maximum of 250 records
-        limited_records = records[:250]
-        
-        simplified_records = []
-        for record in limited_records:
-            simplified_record = {
-                "id": record.get("internal_id"),  # Use internal_id for consistency
-                "title": record.get("title", ""),
-                "abstract": record.get("abstract", "")
-            }
-            simplified_records.append(simplified_record)
-        
-        if len(records) > 250:
-            logger.info(f"Limited records from {len(records)} to 250 for simplified JSON creation")
-        
-        logger.info(f"Created {len(simplified_records)} simplified JSON records for storage/AI review")
-        return simplified_records
+            error_msg = f"Failed to store full literature records: {e}"
+            logger.error(f"❌ {error_msg}")
+            errors.append(error_msg)
     
     def _normalize_title(self, title: str) -> str:
         """
@@ -999,51 +702,11 @@ class LiteratureSearchService:
         normalized = title.lower().strip()
         
         # Remove common punctuation and extra spaces
-        import re
         normalized = re.sub(r'[^\w\s]', ' ', normalized)  # Replace punctuation with spaces
         normalized = re.sub(r'\s+', ' ', normalized)      # Collapse multiple spaces
         normalized = normalized.strip()
         
         return normalized
-    
-    async def _search_source_with_terms(self, source: str, search_query: SearchQuery, search_terms: List[str]) -> List[Dict[str, Any]]:
-        """Search a specific source using multiple AI-optimized search terms."""
-        try:
-            if not self.search_engines:
-                logger.error("Search engines not initialized")
-                return []
-                
-            all_results = []
-            
-            # Search with each optimized term
-            for term in search_terms:
-                # Create a modified search query with the optimized term
-                modified_query = SearchQuery(
-                    lit_review_id=search_query.lit_review_id,
-                    query=term,
-                    filters=search_query.filters,
-                    sources=search_query.sources,
-                    max_results=max(10, search_query.max_results),
-                    search_depth=search_query.search_depth,
-                    research_plan=search_query.research_plan
-                )
-                
-                # Search with the modified query
-                results = await self.search_engines.search_source(source, modified_query)
-                
-                if results:
-                    all_results.extend(results)
-                    logger.info(f"Found {len(results)} results for term '{term}' in {source}")
-            
-            # Remove duplicates within this source's results
-            unique_results = self.deduplicator.deduplicate_source_results(all_results)
-            logger.info(f"Total unique results from {source} using AI search terms: {len(unique_results)}")
-            
-            return unique_results
-            
-        except Exception as e:
-            logger.error(f"Error searching {source} with AI terms: {e}")
-            return []
     
     async def _check_ai_agent_availability(self):
         """Check if AI agent is available via MCP for search term extraction."""
@@ -1068,3 +731,5 @@ class LiteratureSearchService:
         except Exception as e:
             logger.warning(f"Error checking AI agent availability: {e}")
             self.ai_agent_available = False
+
+

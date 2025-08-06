@@ -5,446 +5,119 @@ import time
 import json
 import requests
 import numpy as np
-import xml.etree.ElementTree as ET
 import re
 from tqdm import tqdm
-from sentence_transformers import SentenceTransformer, util
+import onnxruntime as ort
+from transformers import AutoTokenizer
 from dotenv import load_dotenv
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
 
-# Load environment variables
-load_dotenv()
+@dataclass
+class SearchQuery:
+    """Search query data model for literature search requests."""
+    lit_review_id: str
+    plan_id: str = ""
+    research_plan: Dict[str, Any] = field(default_factory=dict)
+    query: List[str] = field(default_factory=list)
+    filters: Dict[str, Any] = field(default_factory=dict)
+    sources: List[str] = field(default_factory=list)
+    max_results: int = 50
+    search_depth: str = "standard"
 
-# --- Configuration ---
-SIMILARITY_QUANTILE = 0.8
-TOP_K_TERMS = 5
-MAX_RETRIES = 5
-BACKOFF_BASE = 5
-SEARCH_LIMIT = 25
-YEAR_RANGE = (2000, 2025)  # Adjust as needed
 
-# API Keys
-NCBI_API_KEY = os.getenv('NCBI_API_KEY')
-OPENALEX_EMAIL = os.getenv('OPENALEX_EMAIL')
-CORE_API_KEY = os.getenv('CORE_API_KEY')
+# Import search engine functions
+from search_engines import (
+    query_openalex, query_pubmed, query_arxiv, query_core,
+    SIMILARITY_QUANTILE, TOP_K_TERMS, MAX_RETRIES, BACKOFF_BASE, SEARCH_LIMIT, YEAR_RANGE,
+    NCBI_API_KEY, OPENALEX_EMAIL, CORE_API_KEY
+)
 
+# Load environment variables (needed for this file's functions)
+# Look for .env file in parent directory (repository root)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 # Print API key status
 print(f"NCBI API Key: {'✓ Found' if NCBI_API_KEY else '✗ Not found'}")
-print(f"OpenAlex Email: {OPENALEX_EMAIL}")
+print(f"OpenAlex Email: {OPENALEX_EMAIL if OPENALEX_EMAIL else '✗ Not configured'}")
 print(f"CORE API Key: {'✓ Found' if CORE_API_KEY else '✗ Not found'}")
-
-# --- Embedding Model ---
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # --- Rank Phrases ---
 def rank_phrases(plan, phrases, top_k):
-    plan_emb = model.encode(plan, convert_to_tensor=True)
-    phrase_embs = model.encode(phrases, convert_to_tensor=True)
-    scores = util.cos_sim(plan_emb, phrase_embs)[0].cpu().numpy()
-    return sorted(zip(phrases, scores), key=lambda x: x[1], reverse=True)[:top_k]
+    print("Loading tokenizer and ONNX model...")
+    # Load tokenizer and ONNX session
+    tokenizer = AutoTokenizer.from_pretrained("./onnx_models/")
+    session = ort.InferenceSession("./onnx_models/model.onnx")
 
-# --- API Query ---
-def query_openalex(term, limit=SEARCH_LIMIT):
-    """Query OpenAlex API for papers."""
-    retries = 0
-    while retries < MAX_RETRIES:
-        url = "https://api.openalex.org/works"
+    print("Reviewing results...")
+    def get_embedding(text: str) -> np.ndarray:
+        try:
+            if not text or not text.strip():
+                # Return zero vector for empty text
+                print("Empty text provided, returning zero vector")
+                return np.zeros(384)  # MiniLM-L6-v2 has 384 dimensions
+            
+            # Truncate very long text to avoid memory issues
+            max_length = 512  # BERT-style models typically handle 512 tokens max
+            if len(text) > max_length * 4:  # Rough estimate: 4 chars per token
+                text = text[:max_length * 4]
+                print(f"Truncated text to {len(text)} characters")
+            
+            # print(f"Tokenizing text of length {len(text)}")
+            inputs = tokenizer(text, return_tensors="np", padding=True, truncation=True, max_length=max_length)
+            
+            # print("Running ONNX inference...")
+            outputs = session.run(None, {
+                "input_ids": inputs["input_ids"],
+                "attention_mask": inputs["attention_mask"]
+            })
+            
+            # print(f"ONNX inference completed, output shape: {outputs[0].shape}")
+            result = np.mean(outputs[0], axis=1).squeeze()
+            # print(f"Final embedding shape: {result.shape}")
+            return result
+            
+        except Exception as e:
+            print(f"Error in get_embedding: {e}")
+            print(f"Text that caused error: '{text[:100]}...'")
+            # Return zero vector as fallback
+            return np.zeros(384)
         
-        params = {
-            'search': term,
-            'filter': 'type:article',  # Only research articles
-            'sort': 'relevance_score:desc',
-            'per-page': str(limit),
-            'page': '1',
-            'mailto': OPENALEX_EMAIL  # Access polite pool for better performance
-        }
+    print("Computing embeddings...")
+    # Compute average embedding for all search terms
+    query_embeddings = []
+    for term in phrases:
+        try:
+            embedding = get_embedding(term)
+            if np.any(embedding):  # Only add non-zero embeddings
+                query_embeddings.append(embedding)
+        except Exception as e:
+            print(f"Failed to compute embedding for term '{term}': {e}")
+
+    if not query_embeddings:
+        print("No valid query embeddings generated, skipping ranking")
+        raise ValueError("No valid query embeddings")
+    
+    # Compute plan embedding for comparison
+    print("Computing plan embedding...")
+    plan_embedding = get_embedding(plan)
+    
+    # Compute cosine similarity between each phrase and the plan
+    scores = []
+    for embedding in query_embeddings:
+        # Compute cosine similarity using numpy with safety checks
+        dot_product = np.dot(plan_embedding, embedding)
+        norm_plan = np.linalg.norm(plan_embedding)
+        norm_embedding = np.linalg.norm(embedding)
         
-        time.sleep(0.1)  # OpenAlex allows 10 requests/second
-        r = requests.get(url, params=params)
-        
-        if r.status_code == 200:
-            data = r.json()
-            results = data.get("results", [])
-            # Transform OpenAlex results to match expected format
-            transformed_results = []
-            for result in results:
-                # Convert abstract inverted index to plain text
-                abstract_text = ""
-                abstract_index = result.get('abstract_inverted_index', {})
-                if abstract_index:
-                    # Reconstruct abstract from inverted index
-                    words = [""] * 1000  # Pre-allocate for efficiency
-                    max_pos = 0
-                    for word, positions in abstract_index.items():
-                        for pos in positions:
-                            if pos < len(words):
-                                words[pos] = word
-                                max_pos = max(max_pos, pos)
-                    abstract_text = " ".join(words[:max_pos + 1]).strip()
-                
-                # Extract authors
-                authors = []
-                for authorship in result.get('authorships', []):
-                    author = authorship.get('author', {})
-                    if author.get('display_name'):
-                        authors.append({'name': author['display_name']})
-                
-                # Extract external IDs
-                ids = result.get('ids', {})
-                external_ids = {}
-                if ids.get('doi'):
-                    external_ids['DOI'] = ids['doi']
-                if ids.get('pmid'):
-                    external_ids['PMID'] = ids['pmid']
-                
-                transformed_result = {
-                    'paperId': result.get('id', '').replace('https://openalex.org/', ''),
-                    'title': result.get('title') or result.get('display_name', ''),
-                    'abstract': abstract_text,
-                    'authors': authors,
-                    'year': result.get('publication_year'),
-                    'externalIds': external_ids,
-                    'references': result.get('referenced_works', []),  # OpenAlex provides references
-                    'url': result.get('primary_location', {}).get('pdf_url')  # PDF URL from OpenAlex
-                }
-                transformed_results.append(transformed_result)
-            return transformed_results
-        elif r.status_code == 429:
-            delay = BACKOFF_BASE * 2**retries
-            print(f"OpenAlex rate limited. Retrying in {delay}s...")
-            time.sleep(delay)
-            retries += 1
+        # Avoid division by zero
+        if norm_plan == 0 or norm_embedding == 0:
+            similarity_score = 0.0
         else:
-            print(f"OpenAlex API error: HTTP {r.status_code}")
-            break
-    print(f"Failed to query OpenAlex for term: {term}")
-    return []
+            similarity_score = dot_product / (norm_plan * norm_embedding)
+        scores.append(float(similarity_score))
 
-def query_pubmed(term, limit=SEARCH_LIMIT):
-    """Query PubMed API for papers."""
-    retries = 0
-    while retries < MAX_RETRIES:
-        try:
-            # First, search for IDs
-            search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-            
-            # Add year filter to the search term
-            year_filter = f" AND {YEAR_RANGE[0]}:{YEAR_RANGE[1]}[dp]"
-            search_term = term + year_filter
-            
-            search_params = {
-                'db': 'pubmed',
-                'term': search_term,
-                'retmax': limit,
-                'retmode': 'json'
-            }
-            
-            # Add API key if available
-            if NCBI_API_KEY:
-                search_params['api_key'] = NCBI_API_KEY
-            
-            time.sleep(1 if NCBI_API_KEY else 2)  # Faster rate limit with API key
-            r = requests.get(search_url, params=search_params)
-            
-            if r.status_code == 200:
-                search_data = r.json()
-                id_list = search_data.get('esearchresult', {}).get('idlist', [])
-                
-                if not id_list:
-                    return []
-                
-                # Fetch details for the IDs
-                fetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-                fetch_params = {
-                    'db': 'pubmed',
-                    'id': ','.join(id_list),
-                    'retmode': 'xml'
-                }
-                
-                # Add API key if available
-                if NCBI_API_KEY:
-                    fetch_params['api_key'] = NCBI_API_KEY
-                
-                time.sleep(1 if NCBI_API_KEY else 2)  # Faster rate limit with API key
-                r = requests.get(fetch_url, params=fetch_params)
-                
-                if r.status_code == 200:
-                    return parse_pubmed_xml(r.text)
-                else:
-                    print(f"PubMed fetch failed with status {r.status_code}")
-                    return []
-                    
-            elif r.status_code == 429:
-                delay = BACKOFF_BASE * 2**retries
-                print(f"PubMed rate limited. Retrying in {delay}s...")
-                time.sleep(delay)
-                retries += 1
-            else:
-                break
-                
-        except Exception as e:
-            print(f"Error querying PubMed: {e}")
-            break
-            
-    print(f"Failed to query PubMed for term: {term}")
-    return []
-
-def query_arxiv(term, limit=SEARCH_LIMIT):
-    """Query arXiv API for papers."""
-    retries = 0
-    while retries < MAX_RETRIES:
-        try:
-            url = "http://export.arxiv.org/api/query"
-            
-            # Build search query
-            query_parts = term.split()
-            if len(query_parts) > 1:
-                search_query = f'all:"{term}"'
-            else:
-                search_query = f'all:{term}'
-            
-            params = {
-                'search_query': search_query,
-                'start': 0,
-                'max_results': limit,
-                'sortBy': 'relevance',
-                'sortOrder': 'descending'
-            }
-            
-            time.sleep(5)  # arXiv rate limit
-            r = requests.get(url, params=params)
-            
-            if r.status_code == 200:
-                return parse_arxiv_xml(r.text)
-            elif r.status_code == 429:
-                delay = BACKOFF_BASE * 2**retries
-                print(f"arXiv rate limited. Retrying in {delay}s...")
-                time.sleep(delay)
-                retries += 1
-            else:
-                break
-                
-        except Exception as e:
-            print(f"Error querying arXiv: {e}")
-            break
-            
-    print(f"Failed to query arXiv for term: {term}")
-    return []
-
-def query_core(term, limit=SEARCH_LIMIT):
-    """Search CORE API."""
-    retries = 0
-    while retries < MAX_RETRIES:
-        try:
-            url = "https://api.core.ac.uk/v3/search/works"
-
-            # Simplify the query - remove complex syntax that's causing issues
-            params = {
-                'q': term,  # Use simple term without complex syntax
-                'limit': limit,
-            }
-            
-            # Add API key as query parameter if available
-            if CORE_API_KEY:
-                params['apiKey'] = CORE_API_KEY
-
-            r = requests.get(url, params=params)
-
-            if r.status_code == 200:
-                return parse_core_json(r.text)
-            elif r.status_code == 429:
-                delay = BACKOFF_BASE * 2**retries
-                print(f"  CORE rate limited. Retrying in {delay}s...")
-                time.sleep(delay)
-                retries += 1
-            else:
-                break
-                
-        except Exception as e:
-            print(f"Error querying CORE: {e}")
-            break
-
-    print(f"  Failed to query CORE for term: {term}")
-    return []
-        
-# --- XML Parsers ---
-def parse_pubmed_xml(xml_content):
-    """Parse PubMed XML response."""
-    try:
-        root = ET.fromstring(xml_content)
-        entries = []
-        
-        for article in root.findall('.//PubmedArticle'):
-            try:
-                # Extract basic information
-                title_elem = article.find('.//ArticleTitle')
-                abstract_elem = article.find('.//AbstractText')
-                pmid_elem = article.find('.//PMID')
-                
-                # Extract authors
-                authors = []
-                for author in article.findall('.//Author'):
-                    lastname = author.find('LastName')
-                    forename = author.find('ForeName')
-                    if lastname is not None and forename is not None:
-                        if lastname.text and forename.text:
-                            authors.append(f"{forename.text} {lastname.text}")
-                
-                # Extract publication year
-                year_elem = article.find('.//PubDate/Year')
-                
-                # Extract journal
-                journal_elem = article.find('.//Journal/Title')
-                
-                # Extract DOI
-                doi_elem = article.find('.//ArticleId[@IdType="doi"]')
-                
-                record = {
-                    'title': title_elem.text if title_elem is not None and title_elem.text else None,
-                    'abstract': abstract_elem.text if abstract_elem is not None and abstract_elem.text else None,
-                    'authors': [{'name': name} for name in authors],
-                    'pmid': pmid_elem.text if pmid_elem is not None and pmid_elem.text else None,
-                    'year': int(year_elem.text) if year_elem is not None and year_elem.text else None,
-                    'journal': journal_elem.text if journal_elem is not None and journal_elem.text else None,
-                    'externalIds': {'DOI': doi_elem.text} if doi_elem is not None and doi_elem.text else {},
-                    'references': [],  # PubMed doesn't include references in basic fetch
-                    'url': f"https://pubmed.ncbi.nlm.nih.gov/{pmid_elem.text}/" if pmid_elem is not None and pmid_elem.text else None
-                }
-                entries.append(record)
-                
-            except Exception as e:
-                print(f"Error parsing PubMed entry: {e}")
-                continue
-        
-        return entries
-        
-    except Exception as e:
-        print(f"Error parsing PubMed XML: {e}")
-        return []
-
-def parse_arxiv_xml(xml_content):
-    """Parse arXiv XML response."""
-    try:
-        root = ET.fromstring(xml_content)
-        entries = []
-        
-        # arXiv uses Atom namespace
-        ns = {'atom': 'http://www.w3.org/2005/Atom'}
-        
-        for entry in root.findall('atom:entry', ns):
-            try:
-                title = entry.find('atom:title', ns)
-                summary = entry.find('atom:summary', ns)
-                published = entry.find('atom:published', ns)
-                
-                authors = []
-                for author in entry.findall('atom:author', ns):
-                    name = author.find('atom:name', ns)
-                    if name is not None and name.text:
-                        authors.append({'name': name.text.strip()})
-                
-                # Extract arXiv ID from id
-                entry_id = entry.find('atom:id', ns)
-                arxiv_id = None
-                if entry_id is not None and entry_id.text:
-                    # Extract ID from URL like http://arxiv.org/abs/2301.12345v1
-                    match = re.search(r'abs/([0-9]+\.[0-9]+)', entry_id.text)
-                    if match:
-                        arxiv_id = match.group(1)
-                
-                # Extract year from published date
-                year = None
-                if published is not None and published.text:
-                    try:
-                        year = int(published.text[:4])
-                    except:
-                        pass
-                
-                record = {
-                    'title': title.text.strip() if title is not None and title.text else None,
-                    'abstract': summary.text.strip() if summary is not None and summary.text else None,
-                    'authors': authors,
-                    'year': year,
-                    'arxiv_id': arxiv_id,
-                    'externalIds': {'ArXiv': arxiv_id} if arxiv_id else {},
-                    'references': [],  # arXiv doesn't include references
-                    'url': f"https://arxiv.org/pdf/{arxiv_id}.pdf" if arxiv_id else None
-                }
-                entries.append(record)
-                
-            except Exception as e:
-                print(f"Error parsing arXiv entry: {e}")
-                continue
-        
-        return entries
-        
-    except Exception as e:
-        print(f"Error parsing arXiv XML: {e}")
-        return []
-
-def parse_core_json(json_content):
-    """Parse CORE API JSON response."""
-    try:
-        data = json.loads(json_content)
-        entries = []
-        
-        # CORE API v3 returns results in 'results' array
-        results = data.get('results', [])
-        
-        for result in results:
-            try:
-                # Extract basic information
-                title = result.get('title')
-                abstract = result.get('abstract')
-                
-                # Extract authors
-                authors = []
-                for author in result.get('authors', []):
-                    if isinstance(author, dict):
-                        name = author.get('name')
-                        if name:
-                            authors.append({'name': name})
-                    elif isinstance(author, str):
-                        authors.append({'name': author})
-                
-                # Extract publication year
-                year = result.get('yearPublished')
-                if isinstance(year, str):
-                    try:
-                        year = int(year)
-                    except:
-                        year = None
-                
-                # Extract DOI and other IDs
-                external_ids = {}
-                doi = result.get('doi')
-                if doi:
-                    external_ids['DOI'] = doi
-                
-                # Extract URLs
-                download_url = result.get('downloadUrl')
-                
-                record = {
-                    'paperId': result.get('id'),
-                    'title': title,
-                    'abstract': abstract,
-                    'authors': authors,
-                    'year': year,
-                    'externalIds': external_ids,
-                    'references': [],  # CORE doesn't include references in basic search
-                    'url': download_url
-                }
-                entries.append(record)
-                
-            except Exception as e:
-                print(f"Error parsing CORE entry: {e}")
-                continue
-        
-        return entries
-        
-    except Exception as e:
-        print(f"Error parsing CORE JSON: {e}")
-        return []
+    return sorted(zip(phrases, scores), key=lambda x: x[1], reverse=True)[:top_k]
 
 # --- Document Scoring ---
 def score_documents(plan, docs):
@@ -452,16 +125,69 @@ def score_documents(plan, docs):
     missing_abstract = sum(1 for doc in docs if doc.get('abstract') is None)
     if missing_title or missing_abstract:
         print(f"[WARN] {missing_title} docs missing title, {missing_abstract} docs missing abstract.")
+    
+    # Load tokenizer and ONNX session for document scoring
+    tokenizer = AutoTokenizer.from_pretrained("./onnx_models/")
+    session = ort.InferenceSession("./onnx_models/model.onnx")
+    
+    def get_embedding(text: str) -> np.ndarray:
+        try:
+            if not text or not text.strip():
+                # Return zero vector for empty text
+                return np.zeros(384)  # MiniLM-L6-v2 has 384 dimensions
+            
+            # Truncate very long text to avoid memory issues
+            max_length = 512  # BERT-style models typically handle 512 tokens max
+            if len(text) > max_length * 4:  # Rough estimate: 4 chars per token
+                text = text[:max_length * 4]
+            
+            inputs = tokenizer(text, return_tensors="np", padding=True, truncation=True, max_length=max_length)
+            
+            outputs = session.run(None, {
+                "input_ids": inputs["input_ids"],
+                "attention_mask": inputs["attention_mask"]
+            })
+            
+            result = np.mean(outputs[0], axis=1).squeeze()
+            return result
+            
+        except Exception as e:
+            print(f"Error in get_embedding for document scoring: {e}")
+            # Return zero vector as fallback
+            return np.zeros(384)
+    
     texts = [
         (str(doc.get('title')) if doc.get('title') else "") + ". " + (str(doc.get('abstract')) if doc.get('abstract') else "")
         for doc in docs
     ]
-    plan_emb = model.encode(plan, convert_to_tensor=True)
-    doc_embs = model.encode(texts, convert_to_tensor=True)
-    scores = util.cos_sim(plan_emb, doc_embs)[0].cpu().numpy()
+    
+    # Get plan embedding using ONNX model
+    plan_emb = get_embedding(plan)
+    
+    # Get document embeddings using ONNX model
+    doc_embeddings = []
+    for text in texts:
+        doc_emb = get_embedding(text)
+        doc_embeddings.append(doc_emb)
+    
+    # Compute cosine similarity scores
+    scores = []
+    for doc_emb in doc_embeddings:
+        # Compute cosine similarity using numpy with safety checks
+        dot_product = np.dot(plan_emb, doc_emb)
+        norm_plan = np.linalg.norm(plan_emb)
+        norm_doc = np.linalg.norm(doc_emb)
+        
+        # Avoid division by zero
+        if norm_plan == 0 or norm_doc == 0:
+            similarity = 0.0
+        else:
+            similarity = dot_product / (norm_plan * norm_doc)
+        scores.append(float(similarity))
+    
     for doc, score in zip(docs, scores):
-        doc['score'] = float(score)
-    print(f"Scored {len(docs)} documents")
+        doc['score'] = score
+    print(f"Scored {len(docs)} documents using ONNX model")
     return docs
 
 def filter_high_docs(docs, quantile):
@@ -503,6 +229,13 @@ def extract_citing_papers(docs, limit_per_paper=10):
     docs_with_citations = 0
     total_citations = 0
     
+    # Check if we have a valid email for OpenAlex
+    if not OPENALEX_EMAIL:
+        print("[WARN] No OpenAlex email configured. This may cause 403 errors.")
+        print("[INFO] Set OPENALEX_EMAIL environment variable to avoid rate limiting.")
+    else:
+        print(f"[INFO] Using OpenAlex email: {OPENALEX_EMAIL}")
+    
     for doc in docs:
         paper_id = doc.get('paperId')
         if not paper_id:
@@ -514,6 +247,8 @@ def extract_citing_papers(docs, limit_per_paper=10):
         # Ensure we have a full OpenAlex ID
         if not paper_id.startswith('https://openalex.org/'):
             paper_id = f"https://openalex.org/{paper_id}"
+        
+        print(f"[DEBUG] Fetching citations for paper: {paper_id}")
             
         retries = 0
         while retries < MAX_RETRIES:
@@ -523,11 +258,21 @@ def extract_citing_papers(docs, limit_per_paper=10):
                 params = {
                     'filter': f'cites:{paper_id}',
                     'per_page': limit_per_paper,
-                    'mailto': OPENALEX_EMAIL  # Access polite pool for better performance
                 }
+                
+                # Only add mailto if we have a valid email
+                if OPENALEX_EMAIL:
+                    params['mailto'] = OPENALEX_EMAIL
+                
+                print(f"[DEBUG] Request URL: {url}")
+                print(f"[DEBUG] Request params: {params}")
                 
                 time.sleep(0.1)  # OpenAlex rate limiting (10 req/sec)
                 r = requests.get(url, params=params)
+                
+                print(f"[DEBUG] Response status: {r.status_code}")
+                if r.status_code != 200:
+                    print(f"[DEBUG] Response text: {r.text[:200]}...")  # First 200 chars of error
                 
                 if r.status_code == 200:
                     data = r.json()
@@ -545,6 +290,10 @@ def extract_citing_papers(docs, limit_per_paper=10):
                     print(f"OpenAlex citations API rate limited. Retrying in {delay}s...")
                     time.sleep(delay)
                     retries += 1
+                elif r.status_code == 403:
+                    print(f"OpenAlex API access forbidden (403). Check email configuration and API usage.")
+                    print(f"Paper ID: {paper_id}")
+                    break  # Don't retry 403 errors
                 else:
                     print(f"Failed to get citations for paper from OpenAlex: HTTP {r.status_code}")
                     break  # Non-retryable error
@@ -575,9 +324,10 @@ def fetch_abstract(paper_id):
         # OpenAlex API endpoint for getting work by ID
         url = f"https://api.openalex.org/works/{clean_id}"
         
-        params = {
-            'mailto': OPENALEX_EMAIL  # Access polite pool for better performance
-        }
+        params = {}
+        # Only add mailto if we have a valid email
+        if OPENALEX_EMAIL:
+            params['mailto'] = OPENALEX_EMAIL
         
         time.sleep(0.1)  # OpenAlex rate limiting
         r = requests.get(url, params=params)
@@ -681,41 +431,22 @@ def fetch_and_score_papers(paper_ids, plan_text, expansion_type, description):
     return high_docs
 
 # --- Main Pipeline ---
-def main():
+async def search_source(source: str, search_query: SearchQuery) -> List[Dict[str, Any]]:
 
-    candidates = ["avian neuron culturing techniques", 
-            "culturing media for avian neurons", 
-            "ingredients for avian neuronal culture", 
-            "biochemical properties of neuronal culturing media", 
-            "impact of media formulations on neuronal viability", 
-            "optimal concentrations for avian neuron growth", 
-            "growth and viability assays for avian neurons", 
-            "methodologies for assessing neuronal health", 
-            "neuron differentiation in avian culture systems"]
-
-    with open("plan.json") as f:
-        plan_data = json.load(f)
-
-    # Combine semantically rich fields
-    plan_sections = plan_data.get("outcomes", []) + \
-                    plan_data.get("objectives", []) + \
-                    plan_data.get("key_areas", []) + \
-                    plan_data.get("questions", [])
-    print(f"Loaded plan.json: outcomes={len(plan_data.get('outcomes', []))}, objectives={len(plan_data.get('objectives', []))}, key_areas={len(plan_data.get('key_areas', []))}, questions={len(plan_data.get('questions', []))}")
+    # Extract relevant information from the search query
+    plan_sections = search_query.research_plan.get("outcomes", []) + \
+                    search_query.research_plan.get("objectives", []) + \
+                    search_query.research_plan.get("key_areas", []) + \
+                    search_query.research_plan.get("questions", [])
     plan_text = " ".join(plan_sections)
-    print(f"Combined plan text length: {len(plan_text)}")
-
-    print(f"Extracted {len(candidates)} candidate terms.")
-    if not candidates:
-        print("[WARN] No candidate terms extracted. Exiting.")
-        return
+    candidates = search_query.query
 
     ranked = rank_phrases(plan_text, candidates, TOP_K_TERMS)
     top_terms = [term for term, _ in ranked]
     print(f"Top {TOP_K_TERMS} terms: {top_terms}")
     if not top_terms:
         print("[WARN] No top terms after ranking. Exiting.")
-        return
+        return []
 
     print("Querying initial papers from all databases...")
     all_docs = []
@@ -740,7 +471,7 @@ def main():
     print(f"Total papers found across all databases: {len(all_docs)}")
     if not all_docs:
         print("[WARN] No papers found for any top term across all databases. Exiting.")
-        return
+        return []
 
     # Remove duplicates and score documents
     print("Removing duplicates and scoring documents...")
@@ -760,7 +491,7 @@ def main():
     
     if not unique_docs:
         print("[WARN] No unique papers after deduplication. Exiting.")
-        return
+        return []
     
     # Score and filter documents
     scored_docs = score_documents(plan_text, unique_docs)
@@ -769,7 +500,7 @@ def main():
     
     if not high_docs:
         print("[WARN] No high scoring docs after filtering. Exiting.")
-        return
+        return []
 
     print(f"Top score cutoff: {cutoff:.3f}. Expanding via references and citations...")
     
@@ -777,7 +508,7 @@ def main():
     print("Extracting references...")
     paper_ids = extract_references(high_docs)
     print(f"Extracted {len(paper_ids)} unique reference paper IDs.")
-    
+
     print("Extracting citing papers...")
     citing_paper_ids = extract_citing_papers(high_docs, limit_per_paper=10)
     print(f"Extracted {len(citing_paper_ids)} unique citing paper IDs.")
@@ -785,7 +516,7 @@ def main():
     # Combine and process expansion papers
     all_expansion_ids = list(set(paper_ids + citing_paper_ids))
     print(f"Total unique papers for expansion: {len(all_expansion_ids)} (references + citations)")
-    
+    # print(f"Reference IDs: {all_expansion_ids})")
     # Mark expansion type for each paper
     expansion_papers = []
     for pid in all_expansion_ids:
@@ -819,6 +550,52 @@ def main():
         print("[WARN] No valid papers found in round 1 expansion.")
         final_docs = []
 
+    return final_docs
+
+
+if __name__ == "__main__":
+
+    candidates = ["avian neuron culturing techniques", 
+            "culturing media for avian neurons", 
+            "ingredients for avian neuronal culture", 
+            "biochemical properties of neuronal culturing media", 
+            "impact of media formulations on neuronal viability", 
+            "optimal concentrations for avian neuron growth", 
+            "growth and viability assays for avian neurons", 
+            "methodologies for assessing neuronal health", 
+            "neuron differentiation in avian culture systems"]
+
+    with open("plan.json") as f:
+        plan_data = json.load(f)
+
+    # Combine semantically rich fields
+    plan_sections = plan_data.get("outcomes", []) + \
+                    plan_data.get("objectives", []) + \
+                    plan_data.get("key_areas", []) + \
+                    plan_data.get("questions", [])
+    print(f"Loaded plan.json: outcomes={len(plan_data.get('outcomes', []))}, objectives={len(plan_data.get('objectives', []))}, key_areas={len(plan_data.get('key_areas', []))}, questions={len(plan_data.get('questions', []))}")
+    plan_text = " ".join(plan_sections)
+    print(f"Combined plan text length: {len(plan_text)}")
+
+    print(f"Extracted {len(candidates)} candidate terms.")
+    if not candidates:
+        print("[WARN] No candidate terms extracted. Exiting.")
+        exit(1)
+
+    search_query = SearchQuery(
+        lit_review_id="example_review",
+        plan_id="example_plan",
+        research_plan=plan_data,
+        query=candidates,
+        sources=[],
+        max_results=SEARCH_LIMIT,
+        search_depth="standard"
+    )
+
+    # Run the search (since we can't use async in main, we'll call it synchronously)
+    import asyncio
+    final_docs = asyncio.run(search_source("all", search_query))
+    
     with open("output.json", "w") as f:
         json.dump(final_docs, f, indent=2)
     
@@ -839,7 +616,5 @@ def main():
     print("Final results by discovery method:")
     for exp_type, count in expansion_counts.items():
         print(f"  {exp_type}: {count} papers")
+    
 
-
-if __name__ == "__main__":
-    main()
