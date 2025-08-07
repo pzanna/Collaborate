@@ -14,7 +14,7 @@ import json
 import logging
 import os
 import ssl
-import time
+import sys
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
