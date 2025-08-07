@@ -21,25 +21,25 @@ from .models import SearchQuery
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
-# Import constants from experiments search_engines
+# Import constants from local search_engines module
 try:
-    logger.debug("Attempting to import constants from experiments.search_engines")
-    from experiments.search_engines import (
+    logger.debug("Attempting to import constants from local search_engines")
+    from .search_engines import (
         SIMILARITY_QUANTILE, TOP_K_TERMS, MAX_RETRIES, BACKOFF_BASE, 
         SEARCH_LIMIT, YEAR_RANGE, NCBI_API_KEY, OPENALEX_EMAIL, CORE_API_KEY,
         query_openalex, query_pubmed, query_arxiv, query_core
     )
-    logger.info("Successfully imported constants and query functions from experiments.search_engines")
+    logger.info("Successfully imported constants and query functions from local search_engines")
 except ImportError as e:
-    logger.warning(f"Failed to import from experiments.search_engines: {e}")
+    logger.warning(f"Failed to import from local search_engines: {e}")
     logger.info("Using fallback constants and functions")
-    # Fallback constants if experiments module not available
+    # Fallback constants if local module not available
     SIMILARITY_QUANTILE = 0.8
-    TOP_K_TERMS = 1
-    MAX_RETRIES = 5
-    BACKOFF_BASE = 5
-    SEARCH_LIMIT = 25
-    YEAR_RANGE = (2000, 2025)
+    TOP_K_TERMS = 1     # How many top search terms to use.
+    MAX_RETRIES = 5     # Maximum number of retries for API calls
+    BACKOFF_BASE = 5    # Starting backoff time in seconds
+    SEARCH_LIMIT = 5    # Limit for search results per search term
+    YEAR_RANGE = (2000, 2025)   # Default year range for searches
     NCBI_API_KEY = os.getenv('NCBI_API_KEY')
     OPENALEX_EMAIL = os.getenv('OPENALEX_EMAIL')
     CORE_API_KEY = os.getenv('CORE_API_KEY')

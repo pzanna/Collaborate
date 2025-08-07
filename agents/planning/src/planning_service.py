@@ -429,7 +429,7 @@ class PlanningAgentService:
             "questions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
             "sources": ["PubMed", "ArXiv", "Semantic Scholar", "CORE", "CrossRef", "OpenAlex"],
             "timeline": {{
-                "total_days": 14,
+                "total_hours": 14,
                 "phases": {{
                     "literature_search": 3,
                     "data_collection": 5,
@@ -442,6 +442,7 @@ class PlanningAgentService:
         
         Please be thorough and consider all relevant aspects of the research topic.
         Ensure the plan is realistic and executable within the given timeframe. 
+        Do NOT include cost or dollar amounts in the response.
         Do NOT include the labels `Questions 1`, `Objective 1`, etc. in the output.
         """
         
@@ -654,12 +655,39 @@ class PlanningAgentService:
                             {"role": "system", "content": "You are a research planning assistant. Provide detailed, structured responses in JSON format."},
                             {"role": "user", "content": prompt}
                         ],
-                        "temperature": 0.7,
-                        "max_tokens": 2000
+                        "tools": [
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": "google_search",
+                                    "description": "Search the web using Google Custom Search to find recent research, discover additional relevant studies, and find similar work.",
+                                    "parameters": {
+                                        "type": "object",
+                                        "properties": {
+                                            "query": {
+                                                "type": "string",
+                                                "description": "The search query to find relevant research data and studies"
+                                            },
+                                            "num_results": {
+                                                "type": "integer",
+                                                "description": "Number of search results to return (default: 10, max: 10)",
+                                                "default": 10,
+                                                "minimum": 1,
+                                                "maximum": 10
+                                            }
+                                        },
+                                        "required": ["query"]
+                                    }
+                                }
+                            }
+                        ],
+                        "tool_choice": "auto",
+                        "max_tokens": 3000,
+                        "temperature": 0.6
                     }
                 },
                 "client_id": self.agent_id,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now().isoformat()
             }
 
             # Send request through MCP

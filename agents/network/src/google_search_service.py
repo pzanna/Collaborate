@@ -168,7 +168,7 @@ class GoogleSearchService:
         self.last_heartbeat = datetime.now(timezone.utc).isoformat()
         
         # Environment variable fallbacks (prefer environment over config)
-        self.api_key = os.getenv("GOOGLE_SEARCH_API_KEY", self.api_key)
+        self.api_key = os.getenv("GOOGLE_API_KEY", self.api_key)
         self.search_engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID", self.search_engine_id)
         
         # Load from local .env file if still empty
@@ -199,10 +199,10 @@ class GoogleSearchService:
                                 value = value.strip()
                                 
                                 # Only set if not already set and relevant to Google Search
-                                if key in ["GOOGLE_SEARCH_API_KEY", "GOOGLE_SEARCH_ENGINE_ID"]:
+                                if key in ["GOOGLE_API_KEY", "GOOGLE_SEARCH_ENGINE_ID"]:
                                     if not os.getenv(key) and value:
                                         os.environ[key] = value
-                                        if key == "GOOGLE_SEARCH_API_KEY" and not self.api_key:
+                                        if key == "GOOGLE_API_KEY" and not self.api_key:
                                             self.api_key = value
                                         elif key == "GOOGLE_SEARCH_ENGINE_ID" and not self.search_engine_id:
                                             self.search_engine_id = value
@@ -241,7 +241,7 @@ class GoogleSearchService:
             # Validate configuration
             if not self.is_api_configured():
                 logger.warning("Google Search API not fully configured - some features may be limited")
-                logger.warning("Please set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID environment variables")
+                logger.warning("Please set GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID environment variables")
             
             # Test API connection if configured
             if self.is_api_configured():

@@ -22,20 +22,20 @@ from .models import SearchQuery, SearchReport
 from .normalizers import RecordNormalizer
 from .search_pipeline import LiteratureSearchPipeline
 
-# Import constants from experiments search_engines
+# Import constants from local search_engines module
 try:
-    from experiments.search_engines import (
+    from .search_engines import (
         SIMILARITY_QUANTILE, TOP_K_TERMS, MAX_RETRIES, BACKOFF_BASE, 
         SEARCH_LIMIT, YEAR_RANGE, NCBI_API_KEY, OPENALEX_EMAIL, CORE_API_KEY
     )
 except ImportError:
-    # Fallback constants if experiments module not available
+    # Fallback constants if local module not available
     SIMILARITY_QUANTILE = 0.8
-    TOP_K_TERMS = 1
-    MAX_RETRIES = 5
-    BACKOFF_BASE = 5
-    SEARCH_LIMIT = 25
-    YEAR_RANGE = (2000, 2025)
+    TOP_K_TERMS = 1     # How many top search terms to use.
+    MAX_RETRIES = 5     # Maximum number of retries for API calls
+    BACKOFF_BASE = 5    # Starting backoff time in seconds
+    SEARCH_LIMIT = 5    # Limit for search results per search term
+    YEAR_RANGE = (2000, 2025)   # Default year range for searches
     NCBI_API_KEY = os.getenv('NCBI_API_KEY')
     OPENALEX_EMAIL = os.getenv('OPENALEX_EMAIL')
     CORE_API_KEY = os.getenv('CORE_API_KEY')
@@ -80,6 +80,9 @@ class LiteratureSearchService:
         
         # Task processing queue
         self.task_queue = asyncio.Queue()
+        
+        # Track reconnection timing for stability
+        self._last_reconnect_time = None
         
         # Initialize service components
         self.normalizer = RecordNormalizer()
@@ -209,7 +212,7 @@ class LiteratureSearchService:
             while self.websocket:
                 message = await self.websocket.recv()
                 data = json.loads(message)
-                
+                logging.info(f"######## Received MCP message: {data} ########")
                 # Handle task result responses for pending AI/DB requests
                 ai_handled = False
                 db_handled = False
@@ -217,13 +220,13 @@ class LiteratureSearchService:
                 if self.ai_integration:
                     ai_handled = self.ai_integration.handle_task_result(data)
                     if ai_handled:
-                        logger.debug(f"✅ AI integration handled message: {data.get('type')} task_id={data.get('task_id')}")
+                        logger.info(f"✅ AI integration handled message: {data.get('type')} task_id={data.get('task_id')}")
                         continue
                 
                 if self.database_integration:
                     db_handled = self.database_integration.handle_task_result(data)
                     if db_handled:
-                        logger.debug(f"✅ Database integration handled message: {data.get('type')} task_id={data.get('task_id')}")
+                        logger.info(f"✅ Database integration handled message: {data.get('type')} task_id={data.get('task_id')}")
                         continue
                 
                 # Log unhandled task results for debugging
@@ -277,6 +280,9 @@ class LiteratureSearchService:
                 # Re-register with MCP server
                 await self._register_with_mcp_server()
                 
+                # Track successful reconnection time
+                self._last_reconnect_time = datetime.now().timestamp()
+                
                 # Restart message handler
                 asyncio.create_task(self._handle_mcp_messages())
                 
@@ -301,12 +307,22 @@ class LiteratureSearchService:
     
     async def _ensure_mcp_connection(self) -> bool:
         """Ensure MCP connection is active, reconnect if necessary."""
-        if self.mcp_connected and self.websocket and not self.websocket.closed:
-            return True
+        # Check if connection exists and is open
+        if not (self.websocket and not self.websocket.closed):
+            logger.info("MCP connection not active, attempting to reconnect...")
+            await self._reconnect_to_mcp_server()
+            return self.mcp_connected
             
-        logger.info("MCP connection not active, attempting to reconnect...")
-        await self._reconnect_to_mcp_server()
-        return self.mcp_connected
+        # Test connection health with ping if available
+        try:
+            # Send a simple ping to test connection health
+            await self.websocket.ping()
+            logger.debug("MCP connection ping successful")
+            return True
+        except Exception as e:
+            logger.warning(f"MCP connection ping failed: {e}, attempting reconnection...")
+            await self._reconnect_to_mcp_server()
+            return self.mcp_connected
     
     async def _process_task_queue(self):
         """Process tasks from the MCP queue."""
@@ -596,6 +612,19 @@ class LiteratureSearchService:
     async def _review_with_ai(self, search_query: SearchQuery, search_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Review search results with AI agent and return filtered list."""
         if search_results and self.ai_integration:
+            # Ensure MCP connection is healthy before AI review
+            connection_ready = await self._ensure_mcp_connection()
+            if not connection_ready:
+                logger.warning("MCP connection not ready for AI review, using original search results")
+                return search_results
+            
+            # Additional connection stability check - wait for any recent reconnections to stabilize
+            if self._last_reconnect_time is not None:
+                time_since_reconnect = datetime.now().timestamp() - self._last_reconnect_time
+                if time_since_reconnect < 5:  # If reconnected less than 5 seconds ago
+                    logger.info(f"Waiting {5 - time_since_reconnect:.1f} seconds for connection to stabilize after recent reconnect...")
+                    await asyncio.sleep(5 - time_since_reconnect)
+                
             logger.info(f"Reviewing {len(search_results)} search results with AI agent")
             literature_list = await self.ai_integration.review_literature_results(
                 plan=search_query.research_plan,

@@ -236,6 +236,10 @@ class MCPAIService:
         """Handle incoming MCP message"""
         message_type = data.get("type")
         
+        logger.debug(f"🔍 Received MCP message: type={message_type}")
+        if message_type == "task_result":
+            logger.info(f"🔍 Received task_result message: {data}")
+        
         if message_type == "registration_confirmed":
             await self._handle_registration_confirmed(data)
         elif message_type == "heartbeat_ack":
@@ -266,15 +270,26 @@ class MCPAIService:
         """Handle task result responses for our tool calls"""
         task_id = data.get("task_id")
         
+        logger.info(f"🔍 Received task_result: task_id={task_id}")
+        logger.debug(f"🔍 Full task_result data: {data}")
+        logger.debug(f"🔍 Current pending_requests: {list(self.pending_requests.keys())}")
+        
         if task_id in self.pending_requests:
             future = self.pending_requests.pop(task_id)
+            logger.info(f"✅ Found pending request for task_id: {task_id}")
             if not future.done():
                 future.set_result(data)
                 logger.info(f"✅ Tool call response received for task_id: {task_id}")
             else:
                 logger.warning(f"⚠️ Tool call future already done for task_id: {task_id}")
         else:
-            logger.debug(f"🔍 Task result for task we're not waiting for: {task_id}")
+            # Check if this might be a late response by looking for Google search pattern
+            if task_id and task_id.startswith("google_search_"):
+                logger.info(f"🔄 Received late Google search response for task_id: {task_id}")
+                logger.info(f"🔄 Response contains {len(data.get('result', {}).get('results', []))} search results")
+            else:
+                logger.warning(f"❌ Task result for task we're not waiting for: {task_id}")
+                logger.warning(f"❌ Available pending requests: {list(self.pending_requests.keys())}")
     
     async def _handle_task_request(self, data: Dict[str, Any]):
         """Handle task request from MCP Server"""
@@ -725,7 +740,7 @@ class MCPAIService:
                 future = asyncio.Future()
                 self.pending_requests[task_id] = future
                 
-                response_data = await asyncio.wait_for(future, timeout=30.0)
+                response_data = await asyncio.wait_for(future, timeout=60.0)
                 
                 if (response_data.get("type") == "task_result" and 
                     response_data.get("task_id") == task_id):
@@ -743,14 +758,31 @@ class MCPAIService:
                 return {"error": "Invalid response format"}
                 
             except asyncio.TimeoutError:
-                logger.warning("Timeout waiting for Google search response")
+                logger.warning(f"Timeout waiting for Google search response for task_id: {task_id}")
+                # Don't remove from pending_requests immediately - allow grace period for late responses
+                asyncio.create_task(self._cleanup_pending_request_later(task_id, 30.0))
                 return {"error": "Search request timed out"}
-            finally:
+            except Exception as e:
+                logger.error(f"Error waiting for Google search response: {e}")
+                self.pending_requests.pop(task_id, None)
+                return {"error": f"Search execution failed: {str(e)}"}
+            else:
+                # Response received successfully, remove from pending
                 self.pending_requests.pop(task_id, None)
                 
         except Exception as e:
             logger.error(f"Error in Google search execution: {e}")
             return {"error": f"Search execution failed: {str(e)}"}
+
+    async def _cleanup_pending_request_later(self, task_id: str, delay: float):
+        """Clean up a pending request after a delay to allow for late responses"""
+        await asyncio.sleep(delay)
+        if task_id in self.pending_requests:
+            future = self.pending_requests.pop(task_id)
+            if not future.done():
+                logger.info(f"Cleaning up timed-out pending request: {task_id}")
+            else:
+                logger.info(f"Late response arrived for task_id: {task_id}")
 
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""

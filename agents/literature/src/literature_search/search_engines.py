@@ -12,13 +12,13 @@ from dotenv import load_dotenv
 # Look for .env file in parent directory (repository root)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
-# --- Configuration ---
+# --- Primary Configuration ---
 SIMILARITY_QUANTILE = 0.8
-TOP_K_TERMS = 1
-MAX_RETRIES = 5
-BACKOFF_BASE = 5
-SEARCH_LIMIT = 25
-YEAR_RANGE = (2000, 2025)  # Adjust as needed
+TOP_K_TERMS = 1     # How many top search terms to use.
+MAX_RETRIES = 5     # Maximum number of retries for API calls
+BACKOFF_BASE = 5    # Starting backoff time in seconds
+SEARCH_LIMIT = 5    # Limit for search results per search term
+YEAR_RANGE = (2000, 2025)   # Default year range for searches
 
 # API Keys
 NCBI_API_KEY = os.getenv('NCBI_API_KEY')

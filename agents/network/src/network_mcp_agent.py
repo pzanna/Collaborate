@@ -91,6 +91,20 @@ class NetworkMCPAgent:
             
             logger.info("🚀 Network MCP Agent started successfully")
             
+            # Keep agent running with automatic reconnection
+            try:
+                while self.running:
+                    if not self.connected:
+                        logger.warning("Connection lost, attempting to reconnect...")
+                        await self._connect_with_retry()
+                    
+                    await asyncio.sleep(1)
+                    
+            except KeyboardInterrupt:
+                logger.info("Shutdown signal received")
+            finally:
+                await self.stop()
+            
         except Exception as e:
             logger.error(f"Failed to start Network MCP Agent: {e}")
             raise

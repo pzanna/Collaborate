@@ -297,12 +297,61 @@ class WriterService:
         except ConnectionClosed:
             logger.warning("MCP server connection closed")
             self.mcp_connected = False
+            # Attempt to reconnect
+            asyncio.create_task(self._reconnect_to_mcp_server())
         except WebSocketException as e:
             logger.error(f"WebSocket error: {e}")
             self.mcp_connected = False
+            # Attempt to reconnect
+            asyncio.create_task(self._reconnect_to_mcp_server())
         except Exception as e:
             logger.error(f"Unexpected error in message listener: {e}")
             self.mcp_connected = False
+    
+    async def _reconnect_to_mcp_server(self):
+        """Attempt to reconnect to MCP server after connection loss."""
+        logger.info("Attempting to reconnect to MCP server...")
+        max_retries = 5
+        retry_delay = 3
+        
+        for attempt in range(max_retries):
+            try:
+                await asyncio.sleep(retry_delay)  # Wait before retry
+                
+                logger.info(f"Reconnection attempt {attempt + 1}/{max_retries}")
+                
+                # Close existing connection if any
+                if self.websocket:
+                    try:
+                        await self.websocket.close()
+                    except:
+                        pass
+                
+                # Create new connection
+                self.websocket = await websockets.connect(
+                    self.mcp_server_url,
+                    ping_interval=20,  # More frequent pings during long operations
+                    ping_timeout=15    # Longer timeout for ping responses
+                )
+                
+                # Re-register with MCP server
+                await self._register_with_mcp_server()
+                
+                # Restart message handler
+                asyncio.create_task(self._listen_for_tasks())
+                
+                self.mcp_connected = True
+                logger.info("✅ Successfully reconnected to MCP server")
+                
+                return
+                
+            except Exception as e:
+                logger.warning(f"Reconnection attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    retry_delay = min(retry_delay * 2, 30)  # Exponential backoff, max 30s
+                else:
+                    logger.error("❌ Failed to reconnect to MCP server after all attempts")
+                    self.mcp_connected = False
     
     async def _process_task_queue(self):
         """Process tasks from the MCP queue."""
