@@ -16,8 +16,8 @@ async def health_check():
         # Connect to the WebSocket server
         uri = "ws://localhost:9000"
         async with websockets.connect(uri, ping_timeout=5, close_timeout=5) as websocket:
-            # Send a simple ping message
-            await websocket.send('{"type": "ping"}')
+            # Send a JSON-RPC 2.0 ping notification
+            await websocket.send('{"jsonrpc": "2.0", "method": "ping", "params": {}}')
             
             # Wait for any response (or timeout)
             try:

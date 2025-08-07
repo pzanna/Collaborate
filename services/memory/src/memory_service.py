@@ -492,22 +492,24 @@ class MemoryService:
                     raise
     
     async def _register_with_mcp_server(self):
-        """Register this  with the MCP server."""
+        """Register this service with the MCP server."""
         if not self.websocket:
             raise Exception("WebSocket connection not available")
             
         registration_message = {
-            "type": "_register",
-            "_id": self._id,
-            "_type": self._type,
-            "capabilities": self.capabilities,
-            "timestamp": datetime.now().isoformat(),
-            "service_info": {
+            "jsonrpc": "2.0",
+            "method": "agent_register",
+            "params": {
+                "agent_id": self._id,
+                "agent_type": self._type,
+                "capabilities": self.capabilities,
+                "timestamp": datetime.now().isoformat(),
+                "service_info": {
                     "host": self.service_host,
                     "port": self.service_port,
                     "health_endpoint": f"http://{self.service_host}:{self.service_port}/health"
                 }
-            
+            }
         }
         
         await self.websocket.send(json.dumps(registration_message))
