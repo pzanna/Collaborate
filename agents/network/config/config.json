@@ -20,17 +20,59 @@
     "default_page_size": 10,
     "max_results": 100,
     "timeout": 30,
-    "rate_limit": {
-      "max_requests_per_day": 100,
-      "max_requests_per_minute": 10
-    }
+    "cache_size": 100,
+    "max_requests_per_day": 100,
+    "max_requests_per_minute": 10
   },
+  "ai_models": [
+    {
+      "provider": "openai",
+      "api_endpoint": "https://api.openai.com/v1/chat/completions",
+      "api_key": "",
+      "timeout": 60,
+      "cache_size": 50,
+      "max_requests_per_day": 1000,
+      "max_requests_per_minute": 60
+    }
+  ],
+  "literature_dbs": [
+    {
+      "provider": "pubmed",
+      "api_endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+      "api_key": "",
+      "timeout": 30,
+      "cache_size": 100,
+      "max_requests_per_day": 1000,
+      "max_requests_per_second": 3
+    },
+    {
+      "provider": "core",
+      "api_endpoint": "https://api.core.ac.uk/v3/search/works",
+      "api_key": "",
+      "timeout": 30,
+      "cache_size": 100,
+      "max_requests_per_day": 1000,
+      "max_requests_per_second": 10
+    },
+    {
+      "provider": "openalex",
+      "api_endpoint": "https://api.openalex.org/works",
+      "api_key": "",
+      "timeout": 30,
+      "cache_size": 100,
+      "max_requests_per_day": 1000,
+      "max_requests_per_second": 10
+    }
+  ],
   "capabilities": [
     "google_search",
     "web_search",
     "multi_page_search",
     "search_capabilities",
-    "google_custom_search",
+    "ai_model_openai",
+    "literature_search_pubmed",
+    "literature_search_core",
+    "literature_search_openalex",
     "search_result_parsing"
   ],
   "logging": {
