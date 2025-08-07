@@ -8,15 +8,17 @@ The **Research Manager** (`src/core/research_manager.py`) is the central orchest
 
 ## Key Updates in Hierarchical Project Integration
 
-### New Features Added
+### Research Workflow Stages
 
-1. **Hierarchical Organization**: Complete project → topic → plan → task structure
-2. **Enhanced Database Schema**: Full hierarchical database with research topics, plans, and tasks
-3. **Comprehensive API Coverage**: REST endpoints for all hierarchical entities
-4. **Advanced Task Management**: Individual task execution with detailed progress tracking
-5. **Cost Management**: Granular cost tracking at task and plan levels
-6. **Project Dashboard Integration**: Full frontend support for hierarchical navigation
-7. **Research Workflow Automation**: Automated plan creation and task generation
+| Task                   | Agent               | Implementation Status | Workflow Stage(s)                                            | Notes                                                                                     |
+| ---------------------- | ------------------- | -------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| **PLANNING**           | planning_agent      | ✅ Implemented       |• Research goals, Research planning                          | Defining objectives, hypotheses and the overall strategy (including protocol outlines).   |
+| **LITERATURE REVIEW**  | literature_agent    | ✅ Implemented       |• Literature review                                          | Surveying published work to identify gaps, methods and key findings.                      |
+| **SYSTEMATIC REVIEW**  | screening_agent     | ✅ Implemented       |• Literature evaluation, PRISMA                              | A protocol-driven review (e.g. PRISMA) that uses explicit inclusion/exclusion criteria.   |
+| **REASONING**          | reasoning_agent     | 🚧 Planned          |• Synthesis of current frontier, Hypothesis-generation       | Analysing what's known, spotting contradictions or opportunities, framing new questions. Currently handled by planning_agent's analyze_information action. |
+| **EXECUTION**          | executor_agent      | ✅ Implemented       |• Experimental design, laboratory management                 | Carrying out assays, data collection and in-lab work according to the plan.               |
+| **SYNTHESIS**          | synthesis_agent     | ✅ Implemented       |• Result writing, Early manuscript drafting                  | Integrating raw data into coherent figures, tables and narrative; initial interpretation. |
+| **COMPLETE**           | writer_agent        | ✅ Implemented       |• Paper / Journal writing, Submission & publication          | Final polishing of manuscript, cover letters, responding to reviewers and archiving.      |
 
 ### Enhanced Database Schema
 
@@ -672,7 +674,7 @@ The new task detail page provides comprehensive information:
   - Dynamic action processing
   - Result validation and formatting
 
-- **MemoryAgent** (`src/agents/memory_agent.py`)
+- **MemoryService** (`services/memory/memory_service.py`)
   - Context management and persistence
   - Knowledge base integration
   - Conversation history tracking

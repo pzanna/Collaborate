@@ -624,29 +624,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    # To run this example, ensure you have a 'config/default_config.json'
-    # and your API keys are set in a '.env' file.
-    # Example config:
-    # {
-    #     "ai_providers": {
-    #         "openai": {
-    #             "provider": "openai",
-    #             "model": "gpt-4o",
-    #             "temperature": 0.7,
-    #             "max_tokens": 150
-    #         },
-    #         "xai": {
-    #             "provider": "xai",
-    #             "model": "grok-1.5-flash",
-    #             "temperature": 0.8,
-    #             "max_tokens": 200
-    #         }
-    #     },
-    #     "coordination": {
-    #         "base_participation_chance": 0.5,
-    #         "max_consecutive_turns": 2,
-    #         "mention_boost": 0.7,
-    #         "question_boost": 0.3
-    #     }
-    # }
+
     asyncio.run(main())

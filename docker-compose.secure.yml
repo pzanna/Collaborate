@@ -264,17 +264,19 @@ services:
       retries: 3
       start_period: 15s
 
-  # 6. Literature Search Agent (Port 8003) - Security Enhanced
-  literature-agent:
-    build: ./agents/literature
-    container_name: eunice-literature-agent
+  # 6. Network Agent (Google Search - Port 8004) - Security Enhanced
+  network-agent:
+    build: ./agents/network
+    container_name: eunice-network-agent
     ports:
-      - "8003:8003"
+      - "8004:8004"
     environment:
       - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8003
+      - SERVICE_PORT=8004
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=literature
+      - AGENT_TYPE=network
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_SEARCH_ENGINE_ID=${GOOGLE_SEARCH_ENGINE_ID}
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
@@ -305,6 +307,59 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./agents/network/src:/app/src
+      - ./agents/network/start-dev.sh:/app/start-dev.sh
+    command: ["./start-dev.sh"]
+
+  # 7. Literature Search Agent (Port 8003) - Security Enhanced
+  literature-agent:
+    build: ./agents/literature
+    container_name: eunice-literature-agent
+    ports:
+      - "8003:8003"
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8003
+      - MCP_SERVER_URL=ws://mcp-server:9000
+      - AGENT_TYPE=literature
+      - LOG_LEVEL=DEBUG
+      - CORE_API_KEY=${CORE_API_KEY}
+      - OPENALEX_EMAIL=${OPENALEX_EMAIL}
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - PYTHONNOUSERSITE=1
+      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
+    networks:
+      - eunice-microservices
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "8.0"
+          memory: 512M
+        reservations:
+          cpus: "2.0"
+          memory: 256M
+    # Security: Read-only root filesystem with writable temp dirs
+    read_only: true
+    tmpfs:
+      - /app/tmp:exec,nosuid,size=200m,uid=1000,gid=1000
+    # Security: Drop all capabilities
+    cap_drop:
+      - ALL
+    # Security: Prevent privilege escalation
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 10s
@@ -315,15 +370,15 @@ services:
       - ./agents/literature/start-dev.sh:/app/start-dev.sh
     command: ["./start-dev.sh"]
 
-  # 7. Screening PRISMA Agent (Port 8004) - Security Enhanced
+  # 8. Screening PRISMA Agent (Port 8012) - Security Enhanced
   screening-agent:
     build: ./agents/screening
     container_name: eunice-screening-agent
     ports:
-      - "8004:8004"
+      - "8012:8012"
     environment:
       - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8004
+      - SERVICE_PORT=8012
       - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=screening
       - LOG_LEVEL=INFO
@@ -355,7 +410,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -462,10 +517,10 @@ services:
       retries: 3
       start_period: 15s
 
-  # 10. Memory Agent Service (Port 8009) - Security Enhanced
-  memory-agent:
-    build: ./agents/memory
-    container_name: eunice-memory-agent
+  # 10. Memory Service (Port 8009) - Security Enhanced
+  memory-service:
+    build: ./services/memory
+    container_name: eunice-memory-service
     ports:
       - "8009:8009"
     environment:

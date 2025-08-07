@@ -7,13 +7,14 @@
   "search_timeout": 300,
   "rate_limit_delay": 1.0,
   "logging": {
-    "level": "INFO",
+    "level": "DEBUG",
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   },
   "api_configs": {
     "semantic_scholar": {
       "base_url": "https://api.semanticscholar.org/graph/v1/paper/search",
-      "rate_limit": 1.0,
+      "retries": 5,
+      "rate_limit": 10,
       "max_results_per_request": 100,
       "timeout": 30
     },
@@ -38,7 +39,7 @@
     "core": {
       "base_url": "https://api.core.ac.uk/v3/search/works",
       "rate_limit": 1,
-      "max_results_per_request": 10
+      "max_results_per_request": 100
     }
   },
   "search_settings": {

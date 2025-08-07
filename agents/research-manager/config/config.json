@@ -22,6 +22,8 @@
       "type": "planning",
       "capabilities": [
         "plan_research",
+        "manage_research_tasks",
+        "coordinate_agents",
         "analyze_information",
         "synthesize_results"
       ],
@@ -29,11 +31,21 @@
     },
     "literature_agent": {
       "type": "literature",
-      "capabilities": ["search_academic_papers", "review_documents"],
+      "capabilities": ["search_literature"],
+      "timeout": 300
+    },
+    "screening_agent": {
+      "type": "literature",
+      "capabilities": ["review_documents"],
       "timeout": 300
     },
     "executor_agent": {
       "type": "executor",
+      "capabilities": ["execute_research", "process_data"],
+      "timeout": 300
+    },
+    "synthesis_agent": {
+      "type": "synthesis",
       "capabilities": ["execute_research", "process_data"],
       "timeout": 300
     },

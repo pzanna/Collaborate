@@ -136,9 +136,9 @@ def load_config():
                 "reconnect_delay": 5
             },
             "providers": {
-                "openai": {"enabled": True, "models": ["gpt-4o-mini", "gpt-4"]},
+                "openai": {"enabled": True, "models": ["gpt-4.1-nano", "gpt-4o-mini"]},
                 "anthropic": {"enabled": True, "models": ["claude-3-haiku", "claude-3-sonnet"]},
-                "xai": {"enabled": True, "models": ["grok-3-mini-beta", "grok-3"]}
+                "xai": {"enabled": True, "models": ["grok-3-mini", "grok-3-mini-fast"]}
             },
             "load_balancing": {"strategy": "round_robin", "health_check_interval": 30},
             "rate_limiting": {"requests_per_minute": 100, "tokens_per_minute": 50000},

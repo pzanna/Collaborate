@@ -335,8 +335,8 @@ class HierarchicalDatabaseManager:
                     """
                     INSERT OR IGNORE INTO research_plans
                     (id, topic_id, name, description, plan_type, status, plan_approved, created_at, updated_at,
-                     estimated_cost, actual_cost, plan_structure, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     estimated_cost, actual_cost, plan_structure, initial_literature_results, reviewed_literature_results, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         plan_id,
@@ -351,6 +351,8 @@ class HierarchicalDatabaseManager:
                         plan_data.get("estimated_cost", 0.0),
                         plan_data.get("actual_cost", 0.0),
                         plan_data.get("plan_structure", "{}"),
+                        plan_data.get("initial_literature_results", "{}"),
+                        plan_data.get("reviewed_literature_results", "{}"),
                         plan_data.get("metadata", "{}"),
                     ),
                 )
@@ -395,6 +397,26 @@ class HierarchicalDatabaseManager:
                             plan["plan_structure"] = plan_structure_raw
                     except (json.JSONDecodeError, TypeError):
                         plan["plan_structure"] = {}
+
+                    # Handle initial_literature_results parsing
+                    try:
+                        lit_results_raw = plan.get("initial_literature_results", "{}")
+                        if isinstance(lit_results_raw, str):
+                            plan["initial_literature_results"] = json.loads(lit_results_raw)
+                        else:
+                            plan["initial_literature_results"] = lit_results_raw
+                    except (json.JSONDecodeError, TypeError):
+                        plan["initial_literature_results"] = {}
+
+                    # Handle reviewed_literature_results parsing
+                    try:
+                        reviewed_results_raw = plan.get("reviewed_literature_results", "{}")
+                        if isinstance(reviewed_results_raw, str):
+                            plan["reviewed_literature_results"] = json.loads(reviewed_results_raw)
+                        else:
+                            plan["reviewed_literature_results"] = reviewed_results_raw
+                    except (json.JSONDecodeError, TypeError):
+                        plan["reviewed_literature_results"] = {}
 
                     # Handle metadata parsing with double-encoded JSON
                     metadata_raw = plan.get("metadata", "{}")
@@ -445,6 +467,27 @@ class HierarchicalDatabaseManager:
                     plan["plan_structure"] = json.loads(
                         plan.get("plan_structure", "{}")
                     )
+                    
+                    # Handle initial_literature_results parsing
+                    try:
+                        lit_results_raw = plan.get("initial_literature_results", "{}")
+                        if isinstance(lit_results_raw, str):
+                            plan["initial_literature_results"] = json.loads(lit_results_raw)
+                        else:
+                            plan["initial_literature_results"] = lit_results_raw
+                    except (json.JSONDecodeError, TypeError):
+                        plan["initial_literature_results"] = {}
+
+                    # Handle reviewed_literature_results parsing
+                    try:
+                        reviewed_results_raw = plan.get("reviewed_literature_results", "{}")
+                        if isinstance(reviewed_results_raw, str):
+                            plan["reviewed_literature_results"] = json.loads(reviewed_results_raw)
+                        else:
+                            plan["reviewed_literature_results"] = reviewed_results_raw
+                    except (json.JSONDecodeError, TypeError):
+                        plan["reviewed_literature_results"] = {}
+                    
                     # Handle metadata parsing with double-encoded JSON
                     metadata_raw = plan.get("metadata", "{}")
                     try:
@@ -710,7 +753,7 @@ class HierarchicalDatabaseManager:
                 ]:
                     update_fields.append(f"{field} = ?")
                     update_values.append(value)
-                elif field in ["plan_structure", "metadata"]:
+                elif field in ["plan_structure", "initial_literature_results", "reviewed_literature_results", "metadata"]:
                     update_fields.append(f"{field} = ?")
                     update_values.append(json.dumps(value))
 
@@ -1062,7 +1105,7 @@ class HierarchicalDatabaseManager:
                         data["id"],
                         data["name"],
                         data["description"],
-                        data.get("status", "active"),
+                        data.get("status", "pending"),
                         data["created_at"],
                         data["updated_at"],
                         data.get("metadata", "{}"),
@@ -1650,6 +1693,12 @@ class HierarchicalDatabaseManager:
                         data["metadata"] = json.loads(data.get("metadata", "{}"))
                         data["plan_structure"] = json.loads(
                             data.get("plan_structure", "{}")
+                        )
+                        data["initial_literature_results"] = json.loads(
+                            data.get("initial_literature_results", "{}")
+                        )
+                        data["reviewed_literature_results"] = json.loads(
+                            data.get("reviewed_literature_results", "{}")
                         )
                         results["plans"].append(data)
 

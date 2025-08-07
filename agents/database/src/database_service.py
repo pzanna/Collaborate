@@ -94,8 +94,10 @@ class DatabaseAgentService:
             "create_research_topic", "update_research_topic", "delete_research_topic", "get_research_topic",
             "create_plan", "update_plan", "delete_plan", "get_plan",
             "create_research_plan", "update_research_plan", "delete_research_plan", "get_research_plan",
+            "get_all_project_plans",
             "create_task", "update_task", "delete_task", "get_task",
             "create_literature_record", "update_literature_record", "delete_literature_record",
+            "store_literature_records", "store_initial_literature_results", "store_reviewed_literature_results",
             "create_search_term_optimization", "update_search_term_optimization", "delete_search_term_optimization", "get_search_term_optimization",
             "get_search_terms_for_plan", "get_search_terms_for_task", "store_optimized_search_terms",
             "database_operations", "data_persistence", "query_execution"
@@ -270,12 +272,61 @@ class DatabaseAgentService:
         except ConnectionClosed:
             logger.warning("MCP server connection closed")
             self.mcp_connected = False
+            # Attempt to reconnect
+            asyncio.create_task(self._reconnect_to_mcp_server())
         except WebSocketException as e:
             logger.error(f"WebSocket error: {e}")
             self.mcp_connected = False
+            # Attempt to reconnect
+            asyncio.create_task(self._reconnect_to_mcp_server())
         except Exception as e:
             logger.error(f"Unexpected error in message listener: {e}")
             self.mcp_connected = False
+    
+    async def _reconnect_to_mcp_server(self):
+        """Attempt to reconnect to MCP server after connection loss."""
+        logger.info("Attempting to reconnect to MCP server...")
+        max_retries = 5
+        retry_delay = 3
+        
+        for attempt in range(max_retries):
+            try:
+                await asyncio.sleep(retry_delay)  # Wait before retry
+                
+                logger.info(f"Reconnection attempt {attempt + 1}/{max_retries}")
+                
+                # Close existing connection if any
+                if self.websocket:
+                    try:
+                        await self.websocket.close()
+                    except:
+                        pass
+                
+                # Create new connection
+                self.websocket = await websockets.connect(
+                    self.mcp_server_url,
+                    ping_interval=20,  # More frequent pings during long operations
+                    ping_timeout=15    # Longer timeout for ping responses
+                )
+                
+                # Re-register with MCP server
+                await self._register_with_mcp_server()
+                
+                # Restart message handler
+                asyncio.create_task(self._listen_for_tasks())
+                
+                self.mcp_connected = True
+                logger.info("✅ Successfully reconnected to MCP server")
+                
+                return
+                
+            except Exception as e:
+                logger.warning(f"Reconnection attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    retry_delay = min(retry_delay * 2, 30)  # Exponential backoff, max 30s
+                else:
+                    logger.error("❌ Failed to reconnect to MCP server after all attempts")
+                    self.mcp_connected = False
     
     async def _process_task_queue(self):
         """Process tasks from the MCP queue."""
@@ -371,6 +422,8 @@ class DatabaseAgentService:
                 return await self._handle_update_plan(data)
             elif task_type == "delete_plan" or task_type == "delete_research_plan":
                 return await self._handle_delete_plan(data)
+            elif task_type == "get_all_project_plans":
+                return await self._handle_get_all_project_plans(data)
             
             # Task operations
             elif task_type == "create_task":
@@ -387,6 +440,12 @@ class DatabaseAgentService:
                 return await self._handle_update_literature_record(data)
             elif task_type == "delete_literature_record":
                 return await self._handle_delete_literature_record(data)
+            elif task_type == "store_literature_records":
+                return await self._handle_store_literature_records(data)
+            elif task_type == "store_initial_literature_results":
+                return await self._handle_store_initial_literature_results(data)
+            elif task_type == "store_reviewed_literature_results":
+                return await self._handle_store_reviewed_literature_results(data)
             
             # Search term optimization operations
             elif task_type == "create_search_term_optimization":
@@ -855,11 +914,12 @@ class DatabaseAgentService:
                 logger.info(f"Executing INSERT for plan {plan_id} with plan_structure length: {len(json.dumps(plan_structure_json))}")
                 await conn.execute("""
                     INSERT INTO research_plans (id, topic_id, name, description, plan_type, status, plan_approved, 
-                                              estimated_cost, actual_cost, plan_structure, metadata, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                                              estimated_cost, actual_cost, plan_structure, initial_literature_results, 
+                                              reviewed_literature_results, metadata, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                 """, plan_id, topic_id, name, description, plan_type, status, plan_approved, 
-                estimated_cost, actual_cost, json.dumps(plan_structure_json), json.dumps(metadata_json), 
-                datetime.now(), datetime.now())
+                estimated_cost, actual_cost, json.dumps(plan_structure_json), json.dumps({}), 
+                json.dumps({}), json.dumps(metadata_json), datetime.now(), datetime.now())
                 logger.info(f"Successfully executed INSERT for plan {plan_id}")
             
             self.operations_completed += 1
@@ -893,6 +953,84 @@ class DatabaseAgentService:
         plan_id = data.get("id") or data.get("plan_id", "")
         return await self._generic_delete("research_plans", plan_id)
     
+    async def _handle_get_all_project_plans(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle getting all plans for a project request."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            project_id = data.get("project_id", "")
+            if not project_id:
+                return {
+                    "status": "failed",
+                    "error": "Project ID is required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as connection:
+                # Get all topics for the project
+                topics_query = """
+                    SELECT id FROM research_topics WHERE project_id = $1
+                """
+                topic_rows = await connection.fetch(topics_query, project_id)
+                topic_ids = [row['id'] for row in topic_rows]
+                
+                if not topic_ids:
+                    return {
+                        "status": "success",
+                        "plans": [],
+                        "message": f"No topics found for project {project_id}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                
+                # Get all plans for all topics in this project
+                plans_query = """
+                    SELECT id, topic_id, name, description, plan_type, status, plan_approved, 
+                           created_at, updated_at, estimated_cost, actual_cost, plan_structure, metadata
+                    FROM research_plans 
+                    WHERE topic_id = ANY($1)
+                    ORDER BY created_at DESC
+                """
+                plan_rows = await connection.fetch(plans_query, topic_ids)
+                
+                plans = []
+                for row in plan_rows:
+                    plan_dict = dict(row)
+                    # Parse JSON fields
+                    if plan_dict.get('metadata'):
+                        try:
+                            plan_dict['metadata'] = json.loads(plan_dict['metadata'])
+                        except (json.JSONDecodeError, TypeError):
+                            plan_dict['metadata'] = {}
+                    if plan_dict.get('plan_structure'):
+                        try:
+                            plan_dict['plan_structure'] = json.loads(plan_dict['plan_structure'])
+                        except (json.JSONDecodeError, TypeError):
+                            plan_dict['plan_structure'] = {}
+                    
+                    # Convert timestamps to ISO format strings
+                    for field in ['created_at', 'updated_at']:
+                        if plan_dict.get(field):
+                            plan_dict[field] = plan_dict[field].isoformat()
+                    
+                    plans.append(plan_dict)
+                
+                return {
+                    "status": "success",
+                    "plans": plans,
+                    "project_id": project_id,
+                    "total_plans": len(plans),
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting all project plans: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+
     async def _handle_create_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle task creation request."""
         try:
@@ -972,8 +1110,7 @@ class DatabaseAgentService:
             authors = data.get("authors", [])
             project_id = data.get("project_id", "")
             doi = data.get("doi")
-            pmid = data.get("pmid")
-            arxiv_id = data.get("arxiv_id")
+            external_id = data.get("external_id")
             year = data.get("year")
             journal = data.get("journal")
             abstract = data.get("abstract")
@@ -991,6 +1128,13 @@ class DatabaseAgentService:
                     citation_count = int(citation_count) if citation_count != "" else None
                 except (ValueError, TypeError):
                     citation_count = None
+            
+            # Parse year to ensure it's an integer
+            if year is not None:
+                try:
+                    year = int(year)
+                except (ValueError, TypeError):
+                    year = None
             
             # Validate required fields
             if not title or not project_id:
@@ -1018,12 +1162,12 @@ class DatabaseAgentService:
                 # Use the existing connection for the insert
                 await conn.execute("""
                     INSERT INTO literature_records (
-                        id, title, authors, project_id, doi, pmid, arxiv_id, year, 
+                        id, title, authors, project_id, doi, external_id, year, 
                         journal, abstract, url, citation_count, source, publication_type,
                         mesh_terms, categories, created_at, updated_at, metadata
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                 """, 
-                    record_id, title, json.dumps(authors), project_id, doi, pmid, arxiv_id, year,
+                    record_id, title, json.dumps(authors), project_id, doi, external_id, year,
                     journal, abstract, url, citation_count, source, publication_type,
                     json.dumps(mesh_terms), json.dumps(categories), now, now, json.dumps(metadata)
                 )
@@ -1055,6 +1199,242 @@ class DatabaseAgentService:
     async def _handle_delete_literature_record(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle literature record deletion request."""
         return await self._generic_delete("literature_records", data.get("record_id", ""))
+    
+    async def _handle_store_literature_records(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle bulk storage of literature records and update research plan with initial results."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            # Extract the payload
+            lit_review_id = data.get("lit_review_id", "")
+            plan_id = data.get("plan_id", "")
+            project_id = data.get("project_id", "")
+            records = data.get("records", [])
+            search_context = data.get("search_context", {})
+            metadata = data.get("metadata", {})
+            
+            if not lit_review_id or not records:
+                return {
+                    "status": "failed",
+                    "error": "lit_review_id and records are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            async with self.db_pool.acquire() as conn:
+                async with conn.transaction():
+                    stored_count = 0
+                    
+                    # Store individual literature records
+                    for record in records:
+                        try:
+                            # Use the internal_id from the record as the database id
+                            # This ensures consistent mapping between simplified JSON and full records
+                            record_id = record.get("internal_id", str(uuid.uuid4()))
+                            
+                            # Convert citation_count to integer, handle string values
+                            citation_count = record.get("citation_count")
+                            if citation_count is not None:
+                                try:
+                                    citation_count = int(citation_count)
+                                except (ValueError, TypeError):
+                                    citation_count = 0
+                            else:
+                                citation_count = 0
+                            
+                            # Parse year to ensure it's an integer
+                            year = record.get("year")
+                            if year is not None:
+                                try:
+                                    year = int(year)
+                                except (ValueError, TypeError):
+                                    year = None
+                            
+                            await conn.execute("""
+                                INSERT INTO literature_records (
+                                    id, title, authors, project_id, doi, external_id, year,
+                                    journal, abstract, url, citation_count, source, publication_type,
+                                    mesh_terms, categories, created_at, updated_at, metadata
+                                ) VALUES (
+                                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+                                )
+                            """, 
+                                record_id,  # Use internal_id as the primary key id
+                                record.get("title", ""),
+                                json.dumps(record.get("authors", [])),
+                                project_id,
+                                record.get("doi", ""),
+                                record.get("external_id", ""),
+                                year,
+                                record.get("journal", ""),
+                                record.get("abstract", ""),
+                                record.get("url", ""),
+                                citation_count,  # Use the converted integer value
+                                record.get("source", ""),
+                                record.get("publication_type", ""),
+                                json.dumps(record.get("mesh_terms", [])),
+                                json.dumps(record.get("categories", [])),
+                                datetime.now(),
+                                datetime.now(),
+                                json.dumps({
+                                    "raw_data": record.get("raw_data", {}),
+                                    "retrieval_timestamp": record.get("retrieval_timestamp", datetime.now().isoformat()),
+                                    "lit_review_id": lit_review_id,
+                                    "plan_id": plan_id,
+                                    "stored_by": "literature-service"
+                                })
+                            )
+                            stored_count += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to store individual literature record: {e}")
+                            continue
+                    
+                    # Create JSON for research_plans.initial_literature_results
+                    initial_literature_json = {
+                        "lit_review_id": lit_review_id,
+                        "plan_id": plan_id,
+                        "records": [
+                            {
+                                "id": record.get("internal_id"),
+                                "title": record.get("title"),
+                                "abstract": record.get("abstract")
+                            }
+                            for record in records
+                        ],
+                        "metadata": {
+                            "total_records": len(records),
+                            "stored_records": stored_count,
+                            "search_context": search_context,
+                            "storage_timestamp": datetime.now().isoformat()
+                        }
+                    }
+                    
+                    
+                    logger.info(f"Successfully stored {stored_count} literature records and updated research plan")
+                    
+                    return {
+                        "status": "completed",
+                        "stored_count": stored_count,
+                        "lit_review_id": lit_review_id,
+                        "plan_id": plan_id,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Failed to store literature records: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_store_initial_literature_results(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle storage of initial literature results (before AI review) in research plan."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            # Extract the payload
+            plan_id = data.get("plan_id", "")
+            initial_literature_results = data.get("initial_literature_results", {})
+            
+            if not plan_id or not initial_literature_results:
+                return {
+                    "status": "failed", 
+                    "error": "plan_id and initial_literature_results are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Validate that initial_literature_results contains records
+            records = initial_literature_results.get("records", [])
+            if not records:
+                return {
+                    "status": "failed",
+                    "error": "initial_literature_results must contain records",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            logger.info(f"📤 Storing {len(records)} initial literature results for plan {plan_id}")
+            
+            async with self.db_pool.acquire() as conn:
+                # Update research plan with initial literature results
+                await conn.execute("""
+                    UPDATE research_plans 
+                    SET initial_literature_results = $1, updated_at = $2
+                    WHERE id = $3
+                """, json.dumps(initial_literature_results), datetime.now(), plan_id)
+                
+                logger.info(f"🎉 Successfully stored {len(records)} initial literature results for plan {plan_id}")
+                
+                return {
+                    "status": "completed",
+                    "stored_count": len(records),
+                    "plan_id": plan_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to store initial literature results: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_store_reviewed_literature_results(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle storage of AI-reviewed literature results in research plan."""
+        try:
+            if not self.db_pool:
+                raise Exception("Database pool not available")
+                
+            # Extract the payload
+            plan_id = data.get("plan_id", "")
+            reviewed_results = data.get("reviewed_results", [])
+            metadata = data.get("metadata", {})
+            
+            if not plan_id or not reviewed_results:
+                return {
+                    "status": "failed", 
+                    "error": "plan_id and reviewed_results are required",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Create JSON for research_plans.reviewed_literature_results
+            reviewed_literature_json = {
+                "plan_id": plan_id,
+                "reviewed_results": reviewed_results,
+                "metadata": {
+                    "reviewed_count": len(reviewed_results),
+                    "ai_model": metadata.get("ai_model", "unknown"),
+                    "review_timestamp": datetime.now().isoformat(),
+                    **metadata
+                }
+            }
+            
+            async with self.db_pool.acquire() as conn:
+                # Update research plan with reviewed literature results
+                await conn.execute("""
+                    UPDATE research_plans 
+                    SET reviewed_literature_results = $1, updated_at = $2
+                    WHERE id = $3
+                """, json.dumps(reviewed_literature_json), datetime.now(), plan_id)
+                
+                logger.info(f"Successfully stored {len(reviewed_results)} reviewed literature results for plan {plan_id}")
+                
+                return {
+                    "status": "completed",
+                    "stored_count": len(reviewed_results),
+                    "plan_id": plan_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to store reviewed literature results: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
     
     # Search Term Optimization Handlers
     async def _handle_create_search_term_optimization(self, data: Dict[str, Any]) -> Dict[str, Any]:

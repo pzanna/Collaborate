@@ -27,7 +27,8 @@
 #   - Planning Agent (port 8007)  - Research planning and organization
 #   - Research Manager (port 8002) - Research workflow coordination
 #   - Literature Agent (port 8003) - Academic literature search and analysis
-#   - Screening Agent (port 8004)  - Paper screening and filtering
+#   - Network Agent (port 8004)   - Google search and web research
+#   - Screening Agent (port 8012)  - Paper screening and filtering (moved from 8004)
 #   - Synthesis Agent (port 8005)  - Research synthesis and summarization
 #   - Writer Agent (port 8006)     - Academic writing and documentation
 #   - Database Agent (port 8011)   - Database operations and management
@@ -40,7 +41,14 @@
 #   - Docker and Docker Compose installed
 #   - 2GB+ RAM available
 #   - Ports 5433, 6380, 8001-8013, 9000 available
-#   - .env file (optional, defaults will be used if missing)
+#   - .env file with required environment variables:
+#     * GOOGLE_API_KEY (for Google Custom Search via Network Agent)
+#     * GOOGLE_SEARCH_ENGINE_ID (for Google Custom Search)
+#     * OPENAI_API_KEY (for AI Service)
+#     * ANTHROPIC_API_KEY (optional, for AI Service)
+#     * XAI_API_KEY (optional, for AI Service)
+#     * CORE_API_KEY (optional, for Literature Agent)
+#     * OPENALEX_EMAIL (optional, for Literature Agent)
 #
 # Usage:
 #   ./start_dev.sh
@@ -82,6 +90,46 @@ else
     print_warning ".env file not found, using container defaults"
 fi
 
+# Validate critical environment variables
+print_info "Validating environment variables..."
+missing_vars=()
+
+# Check Google API credentials (required for Network Agent)
+if [[ -z "${GOOGLE_API_KEY}" ]]; then
+    missing_vars+=("GOOGLE_API_KEY")
+fi
+if [[ -z "${GOOGLE_SEARCH_ENGINE_ID}" ]]; then
+    missing_vars+=("GOOGLE_SEARCH_ENGINE_ID")
+fi
+
+# Check OpenAI API key (required for AI Service)
+if [[ -z "${OPENAI_API_KEY}" ]]; then
+    missing_vars+=("OPENAI_API_KEY")
+fi
+
+if [[ ${#missing_vars[@]} -gt 0 ]]; then
+    print_warning "Missing required environment variables:"
+    for var in "${missing_vars[@]}"; do
+        echo "   ❌ $var"
+    done
+    echo
+    echo "💡 Create a .env file in the project root with:"
+    echo "   GOOGLE_API_KEY=your_google_api_key_here"
+    echo "   GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here" 
+    echo "   OPENAI_API_KEY=your_openai_api_key_here"
+    echo
+    echo "Optional API keys for enhanced functionality:"
+    echo "   ANTHROPIC_API_KEY=your_anthropic_api_key_here"
+    echo "   XAI_API_KEY=your_xai_api_key_here"
+    echo "   CORE_API_KEY=your_core_api_key_here"
+    echo "   OPENALEX_EMAIL=your_email@example.com"
+    echo
+    print_warning "Services will start but some features may not work without these API keys"
+    echo
+else
+    print_status "All critical environment variables are set"
+fi
+
 # Ensure logs directory exists for container logging
 mkdir -p logs
 
@@ -118,7 +166,7 @@ sleep 5
 # Phase 4: Start core research agents
 # Memory agent handles knowledge graph, Executor handles task processing
 print_info "Starting core agents (Memory, Executor)..."
-docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d memory-agent executor-agent
+docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d memory-service executor-agent
 
 # Phase 5: Start AI service
 # This provides LLM integration and handles AI API calls
@@ -132,6 +180,7 @@ docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up -d \
     planning-agent \
     research-manager-agent \
     literature-agent \
+    network-agent \
     screening-agent \
     synthesis-agent \
     writer-agent
@@ -169,7 +218,7 @@ fi
 
 # Final wait for all services to complete initialization
 print_info "Waiting for services to initialize..."
-sleep 10
+sleep 20
 
 # Health check phase - verify critical services are responding
 print_info "Testing service health..."
@@ -232,8 +281,16 @@ else
     services_ready=false
 fi
 
-# Test Screening Agent health endpoint
+# Test Network Agent health endpoint
 if curl -f -s http://localhost:8004/health >/dev/null 2>&1; then
+    print_status "Network Agent is healthy"
+else
+    echo "❌ Network Agent health check failed"
+    services_ready=false
+fi
+
+# Test Screening Agent health endpoint
+if curl -f -s http://localhost:8012/health >/dev/null 2>&1; then
     print_status "Screening Agent is healthy"
 else
     echo "❌ Screening Agent health check failed"
@@ -284,10 +341,11 @@ if [ "$services_ready" = true ]; then
     echo "   🔐 Auth Service:      http://localhost:8013"
     echo "   🧠 Memory Agent:      http://localhost:8009"
     echo "   ⚡ Executor Agent:     http://localhost:8008"
-    echo "   � Planning Agent:    http://localhost:8007"
-    echo "   �🔍 Research Manager:  http://localhost:8002"
+    echo "   📋 Planning Agent:    http://localhost:8007"
+    echo "   🔍 Research Manager:  http://localhost:8002"
     echo "   📚 Literature Agent:  http://localhost:8003"
-    echo "   🔬 Screening Agent:   http://localhost:8004"
+    echo "   🌐 Network Agent:     http://localhost:8004"
+    echo "   🔬 Screening Agent:   http://localhost:8012"
     echo "   📝 Synthesis Agent:   http://localhost:8005"
     echo "   ✍️  Writer Agent:      http://localhost:8006"
     echo "   🗄️  Database Agent:    http://localhost:8011"
@@ -325,7 +383,7 @@ else
     echo "   docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml ps"
     echo
     echo "💡 Common issues:"
-    echo "   - Port conflicts: Check if ports 8001, 8008, 8009, 8013, 9000, 5433, 6380 are free"
+    echo "   - Port conflicts: Check if ports 8001-8013, 9000, 5433, 6380 are free"
     echo "   - Resource limits: Ensure at least 2GB RAM available"
     echo "   - Docker issues: Verify Docker daemon is running"
     exit 1

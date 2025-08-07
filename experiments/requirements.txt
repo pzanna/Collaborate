@@ -1,0 +1,22 @@
+# Academic Literature Search System - Minimal Requirements
+# ========================================================
+
+# Core dependencies for semantic similarity and embeddings
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Natural language processing
+nltk>=3.8
+
+# Data structures and utilities
+dataclasses; python_version < "3.7"
+
+# Optional: Environment variable management
+python-dotenv>=1.0.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+# black>=22.0.0
+# flake8>=4.0.0

@@ -68,7 +68,7 @@ BUILD_ARGS="--no-cache --pull"
 SERVICES=(
     "planning-agent:agents/planning"
     "screening-agent:agents/screening" 
-    "memory-agent:agents/memory"
+    "memory-service:services/memory"
     "executor-agent:agents/executor"
     "literature-agent:agents/literature"
     "database-agent:agents/database"

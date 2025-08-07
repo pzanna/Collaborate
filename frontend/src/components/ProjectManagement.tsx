@@ -182,7 +182,7 @@ export function ProjectManagement() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="name">Project Name</Label>
                 <Input
                   id="name"
@@ -193,7 +193,7 @@ export function ProjectManagement() {
                   }
                 />
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
@@ -296,12 +296,22 @@ export function ProjectManagement() {
                   <div className="text-sm">
                     <span
                       className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        project.status === "active"
+                        project.status === "pending"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : project.status === "active"
+                          ? "bg-blue-100 text-blue-800"
+                          : project.status === "complete"
                           ? "bg-green-100 text-green-800"
                           : "bg-gray-100 text-gray-800"
                       }`}
                     >
-                      {project.status}
+                      {project.status === "pending"
+                        ? "Pending"
+                        : project.status === "active"
+                        ? "In Progress"
+                        : project.status === "complete"
+                        ? "Complete"
+                        : project.status}
                     </span>
                   </div>
                   {/* Placeholder for plans and tasks - will be implemented later */}
@@ -338,7 +348,7 @@ export function ProjectManagement() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="edit-name">Project Name</Label>
               <Input
                 id="edit-name"
@@ -349,7 +359,7 @@ export function ProjectManagement() {
                 }
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="edit-description">Description</Label>
               <Textarea
                 id="edit-description"

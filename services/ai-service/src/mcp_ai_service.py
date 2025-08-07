@@ -236,12 +236,18 @@ class MCPAIService:
         """Handle incoming MCP message"""
         message_type = data.get("type")
         
+        logger.debug(f"🔍 Received MCP message: type={message_type}")
+        if message_type == "task_result":
+            logger.info(f"🔍 Received task_result message: {data}")
+        
         if message_type == "registration_confirmed":
             await self._handle_registration_confirmed(data)
         elif message_type == "heartbeat_ack":
             await self._handle_heartbeat_ack(data)
         elif message_type == "task_request":
             await self._handle_task_request(data)
+        elif message_type == "task_result":
+            await self._handle_task_result(data)
         elif message_type == "ai_response":
             await self._handle_ai_response(data)
         else:
@@ -259,6 +265,31 @@ class MCPAIService:
         """Handle heartbeat acknowledgment"""
         # Optional: track heartbeat timing for connection health
         pass
+    
+    async def _handle_task_result(self, data: Dict[str, Any]):
+        """Handle task result responses for our tool calls"""
+        task_id = data.get("task_id")
+        
+        logger.info(f"🔍 Received task_result: task_id={task_id}")
+        logger.debug(f"🔍 Full task_result data: {data}")
+        logger.debug(f"🔍 Current pending_requests: {list(self.pending_requests.keys())}")
+        
+        if task_id in self.pending_requests:
+            future = self.pending_requests.pop(task_id)
+            logger.info(f"✅ Found pending request for task_id: {task_id}")
+            if not future.done():
+                future.set_result(data)
+                logger.info(f"✅ Tool call response received for task_id: {task_id}")
+            else:
+                logger.warning(f"⚠️ Tool call future already done for task_id: {task_id}")
+        else:
+            # Check if this might be a late response by looking for Google search pattern
+            if task_id and task_id.startswith("google_search_"):
+                logger.info(f"🔄 Received late Google search response for task_id: {task_id}")
+                logger.info(f"🔄 Response contains {len(data.get('result', {}).get('results', []))} search results")
+            else:
+                logger.warning(f"❌ Task result for task we're not waiting for: {task_id}")
+                logger.warning(f"❌ Available pending requests: {list(self.pending_requests.keys())}")
     
     async def _handle_task_request(self, data: Dict[str, Any]):
         """Handle task request from MCP Server"""
@@ -358,40 +389,100 @@ class MCPAIService:
         return content
 
     async def _handle_chat_completion(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle chat completion request"""
+        """Handle chat completion request with tool support"""
         
         provider = task_data.get("provider", "openai")
         messages = task_data.get("messages", [])
         model = task_data.get("model")
+        tools = task_data.get("tools", [])
+        tool_choice = task_data.get("tool_choice", "auto")
 
-        logger.info(f"Chat completion request details: {task_data}")
+        logger.info(f"Chat completion request details: provider={provider}, model={model}, tools={len(tools)} tools")
 
         if provider == "openai" and self.openai_client:
             if not model:
                 model = "gpt-4o-mini"
             
-            response = await self.openai_client.chat.completions.create(
-                model=model,
-                messages=messages,
+            # Prepare OpenAI request parameters
+            openai_params = {
+                "model": model,
+                "messages": messages,
                 **{k: v for k, v in task_data.items() 
-                   if k not in ["provider", "messages", "model"]}
-            )
+                   if k not in ["provider", "messages", "model", "tools", "tool_choice"]}
+            }
             
-            # Process each choice to extract JSON from markdown if present
+            # Add tools if provided
+            if tools:
+                openai_params["tools"] = tools
+                openai_params["tool_choice"] = tool_choice
+                logger.info(f"Adding {len(tools)} tools to OpenAI request")
+            
+            response = await self.openai_client.chat.completions.create(**openai_params)
+            
+            # Process each choice and handle tool calls
             processed_choices = []
             for choice in response.choices:
-                original_content = choice.message.content
-                processed_content = self._extract_json_from_content(original_content)
-                
-                processed_choices.append({
+                choice_data = {
                     "index": choice.index,
                     "message": {
                         "role": choice.message.role,
-                        "content": processed_content
+                        "content": choice.message.content
                     },
                     "finish_reason": choice.finish_reason
-                })
+                }
+                
+                # Handle tool calls if present
+                if hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
+                    tool_calls = []
+                    for tool_call in choice.message.tool_calls:
+                        # Execute tool call and get result
+                        tool_result = await self._execute_tool_call(tool_call)
+                        tool_calls.append({
+                            "id": tool_call.id,
+                            "type": tool_call.type,
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments
+                            },
+                            "result": tool_result
+                        })
+                    
+                    choice_data["message"]["tool_calls"] = tool_calls
+                    
+                    # If we have tool calls, we need to continue the conversation
+                    if tool_calls:
+                        # Add tool call message and results to conversation
+                        extended_messages = messages + [choice.message]
+                        for tool_call in tool_calls:
+                            extended_messages.append({
+                                "role": "tool",
+                                "content": json.dumps(tool_call["result"]),
+                                "tool_call_id": tool_call["id"]
+                            })
+                        
+                        # Make follow-up request with tool results
+                        follow_up_params = openai_params.copy()
+                        follow_up_params["messages"] = extended_messages
+                        follow_up_params.pop("tools", None)  # Remove tools for follow-up
+                        follow_up_params.pop("tool_choice", None)
+                        
+                        follow_up_response = await self.openai_client.chat.completions.create(**follow_up_params)
+                        
+                        # Use the follow-up response content
+                        if follow_up_response.choices:
+                            follow_up_choice = follow_up_response.choices[0]
+                            choice_data["message"]["content"] = follow_up_choice.message.content
+                            choice_data["finish_reason"] = follow_up_choice.finish_reason
+                else:
+                    # Process content normally if no tool calls
+                    if choice.message.content:
+                        processed_content = self._extract_json_from_content(choice.message.content)
+                        choice_data["message"]["content"] = processed_content
+                
+                processed_choices.append(choice_data)
             
+            logger.info(f"Chat completion response processed with {len(processed_choices)} choices")
+
             return {
                 "id": response.id,
                 "choices": processed_choices,
@@ -464,7 +555,7 @@ class MCPAIService:
         
         elif provider == "xai" and self.xai_client:
             if not model:
-                model = "grok-beta"
+                model = "grok-3-mini"
             
             response = await self.xai_client.chat.completions.create(
                 model=model,
@@ -543,7 +634,7 @@ class MCPAIService:
         
         if self.openai_client:
             available_models.extend([
-                {"provider": "openai", "model": "gpt-4o", "type": "chat"},
+                {"provider": "openai", "model": "gpt-4.1-nano", "type": "chat"},
                 {"provider": "openai", "model": "gpt-4o-mini", "type": "chat"},
                 {"provider": "openai", "model": "text-embedding-3-small", "type": "embedding"},
                 {"provider": "openai", "model": "text-embedding-3-large", "type": "embedding"}
@@ -558,7 +649,7 @@ class MCPAIService:
         
         if self.xai_client:
             available_models.extend([
-                {"provider": "xai", "model": "grok-beta", "type": "chat"}
+                {"provider": "xai", "model": "grok-3-mini", "type": "chat"}
             ])
         
         return {
@@ -584,6 +675,115 @@ class MCPAIService:
             "estimated_cost": 0.0
         }
     
+    async def _execute_tool_call(self, tool_call) -> Dict[str, Any]:
+        """Execute a tool call and return the result"""
+        try:
+            function_name = tool_call.function.name
+            arguments_str = tool_call.function.arguments
+            
+            # Parse tool call arguments
+            try:
+                arguments = json.loads(arguments_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse tool call arguments: {e}")
+                return {"error": f"Invalid JSON in tool call arguments: {e}"}
+            
+            logger.info(f"Executing tool call: {function_name} with args: {arguments}")
+            
+            if function_name == "google_search":
+                return await self._execute_google_search(arguments)
+            else:
+                logger.warning(f"Unknown tool function: {function_name}")
+                return {"error": f"Unknown tool function: {function_name}"}
+                
+        except Exception as e:
+            logger.error(f"Error executing tool call: {e}")
+            return {"error": f"Tool execution failed: {str(e)}"}
+    
+    async def _execute_google_search(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute Google search via network agent"""
+        try:
+            query = arguments.get("query", "")
+            num_results = arguments.get("num_results", 10)
+            
+            if not query:
+                return {"error": "Search query is required"}
+            
+            # Create search request for network agent
+            search_request = {
+                "type": "task_request",
+                "data": {
+                    "task_id": f"google_search_{uuid.uuid4().hex[:8]}",
+                    "context_id": f"ai_service_tool_call",
+                    "agent_type": "network",
+                    "action": "google_search",
+                    "payload": {
+                        "query": query,
+                        "num_results": min(num_results, 10)  # Limit to max 10 results
+                    }
+                },
+                "client_id": self.agent_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            if not self.websocket:
+                logger.warning("MCP connection not available for Google search")
+                return {"error": "MCP connection not available"}
+            
+            # Send search request to network agent via MCP
+            task_id = search_request["data"]["task_id"]
+            await self.websocket.send(json.dumps(search_request))
+            logger.info(f"Google search request sent via MCP: {query}")
+            
+            # Wait for response
+            try:
+                future = asyncio.Future()
+                self.pending_requests[task_id] = future
+                
+                response_data = await asyncio.wait_for(future, timeout=60.0)
+                
+                if (response_data.get("type") == "task_result" and 
+                    response_data.get("task_id") == task_id):
+                    
+                    if response_data.get("status") == "completed":
+                        search_results = response_data.get("result", {})
+                        logger.info(f"Google search completed: {len(search_results.get('items', []))} results")
+                        return search_results
+                    else:
+                        error_msg = response_data.get("error", "Search failed")
+                        logger.warning(f"Google search failed: {error_msg}")
+                        return {"error": error_msg}
+                
+                logger.warning("Invalid response format from Google search")
+                return {"error": "Invalid response format"}
+                
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for Google search response for task_id: {task_id}")
+                # Don't remove from pending_requests immediately - allow grace period for late responses
+                asyncio.create_task(self._cleanup_pending_request_later(task_id, 30.0))
+                return {"error": "Search request timed out"}
+            except Exception as e:
+                logger.error(f"Error waiting for Google search response: {e}")
+                self.pending_requests.pop(task_id, None)
+                return {"error": f"Search execution failed: {str(e)}"}
+            else:
+                # Response received successfully, remove from pending
+                self.pending_requests.pop(task_id, None)
+                
+        except Exception as e:
+            logger.error(f"Error in Google search execution: {e}")
+            return {"error": f"Search execution failed: {str(e)}"}
+
+    async def _cleanup_pending_request_later(self, task_id: str, delay: float):
+        """Clean up a pending request after a delay to allow for late responses"""
+        await asyncio.sleep(delay)
+        if task_id in self.pending_requests:
+            future = self.pending_requests.pop(task_id)
+            if not future.done():
+                logger.info(f"Cleaning up timed-out pending request: {task_id}")
+            else:
+                logger.info(f"Late response arrived for task_id: {task_id}")
+
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
         if sys.platform != "win32":

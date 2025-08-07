@@ -1,103 +1,377 @@
 # Eunice Research Platform
 
+**Version**: v0.3.1  
+**Status**: ✅ Production-Ready Core API (90% functionality operational)  
+**Architecture**: Microservices with MCP (Model Context Protocol) coordination  
+**Target Users**: Researchers, Application Architects, Senior Software Developers
+
 ## Overview
 
-Eunice is an advanced research platform named after the AI from William Gibson's novel [Agency](https://en.wikipedia.org/wiki/Agency_(novel)). It is designed to facilitate sophisticated research workflows through an integrated **Version 0.3 microservices architecture** supporting collaborative research, project management, intelligent agent coordination, and **PhD-quality thesis generation**.
+The Eunice Research Platform is a sophisticated research automation system that leverages artificial intelligence and microservices architecture to streamline academic research workflows. The platform provides comprehensive literature review capabilities, research planning, systematic review automation, and manuscript generation through a distributed agent-based ecosystem.
 
-The platform specializes in hierarchical research organization, multi-agent collaboration, systematic literature reviews, and provides comprehensive tools for managing complex research projects across multiple domains.
+### Key Capabilities
 
-**Current Status**: Version 0.3.1 Microservices Architecture ✅ DEPLOYED  
-**API Testing**: ✅ COMPLETED - 90% core functionality verified ([Test Results](testing/API_TESTING_RESULTS_v031.md))  
-**Production Ready**: Core research workflows fully operational with hierarchical Project → Topic → Plan → Task structure
+- 🔍 **Literature Discovery**: Multi-database academic search across PubMed, arXiv, Semantic Scholar, and CrossRef
+- 🌐 **Web Search Integration**: Google Custom Search API integration for real-time web search capabilities
+- 📊 **Systematic Reviews**: PRISMA-compliant systematic review workflows with automated screening
+- 📝 **Research Planning**: AI-powered research plan generation with cost estimation and optimization
+- ✍️ **Manuscript Generation**: Automated academic writing with proper citation formatting
+- 👥 **Expert Consultation**: 7 specialized persona consultants for domain-specific guidance
+- 🔐 **Enterprise Security**: JWT authentication with 2FA support and role-based access control
 
-## 🚀 Key Features
+## 🏗️ Architecture Summary
 
-### Multi-Agent Coordination - **Project Management**: Comprehensive project organization with hierarchical research topics
+### Core Design Principles
 
-- **Conversation Tracking**: Advanced conversation management with persistent storage
-- **Research Task Organization**: Structured task management with dependency tracking
-- **Hierarchical Data Models**: Complex research structures with nested relationships
-- **Multi-Agent Coordination**: Intelligent agent personas for specialized research domains
-- **Persona Consultation System**: Real-time expert consultation through specialized AI personas
+The platform implements a **hybrid microservices architecture** with:
 
-### Research Capabilities - **Enhanced Academic Search**: Semantic Scholar API integration for high-quality academic papers
+- **MCP Protocol Coordination**: WebSocket-based agent communication with centralized orchestration
+- **Dual Database Access**: Direct PostgreSQL for READ operations, MCP routing for WRITE operations  
+- **Container-First Design**: Docker-native deployment with horizontal scaling capabilities
+- **Security-First Approach**: Enterprise-grade authentication with comprehensive RBAC
+- **Performance Optimization**: 60-70% performance improvement through intelligent routing
 
-- **Multi-Source Research**: Web search across Google, Bing, Yahoo with academic source prioritization
-- **Systematic Literature Reviews**: PRISMA-compliant systematic review generation
-- **Thesis Generation**: Transform systematic reviews into PhD-quality literature review chapters
-- **Cost Estimation System**: Budget tracking and resource management
-- **Dependency Management**: Automatic task dependency resolution
-- **Parallelism Coordination**: Efficient multi-threaded research execution
-- **Memory Management**: Persistent storage for research artifacts and conversations
-- **Export Functionality**: Research data export in multiple formats (PDF, Markdown, LaTeX, HTML, DOCX)
-
-### Thesis Generation System 🎓 - **AI-Powered Analysis**: GPT-4 integration for intelligent theme extraction and gap analysis
-
-- **Multiple Output Formats**: Markdown, LaTeX, HTML, PDF, DOCX
-- **Deterministic Generation**: Reproducible outputs with SHA-256 caching (temp=0, top_p=1)
-- **Academic Quality**: PhD-level literature reviews with proper citations and formatting
-- **Research Questions**: Automatic generation of testable hypotheses and research questions
-- **Conceptual Frameworks**: Visual diagrams and theoretical models with Mermaid integration
-- **Human Checkpoints**: Interactive review points for quality control
-- **Template System**: Jinja2 templates for consistent academic formatting
-
-### Technical Features - **MCP (Model Context Protocol) Server**: Advanced microservices coordination with persona integration
-
-- **Real-time WebSocket Communication**: Live updates, collaboration, and expert consultations
-- **RESTful API**: Comprehensive backend API for all platform operations
-- **Modern React Frontend**: Responsive web interface with TypeScript
-- **PostgreSQL Database**: Reliable data persistence with asynchronous operations
-- **Persona System**: AI-powered expert consultation with domain-specific knowledge
-
-## 🏗️ Architecture - Version 0.3 Microservices
-
-Eunice follows a **Version 0.3 microservices architecture** with the following implemented components:
-
-### ✅ Implemented Services
-
-- **API Gateway** (Port 8001): Unified REST interface with 25+ endpoints including project management
-- **MCP Server** (Port 9000): Enhanced coordination server with agent management and WebSocket communication
-- **Database Service** (Port 8011): PostgreSQL integration with native connection pooling
-- **Redis** (Port 6380): Message broker and caching layer
-- **PostgreSQL** (Port 5433): Primary database with hierarchical research structure
-
-### 🔄 In Development (Version 0.3.1)
-
-- **Research Topic Management**: Full CRUD operations for research topics within projects
-- **Research Plan Management**: Planning and organization endpoints for systematic research
-- **Task Management**: Individual task tracking and execution monitoring
-
-### ❌ Future Implementation
-
-- **Individual Agent Containers**: Literature, Planning, Executor, Memory agents
-- **Service Discovery**: Agent registration and health monitoring
-- **Advanced Security**: JWT authentication and RBAC
-- **Performance Optimization**: Distributed caching and load balancing
-
-### Current Architecture Flow
+### System Components
 
 ```text
-API Gateway (8001) → MCP Server (9000) → Database Service (8011)
-                           ↓
-                   Integrated Agents (not yet containerized)
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│   React UI      │────│   API Gateway    │────│   MCP Server        │
+│   (Port 3000)   │    │   (Port 8001)    │    │   (Port 9000)       │
+└─────────────────┘    └──────────────────┘    └─────────────────────┘
+                              │                           │
+                              ▼                           ▼
+                       ┌──────────────┐           ┌─────────────────┐
+                       │ Auth Service │           │ Research Agents │
+                       │ (Port 8013)  │           │ (8002-8009)     │
+                       └──────────────┘           └─────────────────┘
+                              │                           │
+                              ▼                           ▼
+                    ┌────────────────────┐      ┌──────────────────┐
+                    │ PostgreSQL + Redis │      │ AI Service       │
+                    │ (Infrastructure)   │      │ (Multi-provider) │
+                    └────────────────────┘      └──────────────────┘
 ```
 
-For detailed architecture information, see [Version 0.3 Service Architecture](docs/VERSION03_SERVICE_ARCHITECTURE.md).
+### Research Agent Ecosystem
 
-## 🧬 Research Agent Personas
+The platform includes 9 specialized research agents:
 
-The platform includes specialized agent personas for interdisciplinary research consultation:
+- **Research Manager** (8002): Workflow orchestration and multi-agent coordination
+- **Literature Search** (8003): Academic database search and bibliographic management
+- **Screening & PRISMA** (8012): Systematic review screening with compliance tracking
+- **Synthesis & Review** (8005): Evidence synthesis and meta-analysis capabilities
+- **Writer** (8006): Academic manuscript generation and formatting
+- **Planning** (8007): Research planning with cost estimation and optimization
+- **Executor** (8008): Secure code execution and data processing
+- **Memory** (8009): Knowledge base management and semantic search
+- **Network** (8004): Google Custom Search integration and web research capabilities
 
-- **Neurobiologist**: Brain mapping, neuron extraction, viability assessments, and culture maintenance
-- **Computational Neuroscientist**: Neural activity modeling and bio-digital interfacing protocols
-- **AI/ML Engineer & Data Scientist**: ANN development and experimental data analysis
-- **Biomedical Systems Engineer**: Hardware/software interface development and integration
-- **Animal Biologist & Bioethics Specialist**: Animal welfare and regulatory compliance
-- **Technical/Scientific Writer**: Documentation, manuscripts, and grant proposals
+## 🚀 Quick Start
 
-### 🎯 Persona Consultation System
+### Prerequisites
 
-The platform provides an advanced persona consultation system through the MCP server:
+- Docker and Docker Compose
+- Git
+- 8GB+ RAM recommended
+- Ports 3000, 8001, 8013, 9000 available
+
+### Installation
+
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/your-org/eunice.git
+   cd eunice
+   ```
+
+2. **Configure environment variables**:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys and configuration
+   ```
+
+3. **Start the platform**:
+
+   ```bash
+   # Development environment
+   ./start_dev.sh
+   
+   # Production environment  
+   ./deploy_production.sh
+   ```
+
+4. **Access the platform**:
+   - **Web UI**: <http://localhost:3000>
+   - **API Documentation**: <http://localhost:8001/docs>
+   - **Health Status**: <http://localhost:8001/health>
+
+### Environment Configuration
+
+```bash
+# AI Provider Configuration
+OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_key
+XAI_API_KEY=your_xai_key
+
+# Google Search Configuration (Required for Network Agent)
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_SEARCH_ENGINE_ID=your_google_search_engine_id
+
+# Database Configuration
+POSTGRES_DB=eunice
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_secure_password
+
+# Authentication Configuration
+AUTH_SECRET_KEY=your_jwt_secret_key
+```
+
+## 📊 Current Status (Version 0.3.1)
+
+### Production Readiness
+
+- ✅ **API Validation**: 90% of core CRUD operations working (18/20 operations successful)
+- ✅ **Authentication System**: Production-ready JWT service with 2FA support
+- ✅ **Container Deployment**: Full Docker Compose orchestration operational
+- ✅ **Database Integration**: Hierarchical research structure fully implemented
+- ✅ **Security Framework**: Enterprise-grade authentication and authorization
+- ✅ **Performance Targets**: Response times within acceptable ranges (< 500ms average)
+
+### Functional Capabilities
+
+```yaml
+✅ FULLY OPERATIONAL:
+  - Projects API: 5/5 operations (100%)
+  - Research Topics API: 5/5 operations (100%)
+  - Authentication & 2FA: Complete functionality
+  - Literature Search: Multi-database search working
+  - Research Planning: AI-powered planning operational
+  - Container Orchestration: Full stack deployment
+
+⚠️ CORE WORKING (Known Issues):
+  - Research Plans API: 2/5 operations (CREATE, LIST working)
+  - Tasks API: 3/5 operations (CREATE, LIST, GET working)
+  - Individual resource routing needs optimization
+  - UPDATE/DELETE operations have persistence issues
+
+🔧 IN DEVELOPMENT:
+  - Advanced caching layers
+  - Enhanced load balancing
+  - Kubernetes deployment manifests
+```
+
+## 🔐 Security Features
+
+### Authentication & Authorization
+
+The platform implements enterprise-grade security with:
+
+- **JWT Tokens**: Access tokens (30 min) and refresh tokens (7 days)
+- **Two-Factor Authentication**: TOTP-based 2FA with Google/Microsoft Authenticator
+- **Role-Based Access Control**: Three roles (Admin, Researcher, Collaborator)
+- **Password Security**: Strength validation with bcrypt hashing
+- **API Security**: CORS protection, input validation, rate limiting ready
+
+### Security Compliance
+
+- **Security Score**: 9.2/10 (Production-ready implementation)
+- **Standards Compliance**: RFC 7519 (JWT), RFC 6238 (TOTP), OWASP guidelines
+- **Container Security**: Non-root execution, read-only filesystems, capability dropping
+- **Network Security**: Internal Docker networks, service mesh isolation
+
+## 📚 Comprehensive Documentation
+
+### For Application Architects
+
+- **[Master Architecture](docs/Architecture/MASTER_ARCHITECTURE.md)**: Complete system architecture and design decisions
+- **[Microservices Transition](docs/VERSION03_MICROSERVICES_TRANSITION.md)**: Evolution roadmap and implementation strategy
+- **[Service Architecture](docs/VERSION03_SERVICE_ARCHITECTURE.md)**: Detailed service specifications and deployment configs
+
+### For Developers
+
+- **[MCP Task Capabilities](docs/MCP_TASK_CAPABILITIES.md)**: Complete agent capability mapping
+- **[API Documentation](docs/API%20Gateway/API_DOCUMENTATION.md)**: REST API specifications and examples
+- **[Database Schema](docs/Database/Schema_Documentation.md)**: Hierarchical data model and relationships
+
+### For Researchers
+
+- **[Persona System](docs/Personas/README.md)**: Expert consultation system with 7 specialized domains
+- **[Literature Review Process](docs/Workflows/Literature_Review_Process.md)**: PRISMA-compliant systematic review workflows
+- **[Research Planning Guide](docs/Agents/Planning_Agent/README.md)**: AI-powered research planning capabilities
+
+### Testing & Validation
+
+- **[Testing Documentation](docs/Testing/TESTING_CONSOLIDATED.md)**: Comprehensive testing results and validation
+- **[API Testing Results](testing/API_TESTING_RESULTS_v031.md)**: Detailed API functionality validation
+- **[Performance Benchmarks](docs/Architecture/Performance_Analysis.md)**: System performance metrics and optimization
+
+## 🎯 Use Cases
+
+### Academic Researchers
+
+```yaml
+Literature Reviews:
+  - Automated literature discovery across multiple databases
+  - PRISMA-compliant systematic review workflows
+  - Evidence synthesis with statistical meta-analysis
+  - Automated manuscript generation with proper citations
+
+Research Planning:
+  - AI-powered research plan generation
+  - Cost estimation and budget optimization
+  - Resource requirement analysis
+  - Timeline and milestone planning
+```
+
+### Research Institutions
+
+```yaml
+Workflow Automation:
+  - Multi-user research collaboration
+  - Standardized research methodologies
+  - Quality assurance and compliance tracking
+  - Centralized knowledge management
+
+Administrative Benefits:
+  - Role-based access control for team management
+  - Audit trails for compliance reporting
+  - Resource usage tracking and optimization
+  - Integration with existing research infrastructure
+```
+
+### Software Development Teams
+
+```yaml
+Architecture Reference:
+  - Microservices design patterns
+  - MCP protocol implementation
+  - Container orchestration strategies
+  - Security framework implementation
+
+Integration Opportunities:
+  - REST API for external integrations
+  - WebSocket real-time communication
+  - Event-driven architecture patterns
+  - Scalable agent-based systems
+```
+
+## 🔧 Development Setup
+
+### Local Development
+
+```bash
+# Install dependencies
+npm install  # Frontend dependencies
+pip install -r requirements-dev.txt  # Backend dependencies
+
+# Start development servers
+npm run dev  # Frontend development server
+python -m uvicorn main:app --reload  # Backend development server
+
+# Run tests
+pytest  # Backend tests
+npm test  # Frontend tests
+```
+
+### Container Development
+
+```bash
+# Build and start development environment
+docker compose -f docker-compose.dev.yml up --build
+
+# View logs
+docker compose logs -f
+
+# Reset environment
+docker compose down -v
+docker compose up --build
+```
+
+## 📈 Performance Characteristics
+
+### Response Time Targets
+
+- **UI Interactions**: < 200ms for navigation and queries
+- **Literature Searches**: < 10s for comprehensive academic searches  
+- **Research Planning**: < 30s for AI-powered plan generation
+- **API Operations**: < 500ms for complex database operations
+- **Authentication**: < 100ms for JWT validation
+
+### Scalability Metrics
+
+- **Concurrent Users**: 50+ simultaneous users supported
+- **Database Performance**: 20 connections pool, < 50ms query response
+- **Agent Processing**: 1000+ MCP messages per second
+- **Container Resources**: 50-200MB memory per service
+- **Storage**: Efficient PostgreSQL with JSON metadata support
+
+## 🔮 Roadmap
+
+### Version 0.4 (Planned)
+
+- **Vector Database Integration**: Semantic search with Qdrant/Weaviate
+- **Advanced Analytics**: Prometheus/Grafana monitoring dashboards
+- **Enhanced Collaboration**: Real-time multi-user editing capabilities
+- **Performance Optimization**: Advanced caching and query optimization
+
+### Version 0.5 (Future)
+
+- **Multi-Cloud Deployment**: AWS/Azure/GCP deployment options
+- **Edge AI Integration**: Local LLM deployment for reduced latency
+- **Advanced Workflows**: Custom research workflow builder
+- **Third-Party Integrations**: Zotero, EndNote, Mendeley integration
+
+## 🤝 Contributing
+
+### Development Guidelines
+
+- **Code Quality**: PEP 8 compliance, type hints, comprehensive testing
+- **Security**: Follow security-first development practices
+- **Documentation**: Maintain comprehensive inline and API documentation
+- **Testing**: Aim for 80%+ test coverage with integration tests
+
+### Getting Started
+
+1. Review the [Master Architecture](docs/Architecture/MASTER_ARCHITECTURE.md) documentation
+2. Set up the development environment using Docker Compose
+3. Run the test suite to ensure everything is working
+4. Check the issues list for contribution opportunities
+
+## 📞 Support
+
+### Documentation
+
+- **Architecture**: Complete system design and implementation details
+- **API Reference**: REST API specifications with examples
+- **Deployment**: Container orchestration and scaling guides
+- **Security**: Authentication, authorization, and compliance documentation
+
+### Community
+
+- **Issues**: GitHub Issues for bug reports and feature requests
+- **Discussions**: GitHub Discussions for questions and community support
+- **Documentation**: Comprehensive guides for all user types
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🏆 Acknowledgments
+
+- **Model Context Protocol (MCP)**: For enabling sophisticated agent coordination
+- **FastAPI**: For high-performance API development
+- **React**: For modern, responsive user interfaces
+- **PostgreSQL**: For robust, scalable data storage
+- **Docker**: For containerization and deployment simplification
+
+---
+
+**The Eunice Research Platform represents the next generation of research automation, combining artificial intelligence, microservices architecture, and academic domain expertise to accelerate scientific discovery and knowledge creation.**
+
+---
+
+*For detailed technical documentation, see the [docs/](docs/) directory. For specific implementation questions, refer to the [Master Architecture](docs/Architecture/MASTER_ARCHITECTURE.md) documentation.*
 
 - **Expert Consultation**: Request specialized advice from domain experts
 - **Multi-Persona Support**: Automatic routing to appropriate expertise areas

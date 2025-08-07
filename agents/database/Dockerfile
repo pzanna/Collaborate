@@ -40,7 +40,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
-COPY start.sh ./
 COPY start-dev.sh ./
 
 # Copy base MCP agent from local directory
@@ -56,7 +55,7 @@ RUN chown -R database:database /app && \
     chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \; && \
-    chmod 750 /app/start.sh /app/start-dev.sh
+    chmod 750 /app/start-dev.sh
 
 # Security: Create writable temp directory for application
 RUN mkdir -p /app/tmp && \
@@ -75,4 +74,4 @@ EXPOSE 8011
 
 # Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["./start.sh"]
+CMD ["./start-dev.sh"]

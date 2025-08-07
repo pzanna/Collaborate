@@ -13,7 +13,7 @@
 # Services Stopped:
 #   - API Gateway (port 8001)
 #   - Auth Service (port 8013)
-#   - Memory Agent (port 8009) 
+#   - Memory Service (port 8009) 
 #   - Executor Agent (port 8008)
 #   - Planning Agent (port 8007)
 #   - Research Manager Agent (port 8002)

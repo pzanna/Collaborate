@@ -1,24 +1,15 @@
 #!/usr/bin/env python3
 """
-Containerized API Gateway Service for Eunice Research Platform
+Improved Containerized API Gateway Service for Eunice Research Platform
 
-This service provides a unified REST API interface that routes requests to appropriate 
-research agents via the MCP (Message Control Protocol) server. It's designed to run 
-as a containerized microservice in Version 0.3 architecture.
-
-Key Features:
-- REST API endpoints for all research operations
-- MCP p            
-            return AcademicSearchResponse(
-                papers=papers,
-                total_results=len(papers),
-                query=request.query,
-                execution_time=None,
-                sources=["literature_agent"]
-            )tocol integration for agent communication
-- Health checks and monitoring
-- Graceful shutdown handling
-- Production-ready configuration
+This service provides a unified REST API interface that routes requests to research 
+agents via the MCP server. Updated to work with the improved MCPClient, featuring:
+- Full configuration integration for MCPClient
+- Enhanced task management with timeout cleanup
+- Aligned message types (research_action)
+- Improved health checks using MCPClient
+- Robust shutdown with task cancellation
+- Structured JSON logging for monitoring
 """
 
 import asyncio
@@ -28,14 +19,13 @@ import sys
 import json
 from uuid import uuid4
 from contextlib import asynccontextmanager
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Query, Path
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from config import Config
 from mcp_client import MCPClient
@@ -45,30 +35,41 @@ from native_database_client import get_native_database, initialize_native_databa
 
 # Import hierarchical data models for v2 endpoints
 from src.data_models.hierarchical_data_models import (
-    # Request models
     ProjectRequest, ResearchTopicRequest, ResearchPlanRequest, TaskRequest,
-    # Update models
     ProjectUpdate, ResearchTopicUpdate, ResearchPlanUpdate, TaskUpdate,
-    # Response models
     ProjectResponse as HierarchicalProjectResponse, ResearchTopicResponse, 
     ResearchPlanResponse, TaskResponse,
-    # Utility models  
     SuccessResponse, ProjectHierarchy, ProjectStats, TopicStats, PlanStats
 )
 
 # Import V2 API router
 from v2_hierarchical_api import v2_router, set_mcp_client
 
-# Configure logging
+# Configure structured JSON logging
 logging.basicConfig(
     level=getattr(logging, Config.LOG_LEVEL.upper()),
-    format=Config.LOG_FORMAT,
+    format='%(message)s',  # JSON formatter will handle structure
     handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler('/tmp/api-gateway.log') if Config.LOG_LEVEL.upper() == 'DEBUG' else logging.NullHandler()
     ]
 )
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "service": "api-gateway",
+            "message": record.getMessage(),
+            "module": record.module,
+            "line": record.lineno
+        }
+        return json.dumps(log_record)
+
 logger = logging.getLogger(__name__)
+for handler in logger.handlers:
+    handler.setFormatter(JSONFormatter())
 
 # Global MCP client instance
 mcp_client = None
@@ -78,14 +79,17 @@ native_database_client = None
 
 
 def get_database():
-    """Get database client for direct read operations using native PostgreSQL."""
+    """Get database client for direct read operations."""
     global native_database_client
     if native_database_client is None:
         try:
-            # Initialize native PostgreSQL client for read operations
             native_database_client = get_native_database()
         except Exception as e:
-            logger.error(f"Failed to initialize native database client: {e}")
+            logger.error(json.dumps({
+                "event": "database_initialization_failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }))
             raise HTTPException(status_code=503, detail="Database service not available")
     return native_database_client
 
@@ -94,150 +98,243 @@ class APIGateway:
     """
     Containerized API Gateway for Version 0.3 microservices architecture.
     
-    Provides unified REST interface and routes requests to research agents
-    via the MCP server using WebSocket communication.
+    Routes REST API requests to research agents via the MCP server and supports
+    direct PostgreSQL reads for performance.
     """
     
     def __init__(self):
         self.mcp_client: Optional[MCPClient] = None
         self.active_requests: Dict[str, Dict[str, Any]] = {}
+        self.request_timeout = 3600  # 1 hour
         
     async def initialize(self) -> bool:
         """Initialize the API Gateway and connect to MCP server."""
         try:
-            logger.info("Initializing API Gateway...")
+            logger.info(json.dumps({
+                "event": "gateway_initialization_start",
+                "timestamp": datetime.utcnow().isoformat()
+            }))
             
             # Validate configuration
             Config.validate_config()
             
-            # Initialize MCP client
+            # Initialize MCP client with full configuration
             mcp_config = Config.get_mcp_config()
             self.mcp_client = MCPClient(
-                host=mcp_config["host"],
-                port=mcp_config["port"]
+                host=mcp_config.get("host", "mcp-server"),
+                port=mcp_config.get("port", 9000),
+                config={
+                    "max_retries": mcp_config.get("retry_attempts", 15),
+                    "base_retry_delay": mcp_config.get("retry_delay", 5),
+                    "heartbeat_interval": mcp_config.get("heartbeat_interval", 30),
+                    "ping_timeout": mcp_config.get("ping_timeout", 10),
+                    "request_timeout": mcp_config.get("request_timeout", 3600),
+                    "max_reconnect_duration": mcp_config.get("max_reconnect_duration", 3600)
+                }
             )
             
-            # Connect to MCP server with retries
-            for attempt in range(mcp_config["retry_attempts"]):
-                try:
-                    if await self.mcp_client.connect():
-                        logger.info(f"API Gateway connected to MCP server at {mcp_config['url']}")
-                        return True
-                    else:
-                        logger.warning(f"Connection attempt {attempt + 1} failed")
-                        if attempt < mcp_config["retry_attempts"] - 1:
-                            await asyncio.sleep(mcp_config["retry_delay"])
-                except Exception as e:
-                    logger.error(f"Connection attempt {attempt + 1} error: {e}")
-                    if attempt < mcp_config["retry_attempts"] - 1:
-                        await asyncio.sleep(mcp_config["retry_delay"])
+            # Connect to MCP server
+            if not await self.mcp_client.connect():
+                logger.error(json.dumps({
+                    "event": "mcp_connection_failed",
+                    "timestamp": datetime.utcnow().isoformat()
+                }))
+                return False
             
-            logger.error("Failed to connect to MCP server after all attempts")
-            return False
+            # Start request cleanup task
+            asyncio.create_task(self._cleanup_requests())
+            
+            logger.info(json.dumps({
+                "event": "gateway_initialization_success",
+                "mcp_url": f"ws://{mcp_config['host']}:{mcp_config['port']}",
+                "timestamp": datetime.utcnow().isoformat()
+            }))
+            return True
             
         except Exception as e:
-            logger.error(f"Error initializing API Gateway: {e}")
+            logger.error(json.dumps({
+                "event": "gateway_initialization_error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }))
             return False
     
     async def shutdown(self):
         """Cleanup resources on shutdown."""
         try:
-            logger.info("Shutting down API Gateway...")
+            logger.info(json.dumps({
+                "event": "gateway_shutdown_start",
+                "timestamp": datetime.utcnow().isoformat()
+            }))
+            
+            # Cancel pending requests
+            for task_id in list(self.active_requests.keys()):
+                logger.warning(json.dumps({
+                    "event": "request_cancelled",
+                    "task_id": task_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }))
+                self.active_requests.pop(task_id, None)
+            
             if self.mcp_client:
                 await self.mcp_client.disconnect()
-            logger.info("API Gateway shutdown complete")
+            
+            logger.info(json.dumps({
+                "event": "gateway_shutdown_complete",
+                "timestamp": datetime.utcnow().isoformat()
+            }))
+            
         except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
+            logger.error(json.dumps({
+                "event": "gateway_shutdown_error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }))
     
     async def health_check(self) -> Dict[str, Any]:
         """Comprehensive health check for the API Gateway service."""
         health_status = {
             "service": "api-gateway",
             "status": "healthy",
-            "timestamp": None,
+            "timestamp": datetime.utcnow().isoformat(),
             "version": Config.API_VERSION,
             "dependencies": {}
         }
         
         try:
-            from datetime import datetime
-            health_status["timestamp"] = datetime.utcnow().isoformat()
-            
             # Check MCP server connection
-            if self.mcp_client and self.mcp_client.is_connected:
-                health_status["dependencies"]["mcp_server"] = "connected"
-            else:
-                health_status["dependencies"]["mcp_server"] = "disconnected"
+            mcp_health = await self.mcp_client.health_check() if self.mcp_client else {"status": "unhealthy"}
+            health_status["dependencies"]["mcp_server"] = mcp_health["status"]
+            if mcp_health["status"] != "healthy":
                 health_status["status"] = "degraded"
+                health_status["dependencies"]["mcp_details"] = mcp_health
             
             # Check native database connection
             try:
                 db_client = get_native_database()
                 db_health = await db_client.health_check()
-                if db_health["status"] == "healthy":
-                    health_status["dependencies"]["database"] = "connected"
-                else:
-                    health_status["dependencies"]["database"] = "unhealthy"
+                health_status["dependencies"]["database"] = db_health["status"]
+                if db_health["status"] != "healthy":
                     health_status["status"] = "degraded"
+                    health_status["dependencies"]["db_details"] = db_health
             except Exception as e:
-                logger.error(f"Database health check failed: {e}")
-                health_status["dependencies"]["database"] = "disconnected"
+                logger.error(json.dumps({
+                    "event": "database_health_check_failed",
+                    "error": str(e),
+                    "timestamp": datetime.utcnow().isoformat()
+                }))
+                health_status["dependencies"]["database"] = "unhealthy"
                 health_status["status"] = "degraded"
             
-            # Add more dependency checks as needed
+            # Add Redis check (placeholder for future implementation)
             health_status["dependencies"]["redis"] = "not_implemented"
             
             return health_status
             
         except Exception as e:
-            logger.error(f"Health check error: {e}")
+            logger.error(json.dumps({
+                "event": "health_check_error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }))
             health_status["status"] = "unhealthy"
             health_status["error"] = str(e)
             return health_status
     
-          
+    async def _cleanup_requests(self):
+        """Clean up expired requests."""
+        while True:
+            try:
+                current_time = datetime.now()
+                expired = [
+                    task_id for task_id, req in self.active_requests.items()
+                    if (current_time - req["submitted_at"]).total_seconds() > self.request_timeout
+                ]
+                
+                for task_id in expired:
+                    logger.warning(json.dumps({
+                        "event": "request_timeout",
+                        "task_id": task_id,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }))
+                    self.active_requests.pop(task_id, None)
+                
+                await asyncio.sleep(60)
+                
+            except Exception as e:
+                logger.error(json.dumps({
+                    "event": "request_cleanup_error",
+                    "error": str(e),
+                    "timestamp": datetime.utcnow().isoformat()
+                }))
+                await asyncio.sleep(60)
 
-    
+
 # Global gateway instance
 gateway = APIGateway()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan (startup and shutdown)."""
-    # Startup
-    logger.info("Starting API Gateway...")
+    """Manage application lifespan."""
+    logger.info(json.dumps({
+        "event": "application_startup_start",
+        "timestamp": datetime.utcnow().isoformat()
+    }))
     
     try:
         # Initialize native database connection
         if not await initialize_native_database():
-            logger.error("Failed to initialize native database connection")
+            logger.error(json.dumps({
+                "event": "database_initialization_failed",
+                "timestamp": datetime.utcnow().isoformat()
+            }))
             raise Exception("Database initialization failed")
         
         # Initialize gateway
         if not await gateway.initialize():
-            logger.error("Failed to initialize API Gateway")
+            logger.error(json.dumps({
+                "event": "gateway_initialization_failed",
+                "timestamp": datetime.utcnow().isoformat()
+            }))
             raise Exception("Gateway initialization failed")
         
         # Set MCP client for V2 API
         await set_v2_mcp_client()
         
-        logger.info("API Gateway startup completed successfully")
+        logger.info(json.dumps({
+            "event": "application_startup_success",
+            "timestamp": datetime.utcnow().isoformat()
+        }))
         
     except Exception as e:
-        logger.error(f"Startup failed: {e}")
-        # Don't raise here to allow graceful degradation
+        logger.error(json.dumps({
+            "event": "application_startup_error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }))
+        raise
     
     yield
     
     # Shutdown
-    logger.info("Shutting down API Gateway...")
+    logger.info(json.dumps({
+        "event": "application_shutdown_start",
+        "timestamp": datetime.utcnow().isoformat()
+    }))
     try:
         await gateway.shutdown()
         await close_native_database()
-        logger.info("API Gateway shutdown completed")
+        logger.info(json.dumps({
+            "event": "application_shutdown_success",
+            "timestamp": datetime.utcnow().isoformat()
+        }))
     except Exception as e:
-        logger.error(f"Shutdown error: {e}")
+        logger.error(json.dumps({
+            "event": "application_shutdown_error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }))
 
 
 # Create FastAPI application
@@ -266,9 +363,14 @@ app.include_router(v2_router)
 # Setup MCP client reference for V2 API
 def get_mcp_client_dependency():
     """Dependency to get MCP client for V2 API."""
+    if not gateway.mcp_client or not gateway.mcp_client.is_connected:
+        logger.error(json.dumps({
+            "event": "mcp_client_unavailable",
+            "timestamp": datetime.utcnow().isoformat()
+        }))
+        raise HTTPException(status_code=503, detail="MCP server not available")
     return gateway.mcp_client
 
-# Set MCP client reference for V2 API
 async def set_v2_mcp_client():
     """Set the MCP client for V2 API after initialization."""
     set_mcp_client(gateway.mcp_client)
@@ -289,28 +391,32 @@ async def get_status():
         "status": health["status"],
         "version": health["version"],
         "dependencies": health["dependencies"],
-        "active_requests": len(gateway.active_requests)
+        "active_requests": len(gateway.active_requests),
+        "mcp_connection": gateway.mcp_client.connection_info if gateway.mcp_client else None
     }
 
 @app.get("/metrics")
 async def get_metrics():
     """Get service metrics for monitoring."""
+    mcp_stats = await gateway.mcp_client.get_server_stats() if gateway.mcp_client else None
     return {
         "active_requests": len(gateway.active_requests),
         "mcp_connected": gateway.mcp_client.is_connected if gateway.mcp_client else False,
+        "mcp_stats": mcp_stats,
         "service": "api-gateway",
         "version": Config.API_VERSION
     }
 
 
-
-
-
 # Signal handlers for graceful shutdown
-
 def signal_handler(signum, frame):
     """Handle shutdown signals."""
-    logger.info(f"Received signal {signum}, shutting down...")
+    logger.info(json.dumps({
+        "event": "signal_received",
+        "signal": signum,
+        "timestamp": datetime.utcnow().isoformat()
+    }))
+    asyncio.create_task(gateway.shutdown())
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, signal_handler)
@@ -320,9 +426,13 @@ signal.signal(signal.SIGINT, signal_handler)
 async def main():
     """Main entry point for the containerized API Gateway service."""
     try:
-        logger.info(f"Starting API Gateway service on {Config.HOST}:{Config.PORT}")
+        logger.info(json.dumps({
+            "event": "service_start",
+            "host": Config.HOST,
+            "port": Config.PORT,
+            "timestamp": datetime.utcnow().isoformat()
+        }))
         
-        # Create uvicorn server configuration
         server_config = Config.get_server_config()
         config = uvicorn.Config(
             app,
@@ -332,12 +442,15 @@ async def main():
             access_log=server_config["access_log"]
         )
         
-        # Start the server
         server = uvicorn.Server(config)
         await server.serve()
         
     except Exception as e:
-        logger.error(f"API Gateway service error: {e}")
+        logger.error(json.dumps({
+            "event": "service_error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }))
         sys.exit(1)
 
 
@@ -345,7 +458,14 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("API Gateway service stopped by user")
+        logger.info(json.dumps({
+            "event": "service_stopped_by_user",
+            "timestamp": datetime.utcnow().isoformat()
+        }))
     except Exception as e:
-        logger.error(f"Failed to start API Gateway service: {e}")
+        logger.error(json.dumps({
+            "event": "service_start_failed",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }))
         sys.exit(1)
