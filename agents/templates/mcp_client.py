@@ -1,444 +1,225 @@
 #!/usr/bin/env python3
 """
-Improved Base MCP Agent - WebSocket Client Implementation
+Improved MCP Client for Containerized API Gateway
 
-Enhanced to leverage the improved MCP server's features:
-- Consistent entity_id usage for message routing
-- Robust reconnection with exponential backoff and jitter
-- Support for pending message delivery on reconnect
-- Task timeout handling and late result processing
-- Improved error handling and logging
-- Graceful shutdown with resource cleanup
-- Dynamic configuration updates
-
-Architecture Compliance:
-- No HTTP/REST endpoints
-- Pure MCP JSON-RPC over WebSocket
-- Zero attack surface design
-- Centralized communication through MCP server
+Enhanced to align with the improved MCP server:
+- Aligned message types (e.g., research_action, status_response)
+- Added request timeout cleanup
+- Improved reconnection logic with maximum duration
+- Enhanced server stats handling with Future-based response
+- Structured logging for better debugging
+- Removed unsupported task cancellation until server support is added
 """
 
 import asyncio
 import json
 import logging
 import uuid
-import signal
-import sys
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Callable
-from pathlib import Path
-from abc import ABC, abstractmethod
 import random
+from datetime import datetime, timedelta
+from typing import Any, Callable, Dict, Optional, Union
 
 import websockets
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logger = logging.getLogger(__name__)
 
 
-class BaseMCPAgent(ABC):
+class MCPClient:
     """
-    Base class for all MCP agents.
-
-    Provides:
-    - Robust WebSocket connection management with reconnection
-    - MCP JSON-RPC 2.0 protocol handling
-    - Agent registration with pending message support
-    - Task routing with timeout handling
-    - Enhanced error handling and logging
-    - Graceful shutdown with cleanup
-    - Dynamic configuration updates
+    Improved MCP Client for API Gateway communication with MCP server.
+    
+    Features:
+    - Robust connection management with exponential backoff and jitter
+    - Aligned message types with MCP server (research_action, status_response)
+    - Request timeout cleanup
+    - Enhanced server stats handling with Future-based response
+    - Structured logging for debugging
+    - Graceful shutdown with resource cleanup
     """
 
-    def __init__(self, agent_type: str, config: Dict[str, Any]):
-        """Initialize base MCP agent."""
-        self.agent_type = agent_type
-        self.agent_id = f"{agent_type}-{uuid.uuid4().hex[:8]}"  # Entity ID
-        self.config = config
-        self.logger = logging.getLogger(f"{agent_type}-agent")
+    def __init__(self, host: str = "mcp-server", port: int = 9000, config: Optional[Dict[str, Any]] = None):
+        self.host = host
+        self.port = port
+        self.config = config or {}
         
-        # Connection configuration
-        self.mcp_server_url = config.get("mcp_server_url", "ws://mcp-server:9000")
+        # WebSocket connection
         self.websocket: Optional[websockets.WebSocketClientProtocol] = None
-        self.connected = False
+        self.is_connected = False
         self.running = False
-        self.last_connection_attempt = None
+        
+        # Connection management
         self.connection_attempts = 0
-        self.max_retries = config.get("max_retries", 15)
-        self.base_retry_delay = config.get("base_retry_delay", 5)
+        self.max_retries = self.config.get("max_retries", 15)
+        self.base_retry_delay = self.config.get("base_retry_delay", 5)
+        self.max_reconnect_duration = self.config.get("max_reconnect_duration", 3600)  # 1 hour
+        self.last_connection_attempt = None
+        
+        # Client identification
+        self.client_id = f"api-gateway-{uuid.uuid4().hex[:8]}"  # Entity ID for routing
+        
+        # Task and response management
+        self.response_callbacks: Dict[str, Union[Callable, asyncio.Future]] = {}
+        self.message_handlers: Dict[str, Callable] = {}
+        self.active_requests: Dict[str, Dict[str, Any]] = {}  # Track ongoing requests
+        self.request_timeout = self.config.get("request_timeout", 3600)  # 1 hour
+        
+        # Background tasks
+        self._listen_task: Optional[asyncio.Task] = None
+        self._reconnect_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._cleanup_task: Optional[asyncio.Task] = None
+        self._should_reconnect = True
         
         # Heartbeat configuration
-        self.heartbeat_interval = config.get("heartbeat_interval", 30)
-        self.ping_timeout = config.get("ping_timeout", 10)
+        self.heartbeat_interval = self.config.get("heartbeat_interval", 30)
+        self.ping_timeout = self.config.get("ping_timeout", 10)
         
-        # Task handling
-        self.task_handlers: Dict[str, Callable] = {}
+        # Setup message handlers
+        self._setup_message_handlers()
+
+        logger.info(f"Initialized MCP Client for {host}:{port} with ID {self.client_id}")
+
+    def _setup_message_handlers(self):
+        """Setup message handlers for the API Gateway."""
         self.message_handlers = {
-            "agent/ping": self._handle_ping,
-            "agent/status": self._handle_status_request,
-            "agent/shutdown": self._handle_shutdown,
-            "task_request": self._handle_task_execution,
             "registration_confirmed": self._handle_registration_confirmation,
-            "error": self._handle_error_message
+            "task_result": self._handle_task_result,
+            "status_response": self._handle_status_response,
+            "task_queued": self._handle_task_queued,
+            "task_rejected": self._handle_task_rejected,
+            "error": self._handle_error_message,
+            "heartbeat": self._handle_heartbeat_request
         }
-        
-        # Task tracking
-        self.active_tasks: Dict[str, Dict[str, Any]] = {}  # task_id -> task_info
-        self.task_timeout = config.get("task_timeout", 3600)  # 1 hour
-        
-        self.logger.info(f"MCP Agent {self.agent_id} initialized")
 
-    @abstractmethod
-    def get_capabilities(self) -> List[str]:
-        """Return list of agent capabilities."""
-        pass
+    async def connect(self) -> bool:
+        """Connect to MCP server."""
+        return await self._connect_with_retry()
 
-    @abstractmethod
-    def setup_task_handlers(self) -> Dict[str, Callable]:
-        """Setup task handlers for this agent."""
-        pass
-
-    async def start(self):
-        """Start the MCP agent."""
-        self.running = True
-        
-        # Setup signal handlers for graceful shutdown
-        for sig in [signal.SIGTERM, signal.SIGINT]:
-            signal.signal(sig, self._signal_handler)
-        
-        # Setup task handlers
-        self.task_handlers = self.setup_task_handlers()
-        
-        # Start connection and heartbeat
-        try:
-            await self._connect_with_retry()
-            asyncio.create_task(self._heartbeat_loop())
-            asyncio.create_task(self._task_cleanup_loop())
-            
-            while self.running:
-                if not self.connected:
-                    self.logger.warning("Connection lost, attempting to reconnect...")
-                    await self._connect_with_retry()
-                await asyncio.sleep(1)
-                
-        except KeyboardInterrupt:
-            self.logger.info("Shutdown signal received")
-        except Exception as e:
-            self.logger.error(f"Fatal error in agent: {e}")
-            raise
-        finally:
-            await self.stop()
-
-    async def stop(self):
-        """Stop the MCP agent."""
-        self.running = False
-        
-        if self.websocket and not self.websocket.closed:
-            try:
-                # Send unregister message
-                await self._send_message({
-                    "type": "agent_unregister",
-                    "agent_id": self.agent_id,
-                    "timestamp": datetime.now().isoformat()
-                })
-                await self.websocket.close()
-            except Exception as e:
-                self.logger.error(f"Error closing WebSocket: {e}")
-        
-        self.connected = False
-        self.websocket = None
-        self.logger.info(f"MCP Agent {self.agent_id} stopped")
-
-    def _signal_handler(self, signum, frame):
-        """Handle shutdown signals."""
-        self.logger.info(f"Received signal {signum}, initiating shutdown...")
-        self.running = False
-
-    async def _connect_with_retry(self):
+    async def _connect_with_retry(self) -> bool:
         """Connect to MCP server with exponential backoff and jitter."""
         self.connection_attempts = 0
         max_retries = self.max_retries
         base_delay = self.base_retry_delay
         
-        while self.connection_attempts < max_retries and self.running:
+        while self.connection_attempts < max_retries and self._should_reconnect:
             try:
                 self.connection_attempts += 1
-                self.logger.info(f"Connecting to MCP server at {self.mcp_server_url} (attempt {self.connection_attempts})")
+                uri = f"ws://{self.host}:{self.port}"
+                logger.info(f"Connecting to MCP server at {uri} (attempt {self.connection_attempts})")
                 
                 self.websocket = await websockets.connect(
-                    self.mcp_server_url,
+                    uri,
                     ping_interval=self.heartbeat_interval,
                     ping_timeout=self.ping_timeout,
                     close_timeout=10,
                     max_size=1024*1024  # 1MB max message size
                 )
                 
-                # Register with MCP server
-                await self._register_agent()
-                
-                # Start message handler
-                asyncio.create_task(self._handle_messages())
-                
-                self.connected = True
+                self.is_connected = True
+                self.running = True
                 self.connection_attempts = 0
                 self.last_connection_attempt = datetime.now()
-                self.logger.info("Successfully connected to MCP server")
-                return
+                
+                logger.info(f"Successfully connected to MCP server at {uri}")
+
+                # Start background tasks
+                self._listen_task = asyncio.create_task(self._listen_for_messages())
+                self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+                self._cleanup_task = asyncio.create_task(self._cleanup_requests())
+                
+                # Register as API Gateway
+                await self._register_as_gateway()
+                
+                return True
                 
             except Exception as e:
-                self.logger.warning(f"Connection failed (attempt {self.connection_attempts}): {e}")
+                logger.warning(f"Connection failed (attempt {self.connection_attempts}): {e}")
                 if self.connection_attempts < max_retries:
-                    # Exponential backoff with jitter: delay = base_delay * 2^attempt + random(0, 100ms)
                     delay = (base_delay * (2 ** min(self.connection_attempts - 1, 5))) + (random.random() * 0.1)
-                    self.logger.info(f"Retrying in {delay:.2f} seconds...")
+                    logger.info(f"Retrying in {delay:.2f} seconds...")
                     await asyncio.sleep(delay)
                 else:
-                    self.logger.error("Failed to connect after all retries")
-                    raise ConnectionError(f"Failed to connect to MCP server after {max_retries} attempts")
-
-    async def _register_agent(self):
-        """Register this agent with MCP server."""
-        registration = {
-            "type": "agent_register",
-            "agent_id": self.agent_id,
-            "agent_type": self.agent_type,
-            "capabilities": self.get_capabilities(),
-            "timestamp": datetime.now().isoformat()
-        }
+                    logger.error("Failed to connect after all retries")
+                    self.is_connected = False
+                    return False
         
-        await self._send_message(registration)
-        self.logger.info(f"Sent registration for agent {self.agent_id} with capabilities: {self.get_capabilities()}")
+        self.is_connected = False
+        return False
 
-    async def _send_message(self, message: Dict[str, Any]):
-        """Send message to MCP server."""
-        if not self.websocket or self.websocket.closed:
-            self.logger.warning("Cannot send message: WebSocket not connected")
-            self.connected = False
-            return
-        
+    async def disconnect(self):
+        """Disconnect with proper cleanup."""
         try:
-            message_str = json.dumps(message)
-            await self.websocket.send(message_str)
-            self.logger.debug(f"Sent message: {message.get('type', 'unknown')}")
-        except Exception as e:
-            self.logger.error(f"Error sending message: {e}")
-            self.connected = False
+            logger.info("Disconnecting from MCP server...")
+            self.running = False
+            self._should_reconnect = False
+            
+            # Cancel background tasks
+            tasks_to_cancel = [
+                self._listen_task,
+                self._reconnect_task,
+                self._heartbeat_task,
+                self._cleanup_task
+            ]
+            
+            for task in tasks_to_cancel:
+                if task and not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
-    async def _handle_messages(self):
-        """Handle incoming MCP messages."""
-        try:
-            if not self.websocket:
-                return
-                
-            async for message in self.websocket:
+            # Send unregister message if connected
+            if self.websocket and not self.websocket.closed:
                 try:
-                    data = json.loads(message)
-                    await self._process_mcp_message(data)
-                except json.JSONDecodeError as e:
-                    self.logger.error(f"Invalid JSON received: {e}")
+                    await self._send_message({
+                        "type": "gateway_unregister",
+                        "client_id": self.client_id,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    await self.websocket.close()
                 except Exception as e:
-                    self.logger.error(f"Error processing message: {e}")
-                    
-        except ConnectionClosed:
-            self.logger.warning("MCP server connection closed")
-            self.connected = False
-        except Exception as e:
-            self.logger.error(f"Error in message handler: {e}")
-            self.connected = False
+                    logger.error(f"Error sending unregister message: {e}")
 
-    async def _process_mcp_message(self, data: Dict[str, Any]):
-        """Process incoming MCP message."""
-        try:
-            message_type = data.get("type")
-            if not message_type:
-                self.logger.warning("Received message with no type")
-                return
-                
-            handler = self.message_handlers.get(message_type)
-            if handler:
-                await handler(data)
-            else:
-                self.logger.warning(f"Unknown message type: {message_type}")
-                
-        except Exception as e:
-            self.logger.error(f"Error processing MCP message: {e}")
+            self.is_connected = False
+            self.websocket = None
+            logger.info("Disconnected from MCP server")
 
-    async def _handle_task_execution(self, data: Dict[str, Any]):
-        """Handle task execution request."""
+        except Exception as e:
+            logger.error(f"Error during disconnect: {e}")
+
+    async def _register_as_gateway(self):
+        """Register this client as an API Gateway."""
         try:
-            task_id = data.get("task_id")
-            task_type = data.get("task_type")
-            task_data = data.get("data", {})
-            context_id = data.get("context_id")
-            
-            if not task_id or not task_type:
-                self.logger.error(f"Invalid task request: missing task_id or task_type")
-                await self._send_message({
-                    "type": "task_result",
-                    "task_id": task_id or "unknown",
-                    "status": "error",
-                    "error": "Missing task_id or task_type"
-                })
-                return
-            
-            self.logger.info(f"Executing task: {task_type} (ID: {task_id})")
-            
-            # Track task
-            self.active_tasks[task_id] = {
-                "task_type": task_type,
-                "context_id": context_id,
-                "data": task_data,
-                "created_at": datetime.now()
+            registration_message = {
+                "type": "gateway_register",
+                "client_id": self.client_id,
+                "client_type": "api_gateway",
+                "capabilities": [
+                    "request_routing", 
+                    "task_submission", 
+                    "status_queries",
+                    "result_delivery",
+                    "error_handling"
+                ],
+                "timestamp": datetime.now().isoformat()
             }
             
-            # Route to appropriate handler
-            if task_type in self.task_handlers:
-                try:
-                    handler = self.task_handlers[task_type]
-                    result = await handler(task_data)
-                    
-                    # Send success response
-                    await self._send_message({
-                        "type": "task_result",
-                        "task_id": task_id,
-                        "status": "completed",
-                        "result": result,
-                        "agent_id": self.agent_id,
-                        "timestamp": datetime.now().isoformat()
-                    })
-                except Exception as e:
-                    self.logger.error(f"Task execution failed: {e}")
-                    await self._send_message({
-                        "type": "task_result",
-                        "task_id": task_id,
-                        "status": "error",
-                        "error": str(e),
-                        "agent_id": self.agent_id,
-                        "timestamp": datetime.now().isoformat()
-                    })
-            else:
-                self.logger.error(f"Unknown task type: {task_type}")
-                await self._send_message({
-                    "type": "task_result",
-                    "task_id": task_id,
-                    "status": "error",
-                    "error": f"Unknown task type: {task_type}",
-                    "data": {"available_tasks": list(self.task_handlers.keys())},
-                    "agent_id": self.agent_id,
-                    "timestamp": datetime.now().isoformat()
-                })
-            
-            # Clean up task
-            self.active_tasks.pop(task_id, None)
+            await self._send_message(registration_message)
+            logger.info("Registered as API Gateway with MCP server")
             
         except Exception as e:
-            self.logger.error(f"Error handling task execution: {e}")
-            if task_id:
-                await self._send_message({
-                    "type": "task_result",
-                    "task_id": task_id,
-                    "status": "error",
-                    "error": str(e),
-                    "agent_id": self.agent_id,
-                    "timestamp": datetime.now().isoformat()
-                })
-
-    async def _handle_ping(self, data: Dict[str, Any]):
-        """Handle ping request."""
-        await self._send_message({
-            "type": "heartbeat_ack",
-            "agent_id": self.agent_id,
-            "status": "alive",
-            "timestamp": datetime.now().isoformat()
-        })
-
-    async def _handle_status_request(self, data: Dict[str, Any]):
-        """Handle status request."""
-        await self._send_message({
-            "type": "status_response",
-            "agent_id": self.agent_id,
-            "agent_type": self.agent_type,
-            "status": "ready" if self.connected else "disconnected",
-            "capabilities": self.get_capabilities(),
-            "connection": {
-                "connected": self.connected,
-                "server_url": self.mcp_server_url,
-                "last_connection": self.last_connection_attempt.isoformat() if self.last_connection_attempt else None
-            },
-            "tasks": {
-                "active_tasks": len(self.active_tasks),
-                "available_handlers": list(self.task_handlers.keys())
-            },
-            "timestamp": datetime.now().isoformat()
-        })
-
-    async def _handle_registration_confirmation(self, data: Dict[str, Any]):
-        """Handle registration confirmation from server."""
-        server_id = data.get("server_id")
-        self.logger.info(f"Registration confirmed by server {server_id}")
-        # Process any additional server instructions if present
-        if "instructions" in data:
-            self.logger.info(f"Received server instructions: {data['instructions']}")
-
-    async def _handle_error_message(self, data: Dict[str, Any]):
-        """Handle error messages from server."""
-        message = data.get("message", "Unknown error")
-        task_id = data.get("task_id")
-        self.logger.error(f"Received error from server: {message}" + (f" for task {task_id}" if task_id else ""))
-        if task_id and task_id in self.active_tasks:
-            self.active_tasks.pop(task_id)
-
-    async def _handle_shutdown(self, data: Dict[str, Any]):
-        """Handle shutdown request."""
-        self.logger.info("Shutdown requested via MCP")
-        await self._send_message({
-            "type": "shutdown_ack",
-            "agent_id": self.agent_id,
-            "status": "shutting_down",
-            "timestamp": datetime.now().isoformat()
-        })
-        self.running = False
-
-    async def _task_cleanup_loop(self):
-        """Clean up expired tasks."""
-        while self.running:
-            try:
-                current_time = datetime.now()
-                expired_tasks = [
-                    task_id for task_id, task in self.active_tasks.items()
-                    if (current_time - task["created_at"]).total_seconds() > self.task_timeout
-                ]
-                
-                for task_id in expired_tasks:
-                    self.logger.warning(f"Task {task_id} timed out")
-                    await self._send_message({
-                        "type": "task_result",
-                        "task_id": task_id,
-                        "status": "timeout",
-                        "error": "Task execution timeout",
-                        "agent_id": self.agent_id,
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    self.active_tasks.pop(task_id)
-                
-                await asyncio.sleep(60)  # Check every minute
-                
-            except Exception as e:
-                self.logger.error(f"Error in task cleanup loop: {e}")
-                await asyncio.sleep(60)
+            logger.error(f"Failed to register as gateway: {e}")
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeat to MCP server."""
-        while self.running:
+        while self.running and self._should_reconnect:
             try:
-                if self.connected and self.websocket and not self.websocket.closed:
+                if self.is_connected and self.websocket and not self.websocket.closed:
                     await self._send_message({
                         "type": "heartbeat",
-                        "agent_id": self.agent_id,
+                        "client_id": self.client_id,
                         "status": "alive",
                         "timestamp": datetime.now().isoformat()
                     })
@@ -446,98 +227,437 @@ class BaseMCPAgent(ABC):
                 await asyncio.sleep(self.heartbeat_interval)
                 
             except Exception as e:
-                self.logger.error(f"Error in heartbeat loop: {e}")
-                await asyncio.sleep(self.heartbeat_interval)
+                logger.error(f"Error in heartbeat loop: {e}")
+                self.is_connected = False
+                break
 
-    def load_config(self, config_path: str) -> Dict[str, Any]:
-        """Load configuration from file."""
-        config_file = Path(config_path)
-        if config_file.exists():
+    async def send_research_action(self, task_data: Dict[str, Any]) -> bool:
+        """Send a research action to the MCP server."""
+        if not self.is_connected or not self.websocket:
+            logger.warning("Not connected to MCP server, attempting reconnect...")
+            success = await self._connect_with_retry()
+            if not success:
+                logger.error("Failed to reconnect for research action")
+                return False
+
+        try:
+            task_id = task_data.get("task_id", str(uuid.uuid4()))
+            task_data["task_id"] = task_id
+
+            message = {
+                "type": "research_action",
+                "data": task_data,
+                "client_id": self.client_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Track the request
+            self.active_requests[task_id] = {
+                "type": "research_action",
+                "data": task_data,
+                "submitted_at": datetime.now()
+            }
+            
+            await self._send_message(message)
+            logger.info(f"Sent research action for task {task_id}: {task_data.get('action')}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send research action for task {task_id}: {e}")
+            return False
+
+    async def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get status of a task from MCP server."""
+        if not self.is_connected or not self.websocket:
+            logger.warning("Not connected to MCP server, attempting reconnect...")
+            success = await self._connect_with_retry()
+            if not success:
+                logger.error("Failed to reconnect for task status")
+                return None
+
+        try:
+            message = {
+                "type": "status_request",
+                "task_id": task_id,
+esc
+                "client_id": self.client_id,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Create a future to wait for the response
+            response_future = asyncio.Future()
+            callback_key = f"status_{task_id}"
+            self.response_callbacks[callback_key] = response_future
+
+            await self._send_message(message)
+
+            # Wait for response with timeout
             try:
-                with open(config_file) as f:
-                    config = json.load(f)
-                self.logger.info(f"Loaded config from {config_path}")
-                return config
-            except Exception as e:
-                self.logger.error(f"Error loading config from {config_path}: {e}")
+                response = await asyncio.wait_for(response_future, timeout=10.0)
+                return response
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for task status: {task_id}")
+                return None
+            finally:
+                self.response_callbacks.pop(callback_key, None)
+
+        except Exception as e:
+            logger.error(f"Failed to get task status for {task_id}: {e}")
+            return None
+
+    async def wait_for_task_result(self, task_id: str, timeout: float = 60.0) -> Optional[Dict[str, Any]]:
+        """Wait for a task result."""
+        if not self.is_connected or not self.websocket:
+            logger.warning("Not connected to MCP server, attempting reconnect...")
+            success = await self._connect_with_retry()
+            if not success:
+                logger.error("Failed to reconnect for task result")
+                return None
+
+        try:
+            result_future = asyncio.Future()
+            callback_key = f"result_{task_id}"
+            self.response_callbacks[callback_key] = result_future
+
+            logger.info(f"Waiting for task result: {task_id} (timeout: {timeout}s)")
+
+            try:
+                result = await asyncio.wait_for(result_future, timeout=timeout)
+                logger.info(f"Received task result for {task_id}")
+                return result
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for task result: {task_id}")
+                return None
+            finally:
+                self.response_callbacks.pop(callback_key, None)
+                self.active_requests.pop(task_id, None)
+
+        except Exception as e:
+            logger.error(f"Failed to wait for task result {task_id}: {e}")
+            return None
+
+    async def get_server_stats(self) -> Optional[Dict[str, Any]]:
+        """Get server statistics with response handling."""
+        if not self.is_connected or not self.websocket:
+            logger.warning("Not connected to MCP server, attempting reconnect...")
+            success = await self._connect_with_retry()
+            if not success:
+                logger.error("Failed to reconnect for server stats")
+                return None
+
+        try:
+            message = {
+                "type": "status_request",
+                "client_id": self.client_id,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            response_future = asyncio.Future()
+            callback_key = "server_stats"
+            self.response_callbacks[callback_key] = response_future
+
+            await self._send_message(message)
+
+            try:
+                response = await asyncio.wait_for(response_future, timeout=10.0)
+                return response
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for server stats")
+                return None
+            finally:
+                self.response_callbacks.pop(callback_key, None)
+
+        except Exception as e:
+            logger.error(f"Failed to get server stats: {e}")
+            return None
+
+    async def _send_message(self, message: Dict[str, Any]):
+        """Send a message to the MCP server."""
+        if not self.websocket or self.websocket.closed:
+            logger.warning("Cannot send message: WebSocket not connected")
+            self.is_connected = False
+            return
         
-        # Return default config
-        default_config = {
-            "mcp_server_url": "ws://mcp-server:9000",
-            "heartbeat_interval": 30,
-            "ping_timeout": 10,
-            "max_retries": 15,
-            "base_retry_delay": 5,
-            "task_timeout": 3600
-        }
-        self.logger.info("Using default configuration")
-        return default_config
+        try:
+            message_str = json.dumps(message)
+            await self.websocket.send(message_str)
+            logger.debug(f"Sent message: {message.get('type', 'unknown')} (client_id: {self.client_id})")
+        except Exception as e:
+            logger.error(f"Error sending message: {e}")
+            self.is_connected = False
+
+    async def _listen_for_messages(self):
+        """Listen for incoming messages."""
+        logger.info("Started listening for MCP server messages")
+        
+        try:
+            if not self.websocket:
+                logger.error("No WebSocket connection available")
+                return
+                
+            async for message_str in self.websocket:
+                try:
+                    message = json.loads(message_str)
+                    await self._process_mcp_message(message)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to decode message: {message_str}")
+                except Exception as e:
+                    logger.error(f"Error handling message: {e}")
+                    
+        except ConnectionClosed:
+            logger.warning("WebSocket connection closed")
+            self.is_connected = False
+            if self._should_reconnect and self.running:
+                self._reconnect_task = asyncio.create_task(self._reconnect())
+        except WebSocketException as e:
+            logger.error(f"WebSocket error: {e}")
+            self.is_connected = False
+            if self._should_reconnect and self.running:
+                self._reconnect_task = asyncio.create_task(self._reconnect())
+        except Exception as e:
+            logger.error(f"Unexpected error in message listener: {e}")
+            self.is_connected = False
+
+    async def _process_mcp_message(self, data: Dict[str, Any]):
+        """Process incoming MCP message."""
+        try:
+            message_type = data.get("type")
+            if not message_type:
+                logger.warning("Received message with no type")
+                return
+                
+            handler = self.message_handlers.get(message_type)
+            if handler:
+                await handler(data)
+            else:
+                logger.debug(f"No handler for message type: {message_type}")
+                
+        except Exception as e:
+            logger.error(f"Error processing MCP message: {e}")
+
+    async def _handle_registration_confirmation(self, data: Dict[str, Any]):
+        """Handle registration confirmation from server."""
+        server_id = data.get("server_id")
+        logger.info(f"API Gateway registration confirmed by server {server_id}")
+        if "instructions" in data:
+            logger.info(f"Received server instructions: {data['instructions']}")
+
+    async def _handle_task_result(self, data: Dict[str, Any]):
+        """Handle task result."""
+        task_id = data.get("task_id")
+        status = data.get("status", "unknown")
+        
+        if not task_id:
+            logger.warning("Received task result without task_id")
+            return
+        
+        result_key = f"result_{task_id}"
+        
+        if result_key in self.response_callbacks:
+            callback = self.response_callbacks[result_key]
+            if isinstance(callback, asyncio.Future) and not callback.done():
+                callback.set_result(data)
+                logger.info(f"Delivered task result for {task_id}: {status}")
+        
+        self.active_requests.pop(task_id, None)
+
+    async def _handle_status_response(self, data: Dict[str, Any]):
+        """Handle status response."""
+        task_id = data.get("task_id")
+        server_stats = data.get("data")
+        
+        if server_stats and "server_stats" in self.response_callbacks:
+            callback = self.response_callbacks["server_stats"]
+            if isinstance(callback, asyncio.Future) and not callback.done():
+                callback.set_result(server_stats)
+                logger.debug("Delivered server stats")
+        
+        if task_id:
+            callback_key = f"status_{task_id}"
+            if callback_key in self.response_callbacks:
+                callback = self.response_callbacks[callback_key]
+                if isinstance(callback, asyncio.Future) and not callback.done():
+                    callback.set_result(data.get("data", {}))
+                    logger.debug(f"Delivered task status for {task_id}")
+
+    async def _handle_task_queued(self, data: Dict[str, Any]):
+        """Handle task queued confirmation."""
+        task_id = data.get("data", {}).get("task_id")
+        if task_id:
+            logger.info(f"Task {task_id} queued successfully")
+
+    async def _handle_task_rejected(self, data: Dict[str, Any]):
+        """Handle task rejection."""
+        task_id = data.get("data", {}).get("task_id") or data.get("task_id")
+        error = data.get("data", {}).get("error") or data.get("error", "Unknown error")
+        
+        logger.error(f"Task {task_id} rejected: {error}")
+        
+        result_key = f"result_{task_id}"
+        if result_key in self.response_callbacks:
+            callback = self.response_callbacks[result_key]
+            if isinstance(callback, asyncio.Future) and not callback.done():
+                callback.set_result({
+                    "status": "rejected", 
+                    "error": error,
+                    "task_id": task_id
+                })
+        
+        self.active_requests.pop(task_id, None)
+
+    async def _handle_error_message(self, data: Dict[str, Any]):
+        """Handle error messages from server."""
+        message = data.get("message", "Unknown error")
+        task_id = data.get("task_id")
+        
+        logger.error(f"Received error from server: {message}" + 
+                    (f" for task {task_id}" if task_id else ""))
+        
+        if task_id:
+            result_key = f"result_{task_id}"
+            if result_key in self.response_callbacks:
+                callback = self.response_callbacks[result_key]
+                if isinstance(callback, asyncio.Future) and not callback.done():
+                    callback.set_result({
+                        "status": "error",
+                        "error": message,
+                        "task_id": task_id
+                    })
+            
+            self.active_requests.pop(task_id, None)
+
+    async def _handle_heartbeat_request(self, data: Dict[str, Any]):
+        """Handle heartbeat request from server."""
+        await self._send_message({
+            "type": "heartbeat_ack",
+            "client_id": self.client_id,
+            "status": "alive",
+            "timestamp": datetime.now().isoformat()
+        })
+
+    async def _reconnect(self):
+        """Attempt to reconnect to MCP server with maximum duration."""
+        start_time = datetime.now()
+        reconnect_delay = self.base_retry_delay
+        
+        while (self._should_reconnect and not self.is_connected and self.running and
+               (datetime.now() - start_time).total_seconds() < self.max_reconnect_duration):
+            try:
+                logger.info("Attempting to reconnect to MCP server...")
+                success = await self._connect_with_retry()
+                if success:
+                    logger.info("Successfully reconnected to MCP server")
+                    break
+                else:
+                    reconnect_delay = min(reconnect_delay * 1.5, 60) + (random.random() * 0.1)
+                    logger.info(f"Retrying reconnect in {reconnect_delay:.2f} seconds...")
+                    await asyncio.sleep(reconnect_delay)
+            except Exception as e:
+                logger.error(f"Reconnection attempt failed: {e}")
+                await asyncio.sleep(reconnect_delay)
+        
+        if not self.is_connected:
+            logger.error("Reconnection failed after maximum duration")
+
+    async def _cleanup_requests(self):
+        """Clean up expired requests."""
+        while self.running:
+            try:
+                current_time = datetime.now()
+                expired = [
+                    task_id for task_id, req in self.active_requests.items()
+                    if (current_time - req["submitted_at"]).total_seconds() > self.request_timeout
+                ]
+                
+                for task_id in expired:
+                    logger.warning(f"Request {task_id} timed out")
+                    result_key = f"result_{task_id}"
+                    if result_key in self.response_callbacks:
+                        callback = self.response_callbacks[result_key]
+                        if isinstance(callback, asyncio.Future) and not callback.done():
+                            callback.set_result({
+                                "status": "timeout",
+                                "error": "Request timed out",
+                                "task_id": task_id
+                            })
+                    self.active_requests.pop(task_id, None)
+                    self.response_callbacks.pop(result_key, None)
+                
+                await asyncio.sleep(60)
+                
+            except Exception as e:
+                logger.error(f"Error in request cleanup loop: {e}")
+                await asyncio.sleep(60)
+
+    def add_message_handler(self, message_type: str, handler: Callable):
+        """Add a custom message handler."""
+        self.message_handlers[message_type] = handler
+        logger.debug(f"Added message handler for type: {message_type}")
+
+    def remove_message_handler(self, message_type: str):
+        """Remove a message handler."""
+        if message_type in self.message_handlers:
+            del self.message_handlers[message_type]
+            logger.debug(f"Removed message handler for type: {message_type}")
 
     async def update_config(self, new_config: Dict[str, Any]):
         """Update configuration dynamically."""
-        self.logger.info("Updating agent configuration")
+        logger.info("Updating MCP client configuration")
         self.config.update(new_config)
         
-        # Update relevant attributes
-        self.mcp_server_url = self.config.get("mcp_server_url", self.mcp_server_url)
-        self.heartbeat_interval = self.config.get("heartbeat_interval", self.heartbeat_interval)
-        self.ping_timeout = self.config.get("ping_timeout", self.ping_timeout)
+        old_server_url = f"ws://{self.host}:{self.port}"
+        
+        self.host = self.config.get("host", self.host)
+        self.port = self.config.get("port", self.port)
         self.max_retries = self.config.get("max_retries", self.max_retries)
         self.base_retry_delay = self.config.get("base_retry_delay", self.base_retry_delay)
-        self.task_timeout = self.config.get("task_timeout", self.task_timeout)
+        self.max_reconnect_duration = self.config.get("max_reconnect_duration", self.max_reconnect_duration)
+        self.heartbeat_interval = self.config.get("heartbeat_interval", self.heartbeat_interval)
+        self.ping_timeout = self.config.get("ping_timeout", self.ping_timeout)
+        self.request_timeout = self.config.get("request_timeout", self.request_timeout)
         
-        self.logger.info("Configuration updated successfully")
+        new_server_url = f"ws://{self.host}:{self.port}"
         
-        # Reconnect if server URL changed
-        if new_config.get("mcp_server_url") and new_config["mcp_server_url"] != self.mcp_server_url:
-            self.logger.info("Server URL changed, reconnecting...")
-            self.connected = False
+        logger.info("Configuration updated successfully")
+        
+        if new_server_url != old_server_url:
+            logger.info("Server URL changed, reconnecting...")
+            self.is_connected = False
             if self.websocket and not self.websocket.closed:
                 await self.websocket.close()
             await self._connect_with_retry()
 
+    @property
+    def connection_info(self) -> Dict[str, Any]:
+        """Get connection information."""
+        return {
+            "host": self.host,
+            "port": self.port,
+            "client_id": self.client_id,
+            "is_connected": self.is_connected,
+            "running": self.running,
+            "websocket_available": self.websocket is not None,
+            "last_connection_attempt": self.last_connection_attempt.isoformat() if self.last_connection_attempt else None,
+            "connection_attempts": self.connection_attempts,
+            "active_requests": len(self.active_requests),
+            "pending_callbacks": len(self.response_callbacks)
+        }
 
-def create_agent_main(agent_class, agent_type: str, config_path: str = "/app/config/config.json"):
-    """
-    Create main entry point for an agent.
-
-    Args:
-        agent_class: The agent class that inherits from BaseMCPAgent
-        agent_type: The type identifier for the agent
-        config_path: Path to configuration file
-    """
-    async def main():
-        """Main entry point for MCP agent."""
-        # Load configuration
-        try:
-            config_file = Path(config_path)
-            if config_file.exists():
-                with open(config_file) as f:
-                    config = json.load(f)
-            else:
-                config = {
-                    "mcp_server_url": "ws://mcp-server:9000",
-                    "heartbeat_interval": 30,
-                    "ping_timeout": 10,
-                    "max_retries": 15,
-                    "base_retry_delay": 5,
-                    "task_timeout": 3600
-                }
-            logger = logging.getLogger(f"{agent_type}-agent")
-            logger.info(f"Loaded config from {config_path if config_file.exists() else 'default'}")
-        except Exception as e:
-            print(f"Error loading config: {e}")
-            sys.exit(1)
+    async def health_check(self) -> Dict[str, Any]:
+        """Perform a health check and return status."""
+        health_status = {
+            "status": "healthy" if self.is_connected else "unhealthy",
+            "connected": self.is_connected,
+            "running": self.running,
+            "client_id": self.client_id,
+            "server_url": f"ws://{self.host}:{self.port}",
+            "active_requests": len(self.active_requests),
+            "pending_callbacks": len(self.response_callbacks),
+            "timestamp": datetime.now().isoformat()
+        }
         
-        # Create and start agent
-        agent = agent_class(agent_type, config)
-        
-        try:
-            await agent.start()
-        except KeyboardInterrupt:
-            print(f"\n{agent_type} agent shutdown requested")
-        except Exception as e:
-            print(f"{agent_type} agent failed: {e}")
-            sys.exit(1)
-
-    return main
+        if not self.is_connected:
+            health_status["last_error"] = "WebSocket not connected"
+            
+        return health_status
+    

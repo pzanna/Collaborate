@@ -8,6 +8,7 @@ Addresses routing and connection issues by:
 - Improved late result delivery for AI services
 - Added task timeout cleanup
 - More robust logging and error handling
+- Added support for API Gateway with status_request handling
 """
 
 import asyncio
@@ -102,7 +103,7 @@ class MCPServer:
         
         logger.info("Improved MCP Server stopped")
     
-    async def _handle_connection(self, websocket, path):
+    async def _handle_connection(self, websocket):
         """Handle new WebSocket connection"""
         client_id = str(uuid.uuid4())
         self.clients[client_id] = websocket
@@ -140,6 +141,10 @@ class MCPServer:
                 await self._handle_task_result(client_id, data)
             elif message_type == "heartbeat":
                 await self._handle_heartbeat(client_id, data)
+            elif message_type == "status_request":
+                await self._handle_status_request(client_id, data)
+            elif message_type == "gateway_unregister" or message_type == "agent_unregister":
+                await self._cleanup_client(client_id)
             else:
                 logger.warning(f"Unknown message type from {client_id}: {message_type}")
                 
@@ -185,7 +190,7 @@ class MCPServer:
     
     async def _handle_gateway_registration(self, client_id: str, data: Dict[str, Any]):
         """Handle gateway registration"""
-        gateway_id = data.get("client_id")  # Note: This is the gateway's own ID
+        gateway_id = data.get("client_id")
         gateway_type = data.get("client_type")
         capabilities = data.get("capabilities", [])
         
@@ -229,7 +234,6 @@ class MCPServer:
         for msg in pending:
             success = await self._send_to_entity(entity_id, msg)
             if not success:
-                # If fails, it will be appended back in _send_to_entity
                 pass
         
         logger.info(f"Delivered {len(pending)} pending messages to {entity_id}")
@@ -276,7 +280,7 @@ class MCPServer:
                 logger.warning(error_msg)
                 return
             
-            # Select first available agent (can be improved to round-robin or load-based)
+            # Select first available agent
             selected_agent = suitable_agents[0]
             agent_client_id = self.agent_registry[selected_agent]["client_id"]
             
@@ -433,10 +437,8 @@ class MCPServer:
                 del self.active_tasks[task_id]
             else:
                 logger.warning(f"Buffering task result for {task_id} due to delivery failure")
-                # Since buffered in pending_messages, task can be removed or kept; here remove
                 del self.active_tasks[task_id]
         else:
-            # Late-arriving result
             logger.warning(f"Late task result for {task_id}, attempting delivery")
             self.task_result_buffer[task_id] = {
                 "message": message,
@@ -453,7 +455,6 @@ class MCPServer:
         buffered = self.task_result_buffer[task_id]
         buffered["attempts"] += 1
         
-        # Find all AI service entities
         ai_services = [
             agent_id for agent_id, info in self.agent_registry.items()
             if info["agent_type"] == "ai_service" and agent_id in self.agent_connections
@@ -522,6 +523,34 @@ class MCPServer:
                 "timestamp": datetime.now().isoformat()
             })
     
+    async def _handle_status_request(self, client_id: str, data: Dict[str, Any]):
+        """Handle status request from gateway or agent."""
+        entity_id = self.connection_to_entity.get(client_id)
+        if not entity_id:
+            await self._send_error(client_id, "Unregistered client")
+            return
+        
+        task_id = data.get("task_id")
+        response = {
+            "type": "status_response",
+            "client_id": entity_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        if task_id:
+            task = self.active_tasks.get(task_id)
+            response["task_id"] = task_id
+            response["data"] = {
+                "status": task["status"] if task else "unknown",
+                "assigned_agent": task.get("assigned_agent") if task else None,
+                "created_at": task["created_at"].isoformat() if task else None
+            }
+        else:
+            response["data"] = self.get_status()
+        
+        await self._send_to_entity(entity_id, response)
+        logger.info(f"Sent status response to {entity_id}" + (f" for task {task_id}" if task_id else ""))
+    
     async def _send_to_entity(self, entity_id: str, message: Dict[str, Any]) -> bool:
         """Send message to entity, buffer if disconnected"""
         current_client_id = self.agent_connections.get(entity_id)
@@ -542,7 +571,7 @@ class MCPServer:
             return False
     
     async def _send_error(self, client_id: str, error_message: str):
-        """Send error message to client (fallback to old method for unregistered)"""
+        """Send error message to client"""
         await self._send_message(client_id, {
             "type": "error",
             "message": error_message,
@@ -550,7 +579,7 @@ class MCPServer:
         })
     
     async def _send_message(self, client_id: str, message: Dict[str, Any]) -> bool:
-        """Legacy direct send to client_id (used for task requests to agents)"""
+        """Legacy direct send to client_id"""
         if client_id not in self.clients:
             logger.error(f"Client {client_id} not found")
             return False
