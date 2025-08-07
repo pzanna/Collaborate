@@ -20,9 +20,20 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import asyncpg
-import redis
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
+# Import watchfiles with fallback
+try:
+    from watchfiles import awatch
+    WATCHFILES_AVAILABLE = True
+except ImportError as e:
+    awatch = None  # type: ignore
+    WATCHFILES_AVAILABLE = False
+
+from mcp_client import MCPClient
+import database_tools
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -37,7 +48,6 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@postgres:5432/eunice")
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 HEALTH_CHECK_INTERVAL = int(os.getenv("HEALTH_CHECK_INTERVAL", "30"))
 MAINTENANCE_INTERVAL = int(os.getenv("MAINTENANCE_INTERVAL", "3600"))  # 1 hour
 
@@ -50,10 +60,9 @@ class DatabaseService:
     
     def __init__(self):
         self.db_url = DATABASE_URL
-        self.redis_url = REDIS_URL
         self.engine: Optional[Any] = None
-        self.redis_client: Optional[Any] = None
         self.running = False
+        self.mcp_client = MCPClient()
         
     async def initialize(self):
         """Initialize database connections and verify schema."""
@@ -68,22 +77,146 @@ class DatabaseService:
             # Create SQLAlchemy engine for maintenance operations
             self.engine = create_engine(self.db_url)
             
-            # Initialize Redis connection
-            self.redis_client = redis.from_url(self.redis_url)
-            if self.redis_client:
-                self.redis_client.ping()
-                logger.info("✅ Redis connection established")
-            else:
-                raise Exception("Failed to create Redis client")
-            
             # Verify database schema exists
             await self.verify_schema()
             
             logger.info("✅ Database Service initialized successfully")
             
+            # Initialize MCP Client
+            logger.info("Initializing MCP Client...")
+            success = await self.mcp_client.connect()
+            if success:
+                await self.register_with_mcp()
+                self._setup_custom_handlers()
+                logger.info("✅ MCP Client initialized and connected")
+            else:
+                logger.error("❌ Failed to connect to MCP server")
+                raise Exception("MCP connection failed")
+            
         except Exception as e:
             logger.error(f"❌ Database Service initialization failed: {e}")
             raise
+    
+    def _setup_custom_handlers(self):
+        async def handle_database_update(message: Dict[str, Any]):
+            try:
+                command = message.get("command")
+                data = message.get("data", {})
+                if not command:
+                    raise ValueError("No command in database_update message")
+                
+                result_str = await database_tools.database_write(command, json.dumps(data))
+                result = json.loads(result_str)
+                
+                # Send acknowledgment back via MCP
+                ack_message = {
+                    "type": "database_update_ack",
+                    "status": result["status"],
+                    "message_id": message.get("message_id"),  # Correlate with original
+                    "result": result,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await self.mcp_client._send_message(ack_message)
+                
+                logger.info(f"Processed database_update: {command} - {result['status']}")
+            except Exception as e:
+                logger.error(f"Error handling database_update: {e}")
+                # Send error ack
+                await self.mcp_client._send_message({
+                    "type": "database_update_ack",
+                    "status": "error",
+                    "message_id": message.get("message_id"),
+                    "error": str(e),
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+
+        async def handle_task_request(message: Dict[str, Any]):
+            """Handle task requests from MCP server."""
+            try:
+                task_id = message.get("task_id")
+                task_type = message.get("task_type")
+                data = message.get("data", {})
+                context_id = message.get("context_id")
+                
+                if not task_id or not task_type:
+                    raise ValueError("Missing task_id or task_type in task request")
+                
+                logger.info(f"Processing database task: {task_type} (task_id: {task_id})")
+                
+                # Execute the database operation
+                result_str = await database_tools.database_write(task_type, json.dumps(data))
+                result = json.loads(result_str)
+                
+                # Send result back via MCP
+                response_message = {
+                    "type": "task_result",
+                    "task_id": task_id,
+                    "status": "completed" if result["status"] == "success" else "error",
+                    "result": result,
+                    "context_id": context_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+                if result["status"] != "success":
+                    response_message["error"] = result.get("error", "Unknown error")
+                
+                await self.mcp_client._send_message(response_message)
+                
+                logger.info(f"Completed database task: {task_type} - {result['status']}")
+                
+            except Exception as e:
+                logger.error(f"Error handling task request: {e}")
+                # Send error result
+                await self.mcp_client._send_message({
+                    "type": "task_result",
+                    "task_id": message.get("task_id"),
+                    "status": "error",
+                    "error": str(e),
+                    "context_id": message.get("context_id"),
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+        
+        self.mcp_client.add_message_handler("database_update", handle_database_update)
+        self.mcp_client.add_message_handler("task_request", handle_task_request)
+    
+    async def register_with_mcp(self):
+        """Register this service with the MCP server."""
+        try:
+            registration_message = {
+                "type": "agent_register",
+                "agent_id": self.mcp_client.client_id,
+                "agent_type": "database",
+                "capabilities": [
+                    "create_project",
+                    "update_project",
+                    "delete_project",
+                    "create_research_topic",
+                    "update_research_topic", 
+                    "delete_research_topic",
+                    "create_research_plan",
+                    "update_research_plan",
+                    "delete_research_plan",
+                    "create_task",
+                    "update_task",
+                    "delete_task",
+                    "create_research_task",
+                    "update_research_task",
+                    "delete_research_task",
+                    "create_literature_record",
+                    "update_literature_record",
+                    "delete_literature_record",
+                    "create_search_term_optimization",
+                    "update_search_term_optimization",
+                    "delete_search_term_optimization"
+                ],
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            await self.mcp_client._send_message(registration_message)
+            logger.info("Registered as Database Service with MCP server")
+            
+        except Exception as e:
+            logger.error(f"Failed to register with MCP: {e}")
     
     async def verify_schema(self):
         """Verify that all required tables exist."""
@@ -121,8 +254,7 @@ class DatabaseService:
             "status": "unknown",
             "timestamp": datetime.utcnow().isoformat(),
             "dependencies": {
-                "database": "unknown",
-                "redis": "unknown"
+                "database": "unknown"
             },
             "metrics": {}
         }
@@ -154,32 +286,9 @@ class DatabaseService:
             health["dependencies"]["database"] = "unhealthy"
             health["metrics"]["database"] = {"error": str(e)}
         
-        try:
-            # Check Redis
-            if self.redis_client:
-                self.redis_client.ping()
-                redis_info = self.redis_client.info()
-                
-                health["dependencies"]["redis"] = "healthy"
-                health["metrics"]["redis"] = {
-                    "connected_clients": redis_info.get("connected_clients", 0),
-                    "used_memory": redis_info.get("used_memory", 0),
-                    "uptime_in_seconds": redis_info.get("uptime_in_seconds", 0)
-                }
-            else:
-                raise Exception("Redis client not initialized")
-                
-        except Exception as e:
-            logger.error(f"Redis health check failed: {e}")
-            health["dependencies"]["redis"] = "unhealthy"
-            health["metrics"]["redis"] = {"error": str(e)}
-        
-        # Overall status
-        deps_healthy = all(
-            status == "healthy" 
-            for status in health["dependencies"].values()
-        )
-        health["status"] = "healthy" if deps_healthy else "unhealthy"
+        # Overall status - only require database to be healthy
+        database_healthy = health["dependencies"]["database"] == "healthy"
+        health["status"] = "healthy" if database_healthy else "unhealthy"
         
         return health
     
@@ -203,8 +312,27 @@ class DatabaseService:
             
             logger.info("✅ Database maintenance completed")
             
+            # Report maintenance completion to MCP
+            if self.mcp_client.is_connected:
+                message = {
+                    "type": "maintenance_completed",
+                    "data": {"status": "success"},
+                    "client_id": self.mcp_client.client_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await self.mcp_client._send_message(message)
+            
         except Exception as e:
             logger.error(f"❌ Database maintenance failed: {e}")
+            # Report failure to MCP
+            if self.mcp_client.is_connected:
+                message = {
+                    "type": "maintenance_completed",
+                    "data": {"status": "failed", "error": str(e)},
+                    "client_id": self.mcp_client.client_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await self.mcp_client._send_message(message)
     
     async def run_health_monitor(self):
         """Background task for continuous health monitoring."""
@@ -212,13 +340,15 @@ class DatabaseService:
             try:
                 health = await self.health_check()
                 
-                # Store health status in Redis for other services to check
-                if self.redis_client:
-                    self.redis_client.setex(
-                        "database-service:health", 
-                        HEALTH_CHECK_INTERVAL * 2,  # TTL slightly longer than interval
-                        str(health)
-                    )
+                # Report health to MCP
+                if self.mcp_client.is_connected:
+                    message = {
+                        "type": "status_response",
+                        "data": health,
+                        "client_id": self.mcp_client.client_id,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    await self.mcp_client._send_message(message)
                 
                 # Log health status
                 status = health["status"]
@@ -263,6 +393,8 @@ class DatabaseService:
             maintenance_task.cancel()
             
             await asyncio.gather(health_task, maintenance_task, return_exceptions=True)
+            
+            await self.mcp_client.disconnect()
             
             logger.info("✅ Database Service stopped gracefully")
             

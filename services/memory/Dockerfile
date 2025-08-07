@@ -1,4 +1,4 @@
-# Memory Agent Service - SECURITY HARDENED with Alpine
+# Memory Service - SECURITY HARDENED with Alpine
 FROM python:3.12-alpine
 
 # Security: Set build arguments for better control
@@ -50,14 +50,11 @@ COPY src/ ./src/
 COPY config/ ./config/
 COPY ./start.sh ./start.sh
 
-# Copy shared health check service
-COPY health_check_service.py ./health_check_service.py
-
 # Security: Create secure data directory with proper permissions
 RUN mkdir -p /app/data /app/tmp && \
     chown -R memoryagent:memoryagent /app && \
     chmod -R 750 /app && \
-    chmod 640 /app/src/*.py /app/config/*.json /app/health_check_service.py 2>/dev/null || true && \
+    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
     chmod +x /app/start.sh && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -name "*.py" -exec chmod 640 {} \; && \

@@ -1,5 +1,5 @@
-# Eunice Research Platform - Version 0.3 Microservices Architecture
-# Root-level orchestration following the Version 0.3 design document
+# Eunice Research Platform - Re-architected
+# Core microservices architecture following the new design document
 
 services:
   # Core Services
@@ -15,7 +15,6 @@ services:
       - PORT=8001
       - MCP_SERVER_HOST=mcp-server
       - MCP_SERVER_PORT=9000
-      - AUTH_SERVICE_URL=http://auth-service:8013
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
@@ -25,7 +24,6 @@ services:
       - eunice-microservices
     depends_on:
       - mcp-server
-      - auth-service
       - postgres
     restart: unless-stopped
     healthcheck:
@@ -35,7 +33,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # 2. Enhanced MCP Server Service (Port 9000) - WebSocket hub for all agents
+  # 2. MCP Server Service (Port 9000) - Central communication hub
   mcp-server:
     build: ./services/mcp-server
     container_name: eunice-mcp-server
@@ -45,7 +43,6 @@ services:
       - LOG_LEVEL=INFO
       - PORT=9000
       - HOST=0.0.0.0
-      - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
@@ -53,49 +50,12 @@ services:
     networks:
       - eunice-microservices
     depends_on:
-      - redis
       - postgres
     restart: unless-stopped
-    # Health check disabled to prevent WebSocket 400 Bad Request errors
-    # The health check was making raw TCP connections instead of proper WebSocket connections
-    # healthcheck:
-    #   test: ["CMD", "python", "health_check.py"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 15s
 
-  # 3. AI Service (Pure MCP Client)
-  ai-service:
-    build: ./services/ai-service
-    container_name: eunice-ai-service
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - XAI_API_KEY=${XAI_API_KEY}
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-      - HEALTH_PORT=8010
-    ports:
-      - "8010:8010" # Health check API
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
+  # Agent Services
 
-  # Pure MCP Agent Services (No HTTP ports)
-
-  # Research Manager Agent - Pure MCP Client
+  # Research Manager Agent - Orchestrator agent with prompt logic
   research-manager-agent:
     build: ./agents/research-manager
     container_name: eunice-research-manager
@@ -122,46 +82,32 @@ services:
       retries: 3
       start_period: 15s
 
-  # Literature Search Agent - Pure MCP Client
-  literature-agent:
-    build: ./agents/literature
-    container_name: eunice-literature-agent
-    ports:
-      - "8003:8003"
+  # Supporting Services
+
+  # Database Service - Database management and tools
+  database-service:
+    build: ./services/database
+    container_name: eunice-database-service
     environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8003
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=literature
-      - LOG_LEVEL=DEBUG
-      - CORE_API_KEY=${CORE_API_KEY}
-      - OPENALEX_EMAIL=${OPENALEX_EMAIL}
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
+      - LOG_LEVEL=INFO
+      - HEALTH_CHECK_INTERVAL=30
+      - MAINTENANCE_INTERVAL=3600
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
     networks:
       - eunice-microservices
     depends_on:
-      - mcp-server
+      - postgres
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
 
-  # Network Agent (Google Search) - Pure MCP Client
-  network-agent:
-    build: ./agents/network
-    container_name: eunice-network-agent
-    ports:
-      - "8004:8004"
+  # Network Service - Web/API tool calls for LLMs, search, etc
+  network-service:
+    build: ./services/network
+    container_name: eunice-network-service
     environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8004
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=network
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - GOOGLE_SEARCH_ENGINE_ID=${GOOGLE_SEARCH_ENGINE_ID}
       - LOG_LEVEL=INFO
@@ -173,95 +119,8 @@ services:
     depends_on:
       - mcp-server
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
 
-  # Screening PRISMA Agent - Pure MCP Client
-  screening-agent:
-    build: ./agents/screening
-    container_name: eunice-screening-agent
-    ports:
-      - "8012:8012"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8012
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=screening
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Planning Agent - Pure MCP Client
-  planning-agent:
-    build: ./agents/planning
-    container_name: eunice-planning-agent
-    ports:
-      - "8007:8007"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8007
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=planning
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Executor Agent - Pure MCP Client
-  executor-agent:
-    build: ./agents/executor
-    container_name: eunice-executor-agent
-    ports:
-      - "8008:8008"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8008
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=executor
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Memory Service - Pure MCP Client
+  # Memory Service - Memory and context tracking
   memory-service:
     build: ./services/memory
     container_name: eunice-memory-service
@@ -271,7 +130,6 @@ services:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8009
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=memory
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
@@ -288,155 +146,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # Synthesis & Review Agent - Pure MCP Client
-  synthesis-agent:
-    build: ./agents/synthesis
-    container_name: eunice-synthesis-agent
-    ports:
-      - "8005:8005"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8005
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=synthesis
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Writer Agent - Pure MCP Client
-  writer-agent:
-    build: ./agents/writer
-    container_name: eunice-writer-agent
-    ports:
-      - "8006:8006"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8006
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=writer
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Database Agent - Pure MCP Client
-  database-agent:
-    build: ./agents/database
-    container_name: eunice-database-agent
-    ports:
-      - "8011:8011"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8011
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=database
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-      - postgres
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Supporting Services
-
-  # Database Service (Pure Database Management - No API)
-  database-service:
-    build: ./services/database
-    container_name: eunice-database
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-      - REDIS_URL=redis://redis:6379
-      - LOG_LEVEL=INFO
-      - HEALTH_CHECK_INTERVAL=30
-      - MAINTENANCE_INTERVAL=3600
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-
-  # Docker Socket Proxy (Security Layer for Docker API Access)
-  docker-socket-proxy:
-    image: lscr.io/linuxserver/socket-proxy:latest
-    container_name: eunice-docker-socket-proxy
-    environment:
-      - LOG_LEVEL=info
-      - CONTAINERS=1 # Allow listing and managing containers
-      - SERVICES=1 # Allow listing and managing services
-      - NETWORKS=1 # Allow listing networks
-      - VOLUMES=1 # Allow listing volumes
-      - IMAGES=1 # Allow listing images
-      - INFO=1 # Allow system info
-      - VERSION=1 # Allow version info
-      - PING=1 # Allow ping
-      - EVENTS=1 # Allow events
-      - EXEC=0 # Disable exec for security
-      - SYSTEM=0 # Block system-level API access
-      - BUILD=0 # Disable build operations
-      - COMMIT=0 # Disable commit operations
-      - POST=0 # Make API read-only for extra security
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - eunice-microservices
-    restart: unless-stopped
-    read_only: true
-    tmpfs:
-      - /run
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:2375/_ping",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-
-  # Authentication Service (JWT & RBAC - Port 8013)
+  # Authentication Service - JWT & RBAC
   auth-service:
     build: ./services/auth-service
     container_name: eunice-auth-service
@@ -471,22 +181,50 @@ services:
       retries: 3
       start_period: 15s
 
-  # Supporting Infrastructure
-
-  # Redis (Message Broker & Cache)
-  redis:
-    image: redis:7-alpine
-    container_name: eunice-redis
-    ports:
-      - "6380:6379" # Use different external port to avoid conflict
+  # Docker Socket Proxy - Security layer for Docker API access
+  docker-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    container_name: eunice-docker-socket-proxy
+    environment:
+      - LOG_LEVEL=info
+      - CONTAINERS=1
+      - SERVICES=1
+      - NETWORKS=1
+      - VOLUMES=1
+      - IMAGES=1
+      - INFO=1
+      - VERSION=1
+      - PING=1
+      - EVENTS=1
+      - EXEC=0
+      - SYSTEM=0
+      - BUILD=0
+      - COMMIT=0
+      - POST=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - eunice-microservices
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /run
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:2375/_ping",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 5s
+
+  # Supporting Infrastructure
 
   # PostgreSQL Database
   postgres:
@@ -540,7 +278,7 @@ networks:
     name: eunice-microservices
     labels:
       - "com.eunice.network=microservices"
-      - "com.eunice.version=v0.3"
+      - "com.eunice.version=re-architected"
 
 # Volumes
 volumes:

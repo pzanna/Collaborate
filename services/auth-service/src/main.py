@@ -9,6 +9,7 @@ import json
 import os
 import secrets
 import logging
+import errno
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 from io import BytesIO
@@ -47,6 +48,16 @@ settings = get_settings()
 
 # Initialize logger
 logger = logging.getLogger(__name__)
+
+# Import watchfiles with fallback after logger is configured
+try:
+    from watchfiles import awatch
+    WATCHFILES_AVAILABLE = True
+    logger.info("watchfiles imported successfully")
+except ImportError as e:
+    logger.warning(f"watchfiles not available: {e}")
+    awatch = None  # type: ignore
+    WATCHFILES_AVAILABLE = False
 
 # FastAPI app instance
 app = FastAPI(
@@ -175,7 +186,8 @@ async def health_check():
         "status": "healthy",
         "service": "auth-service",
         "version": "0.3.2",
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "watchfiles_available": WATCHFILES_AVAILABLE
     }
 
 

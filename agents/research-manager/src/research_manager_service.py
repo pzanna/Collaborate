@@ -28,6 +28,14 @@ from fastapi import FastAPI
 # Import the modular research manager components
 from research_manager import ResearchManagerService
 
+# Import watchfiles with fallback
+try:
+    from watchfiles import awatch
+    WATCHFILES_AVAILABLE = True
+except ImportError as e:
+    awatch = None  # type: ignore
+    WATCHFILES_AVAILABLE = False
+
 # Import the standardized health check service
 sys.path.append(str(Path(__file__).parent.parent))
 from research_manager.health_check import create_health_check_app
@@ -61,9 +69,10 @@ def get_additional_metadata() -> Dict[str, Any]:
             "capabilities": research_manager_service.capabilities,
             "active_tasks": len(research_manager_service.active_contexts),
             "max_concurrent_tasks": research_manager_service.max_concurrent_tasks,
+            "watchfiles_available": WATCHFILES_AVAILABLE,
             "agent_id": research_manager_service.agent_id
         }
-    return {}
+    return {"watchfiles_available": WATCHFILES_AVAILABLE}
 
 
 # Create health check only FastAPI application

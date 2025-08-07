@@ -30,6 +30,14 @@ from pydantic import BaseModel
 from config import Config
 from mcp_client import MCPClient
 
+# Import watchfiles with fallback
+try:
+    from watchfiles import awatch
+    WATCHFILES_AVAILABLE = True
+except ImportError as e:
+    awatch = None  # type: ignore
+    WATCHFILES_AVAILABLE = False
+
 # Import database service client for direct read access
 from native_database_client import get_native_database, initialize_native_database, close_native_database
 

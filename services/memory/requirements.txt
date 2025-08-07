@@ -12,6 +12,9 @@ aiosqlite==0.19.0
 # Async support and utilities
 asyncio-mqtt==0.16.1
 
+# File watching
+watchfiles==0.21.0
+
 # Logging and monitoring
 structlog==23.2.0
 

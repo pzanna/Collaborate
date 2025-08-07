@@ -1,5 +1,5 @@
 # Development Override Configuration
-# Use with: docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml up
+# Use with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 services:
   api-gateway:
@@ -40,25 +40,6 @@ services:
     read_only: false
     tmpfs: []
 
-  # Network Agent development configuration
-  network-agent:
-    build:
-      context: ./agents/network
-      target: development
-    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
-    environment:
-      - LOG_LEVEL=DEBUG
-      - DEVELOPMENT_MODE=true
-      - WATCHFILES_FORCE_POLLING=1
-    volumes:
-      # Mount source code for development
-      - ./agents/network/src:/app/src:ro
-      - ./agents/network/config:/app/config:ro
-      - ./agents/network/start-dev.sh:/app/start-dev.sh:ro
-    # Remove read-only constraints for development
-    read_only: false
-    tmpfs: []
-
   # Research Manager Agent development configuration
   research-manager-agent:
     build:
@@ -77,14 +58,3 @@ services:
     # Remove read-only constraints for development
     read_only: false
     tmpfs: []
-
-  # Override other services for development if needed
-  planning-agent:
-    environment:
-      - LOG_LEVEL=DEBUG
-      - DEVELOPMENT_MODE=true
-
-  ai-service:
-    environment:
-      - LOG_LEVEL=DEBUG
-      - DEVELOPMENT_MODE=true

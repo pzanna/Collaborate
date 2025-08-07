@@ -1,0 +1,40 @@
+{
+  "id": "research_plan",
+  "description": "Generate a detailed research plan from a query and scope using a structured JSON format.",
+  "agent_type": "ai_service",
+  "model": "grok-3-mini",
+  "system_prompt": "You are a research planning assistant. Provide detailed, structured responses in JSON format.",
+  "user_prompt_template": "Please create a comprehensive research plan for the following query:\n\nQuery: {query}\nScope: {scope}\nContext: {context_json}\n\nPlease provide a detailed research plan with:\n1. Clear research objectives (3\u20135 specific goals)\n2. Key areas to investigate (4\u20136 major research domains)\n3. Specific questions to answer (5\u20138 focused research questions)\n4. Information sources to consult (academic databases, repositories, etc.)\n5. Expected outcomes and deliverables\n6. Realistic timeline with phases\n\nFormat your response as a JSON object with this exact structure:\n{\n  \"objectives\": [\"Objective 1\", \"Objective 2\", \"Objective 3\"],\n  \"key_areas\": [\"Area 1\", \"Area 2\", \"Area 3\", \"Area 4\"],\n  \"questions\": [\"Question 1\", \"Question 2\", \"Question 3\", \"Question 4\", \"Question 5\"],\n  \"sources\": [\"PubMed\", \"ArXiv\", \"Semantic Scholar\", \"CORE\", \"CrossRef\", \"OpenAlex\"],\n  \"timeline\": {\n    \"total_hours\": 14,\n    \"phases\": {\n      \"literature_search\": 3,\n      \"data_collection\": 5,\n      \"analysis\": 4,\n      \"synthesis\": 2\n    }\n  },\n  \"outcomes\": [\"Literature review\", \"Data analysis\", \"Experiment design\", \"Research synthesis\", \"Final report\"]\n}\n\nDo NOT include cost or dollar amounts. Be thorough and realistic.",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "google_search",
+        "description": "Search the web using Google Custom Search to find recent research, discover additional relevant studies, and find similar work.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query to find relevant research data and studies"
+            },
+            "num_results": {
+              "type": "integer",
+              "description": "Number of search results to return (default: 10, max: 10)",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 10
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "max_tokens": 3000,
+  "temperature": 0.6,
+  "created_at": "2025-08-07T12:10:16.745403"
+}

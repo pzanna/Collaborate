@@ -25,6 +25,14 @@ from typing import Any, Dict, List, Optional
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
+# Import watchfiles with fallback
+try:
+    from watchfiles import awatch
+    WATCHFILES_AVAILABLE = True
+except ImportError as e:
+    awatch = None  # type: ignore
+    WATCHFILES_AVAILABLE = False
+
 # Structured JSON logging
 class JSONFormatter(logging.Formatter):
     def format(self, record):
@@ -664,6 +672,7 @@ class MCPServer:
             "active_tasks": len(self.active_tasks),
             "pending_messages": {k: len(v) for k, v in self.pending_messages.items()},
             "agent_load": self.agent_load,
+            "watchfiles_available": WATCHFILES_AVAILABLE,
             "registered_agents": {
                 agent_id: {
                     "type": info["agent_type"],

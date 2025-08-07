@@ -221,11 +221,17 @@ class NativeDatabaseClient:
                     return None
                 
                 metadata = row['metadata'] or {}
+                logger.info(f"Retrieved metadata: {metadata}, type: {type(metadata)}")
                 if isinstance(metadata, str):
                     try:
                         metadata = json.loads(metadata)
-                    except:
+                        logger.info(f"Parsed metadata: {metadata}")
+                    except Exception as e:
+                        logger.error(f"Failed to parse metadata JSON: {e}, raw metadata: {metadata}")
                         metadata = {}
+                else:
+                    logger.info(f"Metadata is not a string, type: {type(metadata)}")
+                logger.info(f"Final metadata: {metadata}, type: {type(metadata)}")
                 
                 return {
                     "id": str(row['id']),

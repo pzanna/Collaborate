@@ -25,3 +25,6 @@ structlog==23.2.0
 
 # Performance
 orjson==3.9.10
+
+# File watching
+watchfiles==0.21.0

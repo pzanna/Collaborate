@@ -1,7 +1,7 @@
 """
-Memory Agent Service for Eunice Research Platform.
+Memory Service for Eunice Research Platform.
 
-This module provides a containerized Memory Agent that handles:
+This module provides a containerized Memory  that handles:
 - Knowledge base management
 - Document storage and retrieval  
 - Research artifact organization
@@ -34,8 +34,7 @@ from fastapi import FastAPI
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 # Import the standardized health check service
-sys.path.append(str(Path(__file__).parent.parent))
-from health_check_service import create_health_check_app
+from health_check import create_health_check_app
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +42,16 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Import watchfiles with fallback after logger is configured
+try:
+    from watchfiles import awatch
+    WATCHFILES_AVAILABLE = True
+    logger.info("watchfiles imported successfully")
+except ImportError as e:
+    logger.warning(f"watchfiles not available: {e}")
+    awatch = None  # type: ignore
+    WATCHFILES_AVAILABLE = False
 
 
 @dataclass
@@ -86,19 +95,19 @@ class KnowledgeEdge:
     created_at: datetime = field(default_factory=datetime.now)
 
 
-class MemoryAgentService:
+class MemoryService:
     """
-    Memory Agent Service for knowledge base management.
+    Memory Service for knowledge base management.
     
     Handles memory operations, knowledge graph management,
     and semantic search via MCP protocol.
     """
     
     def __init__(self, config: Dict[str, Any]):
-        """Initialize Memory Agent Service."""
+        """Initialize Memory Service."""
         self.config = config
-        self.agent_id = "memory_agent"
-        self.agent_type = "memory"
+        self._id = "memory_"
+        self._type = "memory"
         
         # Service configuration
         self.service_host = config.get("service_host", "0.0.0.0")
@@ -135,8 +144,15 @@ class MemoryAgentService:
         # Task processing queue
         self.task_queue = asyncio.Queue()
         
+        # File watching
+        self.watch_paths = [
+            "/app/config",  # Watch config directory for changes
+            "/app/data"     # Watch data directory for external changes
+        ]
+        self.file_watcher_task: Optional[asyncio.Task] = None
+        
         # Capabilities
-        self.capabilities = [
+        capabilities_list = [
             "store_memory",
             "retrieve_memory", 
             "search_knowledge",
@@ -145,10 +161,16 @@ class MemoryAgentService:
             "semantic_search"
         ]
         
-        logger.info(f"Memory Agent Service initialized on port {self.service_port}")
+        # Add file watching capability if available
+        if WATCHFILES_AVAILABLE:
+            capabilities_list.append("file_watching")
+        
+        self.capabilities = capabilities_list
+        
+        logger.info(f"Memory Service initialized on port {self.service_port}")
     
     async def start(self):
-        """Start the Memory Agent Service."""
+        """Start the Memory Service."""
         try:
             # Ensure data directory exists
             self.memory_db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -165,23 +187,45 @@ class MemoryAgentService:
             # Connect to MCP server
             await self._connect_to_mcp_server()
             
-            # Start task processing and listening concurrently
-            await asyncio.gather(
-                self._process_task_queue(),
-                self._periodic_consolidation(),
-                self._listen_for_tasks()
-            )
+            # Prepare tasks to run concurrently
+            tasks_to_run = []
             
-            logger.info("Memory Agent Service started successfully")
+            # Always start these core tasks
+            tasks_to_run.extend([
+                asyncio.create_task(self._process_task_queue()),
+                asyncio.create_task(self._periodic_consolidation()),
+                asyncio.create_task(self._listen_for_tasks())
+            ])
+            
+            # Start file watcher if available
+            if WATCHFILES_AVAILABLE:
+                self.file_watcher_task = asyncio.create_task(self._watch_files())
+                tasks_to_run.append(self.file_watcher_task)
+                logger.info("File watching enabled")
+            else:
+                logger.info("File watching disabled - watchfiles not available")
+            
+            # Start all tasks concurrently
+            await asyncio.gather(*tasks_to_run)
+            
+            logger.info("Memory Service started successfully")
             
         except Exception as e:
-            logger.error(f"Failed to start Memory Agent Service: {e}")
+            logger.error(f"Failed to start Memory Service: {e}")
             raise
     
     async def stop(self):
-        """Stop the Memory Agent Service."""
+        """Stop the Memory Service."""
         try:
             self.should_run = False
+            
+            # Cancel file watcher task if it exists
+            if self.file_watcher_task and not self.file_watcher_task.done():
+                self.file_watcher_task.cancel()
+                try:
+                    await self.file_watcher_task
+                except asyncio.CancelledError:
+                    pass
             
             # Close database connection
             if self.db_connection:
@@ -191,10 +235,106 @@ class MemoryAgentService:
             if self.websocket:
                 await self.websocket.close()
             
-            logger.info("Memory Agent Service stopped")
+            logger.info("Memory Service stopped")
             
         except Exception as e:
-            logger.error(f"Error stopping Memory Agent Service: {e}")
+            logger.error(f"Error stopping Memory Service: {e}")
+    
+    async def _watch_files(self):
+        """Watch files and directories for changes."""
+        try:
+            if not WATCHFILES_AVAILABLE:
+                logger.warning("File watching not available - watchfiles not installed")
+                return
+            
+            logger.info(f"Starting file watcher for paths: {self.watch_paths}")
+            
+            # Filter paths that actually exist
+            existing_paths = []
+            for path in self.watch_paths:
+                path_obj = Path(path)
+                if path_obj.exists():
+                    existing_paths.append(str(path_obj))
+                else:
+                    logger.warning(f"Watch path does not exist: {path}")
+            
+            if not existing_paths:
+                logger.warning("No valid paths to watch")
+                return
+            
+            if awatch is None:
+                logger.error("awatch function not available")
+                return
+            
+            async for changes in awatch(*existing_paths, watch_filter=None):
+                if not self.should_run:
+                    break
+                    
+                await self._handle_file_changes(changes)
+                
+        except Exception as e:
+            logger.error(f"Error in file watcher: {e}")
+    
+    async def _handle_file_changes(self, changes):
+        """Handle detected file changes."""
+        try:
+            for change_type, path in changes:
+                path_str = str(path)
+                logger.info(f"File change detected: {change_type.name} - {path_str}")
+                
+                # Handle config file changes
+                if "/config/" in path_str and path_str.endswith(".json"):
+                    await self._handle_config_change(path_str)
+                
+                # Handle database file changes (external modifications)
+                elif path_str.endswith(".db"):
+                    await self._handle_database_change(path_str)
+                
+                # Handle other data file changes
+                else:
+                    await self._handle_data_file_change(path_str, change_type.name)
+                    
+        except Exception as e:
+            logger.error(f"Error handling file changes: {e}")
+    
+    async def _handle_config_change(self, config_path: str):
+        """Handle configuration file changes."""
+        try:
+            logger.info(f"Configuration file changed: {config_path}")
+            
+            # If it's the main config file, we might want to reload some settings
+            if "config.json" in config_path:
+                logger.info("Main configuration file changed - considering reload")
+                # Note: Full reload would require service restart
+                # For now, just log the change
+                
+        except Exception as e:
+            logger.error(f"Error handling config change: {e}")
+    
+    async def _handle_database_change(self, db_path: str):
+        """Handle database file changes."""
+        try:
+            logger.info(f"Database file changed externally: {db_path}")
+            
+            # If our main database was modified externally, reload cache
+            if str(self.memory_db_path) in db_path:
+                logger.info("Memory database changed externally - reloading cache")
+                await self._load_memory_cache()
+                await self._load_knowledge_cache()
+                
+        except Exception as e:
+            logger.error(f"Error handling database change: {e}")
+    
+    async def _handle_data_file_change(self, file_path: str, change_type: str):
+        """Handle other data file changes."""
+        try:
+            logger.info(f"Data file {change_type.lower()}: {file_path}")
+            
+            # Could implement specific handling for different file types
+            # For example, watching for import files, backup files, etc.
+            
+        except Exception as e:
+            logger.error(f"Error handling data file change: {e}")
     
     async def _initialize_database(self):
         """Initialize SQLite database for memory storage."""
@@ -352,14 +492,14 @@ class MemoryAgentService:
                     raise
     
     async def _register_with_mcp_server(self):
-        """Register this agent with the MCP server."""
+        """Register this  with the MCP server."""
         if not self.websocket:
             raise Exception("WebSocket connection not available")
             
         registration_message = {
-            "type": "agent_register",
-            "agent_id": self.agent_id,
-            "agent_type": self.agent_type,
+            "type": "_register",
+            "_id": self._id,
+            "_type": self._type,
             "capabilities": self.capabilities,
             "timestamp": datetime.now().isoformat(),
             "service_info": {
@@ -451,16 +591,18 @@ class MemoryAgentService:
                     return await self._handle_manage_knowledge_graph(data)
                 elif task_type == "consolidate_memory":
                     return await self._handle_consolidate_memory(data)
+                elif task_type == "file_watching":
+                    return await self._handle_file_watching(data)
                 else:
                     return {
                         "status": "failed",
                         "error": f"Unknown task type: {task_type}",
                         "timestamp": datetime.now().isoformat()
                     }
-            elif method == "agent/ping":
+            elif method == "/ping":
                 return {"status": "alive", "timestamp": datetime.now().isoformat()}
-            elif method == "agent/status":
-                return await self._get_agent_status()
+            elif method == "/status":
+                return await self._get__status()
             else:
                 return {
                     "status": "failed",
@@ -637,6 +779,65 @@ class MemoryAgentService:
             
         except Exception as e:
             logger.error(f"Failed to consolidate memory: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    async def _handle_file_watching(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle file watching request."""
+        try:
+            operation = data.get("operation", "")
+            
+            if operation == "add_watch_path":
+                path = data.get("path", "")
+                if path and Path(path).exists():
+                    if path not in self.watch_paths:
+                        self.watch_paths.append(path)
+                        logger.info(f"Added watch path: {path}")
+                    return {
+                        "status": "completed",
+                        "operation": "add_watch_path",
+                        "path": path,
+                        "watch_paths": self.watch_paths,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": f"Path does not exist: {path}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+            elif operation == "remove_watch_path":
+                path = data.get("path", "")
+                if path in self.watch_paths:
+                    self.watch_paths.remove(path)
+                    logger.info(f"Removed watch path: {path}")
+                return {
+                    "status": "completed",
+                    "operation": "remove_watch_path",
+                    "path": path,
+                    "watch_paths": self.watch_paths,
+                    "timestamp": datetime.now().isoformat()
+                }
+            elif operation == "list_watch_paths":
+                return {
+                    "status": "completed",
+                    "operation": "list_watch_paths",
+                    "watch_paths": self.watch_paths,
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "status": "failed",
+                    "error": f"Unknown file watching operation: {operation}",
+                    "available_operations": ["add_watch_path", "remove_watch_path", "list_watch_paths"],
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to handle file watching: {e}")
             return {
                 "status": "failed",
                 "error": str(e),
@@ -893,11 +1094,11 @@ class MemoryAgentService:
             "created_at": node.created_at.isoformat()
         }
     
-    async def _get_agent_status(self) -> Dict[str, Any]:
-        """Get current agent status."""
+    async def _get__status(self) -> Dict[str, Any]:
+        """Get current  status."""
         return {
-            "agent_id": self.agent_id,
-            "agent_type": self.agent_type,
+            "_id": self._id,
+            "_type": self._type,
             "status": "ready" if self.mcp_connected else "disconnected",
             "capabilities": self.capabilities,
             "timestamp": datetime.now().isoformat(),
@@ -906,12 +1107,14 @@ class MemoryAgentService:
             "knowledge_nodes": len(self.knowledge_cache),
             "knowledge_edges": len(self.edge_cache),
             "last_consolidation": self.last_consolidation.isoformat(),
+            "file_watcher_active": self.file_watcher_task is not None and not self.file_watcher_task.done() if self.file_watcher_task else False,
+            "watch_paths": self.watch_paths,
             "timestamp": datetime.now().isoformat()
         }
 
 
 # Global service instance
-memory_service: Optional[MemoryAgentService] = None
+memory_service: Optional[MemoryService] = None
 
 
 def get_mcp_status() -> Dict[str, Any]:
@@ -932,7 +1135,9 @@ def get_additional_metadata() -> Dict[str, Any]:
             "memory_cache_size": len(memory_service.memory_cache),
             "knowledge_nodes": len(memory_service.knowledge_cache),
             "knowledge_edges": len(memory_service.edge_cache),
-            "agent_id": memory_service.agent_id
+            "file_watcher_active": memory_service.file_watcher_task is not None and not memory_service.file_watcher_task.done() if memory_service.file_watcher_task else False,
+            "watch_paths_count": len(memory_service.watch_paths),
+            "_id": memory_service._id
         }
     return {}
 
@@ -948,7 +1153,7 @@ app = create_health_check_app(
 
 
 async def main():
-    """Main entry point for the memory agent service."""
+    """Main entry point for the memory service."""
     global memory_service
     
     try:
@@ -968,7 +1173,7 @@ async def main():
             }
         
         # Initialize service
-        memory_service = MemoryAgentService(config)
+        memory_service = MemoryService(config)
         
         # Start FastAPI health check server in background
         config_uvicorn = uvicorn.Config(
@@ -979,7 +1184,7 @@ async def main():
         )
         server = uvicorn.Server(config_uvicorn)
         
-        logger.info("🚨 ARCHITECTURE COMPLIANCE: Memory Agent")
+        logger.info("🚨 ARCHITECTURE COMPLIANCE: Memory ")
         logger.info("✅ ONLY health check API exposed")
         logger.info("✅ All business operations via MCP protocol exclusively")
         
@@ -990,9 +1195,9 @@ async def main():
         )
         
     except KeyboardInterrupt:
-        logger.info("Memory agent shutdown requested")
+        logger.info("Memory  shutdown requested")
     except Exception as e:
-        logger.error(f"Memory agent failed: {e}")
+        logger.error(f"Memory  failed: {e}")
         sys.exit(1)
     finally:
         if memory_service:

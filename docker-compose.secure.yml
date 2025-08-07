@@ -15,18 +15,16 @@ services:
       - PORT=8001
       - MCP_SERVER_HOST=mcp-server
       - MCP_SERVER_PORT=9000
-      - AUTH_SERVICE_URL=http://auth-service:8013
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
-      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
+      - WATCHFILES_FORCE_POLLING=1
     networks:
       - eunice-microservices
     depends_on:
       - mcp-server
-      - auth-service
       - postgres
     restart: unless-stopped
     # Security: Resource limits
@@ -54,15 +52,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
-    volumes:
-      - ./services/api-gateway/src:/app/src
-      - ./services/api-gateway/native_database_client.py:/app/native_database_client.py
-      - ./services/api-gateway/v2_hierarchical_api.py:/app/v2_hierarchical_api.py
-      - ./services/api-gateway/main.py:/app/main.py
-      - ./services/api-gateway/mcp_client.py:/app/mcp_client.py
-    command: ["./start-dev.sh"]
 
-  # 2. Enhanced MCP Server Service (Port 9000) - Security Enhanced
+  # 2. MCP Server Service (Port 9000) - Security Enhanced
   mcp-server:
     build: ./services/mcp-server
     container_name: eunice-mcp-server
@@ -72,16 +63,14 @@ services:
       - LOG_LEVEL=INFO
       - PORT=9000
       - HOST=0.0.0.0
-      - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
-      - WATCHFILES_FORCE_POLLING=1 # For watchfiles in Docker
+      - WATCHFILES_FORCE_POLLING=1
     networks:
       - eunice-microservices
     depends_on:
-      - redis
       - postgres
     restart: unless-stopped
     # Security: Resource limits
@@ -104,121 +93,10 @@ services:
     # Security: Prevent privilege escalation
     security_opt:
       - no-new-privileges:true
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import socket; s = socket.socket(); s.connect(('localhost', 9000)); s.close()",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    volumes:
-      - ./services/mcp-server/mcp_server.py:/app/mcp_server.py
-      - ./services/mcp-server/config.py:/app/config.py
-      - ./services/mcp-server/start-dev.sh:/app/start-dev.sh
-    command: ["./start-dev.sh"]
 
-  # 3. AI Service (MCP Client) - Security Enhanced
-  ai-service:
-    build: ./services/ai-service
-    container_name: eunice-ai-service
-    environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - XAI_API_KEY=${XAI_API_KEY}
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    # Security: Read-only root filesystem
-    read_only: true
-    tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    volumes:
-      - ./services/ai-service/src:/app/src
-      - ./services/ai-service/start-dev.sh:/app/start-dev.sh
-    command: ["./start-dev.sh"]
+  # Agent Services with Security Hardening
 
-  # All Agent Services with Enhanced Security
-
-  # 4. Planning Agent (Port 8007) - Security Enhanced
-  planning-agent:
-    build: ./agents/planning
-    container_name: eunice-planning-agent
-    ports:
-      - "8007:8007"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8007
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=planning
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    # Security: Read-only root filesystem
-    read_only: true
-    tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    volumes:
-      - ./agents/planning/src:/app/src
-      - ./agents/planning/start-dev.sh:/app/start-dev.sh
-    command: ["./start-dev.sh"]
-
-  # 5. Research Manager Agent (Port 8002) - Security Enhanced
+  # Research Manager Agent (Port 8002) - Security Enhanced
   research-manager-agent:
     build: ./agents/research-manager
     container_name: eunice-research-manager
@@ -264,179 +142,23 @@ services:
       retries: 3
       start_period: 15s
 
-  # 6. Network Agent (Google Search - Port 8004) - Security Enhanced
-  network-agent:
-    build: ./agents/network
-    container_name: eunice-network-agent
-    ports:
-      - "8004:8004"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8004
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=network
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GOOGLE_SEARCH_ENGINE_ID=${GOOGLE_SEARCH_ENGINE_ID}
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    # Security: Read-only root filesystem
-    read_only: true
-    tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    volumes:
-      - ./agents/network/src:/app/src
-      - ./agents/network/start-dev.sh:/app/start-dev.sh
-    command: ["./start-dev.sh"]
+  # Supporting Services with Security Hardening
 
-  # 7. Literature Search Agent (Port 8003) - Security Enhanced
-  literature-agent:
-    build: ./agents/literature
-    container_name: eunice-literature-agent
-    ports:
-      - "8003:8003"
+  # Database Service - Security Enhanced
+  database-service:
+    build: ./services/database
+    container_name: eunice-database-service
     environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8003
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=literature
-      - LOG_LEVEL=DEBUG
-      - CORE_API_KEY=${CORE_API_KEY}
-      - OPENALEX_EMAIL=${OPENALEX_EMAIL}
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "8.0"
-          memory: 512M
-        reservations:
-          cpus: "2.0"
-          memory: 256M
-    # Security: Read-only root filesystem with writable temp dirs
-    read_only: true
-    tmpfs:
-      - /app/tmp:exec,nosuid,size=200m,uid=1000,gid=1000
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    volumes:
-      - ./agents/literature/src:/app/src
-      - ./agents/literature/start-dev.sh:/app/start-dev.sh
-    command: ["./start-dev.sh"]
-
-  # 8. Screening PRISMA Agent (Port 8012) - Security Enhanced
-  screening-agent:
-    build: ./agents/screening
-    container_name: eunice-screening-agent
-    ports:
-      - "8012:8012"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8012
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=screening
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    # Security: Read-only root filesystem
-    read_only: true
-    tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # 8. Database Agent (Port 8011) - Security Enhanced
-  database-agent:
-    build: ./agents/database
-    container_name: eunice-database-agent
-    ports:
-      - "8011:8011"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8011
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=database
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - LOG_LEVEL=INFO
+      - HEALTH_CHECK_INTERVAL=30
+      - MAINTENANCE_INTERVAL=3600
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
-      - WATCHFILES_FORCE_POLLING=1 # Optional: for watchfiles in Docker
     networks:
       - eunice-microservices
     depends_on:
-      - mcp-server
       - postgres
     restart: unless-stopped
     # Security: Resource limits
@@ -458,28 +180,15 @@ services:
     # Security: Prevent privilege escalation
     security_opt:
       - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    volumes:
-      - ./agents/database/src:/app/src
-      - ./agents/database/start-dev.sh:/app/start-dev.sh
-    command: ["./start-dev.sh"]
 
-  # 9. Executor Agent (Port 8008) - Security Enhanced
-  executor-agent:
-    build: ./agents/executor
-    container_name: eunice-executor-agent
-    ports:
-      - "8008:8008"
+  # Network Service - Web/API tool calls with security
+  network-service:
+    build: ./services/network
+    container_name: eunice-network-service
     environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8008
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=executor
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_SEARCH_ENGINE_ID=${GOOGLE_SEARCH_ENGINE_ID}
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
@@ -501,23 +210,15 @@ services:
     # Security: Read-only root filesystem
     read_only: true
     tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m,uid=1000,gid=1000
-      - /app/work:noexec,nosuid,size=100m,uid=1000,gid=1000
-      - /tmp:noexec,nosuid,size=50m,uid=1000,gid=1000
+      - /app/tmp:noexec,nosuid,size=100m
     # Security: Drop all capabilities
     cap_drop:
       - ALL
     # Security: Prevent privilege escalation
     security_opt:
       - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
 
-  # 10. Memory Service (Port 8009) - Security Enhanced
+  # Memory Service - Memory and context tracking with security
   memory-service:
     build: ./services/memory
     container_name: eunice-memory-service
@@ -527,7 +228,6 @@ services:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8009
       - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=memory
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
@@ -564,99 +264,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # 11. Synthesis & Review Agent (Port 8005) - Security Enhanced
-  synthesis-agent:
-    build: ./agents/synthesis
-    container_name: eunice-synthesis-agent
-    ports:
-      - "8005:8005"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8005
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=synthesis
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    # Security: Read-only root filesystem
-    read_only: true
-    tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m,uid=1000,gid=1000
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # 12. Writer Agent (Port 8006) - Security Enhanced
-  writer-agent:
-    build: ./agents/writer
-    container_name: eunice-writer-agent
-    ports:
-      - "8006:8006"
-    environment:
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=8006
-      - MCP_SERVER_URL=ws://mcp-server:9000
-      - AGENT_TYPE=writer
-      - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    # Security: Read-only root filesystem
-    read_only: true
-    tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m,uid=1000,gid=1000
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # 13. Authentication Service (Port 8013) - Security Enhanced
+  # Authentication Service - JWT & RBAC with security
   auth-service:
     build: ./services/auth-service
     container_name: eunice-auth-service
@@ -710,67 +318,26 @@ services:
       retries: 3
       start_period: 15s
 
-  # 14. Database Service - Security Enhanced
-  database-service:
-    build: ./services/database
-    container_name: eunice-database
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
-      - REDIS_URL=redis://redis:6379
-      - LOG_LEVEL=INFO
-      - HEALTH_CHECK_INTERVAL=30
-      - MAINTENANCE_INTERVAL=3600
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    # Security: Read-only root filesystem
-    read_only: true
-    tmpfs:
-      - /app/tmp:noexec,nosuid,size=100m
-    # Security: Drop all capabilities
-    cap_drop:
-      - ALL
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-
-  # Supporting Infrastructure with Security
-
-  # Docker Socket Proxy (Security Layer for Docker API Access) - Security Enhanced
+  # Docker Socket Proxy - Security layer for Docker API access
   docker-socket-proxy:
     image: lscr.io/linuxserver/socket-proxy:latest
     container_name: eunice-docker-socket-proxy
     environment:
       - LOG_LEVEL=info
-      - CONTAINERS=1 # Allow listing and managing containers
-      - SERVICES=1 # Allow listing and managing services
-      - NETWORKS=1 # Allow listing networks
-      - VOLUMES=1 # Allow listing volumes
-      - IMAGES=1 # Allow listing images
-      - INFO=1 # Allow system info
-      - VERSION=1 # Allow version info
-      - PING=1 # Allow ping
-      - EVENTS=1 # Allow events
-      - EXEC=0 # Disable exec for security
-      - SYSTEM=0 # Block system-level API access
-      - BUILD=0 # Disable build operations
-      - COMMIT=0 # Disable commit operations
-      - POST=0 # Make API read-only for extra security
+      - CONTAINERS=1
+      - SERVICES=1
+      - NETWORKS=1
+      - VOLUMES=1
+      - IMAGES=1
+      - INFO=1
+      - VERSION=1
+      - PING=1
+      - EVENTS=1
+      - EXEC=0
+      - SYSTEM=0
+      - BUILD=0
+      - COMMIT=0
+      - POST=0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -810,38 +377,7 @@ services:
       retries: 3
       start_period: 5s
 
-  # Redis (Message Broker & Cache) - Security Enhanced
-  redis:
-    image: redis:7-alpine
-    container_name: eunice-redis
-    ports:
-      - "6380:6379"
-    networks:
-      - eunice-microservices
-    restart: unless-stopped
-    # Security: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 64M
-    # Security: Drop unnecessary capabilities
-    cap_drop:
-      - ALL
-    cap_add:
-      - SETUID
-      - SETGID
-    # Security: Prevent privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # Supporting Infrastructure
 
   # PostgreSQL Database - Security Enhanced
   postgres:
@@ -932,7 +468,7 @@ networks:
     name: eunice-microservices
     labels:
       - "com.eunice.network=microservices"
-      - "com.eunice.version=v0.3-secure"
+      - "com.eunice.version=re-architected-secure"
 
 # Volumes
 volumes:

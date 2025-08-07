@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import uuid4
 
@@ -83,9 +83,7 @@ async def create_project(
             "name": project_request.name,
             "description": project_request.description,
             "status": "pending",
-            "created_at": now.isoformat(),
-            "updated_at": now.isoformat(),
-            "metadata": json.dumps(project_request.metadata or {}),
+            "metadata": project_request.metadata or {}
         }
 
         # Send project creation via MCP
@@ -94,7 +92,7 @@ async def create_project(
                 "task_id": str(uuid4()),
                 "context_id": f"project-{project_id}",
                 "agent_type": "database",
-                "action": "create_project",
+                "task_type": "create_project",
                 "payload": project_data
             }
             success = await mcp_client.send_research_action(task_data)
@@ -239,28 +237,23 @@ async def update_project(
         if not existing_project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Build update data from non-None fields - format for database agent
-        updates = {}
-        if project_update.name is not None:
-            updates["name"] = project_update.name
-        if project_update.description is not None:
-            updates["description"] = project_update.description
-        if project_update.status is not None:
-            updates["status"] = project_update.status
-        if project_update.metadata is not None:
-            updates["metadata"] = json.dumps(project_update.metadata)
+        # Build update data with all fields (merge existing with updates) - format for database tools
+        update_data: Dict[str, Any] = {
+            "id": project_id,
+            "name": project_update.name if project_update.name is not None else existing_project["name"],
+            "description": project_update.description if project_update.description is not None else existing_project["description"],
+            "status": project_update.status if project_update.status is not None else existing_project["status"],
+            "metadata": project_update.metadata if project_update.metadata is not None else existing_project["metadata"]
+        }
 
-        # Send project update via MCP - format expected by database agent
+        # Send project update via MCP
         if mcp_client and mcp_client.is_connected:
             task_data = {
                 "task_id": str(uuid4()),
                 "context_id": f"project-{project_id}",
                 "agent_type": "database",
-                "action": "update_project",
-                "payload": {
-                    "project_id": project_id,
-                    "updates": updates
-                }
+                "task_type": "update_project",
+                "payload": update_data
             }
             success = await mcp_client.send_research_action(task_data)
             if not success:
@@ -308,7 +301,7 @@ async def delete_project(
                 "task_id": str(uuid4()),
                 "context_id": f"project-{project_id}",
                 "agent_type": "database",
-                "action": "delete_project",
+                "task_type": "delete_project",
                 "payload": {"id": project_id}
             }
             success = await mcp_client.send_research_action(task_data)
