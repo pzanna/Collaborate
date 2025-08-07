@@ -86,6 +86,89 @@ class MCPServer:
         
         logger.info(f"Improved MCP Server initialized: {self.server_id}")
     
+    def _validate_jsonrpc_message(self, data: Dict[str, Any]) -> bool:
+        """Validate JSON-RPC 2.0 message format."""
+        if not isinstance(data, dict):
+            return False
+        
+        # Check required fields
+        if data.get("jsonrpc") != "2.0":
+            return False
+        
+        # Either method (request/notification) or result/error (response) must be present
+        has_method = "method" in data
+        has_result = "result" in data
+        has_error = "error" in data
+        
+        if not (has_method or has_result or has_error):
+            return False
+        
+        # Responses must have id
+        if (has_result or has_error) and "id" not in data:
+            return False
+        
+        return True
+    
+    async def _send_jsonrpc_response(self, client_id: str, result: Any, request_id: Any):
+        """Send JSON-RPC 2.0 response."""
+        response = {
+            "jsonrpc": "2.0",
+            "result": result,
+            "id": request_id
+        }
+        await self._send_message(client_id, response)
+    
+    async def _send_jsonrpc_error(self, client_id: str, code: int, message: str, request_id: Any, data: Any = None):
+        """Send JSON-RPC 2.0 error response."""
+        error_response = {
+            "jsonrpc": "2.0",
+            "error": {
+                "code": code,
+                "message": message
+            },
+            "id": request_id
+        }
+        if data is not None:
+            error_response["error"]["data"] = data
+        
+        await self._send_message(client_id, error_response)
+    
+    async def _send_jsonrpc_notification(self, client_id: str, method: str, params: Dict[str, Any]):
+        """Send JSON-RPC 2.0 notification (no response expected)."""
+        notification = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params
+        }
+        await self._send_message(client_id, notification)
+    
+    async def _send_jsonrpc_notification_to_entity(self, entity_id: str, method: str, params: Dict[str, Any]) -> bool:
+        """Send JSON-RPC 2.0 notification to entity, buffer if disconnected."""
+        current_client_id = self.agent_connections.get(entity_id)
+        if not current_client_id or current_client_id not in self.clients:
+            logger.warning(f"No active connection for {entity_id}, buffering notification")
+            # Buffer as old format for compatibility with existing buffer logic
+            self.pending_messages.setdefault(entity_id, []).append({
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params
+            })
+            return False
+        
+        try:
+            await self._send_jsonrpc_notification(current_client_id, method, params)
+            logger.info(f"Notification sent to {entity_id} ({current_client_id}): {method}")
+            return True
+        except Exception as e:
+            logger.error(f"Notification send failed to {entity_id} ({current_client_id}): {str(e)}")
+            await self._cleanup_client(current_client_id)
+            self.pending_messages.setdefault(entity_id, []).append({
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params
+            })
+            return False
+    
     async def start(self):
         """Start the MCP server"""
         try:
@@ -144,47 +227,63 @@ class MCPServer:
             await self._cleanup_client(client_id)
     
     async def _handle_message(self, client_id: str, message: str):
-        """Handle incoming message from client"""
+        """Handle incoming JSON-RPC 2.0 message from client"""
         try:
             data = json.loads(message)
-            message_type = data.get("type")
             
-            logger.info(f"Received message from {client_id}: {message_type}")
+            # Validate JSON-RPC 2.0 format
+            if not self._validate_jsonrpc_message(data):
+                await self._send_jsonrpc_error(client_id, -32600, "Invalid Request", None)
+                return
             
-            if message_type == "agent_register":
-                await self._handle_agent_registration(client_id, data)
-            elif message_type == "gateway_register":
-                await self._handle_gateway_registration(client_id, data)
-            elif message_type == "research_action":
-                await self._handle_research_action(client_id, data)
-            elif message_type == "task_request":
-                await self._handle_task_request_from_ai(client_id, data)
-            elif message_type == "task_result":
-                await self._handle_task_result(client_id, data)
-            elif message_type == "heartbeat":
-                await self._handle_heartbeat(client_id, data)
-            elif message_type == "status_request":
-                await self._handle_status_request(client_id, data)
-            elif message_type == "task_cancel_request":
-                await self._handle_task_cancel(client_id, data)
-            elif message_type == "gateway_unregister" or message_type == "agent_unregister":
+            method = data.get("method")
+            params = data.get("params", {})
+            request_id = data.get("id")
+            
+            logger.info(f"Received JSON-RPC method from {client_id}: {method}")
+            
+            # Handle JSON-RPC requests
+            if method == "agent_register":
+                await self._handle_agent_registration(client_id, params, request_id)
+            elif method == "gateway_register":
+                await self._handle_gateway_registration(client_id, params, request_id)
+            elif method == "research_action":
+                await self._handle_research_action(client_id, params, request_id)
+            elif method == "task_request":
+                await self._handle_task_request_from_ai(client_id, params, request_id)
+            elif method == "task_result":
+                await self._handle_task_result(client_id, params, request_id)
+            elif method == "heartbeat":
+                await self._handle_heartbeat(client_id, params, request_id)
+            elif method == "status_request":
+                await self._handle_status_request(client_id, params, request_id)
+            elif method == "task_cancel_request":
+                await self._handle_task_cancel(client_id, params, request_id)
+            elif method == "gateway_unregister" or method == "agent_unregister":
                 await self._cleanup_client(client_id)
+                if request_id is not None:
+                    await self._send_jsonrpc_response(client_id, {"status": "unregistered"}, request_id)
             else:
-                logger.warning(f"Unknown message type from {client_id}: {message_type}")
+                logger.warning(f"Unknown method from {client_id}: {method}")
+                if request_id is not None:
+                    await self._send_jsonrpc_error(client_id, -32601, "Method not found", request_id)
                 
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON from {client_id}")
+            await self._send_jsonrpc_error(client_id, -32700, "Parse error", None)
         except Exception as e:
             logger.error(f"Message handling error for {client_id}: {str(e)}")
+            await self._send_jsonrpc_error(client_id, -32603, "Internal error", None)
     
-    async def _handle_agent_registration(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_agent_registration(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle agent registration"""
-        agent_id = data.get("agent_id")
-        agent_type = data.get("agent_type")
-        capabilities = data.get("capabilities", [])
+        agent_id = params.get("agent_id")
+        agent_type = params.get("agent_type")
+        capabilities = params.get("capabilities", [])
         
         if not agent_id or not agent_type:
-            await self._send_error(client_id, "Missing agent_id or agent_type")
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32602, "Missing agent_id or agent_type", request_id)
             return
         
         # Register agent
@@ -202,26 +301,34 @@ class MCPServer:
         self.agent_load[agent_id] = 0  # Initialize load
         
         # Send registration confirmation
-        await self._send_to_entity(agent_id, {
-            "type": "registration_confirmed",
-            "agent_id": agent_id,
-            "server_id": self.server_id,
-            "timestamp": datetime.now().isoformat()
-        })
+        if request_id is not None:
+            await self._send_jsonrpc_response(client_id, {
+                "agent_id": agent_id,
+                "server_id": self.server_id,
+                "timestamp": datetime.now().isoformat()
+            }, request_id)
+        else:
+            # Send as notification
+            await self._send_jsonrpc_notification(client_id, "registration_confirmed", {
+                "agent_id": agent_id,
+                "server_id": self.server_id,
+                "timestamp": datetime.now().isoformat()
+            })
         
         # Deliver any pending messages
         await self._deliver_pending_messages(agent_id)
         
         logger.info(f"Agent registered: {agent_id} ({agent_type}) with capabilities: {capabilities}")
     
-    async def _handle_gateway_registration(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_gateway_registration(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle gateway registration"""
-        gateway_id = data.get("client_id")
-        gateway_type = data.get("client_type")
-        capabilities = data.get("capabilities", [])
+        gateway_id = params.get("client_id")
+        gateway_type = params.get("client_type")
+        capabilities = params.get("capabilities", [])
         
         if not gateway_id or not gateway_type:
-            await self._send_error(client_id, "Missing client_id or client_type")
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32602, "Missing client_id or client_type", request_id)
             return
         
         # Register gateway
@@ -237,12 +344,19 @@ class MCPServer:
         self.connection_to_entity[client_id] = gateway_id
         
         # Send registration confirmation
-        await self._send_to_entity(gateway_id, {
-            "type": "registration_confirmed",
-            "client_id": gateway_id,
-            "server_id": self.server_id,
-            "timestamp": datetime.now().isoformat()
-        })
+        if request_id is not None:
+            await self._send_jsonrpc_response(client_id, {
+                "client_id": gateway_id,
+                "server_id": self.server_id,
+                "timestamp": datetime.now().isoformat()
+            }, request_id)
+        else:
+            # Send as notification
+            await self._send_jsonrpc_notification(client_id, "registration_confirmed", {
+                "client_id": gateway_id,
+                "server_id": self.server_id,
+                "timestamp": datetime.now().isoformat()
+            })
         
         # Deliver any pending messages
         await self._deliver_pending_messages(gateway_id)
@@ -264,15 +378,16 @@ class MCPServer:
         
         logger.info(f"Delivered {len(pending)} pending messages to {entity_id}")
     
-    async def _handle_research_action(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_research_action(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle research action from API Gateway with improved load balancing"""
         try:
             requester_entity_id = self.connection_to_entity.get(client_id)
             if not requester_entity_id:
-                await self._send_error(client_id, "Unregistered client")
+                if request_id is not None:
+                    await self._send_jsonrpc_error(client_id, -32603, "Unregistered client", request_id)
                 return
             
-            task_data = data.get("data", {})
+            task_data = params.get("data", {})
             
             task_id = task_data.get("task_id", str(uuid.uuid4()))
             agent_type = task_data.get("agent_type")
@@ -283,7 +398,13 @@ class MCPServer:
             logger.info(f"Processing research action: {action} for agent type: {agent_type} from {requester_entity_id}")
             
             if not agent_type or not action:
-                await self._send_to_entity(requester_entity_id, {"type": "error", "message": "Missing agent_type or action"})
+                if request_id is not None:
+                    await self._send_jsonrpc_error(client_id, -32602, "Missing agent_type or action", request_id)
+                else:
+                    await self._send_jsonrpc_notification(client_id, "task_rejected", {
+                        "task_id": task_id,
+                        "error": "Missing agent_type or action"
+                    })
                 return
             
             # Find suitable agents
@@ -296,13 +417,13 @@ class MCPServer:
             
             if not suitable_agents:
                 error_msg = f"No active {agent_type} agents found with capability: {action}"
-                await self._send_to_entity(requester_entity_id, {
-                    "type": "task_rejected",
-                    "data": {
+                if request_id is not None:
+                    await self._send_jsonrpc_error(client_id, -32601, error_msg, request_id)
+                else:
+                    await self._send_jsonrpc_notification(client_id, "task_rejected", {
                         "task_id": task_id,
                         "error": error_msg
-                    }
-                })
+                    })
                 logger.warning(error_msg)
                 return
             
@@ -325,9 +446,8 @@ class MCPServer:
                 "created_at": datetime.now(),
             }
             
-            # Send task to agent
-            await self._send_message(agent_client_id, {
-                "type": "task_request",
+            # Send task to agent using JSON-RPC
+            await self._send_jsonrpc_notification(agent_client_id, "task_request", {
                 "task_id": task_id,
                 "task_type": action,
                 "data": payload,
@@ -335,33 +455,39 @@ class MCPServer:
             })
             
             # Confirm to gateway
-            await self._send_to_entity(requester_entity_id, {
-                "type": "task_queued",
-                "data": {
+            if request_id is not None:
+                await self._send_jsonrpc_response(client_id, {
                     "task_id": task_id,
                     "assigned_agent": selected_agent,
                     "agent_type": agent_type,
                     "status": "processing"
-                }
-            })
+                }, request_id)
+            else:
+                await self._send_jsonrpc_notification(client_id, "task_queued", {
+                    "task_id": task_id,
+                    "assigned_agent": selected_agent,
+                    "agent_type": agent_type,
+                    "status": "processing"
+                })
             
             logger.info(f"Research action routed: {task_id} -> {selected_agent}")
             
         except Exception as e:
             error_msg = f"Error processing research action: {str(e)}"
-            if requester_entity_id:
-                await self._send_to_entity(requester_entity_id, {"type": "error", "message": error_msg})
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32603, error_msg, request_id)
             logger.error(error_msg)
     
-    async def _handle_task_request_from_ai(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_task_request_from_ai(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle task request from AI service"""
         try:
             requester_entity_id = self.connection_to_entity.get(client_id)
             if not requester_entity_id:
-                await self._send_error(client_id, "Unregistered client")
+                if request_id is not None:
+                    await self._send_jsonrpc_error(client_id, -32603, "Unregistered client", request_id)
                 return
             
-            task_data = data.get("data", {})
+            task_data = params.get("data", {})
             
             task_id = task_data.get("task_id", str(uuid.uuid4()))
             agent_type = task_data.get("agent_type")
@@ -372,12 +498,14 @@ class MCPServer:
             logger.info(f"Processing AI task request: {action} for agent type: {agent_type} from {requester_entity_id}")
             
             if not agent_type or not action:
-                await self._send_to_entity(requester_entity_id, {
-                    "type": "task_result",
-                    "task_id": task_id,
-                    "status": "error",
-                    "error": "Missing agent_type or action"
-                })
+                if request_id is not None:
+                    await self._send_jsonrpc_error(client_id, -32602, "Missing agent_type or action", request_id)
+                else:
+                    await self._send_jsonrpc_notification(client_id, "task_result", {
+                        "task_id": task_id,
+                        "status": "error",
+                        "error": "Missing agent_type or action"
+                    })
                 return
             
             # Find suitable agents
@@ -390,12 +518,14 @@ class MCPServer:
             
             if not suitable_agents:
                 error_msg = f"No active {agent_type} agents found with capability: {action}"
-                await self._send_to_entity(requester_entity_id, {
-                    "type": "task_result",
-                    "task_id": task_id,
-                    "status": "error",
-                    "error": error_msg
-                })
+                if request_id is not None:
+                    await self._send_jsonrpc_error(client_id, -32601, error_msg, request_id)
+                else:
+                    await self._send_jsonrpc_notification(client_id, "task_result", {
+                        "task_id": task_id,
+                        "status": "error",
+                        "error": error_msg
+                    })
                 logger.warning(error_msg)
                 return
             
@@ -416,38 +546,50 @@ class MCPServer:
                 "created_at": datetime.now(),
             }
             
-            # Send task to agent
-            await self._send_message(agent_client_id, {
-                "type": "task_request",
+            # Send task to agent using JSON-RPC
+            await self._send_jsonrpc_notification(agent_client_id, "task_request", {
                 "task_id": task_id,
                 "task_type": action,
                 "data": payload,
                 "context_id": context_id
             })
             
+            if request_id is not None:
+                await self._send_jsonrpc_response(client_id, {
+                    "task_id": task_id,
+                    "assigned_agent": selected_agent,
+                    "status": "processing"
+                }, request_id)
+            
             logger.info(f"AI task routed: {task_id} -> {selected_agent}")
             
         except Exception as e:
             error_msg = f"Error processing AI task request: {str(e)}"
-            if requester_entity_id:
-                await self._send_to_entity(requester_entity_id, {"type": "error", "message": error_msg})
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32603, error_msg, request_id)
             logger.error(error_msg)
     
-    async def _handle_task_result(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_task_result(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle task result from agent"""
-        task_id = data.get("task_id")
-        result = data.get("result")
-        status = data.get("status", "completed")
-        error = data.get("error")
+        task_id = params.get("task_id")
+        result = params.get("result")
+        status = params.get("status", "completed")
+        error = params.get("error")
         
         if not task_id:
             logger.error("Received task result with no task_id")
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32602, "Missing task_id", request_id)
             return
         
         logger.info(f"Received task result for {task_id}: {status}")
         
-        message = {
-            "type": "task_result",
+        # Send confirmation if this was a request
+        if request_id is not None:
+            await self._send_jsonrpc_response(client_id, {"status": "received"}, request_id)
+        
+        # Prepare task result notification
+        result_notification = {
             "task_id": task_id,
             "result": result,
             "status": status,
@@ -458,7 +600,7 @@ class MCPServer:
             task = self.active_tasks[task_id]
             requester_id = task["requester_id"]
             
-            success = await self._send_to_entity(requester_id, message)
+            success = await self._send_jsonrpc_notification_to_entity(requester_id, "task_result", result_notification)
             
             if success:
                 logger.info(f"Task result delivered successfully for {task_id}")
@@ -469,39 +611,49 @@ class MCPServer:
         else:
             logger.warning(f"Late task result for {task_id}, attempting delivery")
             self.task_result_buffer[task_id] = {
-                "message": message,
+                "message": result_notification,
                 "received_at": datetime.now(),
                 "attempts": 0
             }
             await self._attempt_late_delivery(task_id)
     
-    async def _handle_task_cancel(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_task_cancel(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle task cancellation request from API Gateway"""
         requester_entity_id = self.connection_to_entity.get(client_id)
         if not requester_entity_id:
-            await self._send_error(client_id, "Unregistered client")
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32603, "Unregistered client", request_id)
             return
         
-        task_id = data.get("task_id")
+        task_id = params.get("task_id")
         if not task_id:
-            await self._send_to_entity(requester_entity_id, {"type": "error", "message": "Missing task_id"})
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32602, "Missing task_id", request_id)
             return
         
         if task_id in self.active_tasks:
             task = self.active_tasks.pop(task_id)
             logger.info(f"Cancelled task {task_id} assigned to {task.get('assigned_agent')}")
-            await self._send_to_entity(requester_entity_id, {
-                "type": "task_cancelled",
+            
+            result_data = {
                 "task_id": task_id,
                 "status": "cancelled",
                 "timestamp": datetime.now().isoformat()
-            })
+            }
+            
+            if request_id is not None:
+                await self._send_jsonrpc_response(client_id, result_data, request_id)
+            else:
+                await self._send_jsonrpc_notification(client_id, "task_cancelled", result_data)
         else:
-            await self._send_to_entity(requester_entity_id, {
-                "type": "error",
-                "message": "Task not found or already completed",
-                "task_id": task_id
-            })
+            error_msg = "Task not found or already completed"
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32602, error_msg, request_id, {"task_id": task_id})
+            else:
+                await self._send_jsonrpc_notification(client_id, "error", {
+                    "message": error_msg,
+                    "task_id": task_id
+                })
     
     async def _attempt_late_delivery(self, task_id: str):
         """Attempt to deliver a buffered task result"""
@@ -519,7 +671,7 @@ class MCPServer:
         
         delivered = False
         for ai_id in ai_services:
-            success = await self._send_to_entity(ai_id, buffered["message"])
+            success = await self._send_jsonrpc_notification_to_entity(ai_id, "task_result", buffered["message"])
             if success:
                 delivered = True
                 logger.info(f"Late delivery successful to {ai_id} for {task_id}")
@@ -549,13 +701,12 @@ class MCPServer:
             age = (current_time - task["created_at"]).total_seconds()
             if age > self.task_timeout:
                 expired.append(tid)
-                message = {
-                    "type": "task_result",
+                result_notification = {
                     "task_id": tid,
                     "status": "timeout",
                     "error": "Task timed out"
                 }
-                await self._send_to_entity(task["requester_id"], message)
+                await self._send_jsonrpc_notification_to_entity(task["requester_id"], "task_result", result_notification)
         
         for tid in expired:
             del self.active_tasks[tid]
@@ -570,47 +721,56 @@ class MCPServer:
                 logger.error(f"Background cleanup error: {str(e)}")
             await asyncio.sleep(60)
     
-    async def _handle_heartbeat(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_heartbeat(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle heartbeat"""
         entity_id = self.connection_to_entity.get(client_id)
         if entity_id:
-            await self._send_to_entity(entity_id, {
-                "type": "heartbeat_ack",
-                "agent_id": entity_id,
-                "timestamp": datetime.now().isoformat()
-            })
+            if request_id is not None:
+                await self._send_jsonrpc_response(client_id, {
+                    "agent_id": entity_id,
+                    "timestamp": datetime.now().isoformat()
+                }, request_id)
+            else:
+                await self._send_jsonrpc_notification(client_id, "heartbeat_ack", {
+                    "agent_id": entity_id,
+                    "timestamp": datetime.now().isoformat()
+                })
     
-    async def _handle_status_request(self, client_id: str, data: Dict[str, Any]):
+    async def _handle_status_request(self, client_id: str, params: Dict[str, Any], request_id: Any = None):
         """Handle status request from gateway or agent"""
         entity_id = self.connection_to_entity.get(client_id)
         if not entity_id:
-            await self._send_error(client_id, "Unregistered client")
+            if request_id is not None:
+                await self._send_jsonrpc_error(client_id, -32603, "Unregistered client", request_id)
             return
         
-        task_id = data.get("task_id")
-        response = {
-            "type": "status_response",
+        task_id = params.get("task_id")
+        response_data: Dict[str, Any] = {
             "client_id": entity_id,
             "timestamp": datetime.now().isoformat()
         }
         
         if task_id:
             task = self.active_tasks.get(task_id)
-            response["task_id"] = task_id
-            response["data"] = {
+            response_data["task_id"] = task_id
+            response_data["task_data"] = {
                 "status": task["status"] if task else "unknown",
                 "assigned_agent": task.get("assigned_agent") if task else None,
                 "created_at": task["created_at"].isoformat() if task else None,
                 "age_seconds": (datetime.now() - task["created_at"]).total_seconds() if task else 0
             }
         else:
-            response["data"] = self.get_status()
+            response_data["server_data"] = self.get_status()
         
-        await self._send_to_entity(entity_id, response)
+        if request_id is not None:
+            await self._send_jsonrpc_response(client_id, response_data, request_id)
+        else:
+            await self._send_jsonrpc_notification(client_id, "status_response", response_data)
+        
         logger.info(f"Sent status response to {entity_id}" + (f" for task {task_id}" if task_id else ""))
     
     async def _send_to_entity(self, entity_id: str, message: Dict[str, Any]) -> bool:
-        """Send message to entity, buffer if disconnected"""
+        """Send message to entity, buffer if disconnected. Legacy method for backward compatibility."""
         current_client_id = self.agent_connections.get(entity_id)
         if not current_client_id or current_client_id not in self.clients:
             logger.warning(f"No active connection for {entity_id}, buffering message")
@@ -620,21 +780,13 @@ class MCPServer:
         try:
             ws = self.clients[current_client_id]
             await ws.send(json.dumps(message))
-            logger.info(f"Message sent to {entity_id} ({current_client_id}): {message.get('type')}")
+            logger.info(f"Message sent to {entity_id} ({current_client_id}): {message.get('type', message.get('method', 'unknown'))}")
             return True
         except Exception as e:
             logger.error(f"Send failed to {entity_id} ({current_client_id}): {str(e)}")
             await self._cleanup_client(current_client_id)
             self.pending_messages.setdefault(entity_id, []).append(message)
             return False
-    
-    async def _send_error(self, client_id: str, error_message: str):
-        """Send error message to client"""
-        await self._send_message(client_id, {
-            "type": "error",
-            "message": error_message,
-            "timestamp": datetime.now().isoformat()
-        })
     
     async def _send_message(self, client_id: str, message: Dict[str, Any]) -> bool:
         """Direct send to client_id"""
