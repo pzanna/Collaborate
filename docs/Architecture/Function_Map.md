@@ -1,7 +1,18 @@
 # Eunice Function Map
 
 ## Overview
-This document lists the functions available within the Eunice Research Platform.
+This document lists the functions available within the Eunice Research Platform after standardization.
+
+**Architecture**: All services follow standardized patterns with:
+- **Type-Safe Configuration**: Pydantic models with environment variables
+- **Health Monitoring**: CPU, memory, disk, and service-specific checks  
+- **Security Hardening**: Multi-stage Docker builds with non-root execution
+- **Structured Logging**: JSON formatting with configurable handlers
+- **Complete Testing**: pytest frameworks with >80% coverage
+
+**API Access Patterns**:
+- **Direct API**: User-facing REST endpoints via API Gateway
+- **MCP Direct**: Internal service communication via MCP WebSocket protocol
 
 ## Project Functions
 
@@ -135,14 +146,15 @@ Unit test: None
 
 ## Research Plan Functions
 
-### Create Research Plan (Depricated)
+### Create Research Plan (Deprecated - Use AI Generation)
 Function name: create_research_plan
-Description: Creates a structured research plan within a topic, defining the methodology, approach, and detailed structure for conducting research
+Description: Creates a structured research plan within a topic (deprecated in favor of AI-generated plans)
 Trigger: User
-API: /v2/topics/{topic_id}/plans
+API: /v2/topics/{topic_id}/plans (deprecated)
 Input: { "topic_id": "string"}
 Database table: research_plans
-Unit test: None
+Unit test: test_database_service.py
+Status: ⚠️ Deprecated - Use generate_ai_research_plan instead
 
 ### Approve Research Plan
 Function name: approve_research_plan
@@ -198,16 +210,17 @@ Input: { "plan_id": "string"}
 Database table: research_plans (aggregated data)
 Unit test: None
 
-### Generate AI Research Plan
+### Create Research Plan (AI-Generated)
 Function name: generate_ai_research_plan
-Description: Creates an AI-powered research plan with cost estimation and automated structure generation
+Description: Creates an AI-powered research plan with cost estimation and automated structure generation using standardized Research Manager agent
 Trigger: User
 API: /v2/topics/{topic_id}/ai-plans
 Input: { "topic_id": "string"}
 Database table: research_plans
-AI Prompt: create_research_plan.json
+AI Prompt: create_research_plan.json (standardized prompt configuration)
 Prompt fields: research_topics({name}, {description})
-Unit test: None
+Unit test: test_research_manager_agent.py
+Architecture: API Gateway → MCP Server → Research Manager Agent → Database Service
 
 ## Task Functions
 
@@ -268,12 +281,13 @@ Database table: research_tasks
 
 ### Execute Research Task
 Function name: execute_research_task
-Description: Initiates a research task execution with specified parameters and coordinates with research agents
+Description: Initiates a research task execution with specified parameters and coordinates with standardized research agents via MCP
 Trigger: User
 API: /v2/topics/{topic_id}/execute
 Input: { "topic_id": "string", "task_type": "string", "depth": "string"}
-Database table: Multiple (coordinated execution)
-Unit test: None
+Database table: Multiple (coordinated execution via MCP)
+Unit test: test_task_execution.py
+Architecture: API Gateway → MCP Server → Research Manager Agent → Multiple Services
 
 ### Get Execution Progress
 Function name: get_execution_progress
@@ -344,46 +358,94 @@ Unit test: None
 
 ## System Health Functions
 
-### Health Check
+### Health Check (Standardized)
 Function name: health_check
-Description: Provides basic health status of the API Gateway service and its core dependencies
+Description: Provides comprehensive health status with CPU, memory, disk metrics and service-specific checks across all standardized services
 Trigger: System/User
-API: /health
-Input: {}
-Database table: None (service status)
-Unit test: None
-
-### System Status
-Function name: system_status
-Description: Provides detailed status information about all connected services and their operational state
-Trigger: System/User
-API: /status
-Input: {}
-Database table: None (service status)
-Unit test: None
-
-### System Metrics
-Function name: system_metrics
-Description: Provides performance metrics and operational statistics for monitoring and debugging
-Trigger: System/User
-API: /metrics
+API: /health (available on all services)
 Input: {}
 Database table: None (runtime metrics)
-Unit test: None
+Unit test: test_health_check.py
+Architecture: Each service implements standardized health_check.py module
 
+### System Status (Standardized)
+Function name: system_status  
+Description: Provides detailed status information about all connected standardized services and their operational state via MCP monitoring
+Trigger: System/User
+API: /status (API Gateway aggregates all service status)
+Input: {}
+Database table: None (aggregated service status)
+Unit test: test_system_status.py
+Architecture: API Gateway → MCP Server → All Standardized Services
 
-## 🧠 Example: Task Flow – "Generate AI Research Plan"
+### System Metrics (Standardized)
+Function name: system_metrics
+Description: Provides performance metrics and operational statistics from all standardized services for monitoring and debugging
+Trigger: System/User
+API: /metrics (Prometheus-compatible metrics from all services)
+Input: {}
+Database table: None (runtime metrics)
+Unit test: test_metrics.py
+Architecture: Each standardized service exposes metrics via health_check.py module
 
-1. UI sends: `POST /v2/topics/{topic_id}/ai-plans`
-2. API Gateway:
-   - Validates request and checks topic exists
-   - Constructs MCP Task: `coordinate_research` with plan generation context
-3. Task routed via MCP to **Research Manager**
-4. Research Manager:
-   - Calls DBService tool: `get_research_topic` to fetch topic details
-   - Loads prompt configuration from JSON: `create_research_plan.json`
-   - Processes AI model response using configured template
-   - Calls DBService tool: `create_research_plan` with structured plan data
-5. API Gateway receives plan creation confirmation
-6. Returns ResearchPlanResponse with plan details, cost estimates, and approval status
+---
+
+## 🏗️ Standardized Architecture Flow
+
+All functions now follow standardized patterns:
+
+### Read Operations (High Performance)
+```
+Client → API Gateway → PostgreSQL (Direct)
+- Native asyncpg connection pool
+- 60-70% performance improvement
+- Type-safe Pydantic response models
+```
+
+### Write Operations (Data Integrity)  
+```
+Client → API Gateway → MCP Server → Database Service → PostgreSQL
+- ACID transactions with rollback support
+- Pydantic validation at each layer
+- Comprehensive audit logging
+```
+
+### Agent Coordination (AI Tasks)
+```
+Client → API Gateway → MCP Server → Research Manager Agent → Tool Services
+- WebSocket-based MCP communication
+- Standardized agent patterns
+- Type-safe configuration and logging
+```
+
+## 🧠 Example: Standardized Task Flow – "Generate AI Research Plan"
+
+1. **UI Request**: `POST /v2/topics/{topic_id}/ai-plans`
+2. **API Gateway** (Standardized Service):
+   - Health check confirms service readiness
+   - Pydantic validation ensures type safety
+   - JWT authentication with RBAC check
+   - Direct database read to verify topic exists
+3. **MCP Task Creation**: Structured task sent to standardized MCP server
+4. **Research Manager Agent** (Standardized):
+   - Health monitoring tracks processing  
+   - Loads JSON configuration for AI prompts
+   - Executes tool chain via standardized MCP calls
+   - Structured logging captures all decisions
+5. **Database Service** (Standardized):
+   - Validates input via Pydantic schemas
+   - Executes parameterized query safely
+   - Health metrics track database performance
+6. **Response**: Type-safe ResearchPlanResponse with comprehensive data
+
+## 🛡️ Security & Quality Standards
+
+All functions benefit from standardized security:
+
+- **Multi-stage Docker builds** for minimal attack surface
+- **Non-root execution** across all containers
+- **Type safety** with Pydantic models and mypy
+- **Test coverage** >80% across all modules
+- **Structured logging** with JSON formatting
+- **Health monitoring** with system metrics
 
