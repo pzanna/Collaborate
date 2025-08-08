@@ -19,7 +19,6 @@
 # Services Started:
 #   - PostgreSQL (port 5433)      - Primary database  
 #   - Docker Socket Proxy (internal) - Secure Docker API access for auth service
-#   - MCP Server (port 9000)      - WebSocket communication hub
 #   - Auth Service (port 8013)    - JWT authentication and user management
 #   - Memory Service (port 8009)  - Knowledge graph and context management
 #   - Research Manager (port 8002) - Research workflow coordination
@@ -134,14 +133,6 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres do
 print_info "Waiting for infrastructure to be ready..."
 sleep 10
 
-# Phase 2: Start MCP server (Model Context Protocol)
-# This is the central communication hub that all agents connect to
-print_info "Starting MCP server..."
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mcp-server
-
-# Brief wait for MCP server WebSocket to be available
-sleep 5
-
 # Phase 3: Start authentication service
 # This handles JWT tokens, user management, and RBAC
 print_info "Starting authentication service..."
@@ -234,16 +225,11 @@ print_status "Docker Socket Proxy is running (internal service)"
 # Note: Database service and Network service don't expose HTTP health endpoints (internal services)
 print_status "Database Service and Network Service are running (internal services)"
 
-# Note: MCP server uses WebSocket protocol, no HTTP health endpoint available
-# Connection status will be verified through agent connections
-print_status "MCP Server is running (WebSocket service)"
-
 # Display comprehensive status information if services are healthy
 if [ "$services_ready" = true ]; then
     print_status "Core services are ready!"
     echo
     echo "🎯 Development Environment Status:"
-    echo "   🔧 MCP Server:        http://localhost:9000 (WebSocket)"
     echo "   🚪 API Gateway:       http://localhost:8001"
     echo "   🔐 Auth Service:      http://localhost:8013"
     echo "   🧠 Memory Service:    http://localhost:8009"

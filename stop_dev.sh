@@ -15,7 +15,6 @@
 #   - Auth Service (port 8013)
 #   - Memory Service (port 8009) 
 #   - Research Manager Agent (port 8002)
-#   - MCP Server (port 9000)
 #   - Database Service (internal)
 #   - Docker Socket Proxy (port 2375)
 #   - PostgreSQL (port 5433)
