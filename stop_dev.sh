@@ -11,11 +11,12 @@
 # removes orphaned containers, and cleans up any dangling resources.
 # 
 # Services Stopped:
-#   - API Gateway (port 8001)
+#   - API Gateway (port 8000)
 #   - Auth Service (port 8013)
 #   - Memory Service (port 8009) 
 #   - Research Manager Agent (port 8002)
 #   - Database Service (internal)
+#   - Network Service (internal)
 #   - Docker Socket Proxy (port 2375)
 #   - PostgreSQL (port 5433)
 #   - Frontend Dev Server (port 5173)
@@ -55,7 +56,7 @@ print_info() {
 # Gracefully stop all Docker Compose services
 # This sends SIGTERM to containers, allowing them to shutdown cleanly
 print_info "Stopping all services..."
-docker compose -f docker-compose.secure.yml -f docker-compose.dev.yml down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down --remove-orphans
 
 # Stop any remaining Eunice containers that might be running independently
 print_info "Stopping any remaining Eunice containers..."

@@ -4,7 +4,20 @@
 # Eunice Platform - Development Start Script
 # ==============================================================================
 # 
-# Quick start for development with Docker Compose development configuration
+# Quick     echo "🎯 Development Environment Status:"
+    echo "   🚪 API Gateway:       http://localhost:8000"
+    echo "   🔐 Auth Service:      http://localhost:8013"
+    echo "   🧠 Memory Service:    http://localhost:8009"
+    echo "   🔍 Research Manager:  http://localhost:8002"
+    echo "   🐳 Docker Socket Proxy: (Internal service - no external access)"
+    echo "   💾 Database Service:  (Internal - no HTTP endpoint)"
+    echo "   🌐 Network Service:   (Internal - no HTTP endpoint)"
+    echo "   🗄️ PostgreSQL:        localhost:5433"
+    echo
+    echo "📊 Health & Documentation:"  
+    echo "   API Docs:         http://localhost:8000/docs"
+    echo "   Auth Health:      http://localhost:8013/health"
+    echo "   Auth API Docs:    http://localhost:8013/docs"opment with Docker Compose development configuration
 #
 # This script provides a streamlined way to start the development environment
 # for the Eunice Research Platform using Docker Compose with development
@@ -24,13 +37,13 @@
 #   - Research Manager (port 8002) - Research workflow coordination
 #   - Database Service (internal)  - Database connection management
 #   - Network Service (internal)   - Google search and web research
-#   - API Gateway (port 8001)     - REST API and frontend communication
+#   - API Gateway (port 8000)     - REST API and frontend communication
 #   - Frontend Dev Server (5173)  - React web UI with hot-reload
 #
 # Prerequisites:
 #   - Docker and Docker Compose installed
 #   - 2GB+ RAM available
-#   - Ports 5433, 8001-8002, 8009, 8013, 9000 available
+#   - Ports 5433, 8000, 8002, 8009, 8013 available
 #   - .env file with required environment variables:
 #     * GOOGLE_API_KEY (for Google Custom Search via Network Service)
 #     * GOOGLE_SEARCH_ENGINE_ID (for Google Custom Search)
@@ -149,7 +162,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d memory-serv
 # Phase 5: Start research workflow agents
 # Research Manager agent handles the research pipeline
 print_info "Starting research workflow agents..."
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d research-manager-agent
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d research-manager
 
 # Phase 6: Start API Gateway 
 # This provides the REST API interface and frontend communication
@@ -187,10 +200,10 @@ print_info "Testing service health..."
 services_ready=true
 
 # Test API Gateway health endpoint (primary interface)
-if curl -f -s http://localhost:8001/health >/dev/null 2>&1; then
-    print_status "API Gateway is healthy"
+if curl -f -s http://localhost:8000/docs >/dev/null 2>&1; then
+    print_status "API Gateway is accessible"
 else
-    echo "❌ API Gateway health check failed"
+    echo "❌ API Gateway accessibility check failed"
     services_ready=false
 fi
 
@@ -247,14 +260,13 @@ if [ "$services_ready" = true ]; then
     echo "   Container Status: docker compose -f docker-compose.yml -f docker-compose.dev.yml ps"
     echo
     echo "🔧 Development Features:"
-    echo "   File Watching:    Enabled for MCP Server and API Gateway"
     echo "   Volume Mounts:    Live code updates without rebuilds"
     echo "   Debug Logging:    Enhanced logging for all services"
     echo "   Hot Reload:       Code changes trigger automatic restarts"
     echo
     echo "📝 View Logs:"
     echo "   All services:     docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f"
-    echo "   Specific service: docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f mcp-server"
+    echo "   Specific service: docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api-gateway"
     echo
     echo "🛑 To stop development environment:"
     echo "   ./stop_dev.sh"
@@ -267,7 +279,7 @@ else
     echo "   docker compose -f docker-compose.yml -f docker-compose.dev.yml ps"
     echo
     echo "💡 Common issues:"
-    echo "   - Port conflicts: Check if ports 8001-8002, 8009, 8013, 9000, 5433 are free"
+    echo "   - Port conflicts: Check if ports 8000, 8002, 8009, 8013, 5433 are free"
     echo "   - Resource limits: Ensure at least 2GB RAM available"
     echo "   - Docker issues: Verify Docker daemon is running"
     exit 1

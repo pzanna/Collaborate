@@ -215,3 +215,4 @@ docs/Commands.txt
 /temp
 experiments/output.json
 /backups
+uv.lock

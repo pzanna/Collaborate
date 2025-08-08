@@ -4,50 +4,19 @@
 services:
   # Core Services
 
-  # 1. API Gateway Service (Port 8001) - Only HTTP endpoint for clients
+  # API Gateway Service (Port 8000) - Only HTTP endpoint for clients
   api-gateway:
     build:
-      context: ./services/api-gateway
+      context: ./api-gateway
       target: production
     container_name: eunice-api-gateway
     ports:
-      - "8001:8001"
+      - "8000:8000"
     environment:
       - HOST=0.0.0.0
-      - PORT=8001
-      - MCP_SERVER_HOST=mcp-server
-      - MCP_SERVER_PORT=9000
+      - PORT=8000
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - LOG_LEVEL=INFO
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONNOUSERSITE=1
-    networks:
-      - eunice-microservices
-    depends_on:
-      - mcp-server
-      - postgres
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # 2. MCP Server Service (Port 9000) - Central communication hub
-  mcp-server:
-    build:
-      context: ./services/mcp-server
-      target: production
-    container_name: eunice-mcp-server
-    ports:
-      - "9000:9000"
-    environment:
-      - LOG_LEVEL=INFO
-      - PORT=9000
-      - HOST=0.0.0.0
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
@@ -57,12 +26,10 @@ services:
       - postgres
     restart: unless-stopped
 
-  # Agent Services
-
-  # Research Manager Agent (Port 8010) - Research coordination
-  research-manager-agent:
+  # Research Manager (Port 8010) - Research coordination
+  research-manager:
     build:
-      context: ./agents/research-manager
+      context: ./research-manager
       target: production
     container_name: eunice-research-manager
     ports:
@@ -70,7 +37,6 @@ services:
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8002
-      - MCP_SERVER_URL=ws://mcp-server:9000
       - AGENT_TYPE=research_manager
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
@@ -78,8 +44,6 @@ services:
       - PYTHONNOUSERSITE=1
     networks:
       - eunice-microservices
-    depends_on:
-      - mcp-server
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
@@ -90,10 +54,10 @@ services:
 
   # Supporting Services
 
-  # 4. Database Service (Port 8000) - Database interface service
+  # Database Service (Port 8000) - Database interface service
   database-service:
     build:
-      context: ./services/database
+      context: ./database
       target: production
     container_name: eunice-database-service
     environment:
@@ -110,14 +74,13 @@ services:
       - postgres
     restart: unless-stopped
 
-  # 6. Network Service (Port 8010) - Handles network operations and connections
+  # Network Service (Port 8010) - Handles network operations and connections
   network-service:
     build:
-      context: ./services/network
+      context: ./network
       target: production
     container_name: eunice-network-service
     environment:
-      - MCP_SERVER_URL=ws://mcp-server:9000
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - GOOGLE_SEARCH_ENGINE_ID=${GOOGLE_SEARCH_ENGINE_ID}
       - LOG_LEVEL=INFO
@@ -126,14 +89,12 @@ services:
       - PYTHONNOUSERSITE=1
     networks:
       - eunice-microservices
-    depends_on:
-      - mcp-server
     restart: unless-stopped
 
-  # 5. Memory Service (Port 8009) - Handles memory and cache operations
+  # Memory Service (Port 8009) - Handles memory and cache operations
   memory-service:
     build:
-      context: ./services/memory
+      context: ./memory
       target: production
     container_name: eunice-memory-service
     ports:
@@ -141,15 +102,12 @@ services:
     environment:
       - SERVICE_HOST=0.0.0.0
       - SERVICE_PORT=8009
-      - MCP_SERVER_URL=ws://mcp-server:9000
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - PYTHONNOUSERSITE=1
     networks:
       - eunice-microservices
-    depends_on:
-      - mcp-server
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
@@ -158,10 +116,10 @@ services:
       retries: 3
       start_period: 15s
 
-  # 3. Auth Service (Port 8013) - User authentication and access control
+  # Auth Service (Port 8013) - User authentication and access control
   auth-service:
     build:
-      context: ./services/auth-service
+      context: ./auth-service
       target: production
     container_name: eunice-auth-service
     ports:

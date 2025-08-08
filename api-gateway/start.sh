@@ -48,4 +48,4 @@ echo "✅ All health checks passed"
 echo "🎯 Starting api-gateway service..."
 
 # Start the service
-exec python3 main.py
+exec python3 src/main.py

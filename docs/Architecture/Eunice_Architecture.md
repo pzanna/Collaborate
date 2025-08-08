@@ -1,10 +1,10 @@
 # 🧠 Eunice Research Platform Architecture v0.4.1
 
 **Status**: Current Architecture (Post-Standardization)  
-**Version**: 0.4.1 
+**Version**: 0.5.0
 **Last Updated**: August 8, 2025  
 
-> **📋 Note**: This document reflects the architecture after the complete standardization of all services and agents. For detailed technical specifications, see [Eunice_Architecture_v0.4.1.md](Eunice_Architecture_v0.4.1.md).
+> **📋 Note**: This document reflects the architecture after the complete standardization of all services and agents. For detailed technical specifications, see [Eunice_Architecture_v0.5.0.md](Eunice_Architecture_v0.5.0.md).
 
 ## 📜 Overview
 
@@ -24,18 +24,10 @@ Each functional component runs in its own **standardized Docker container** with
 ✅ **Multi-stage Docker builds** for production optimization  
 ✅ **Unified startup scripts** for development and production  
 
-## 🧱 System Components (Standardized)
+## 🧱 System Components
 
-### 1. 🧩 MCP Server (Central Hub)
-**Location**: `services/mcp-server/`  
-**Structure**: Standardized with `src/`, `config/`, `tests/`, `logs/`  
+### 1. 🌐 API Gateway (FastAPI)
 
-- Acts as the communication bus between agents, tools, and services
-- Full JSON-RPC 2.0 compliance for MCP protocol
-- Service registry and dynamic agent registration
-- WebSocket-based real-time communication
-
-### 2. 🌐 API Gateway (FastAPI)
 **Location**: `services/api-gateway/`  
 **Structure**: Standardized with comprehensive health monitoring  
 
@@ -44,7 +36,8 @@ Each functional component runs in its own **standardized Docker container** with
 - MCP-routed writes for consistency and validation
 - JWT authentication integration with RBAC
 
-### 3. 🖥️ Web Frontend (React + Vite)
+### 2. 🖥️ Web Frontend (React + Vite)
+
 **Location**: `frontend/`  
 **Structure**: Modern React with shadcn/ui components  
 
@@ -53,8 +46,9 @@ Each functional component runs in its own **standardized Docker container** with
 - Responsive design with consistent UI/UX patterns
 - Comprehensive error handling and loading states
 
-### 4. 🧠 Research Manager Agent
-**Location**: `agents/research-manager/`  
+### 3. 🧠 Research Manager
+
+**Location**: `research-manager/`  
 **Structure**: Fully standardized agent with prompt-driven logic  
 
 - Coordinates complex research workflows
@@ -62,17 +56,9 @@ Each functional component runs in its own **standardized Docker container** with
 - Multi-step research plan execution
 - Integration with Literature Agent for specialized tasks
 
-### 5. 📚 Literature Agent
-**Location**: `agents/literature/`  
-**Structure**: Standardized with academic database integrations  
+### 4. 📦 Database Service
 
-- Systematic literature search and screening
-- Academic database API integrations
-- Literature synthesis and analysis capabilities
-- Enhanced search term optimization
-
-### 6. 📦 Database Service
-**Location**: `services/database/`  
+**Location**: `database/`  
 **Structure**: Standardized with validated database tools  
 
 - MCP-compatible service with predefined tools
@@ -80,8 +66,9 @@ Each functional component runs in its own **standardized Docker container** with
 - Hierarchical data relationship management
 - Secure parameterized queries only
 
-### 7. � Network Service
-**Location**: `services/network/`  
+### 5. 🔎 Network Service
+
+**Location**: `network/`  
 **Structure**: Standardized with external API integrations  
 
 - Academic literature APIs (PubMed, Semantic Scholar, arXiv)
@@ -89,8 +76,9 @@ Each functional component runs in its own **standardized Docker container** with
 - AI service integrations (OpenAI, Anthropic, HuggingFace)
 - Intelligent caching and error handling
 
-### 8. 🧠 Memory Service
-**Location**: `services/memory/`  
+### 6. 🧠 Memory Service
+
+**Location**: `memory/`  
 **Structure**: Standardized with context management  
 
 - Persistent memory and context tracking
@@ -98,8 +86,9 @@ Each functional component runs in its own **standardized Docker container** with
 - Conversation history with efficient retrieval
 - Memory lifecycle and optimization
 
-### 9. 🗄 Authentication Service
-**Location**: `services/auth-service/`  
+### 7. 🗄 Authentication Service
+
+**Location**: `auth-service/`  
 **Structure**: Standardized with security hardening  
 
 - JWT token system with refresh tokens
@@ -117,15 +106,7 @@ Each functional component runs in its own **standardized Docker container** with
 - Manages research execution context and progress tracking.
 - Coordinates with Literature Agent for specialized literature tasks.
 
-### 4.1. 📚 Literature Agent
-
-- Specialized agent for literature review and analysis tasks.
-- Handles systematic literature searches and screening.
-- Manages academic database integrations.
-- Performs literature synthesis and summarization.
-- Works with Research Manager for comprehensive literature workflows.
-
-### 5. 📦 Database Service
+### 8. 📦 Database Service
 
 - MCP-compatible service that exposes **predefined database tools** for research data management:
   - `create_project`, `update_project`, `delete_project`
@@ -140,7 +121,7 @@ Each functional component runs in its own **standardized Docker container** with
 - Implements comprehensive database schema for research workflows.
 - Handles hierarchical data relationships and referential integrity.
 
-### 6. 🔎 Network Service
+### 9. 🔎 Network Service
 
 - Provides web-accessible tools to MCP clients for external data access:
   - Academic literature search (PubMed, Semantic Scholar, arXiv, CORE)
@@ -151,27 +132,20 @@ Each functional component runs in its own **standardized Docker container** with
 - Implements rate limiting and error handling for external services.
 - Supports caching mechanisms for improved performance and reduced API costs.
 
-### 7. 🧠 Memory Service
+### 10. 🧠 Memory Service
 
 - Provides memory and context tracking for agents and sessions.
 - Stores conversation history, agent state, and contextual information.
 - Enables persistent memory across multiple interactions.
 - Integrates with MCP for agent memory management.
 
-### 8. 🗄 Authentication Service
+### 11. 🗄 Authentication Service
 
 - Manages user authentication and authorization.
 - Issues JWT tokens for API access.
 - Integrates with external identity providers (e.g. OAuth, SAML).
 
-### 9. 🐳 Docker Socket Proxy
-
-- Security layer for Docker API access.
-- Provides controlled access to Docker daemon for container management.
-- Used by authentication service for secure Docker operations.
-- Implements read-only access patterns for enhanced security.
-
-### 10. 🐳 Infrastructure Components
+## 🐳 Infrastructure Components
 
 **All with standardized structure and security hardening**
 
@@ -286,6 +260,7 @@ flowchart TD
 ## 🛡️ Security & Quality Standards
 
 ### Container Security (All Services)
+
 - **Multi-stage builds** for minimal attack surface
 - **Non-root execution** across all containers
 - **Read-only filesystems** where applicable
@@ -293,6 +268,7 @@ flowchart TD
 - **Secret management** via environment variables
 
 ### Code Quality (All Services)  
+
 - **Type safety** with Pydantic models and mypy
 - **Test coverage** >80% across all modules
 - **Linting and formatting** with black, flake8, isort
@@ -300,6 +276,7 @@ flowchart TD
 - **Documentation** with consistent patterns
 
 ### Monitoring & Observability (All Services)
+
 - **Health endpoints** with system metrics
 - **Structured logging** with JSON formatting  
 - **Performance monitoring** with request tracking
@@ -308,18 +285,21 @@ flowchart TD
 ## 📊 Benefits of Standardization
 
 ### For Developers
+
 - **Predictable Patterns**: Navigate any service intuitively
 - **Reduced Learning Curve**: Same patterns across all components
 - **Consistent Tooling**: Identical development and testing workflows
 - **Clear Documentation**: Standardized structure and examples
 
 ### For Operations
+
 - **Uniform Deployment**: Same patterns for all services
 - **Consistent Monitoring**: Identical health check and logging patterns
 - **Easier Debugging**: Standard error handling and tracing
 - **Simplified Scaling**: Predictable resource usage patterns
 
 ### For Architecture
+
 - **Maintainability**: Changes can be applied consistently
 - **Extensibility**: New services follow established patterns
 - **Quality Assurance**: Consistent testing and validation
@@ -344,16 +324,19 @@ flowchart TD
 ## 🔄 Additional API Workflows
 
 ### Literature Record Management
+
 - Create, update, delete academic papers and publications
 - Store bibliographic metadata, abstracts, and categorizations  
 - Support DOI resolution and citation tracking
 
 ### Research Execution Tracking
+
 - Initiate research tasks with specified depth levels
 - Monitor execution progress through multiple stages
 - Provide real-time status updates and completion metrics
 
 ### Statistics and Analytics
+
 - Project-level aggregated statistics across all topics and plans
 - Topic-level metrics including plan counts and cost analysis
 - Plan-level progress tracking with task completion rates
@@ -397,6 +380,7 @@ Each AI prompt is a comprehensive JSON configuration file with complete AI model
 ```
 
 Prompt configurations include:
+
 - Complete AI model parameters (temperature, max_tokens, tool_choice)
 - Structured output format requirements
 - Tool definitions with JSON schemas
@@ -415,16 +399,19 @@ Tools are registered functions callable via MCP, implementing the complete resea
 - Error handling and result formatting
 
 ### Database Tools
+
 - CRUD operations for all research entities (projects, topics, plans, tasks, literature)
 - Hierarchical data management with referential integrity
 - Statistics and analytics aggregation
 
 ### Network Tools  
+
 - Academic literature search across multiple databases
 - Web search for general research context
 - External API integrations for AI models and data sources
 
 ### Memory Tools
+
 - Context tracking across research sessions
 - Agent state management and persistence
 - Historical interaction logging
@@ -466,7 +453,8 @@ Tools may be stateful (e.g. DB writes, memory updates) or stateless (e.g. web se
 
 ## 🔄 Extensibility & Development
 
-### Adding New Features:
+### Adding New Features
+
 1. **Define Data Model**: Add new entities to hierarchical data models if needed
 2. **Create Database Tools**: Implement CRUD operations in Database Service
 3. **Design API Endpoints**: Add REST endpoints to API Gateway V2 router
@@ -474,14 +462,16 @@ Tools may be stateful (e.g. DB writes, memory updates) or stateless (e.g. web se
 5. **Update Frontend**: Add UI components using shadcn/ui library
 6. **Register Tools**: Expose new capabilities via MCP tool registration
 
-### Development Workflow:
+### Development Workflow
+
 - **Local Development**: Use `start_dev.sh` for development environment with hot reload
 - **Container Management**: Individual services can be developed and tested in isolation
 - **Database Migrations**: Schema changes managed through Database Service initialization
 - **Prompt Engineering**: JSON-based prompt configurations enable rapid AI behavior iteration
 - **Testing**: Each service includes health checks and validation endpoints
 
-### No Controller/Business Logic Changes Required:
+### No Controller/Business Logic Changes Required
+
 - New research workflows implemented through prompt engineering
 - Database operations use existing tool patterns
 - UI updates leverage existing component architecture

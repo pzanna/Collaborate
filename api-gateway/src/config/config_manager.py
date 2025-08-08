@@ -6,11 +6,80 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+# Try to import optional dependencies
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
 
-# Load environment variables
-load_dotenv()
+try:
+    from pydantic import BaseModel, Field
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    # Create fallback base class if pydantic is not available
+    class BaseModel:
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+        
+        def model_dump(self):
+            return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+    
+    def Field(**kwargs):
+        return kwargs.get('default_factory', lambda: kwargs.get('default'))() if callable(kwargs.get('default_factory')) else kwargs.get('default')
+
+
+class ServiceConfig(BaseModel):
+    """Configuration for service settings."""
+    
+    name: str = "api_gateway"
+    version: str = "1.0.0"
+    description: str = "Eunice api-gateway service"
+    environment: str = "development"
+
+
+class ServerConfig(BaseModel):
+    """Configuration for server settings."""
+    
+    host: str = Field(default_factory=lambda: os.getenv("SERVICE_HOST", "0.0.0.0"))
+    port: int = Field(default_factory=lambda: int(os.getenv("SERVICE_PORT", "8001")))
+    debug: bool = False
+
+
+class DatabaseConfig(BaseModel):
+    """Configuration for database settings."""
+    
+    url: str = Field(default_factory=lambda: os.getenv("DATABASE_URL", "postgresql://eunice:eunice@database:5432/eunice"))
+    echo: bool = False
+    pool_size: int = 10
+    max_overflow: int = 20
+
+
+class MCPConfig(BaseModel):
+    """Configuration for MCP settings."""
+    
+    server_url: str = Field(default_factory=lambda: os.getenv("MCP_SERVER_URL", "ws://mcp-server:8081"))
+    timeout: int = 30
+    retry_attempts: int = 3
+
+
+class SecurityConfig(BaseModel):
+    """Configuration for security settings."""
+    
+    cors_origins: list = Field(default_factory=lambda: ["*"])
+    cors_methods: list = Field(default_factory=lambda: ["GET", "POST", "PUT", "DELETE"])
+    cors_headers: list = Field(default_factory=lambda: ["*"])
+
+
+class HealthCheckConfig(BaseModel):
+    """Configuration for health check settings."""
+    
+    enabled: bool = True
+    interval: int = 30
+    timeout: int = 10
 
 
 class ConversationConfig(BaseModel):
@@ -138,6 +207,18 @@ class Config(BaseModel):
     research_manager: ResearchManagerConfig = Field(
         default_factory=ResearchManagerConfig
     )
+
+
+class APIGatewayConfig(BaseModel):
+    """Main API Gateway configuration class."""
+    
+    service: ServiceConfig = Field(default_factory=ServiceConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig) 
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    mcp: MCPConfig = Field(default_factory=MCPConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
+    health_check: HealthCheckConfig = Field(default_factory=HealthCheckConfig)
 
 
 class ConfigManager:
@@ -426,3 +507,47 @@ class ConfigManager:
                 else self.config.logging.dict()
             )
         return {"level": "INFO", "file": "logs / eunice.log"}
+
+
+# API Gateway specific configuration loader
+def load_api_gateway_config(config_path: str = "config/config.json") -> APIGatewayConfig:
+    """Load API Gateway configuration from JSON file with environment overrides."""
+    
+    # Check if config file exists
+    if not os.path.exists(config_path):
+        # Create default config if it doesn't exist
+        return APIGatewayConfig()
+    
+    # Load config from file
+    with open(config_path, 'r') as f:
+        config_data = json.load(f)
+    
+    # Apply environment variable overrides
+    if "server" in config_data:
+        config_data["server"]["host"] = os.getenv("SERVICE_HOST", config_data["server"].get("host", "0.0.0.0"))
+        config_data["server"]["port"] = int(os.getenv("SERVICE_PORT", str(config_data["server"].get("port", 8001))))
+    
+    if "database" in config_data:
+        config_data["database"]["url"] = os.getenv("DATABASE_URL", config_data["database"].get("url", "postgresql://eunice:eunice@database:5432/eunice"))
+    
+    if "logging" in config_data:
+        config_data["logging"]["level"] = os.getenv("LOG_LEVEL", config_data["logging"].get("level", "INFO"))
+    
+    return APIGatewayConfig(**config_data)
+
+
+def get_config() -> APIGatewayConfig:
+    """Get the API Gateway configuration."""
+    return load_api_gateway_config()
+
+
+# For backward compatibility
+_config_manager = None
+
+
+def get_config_manager() -> ConfigManager:
+    """Get the global config manager instance."""
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = ConfigManager()
+    return _config_manager

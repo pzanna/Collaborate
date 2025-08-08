@@ -1,18 +1,20 @@
 #!/bin/sh
 
-# {{ service_name }} Service Development Startup Script
-# This script starts the {{ service_name }} service with file watching for development
+# api-gateway Service Development Startup Script
+# This script starts the api-gateway service with file watching for development
 
 set -e
 
-echo "🚀 Starting {{ service_name }} Service in development mode..."
+echo "🚀 Starting api-gateway Service in development mode..."
 echo "📁 Working directory: $(pwd)"
 
-# Check if watchfiles is available
-python3 -c "import watchfiles; print('✅ watchfiles is available')" 2>/dev/null || {
-    echo "❌ watchfiles not found. Installing..."
-    pip install watchfiles
-}
+# Check if watchfiles is available and working
+if python3 -c "import watchfiles; print('✅ watchfiles is available')" 2>/dev/null; then
+    USE_WATCHFILES=true
+else
+    echo "⚠️  watchfiles not available or incompatible - falling back to direct execution"
+    USE_WATCHFILES=false
+fi
 
 # Load environment variables if .env file exists
 if [ -f .env ]; then
@@ -22,14 +24,18 @@ fi
 
 # Set development environment variables
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
-export SERVICE_NAME="${SERVICE_NAME:-{{ service_name }}}"
+export SERVICE_NAME="${SERVICE_NAME:-api-gateway}"
 export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
-export SERVICE_PORT="${SERVICE_PORT:-{{ service_port }}}"
+export SERVICE_PORT="${SERVICE_PORT:-8001}"
 export LOG_LEVEL="${LOG_LEVEL:-DEBUG}"
 export DEVELOPMENT_MODE="${DEVELOPMENT_MODE:-true}"
 export WATCHFILES_FORCE_POLLING="${WATCHFILES_FORCE_POLLING:-1}"
 
-echo "🔍 File watching enabled for development"
+if [ "$USE_WATCHFILES" = true ]; then
+    echo "🔍 File watching enabled for development"
+else
+    echo "⚠️  File watching disabled (watchfiles not available)"
+fi
 echo "🔧 Service: ${SERVICE_NAME}"
 echo "🌐 Host: ${SERVICE_HOST}"
 echo "🔌 Port: ${SERVICE_PORT}"
@@ -46,7 +52,13 @@ if [ ! -f "config/config.json" ]; then
 fi
 
 echo "✅ All health checks passed"
-echo "🔍 Starting {{ service_name }} service with file watching..."
 
-# Start with file watching using watchfiles
-exec python3 -m watchfiles src.main.main --args src/main.py
+if [ "$USE_WATCHFILES" = true ]; then
+    echo "🔍 Starting api-gateway service with file watching..."
+    # Start with file watching using watchfiles
+    exec python3 -m watchfiles --filter python src.main.sync_main
+else
+    echo "🎯 Starting api-gateway service in development mode (no file watching)..."
+    # Start directly without file watching
+    exec python3 src/main.py
+fi
