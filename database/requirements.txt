@@ -3,6 +3,9 @@ psycopg2-binary==2.9.9
 asyncpg==0.29.0
 sqlalchemy==2.0.23
 
+# MCP Python SDK
+mcp>=1.12.0
+
 # Development and file watching
 watchfiles==1.1.0
 

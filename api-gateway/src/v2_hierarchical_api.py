@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from .data_models.hierarchical_data_models import (
+from data_models.hierarchical_data_models import (
     # Request models
     ProjectRequest, ResearchTopicRequest, ResearchPlanRequest, ExecuteResearchRequest,
     # Update models  
@@ -20,7 +20,13 @@ from .data_models.hierarchical_data_models import (
 )
 
 # Import database client access
-from .native_database_client import get_native_database
+from native_database_client import get_native_database
+
+# Import MCP client for write operations - Commented out due to transport compatibility issues
+# from mcp_client import get_mcp_client
+
+# For now, we'll use the same database client for both reads and writes
+# TODO: Re-implement MCP client once transport issues are resolved
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,13 @@ def get_database():
         raise HTTPException(status_code=503, detail="Database service not available")
 
 
+async def get_mcp_database():
+    """Dependency to get database client for write operations."""
+    # For now, return the same database client used for reads
+    # TODO: Re-implement MCP client once transport issues are resolved
+    return get_database()
+
+
 # =============================================================================
 # PROJECT ENDPOINTS
 # =============================================================================
@@ -48,6 +61,7 @@ def get_database():
 async def create_project(
     project_request: ProjectRequest,
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Create a new project."""
     try:
@@ -60,26 +74,31 @@ async def create_project(
             "name": project_request.name,
             "description": project_request.description,
             "status": "pending",
-            "metadata": project_request.metadata or {}
+            "metadata": project_request.metadata or {},
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat()
         }
 
-        # TODO: Store project creation via database client
-        # For now, return optimistic response - database operations handled separately
+        # Store project creation via database client (bypassing MCP for now)
+        result = await mcp_db.create_project(project_data)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Failed to create project: No result returned")
+        logger.info(f"Created project {project_id} via database: {result}")
 
-        # Return the project response immediately (optimistic response)
+        # Use the actual database result to construct response
         project_response_data = {
-            "id": project_id,
-            "name": project_request.name,
-            "description": project_request.description,
-            "status": "pending",
-            "created_at": now.isoformat(),
-            "updated_at": now.isoformat(),
-            "topics_count": 0,
+            "id": result["id"],
+            "name": result["name"],
+            "description": result["description"],
+            "status": result["status"],
+            "created_at": result["created_at"],
+            "updated_at": result["updated_at"],
+            "topics_count": 0,  # These will be calculated separately if needed
             "plans_count": 0,
             "tasks_count": 0,
             "total_cost": 0.0,
             "completion_rate": 0.0,
-            "metadata": project_request.metadata or {},
+            "metadata": result.get("metadata", {}),
         }
 
         return ProjectResponse(**project_response_data)
@@ -195,6 +214,7 @@ async def update_project(
     project_update: ProjectUpdate,
     project_id: str = Path(..., description="Project ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Update a project."""
     try:
@@ -203,17 +223,23 @@ async def update_project(
         if not existing_project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Build update data with all fields (merge existing with updates) - format for database tools
-        update_data: Dict[str, Any] = {
-            "id": project_id,
-            "name": project_update.name if project_update.name is not None else existing_project["name"],
-            "description": project_update.description if project_update.description is not None else existing_project["description"],
-            "status": project_update.status if project_update.status is not None else existing_project["status"],
-            "metadata": project_update.metadata if project_update.metadata is not None else existing_project["metadata"]
-        }
+        # Build update data for MCP call
+        updates: Dict[str, Any] = {}
+        if project_update.name is not None:
+            updates["name"] = project_update.name
+        if project_update.description is not None:
+            updates["description"] = project_update.description
+        if project_update.status is not None:
+            updates["status"] = project_update.status
+        if project_update.metadata is not None:
+            updates["metadata"] = project_update.metadata
 
-        # TODO: Send project update via database client
-        # For now, return optimistic response
+        # Send project update via database client (bypassing MCP for now)
+        # Update project via database
+        result = await mcp_db.update_project(project_id, updates)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Failed to update project: No result returned")
+        logger.info(f"Updated project {project_id} via database: {result}")
 
         # Return updated project (we merge existing data with updates)
         updated_project = existing_project.copy()
@@ -242,6 +268,7 @@ async def update_project(
 async def delete_project(
     project_id: str = Path(..., description="Project ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Delete a project and all its related data."""
     try:
@@ -250,8 +277,9 @@ async def delete_project(
         if not existing_project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # TODO: Send project deletion via database client
-        # For now, return success response
+        # Send project deletion via database client (bypassing MCP for now)
+        await mcp_db.delete_project(project_id)
+        logger.info(f"Deleted project {project_id} via database")
 
         return SuccessResponse(message="Project deleted successfully")
 
@@ -270,6 +298,7 @@ async def create_research_topic(
     topic_request: ResearchTopicRequest,
     project_id: str = Path(..., description="Project ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Create a new research topic within a project."""
     try:
@@ -290,13 +319,16 @@ async def create_research_topic(
             "status": "active",
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
-            "metadata": json.dumps(topic_request.metadata or {}),
+            "metadata": topic_request.metadata or {},
         }
 
-        # TODO: Send topic creation via database client
-        # For now, return optimistic response
+        # Send topic creation via database database client
+        result = await mcp_db.create_research_topic(topic_data)
+        if result is None:
+            raise HTTPException(status_code=500, detail=f"Failed to create research topic: 'No result returned'")
+        logger.info(f"Created topic {topic_id} via database: {result}")
 
-        # Return the topic response immediately (optimistic response)
+        # Return the topic response immediately
         topic_response_data = {
             "id": topic_id,
             "project_id": project_id,
@@ -397,6 +429,7 @@ async def update_research_topic(
     topic_update: ResearchTopicUpdate,
     topic_id: str = Path(..., description="Topic ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Update a research topic."""
     try:
@@ -405,17 +438,20 @@ async def update_research_topic(
         if not existing_topic:
             raise HTTPException(status_code=404, detail="Research topic not found")
 
-        # Build update data from non-None fields
-        update_data = {"id": topic_id}
+        # Build update data for MCP call
+        updates: Dict[str, Any] = {}
         if topic_update.name is not None:
-            update_data["name"] = topic_update.name
+            updates["name"] = topic_update.name
         if topic_update.description is not None:
-            update_data["description"] = topic_update.description
+            updates["description"] = topic_update.description
         if topic_update.metadata is not None:
-            update_data["metadata"] = json.dumps(topic_update.metadata)
+            updates["metadata"] = topic_update.metadata
 
-        # TODO: Send topic update via database client
-        # For now, return optimistic response
+        # Send topic update via database database client
+        result = await mcp_db.update_research_topic(topic_id, updates)
+        if result is None:
+            raise HTTPException(status_code=500, detail=f"Failed to update research topic: 'No result returned'")
+        logger.info(f"Updated topic {topic_id} via database: {result}")
 
         # Return updated topic (we merge existing data with updates)
         updated_topic = existing_topic.copy()
@@ -442,6 +478,7 @@ async def update_research_topic(
 async def delete_research_topic(
     topic_id: str = Path(..., description="Topic ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Delete a research topic and all its related data."""
     try:
@@ -450,8 +487,9 @@ async def delete_research_topic(
         if not existing_topic:
             raise HTTPException(status_code=404, detail="Research topic not found")
 
-        # TODO: Send topic deletion via database client
-        # For now, return success response
+        # Send topic deletion via database database client
+        await mcp_db.delete_research_topic(topic_id)
+        logger.info(f"Deleted topic {topic_id} via database")
 
         return SuccessResponse(message="Research topic deleted successfully")
 
@@ -497,6 +535,7 @@ async def update_research_topic_by_project(
     project_id: str = Path(..., description="Project ID"),
     topic_id: str = Path(..., description="Topic ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Update a research topic within a project."""
     try:
@@ -513,17 +552,20 @@ async def update_research_topic_by_project(
         if existing_topic["project_id"] != project_id:
             raise HTTPException(status_code=404, detail="Research topic not found in this project")
 
-        # Build update data from non-None fields
-        update_data = {"id": topic_id}
+        # Build update data for MCP call
+        updates: Dict[str, Any] = {}
         if topic_update.name is not None:
-            update_data["name"] = topic_update.name
+            updates["name"] = topic_update.name
         if topic_update.description is not None:
-            update_data["description"] = topic_update.description
+            updates["description"] = topic_update.description
         if topic_update.metadata is not None:
-            update_data["metadata"] = json.dumps(topic_update.metadata)
+            updates["metadata"] = topic_update.metadata
 
-        # TODO: Send topic update via database client
-        # For now, return optimistic response
+        # Send topic update via database database client
+        result = await mcp_db.update_research_topic(topic_id, updates)
+        if result is None:
+            raise HTTPException(status_code=500, detail=f"Failed to update research topic: 'No result returned'")
+        logger.info(f"Updated topic {topic_id} in project {project_id} via database: {result}")
 
         # Return updated topic (we merge existing data with updates)
         updated_topic = existing_topic.copy()
@@ -551,6 +593,7 @@ async def delete_research_topic_by_project(
     project_id: str = Path(..., description="Project ID"),
     topic_id: str = Path(..., description="Topic ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Delete a research topic within a project."""
     try:
@@ -567,8 +610,9 @@ async def delete_research_topic_by_project(
         if existing_topic["project_id"] != project_id:
             raise HTTPException(status_code=404, detail="Research topic not found in this project")
 
-        # TODO: Send topic deletion via database client
-        # For now, return success response
+        # Send topic deletion via database database client
+        await mcp_db.delete_research_topic(topic_id)
+        logger.info(f"Deleted topic {topic_id} in project {project_id} via database")
 
         return SuccessResponse(message="Research topic deleted successfully")
 
@@ -587,6 +631,7 @@ async def create_research_plan(
     plan_request: ResearchPlanRequest,
     topic_id: str = Path(..., description="Topic ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Create a new research plan within a topic."""
     try:
@@ -611,14 +656,17 @@ async def create_research_plan(
             "updated_at": now.isoformat(),
             "estimated_cost": 0.0,
             "actual_cost": 0.0,
-            "plan_structure": json.dumps(plan_request.plan_structure or {}),
-            "initial_literature_results": json.dumps(plan_request.initial_literature_results or {}),
-            "reviewed_literature_results": json.dumps(plan_request.reviewed_literature_results or {}),
-            "metadata": json.dumps(plan_request.metadata or {}),
+            "plan_structure": plan_request.plan_structure or {},
+            "initial_literature_results": plan_request.initial_literature_results or {},
+            "reviewed_literature_results": plan_request.reviewed_literature_results or {},
+            "metadata": plan_request.metadata or {},
         }
 
-        # TODO: Send plan creation via database client
-        # For now, return optimistic response
+        # Send plan creation via database database client
+        result = await mcp_db.create_research_plan(plan_data)
+        if result is None:
+            raise HTTPException(status_code=500, detail=f"Failed to create research plan: 'No result returned'")
+        logger.info(f"Created plan {plan_id} via database: {result}")
 
         # Return the plan data we expect to be created
         plan_response_data = {
@@ -647,6 +695,7 @@ async def generate_ai_research_plan(
     plan_request: ResearchPlanRequest,
     topic_id: str = Path(..., description="Topic ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Generate an AI-powered research plan within a topic."""
     try:
@@ -688,21 +737,24 @@ async def generate_ai_research_plan(
             "updated_at": now.isoformat(),
             "estimated_cost": 5.0,
             "actual_cost": 0.0,
-            "plan_structure": json.dumps(basic_plan_structure),
-            "initial_literature_results": json.dumps(plan_request.initial_literature_results or {}),
-            "reviewed_literature_results": json.dumps(plan_request.reviewed_literature_results or {}),
-            "metadata": json.dumps({
+            "plan_structure": basic_plan_structure,
+            "initial_literature_results": plan_request.initial_literature_results or {},
+            "reviewed_literature_results": plan_request.reviewed_literature_results or {},
+            "metadata": {
                 "ai_generated": True,
                 "ai_model_used": "basic-template",
                 "generation_cost": 0.0,
                 "generation_timestamp": now.isoformat(),
                 "confidence_score": 0.8,
                 **(plan_request.metadata or {})
-            }),
+            },
         }
 
-        # TODO: Send plan creation via database client
-        # For now, return optimistic response
+        # Send plan creation via database database client
+        result = await mcp_db.create_research_plan(plan_data)
+        if result is None:
+            raise HTTPException(status_code=500, detail=f"Failed to create AI research plan: 'No result returned'")
+        logger.info(f"Created AI plan {plan_id} via database: {result}")
 
         # Return the AI-generated plan data
         plan_response_data = {
@@ -837,6 +889,7 @@ async def update_research_plan(
     plan_update: ResearchPlanUpdate,
     plan_id: str = Path(..., description="Plan ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Update a research plan."""
     try:
@@ -845,7 +898,7 @@ async def update_research_plan(
         if not existing_plan:
             raise HTTPException(status_code=404, detail="Research plan not found")
 
-        # Build update data from non-None fields
+        # Build update data for MCP call
         updates = {}
         if plan_update.name is not None:
             updates["name"] = plan_update.name
@@ -856,20 +909,19 @@ async def update_research_plan(
         if plan_update.status is not None:
             updates["status"] = plan_update.status
         if plan_update.plan_structure is not None:
-            updates["plan_structure"] = json.dumps(plan_update.plan_structure)
+            updates["plan_structure"] = plan_update.plan_structure
         if plan_update.initial_literature_results is not None:
-            updates["initial_literature_results"] = json.dumps(plan_update.initial_literature_results)
+            updates["initial_literature_results"] = plan_update.initial_literature_results
         if plan_update.reviewed_literature_results is not None:
-            updates["reviewed_literature_results"] = json.dumps(plan_update.reviewed_literature_results)
+            updates["reviewed_literature_results"] = plan_update.reviewed_literature_results
         if plan_update.metadata is not None:
-            updates["metadata"] = json.dumps(plan_update.metadata)
+            updates["metadata"] = plan_update.metadata
 
-        update_data = {
-            "id": plan_id,
-            "updates": updates
-        }
-
-        # TODO: Send plan update via database client
+        # Send plan update via database database client
+        result = await mcp_db.update_research_plan(plan_id, updates)
+        if result is None:
+            raise HTTPException(status_code=500, detail=f"Failed to update research plan: 'No result returned'")
+        logger.info(f"Updated plan {plan_id} via database: {result}")
         # For now, return optimistic response
 
         # Return updated plan (we merge existing data with updates)
@@ -923,6 +975,7 @@ async def update_research_plan(
 async def delete_research_plan(
     plan_id: str = Path(..., description="Plan ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Delete a research plan and all its related data."""
     try:
@@ -931,8 +984,9 @@ async def delete_research_plan(
         if not existing_plan:
             raise HTTPException(status_code=404, detail="Research plan not found")
 
-        # TODO: Send plan deletion via database client
-        # For now, return success response
+        # Send plan deletion via database database client
+        await mcp_db.delete_research_plan(plan_id)
+        logger.info(f"Deleted plan {plan_id} via database")
 
         return SuccessResponse(message="Research plan deleted successfully")
 
@@ -946,6 +1000,7 @@ async def delete_research_plan(
 async def approve_research_plan(
     plan_id: str = Path(..., description="Plan ID"),
     db=Depends(get_database),
+    mcp_db=Depends(get_mcp_database),
 ):
     """Approve a research plan and update its approval status."""
     try:
@@ -954,17 +1009,11 @@ async def approve_research_plan(
         if not existing_plan:
             raise HTTPException(status_code=404, detail="Research plan not found")
 
-        # Update the plan to approved status
-        update_data = {
-            "id": plan_id,
-            "updates": {
-                "plan_approved": True,
-                "status": "active",  # Set to active when approved
-            }
-        }
-
-        # TODO: Send plan approval via database client
-        # For now, return optimistic response
+        # Send plan approval via database database client
+        result = await mcp_db.approve_research_plan(plan_id)
+        if result is None:
+            raise HTTPException(status_code=500, detail=f"Failed to approve research plan: 'No result returned'")
+        logger.info(f"Approved plan {plan_id} via database: {result}")
 
         # Return updated plan
         updated_plan = existing_plan.copy()
@@ -1013,7 +1062,7 @@ async def execute_research_task(
     """Execute a research task with simplified parameters."""
     try:
         # Import depth configuration
-        from .research_depth_config import get_depth_config
+        from research_depth_config import get_depth_config
         
         # 1. Fetch topic details
         topic = await db.get_research_topic(topic_id)
@@ -1076,54 +1125,6 @@ async def execute_research_task(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error executing research task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
-# TASK ENDPOINTS  
-# =============================================================================
-
-@v2_router.get("/plans/{plan_id}/tasks", response_model=List[Dict[str, Any]])
-async def list_tasks(
-    plan_id: str = Path(..., description="Plan ID"),
-    status: Optional[str] = Query(None, description="Filter by task status"),
-    db=Depends(get_database),
-):
-    """List all tasks for a research plan."""
-    try:
-        # First check if plan exists
-        existing_plan = await db.get_research_plan(plan_id)
-        if not existing_plan:
-            raise HTTPException(status_code=404, detail="Research plan not found")
-
-        # Get tasks for the plan using database client
-        tasks = await db.get_tasks(plan_id, status_filter=status)
-        
-        return tasks
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@v2_router.get("/tasks/{task_id}", response_model=Dict[str, Any])
-async def get_task(
-    task_id: str = Path(..., description="Task ID"),
-    db=Depends(get_database),
-):
-    """Get a specific task."""
-    try:
-        # Get task using database client
-        task = await db.get_task(task_id)
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found")
-
-        return task
-
-    except HTTPException:
-        raise
-    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

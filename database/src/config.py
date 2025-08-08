@@ -24,14 +24,6 @@ class ServiceConfig(BaseModel):
     debug: bool = Field(default=False, env="DEBUG")
 
 
-class MCPConfig(BaseModel):
-    """MCP client configuration."""
-    server_url: str = Field(default="ws://mcp-server:9000", env="MCP_SERVER_URL")
-    timeout: int = Field(default=30, env="MCP_TIMEOUT")
-    retry_attempts: int = Field(default=3, env="MCP_RETRY_ATTEMPTS")
-    retry_delay: int = Field(default=5, env="MCP_RETRY_DELAY")
-
-
 class DatabaseConfig(BaseModel):
     """Database configuration."""
     url: str = Field(default="postgresql://postgres:password@postgres:5432/eunice", env="DATABASE_URL")
@@ -68,7 +60,6 @@ class SecurityConfig(BaseModel):
 class Config(BaseModel):
     """Main configuration class that combines all configuration sections."""
     service: ServiceConfig = Field(default_factory=ServiceConfig)
-    mcp: MCPConfig = Field(default_factory=MCPConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     health_check: HealthCheckConfig = Field(default_factory=HealthCheckConfig)
@@ -106,15 +97,13 @@ def load_config_from_env() -> Dict[str, Any]:
     if os.getenv("SERVICE_HOST"):
         env_config.setdefault("service", {})["host"] = os.getenv("SERVICE_HOST")
     if os.getenv("SERVICE_PORT"):
-        env_config.setdefault("service", {})["port"] = int(os.getenv("SERVICE_PORT"))
+        port_str = os.getenv("SERVICE_PORT")
+        if port_str:
+            env_config.setdefault("service", {})["port"] = int(port_str)
     if os.getenv("DEBUG"):
-        env_config.setdefault("service", {})["debug"] = os.getenv("DEBUG").lower() == "true"
-    
-    # MCP configuration
-    if os.getenv("MCP_SERVER_URL"):
-        env_config.setdefault("mcp", {})["server_url"] = os.getenv("MCP_SERVER_URL")
-    if os.getenv("MCP_TIMEOUT"):
-        env_config.setdefault("mcp", {})["timeout"] = int(os.getenv("MCP_TIMEOUT"))
+        debug_str = os.getenv("DEBUG")
+        if debug_str:
+            env_config.setdefault("service", {})["debug"] = debug_str.lower() == "true"
     
     # Database configuration
     if os.getenv("DATABASE_URL"):
@@ -124,13 +113,17 @@ def load_config_from_env() -> Dict[str, Any]:
     if os.getenv("LOG_LEVEL"):
         env_config.setdefault("logging", {})["level"] = os.getenv("LOG_LEVEL")
     if os.getenv("LOG_TO_FILE"):
-        env_config.setdefault("logging", {})["file_logging"] = os.getenv("LOG_TO_FILE").lower() == "true"
+        log_file_str = os.getenv("LOG_TO_FILE")
+        if log_file_str:
+            env_config.setdefault("logging", {})["file_logging"] = log_file_str.lower() == "true"
     
     # Security configuration
     if os.getenv("SECRET_KEY"):
         env_config.setdefault("security", {})["secret_key"] = os.getenv("SECRET_KEY")
     if os.getenv("CORS_ORIGINS"):
-        env_config.setdefault("security", {})["cors_origins"] = os.getenv("CORS_ORIGINS").split(",")
+        cors_origins_str = os.getenv("CORS_ORIGINS")
+        if cors_origins_str:
+            env_config.setdefault("security", {})["cors_origins"] = cors_origins_str.split(",")
     
     return env_config
 

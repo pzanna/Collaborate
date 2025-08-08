@@ -2,11 +2,10 @@
 """
 Database Service Main Entry Point
 
-This is the main entry point for the database service.
+This is the main entry point for the database service, now running as an MCP server.
 """
 
-from database_service import main
+from mcp_server import main
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()

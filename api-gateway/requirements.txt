@@ -6,6 +6,7 @@ python-multipart==0.0.6
 # HTTP client and WebSocket support
 aiohttp==3.9.1
 websockets==12.0
+httpx==0.25.2
 
 # Data validation and serialization
 pydantic==2.5.2
@@ -13,6 +14,10 @@ pydantic-settings==2.1.0
 
 # Database and caching (for future features)
 asyncpg==0.29.0
+
+# MCP (Model Context Protocol) client support
+mcp>=1.0.0
+fastmcp>=2.4.0
 
 # Development and testing dependencies
 pytest==7.4.3
