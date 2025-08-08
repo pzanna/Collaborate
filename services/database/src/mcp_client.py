@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-JSON-RPC 2.0 Compliant MCP Client for API Gateway
+JSON-RPC 2.0 Compliant MCP Client for Database Service
 
 Enhanced for JSON-RPC 2.0 compliance with the MCP standard:
 - Proper JSON-RPC 2.0 message format with "jsonrpc": "2.0"
 - Request/response/notification handling
 - Error handling with proper JSON-RPC error codes
 - Enhanced connection management and retry logic
-- API Gateway specific capabilities and message handlers
+- Database service specific capabilities and message handlers
 """
 
 import asyncio
@@ -26,14 +26,14 @@ logger = logging.getLogger(__name__)
 
 class MCPClient:
     """
-    JSON-RPC 2.0 compliant MCP Client for API Gateway communication.
+    JSON-RPC 2.0 compliant MCP Client for Database Service communication.
     
     Features:
     - Full JSON-RPC 2.0 compliance for MCP protocol
     - Robust connection management with exponential backoff
     - Proper request/response/notification handling
     - Enhanced error handling with JSON-RPC error codes
-    - API Gateway specific capabilities and message handlers
+    - Database service specific capabilities and message handlers
     """
 
     def __init__(self, host: str = "mcp-server", port: int = 9000, config: Optional[Dict[str, Any]] = None):
@@ -54,14 +54,13 @@ class MCPClient:
         self.last_connection_attempt = None
         
         # Client identification
-        self.client_id = f"api-gateway-{uuid.uuid4().hex[:8]}"  # Entity ID for routing
+        self.client_id = f"database-{uuid.uuid4().hex[:8]}"  # Entity ID for routing
         
         # JSON-RPC management
         self.pending_requests: Dict[str, asyncio.Future] = {}
         self.request_counter = 0
         self.message_handlers: Dict[str, Callable] = {}
-        self.active_requests: Dict[str, Dict[str, Any]] = {}  # Track ongoing requests
-        self.request_timeout = self.config.get("request_timeout", 3600)  # 1 hour
+        self.request_timeout = self.config.get("request_timeout", 30.0)  # 30 seconds
         
         # Background tasks
         self._listen_task: Optional[asyncio.Task] = None
@@ -74,20 +73,17 @@ class MCPClient:
         self.heartbeat_interval = self.config.get("heartbeat_interval", 30)
         self.ping_timeout = self.config.get("ping_timeout", 10)
         
-        # Setup message handlers for API Gateway
+        # Setup message handlers for Database Service
         self._setup_message_handlers()
 
-        logger.info(f"Initialized JSON-RPC 2.0 MCP Client for {host}:{port} with ID {self.client_id}")
+        logger.info(f"Initialized JSON-RPC 2.0 MCP Client for Database Service {host}:{port} with ID {self.client_id}")
 
     def _setup_message_handlers(self):
-        """Setup message handlers for the API Gateway."""
+        """Setup message handlers for the Database Service."""
         self.message_handlers = {
-            "registration_confirmed": self._handle_registration_confirmation,
-            "task_result": self._handle_task_result,
-            "status_response": self._handle_status_response,
-            "task_queued": self._handle_task_queued,
-            "task_rejected": self._handle_task_rejected,
-            "error": self._handle_error_message,
+            "agent_register_ack": self._handle_registration_confirmation,
+            "task_request": self._handle_task_request,
+            "database_update": self._handle_database_update,
             "heartbeat": self._handle_heartbeat,
             "ping": self._handle_ping
         }
@@ -152,8 +148,8 @@ class MCPClient:
                 self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
                 self._cleanup_task = asyncio.create_task(self._cleanup_requests())
                 
-                # Register as API Gateway
-                await self._register_as_gateway()
+                # Register as Database Service
+                await self._register_as_database_service()
                 
                 return True
                 
@@ -197,8 +193,8 @@ class MCPClient:
             # Send unregister notification if connected
             if self.websocket and not self.websocket.closed:
                 try:
-                    await self._send_jsonrpc_notification("gateway_unregister", {
-                        "client_id": self.client_id,
+                    await self._send_jsonrpc_notification("agent_unregister", {
+                        "agent_id": self.client_id,
                         "timestamp": datetime.now().isoformat()
                     })
                     await self.websocket.close()
@@ -292,118 +288,111 @@ class MCPClient:
         await self.websocket.send(json.dumps(error_response))
         logger.debug(f"Sent JSON-RPC error: {code} - {message} (id: {request_id})")
 
-    # API Gateway specific methods
-    async def _register_as_gateway(self):
-        """Register this client as an API Gateway."""
+    # Database Service specific methods
+    async def _register_as_database_service(self):
+        """Register this client as a Database Service."""
         try:
-            await self._send_jsonrpc_notification("gateway_register", {
-                "client_id": self.client_id,
-                "client_type": "api_gateway",
+            await self._send_jsonrpc_notification("agent_register", {
+                "agent_id": self.client_id,
+                "agent_type": "database",
                 "capabilities": [
-                    "request_routing", 
-                    "task_submission", 
-                    "status_queries",
-                    "result_delivery",
-                    "error_handling"
+                    "create_project",
+                    "update_project",
+                    "delete_project", 
+                    "create_research_topic",
+                    "update_research_topic",
+                    "delete_research_topic",
+                    "create_research_plan",
+                    "update_research_plan",
+                    "delete_research_plan",
+                    "create_task",
+                    "update_task",
+                    "delete_task",
+                    "create_research_task",
+                    "update_research_task",
+                    "delete_research_task",
+                    "create_literature_record",
+                    "update_literature_record",
+                    "delete_literature_record",
+                    "create_search_term_optimization",
+                    "update_search_term_optimization",
+                    "delete_search_term_optimization"
                 ],
                 "timestamp": datetime.now().isoformat()
             })
-            logger.info("Registered as API Gateway with MCP server")
+            logger.info("Registered as Database Service with MCP server")
             
         except Exception as e:
-            logger.error(f"Failed to register as gateway: {e}")
+            logger.error(f"Failed to register as database service: {e}")
 
-    async def send_research_action(self, task_data: Dict[str, Any]) -> bool:
-        """Send a research action to the MCP server."""
+    async def send_status_update(self, status_data: Dict[str, Any]) -> bool:
+        """Send a status update to the MCP server."""
         if not self.is_connected or not self.websocket:
             logger.warning("Not connected to MCP server, attempting reconnect...")
             success = await self._connect_with_retry()
             if not success:
-                logger.error("Failed to reconnect for research action")
+                logger.error("Failed to reconnect for status update")
                 return False
 
-        task_id = task_data.get("task_id", str(uuid.uuid4()))
-        
         try:
-            task_data["task_id"] = task_id
-
-            # Track the request
-            self.active_requests[task_id] = {
-                "type": "research_action",
-                "data": task_data,
-                "submitted_at": datetime.now()
-            }
-            
-            await self._send_jsonrpc_notification("research_action", {
-                "data": task_data,
-                "client_id": self.client_id,
+            await self._send_jsonrpc_notification("status_response", {
+                **status_data,
+                "agent_id": self.client_id,
                 "timestamp": datetime.now().isoformat()
             })
             
-            logger.info(f"Sent research action for task {task_id}: {task_data.get('action')}")
+            logger.info(f"Sent status update from database service")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send research action for task {task_id}: {e}")
+            logger.error(f"Failed to send status update: {e}")
             return False
 
-    async def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Get status of a task from MCP server."""
+    async def send_maintenance_report(self, maintenance_data: Dict[str, Any]) -> bool:
+        """Send maintenance completion report to MCP server."""
         if not self.is_connected or not self.websocket:
             logger.warning("Not connected to MCP server, attempting reconnect...")
             success = await self._connect_with_retry()
             if not success:
-                logger.error("Failed to reconnect for task status")
-                return None
+                logger.error("Failed to reconnect for maintenance report")
+                return False
 
         try:
-            result = await self._send_jsonrpc_request("status_request", {
-                "task_id": task_id,
-                "client_id": self.client_id,
+            await self._send_jsonrpc_notification("maintenance_completed", {
+                **maintenance_data,
+                "agent_id": self.client_id,
                 "timestamp": datetime.now().isoformat()
             })
-            return result
+            
+            logger.info(f"Sent maintenance report from database service")
+            return True
 
         except Exception as e:
-            logger.error(f"Failed to get task status for {task_id}: {e}")
-            return None
+            logger.error(f"Failed to send maintenance report: {e}")
+            return False
 
-    async def wait_for_task_result(self, task_id: str, timeout: float = 60.0) -> Optional[Dict[str, Any]]:
-        """Wait for a task result."""
+    async def send_task_result(self, task_result: Dict[str, Any]) -> bool:
+        """Send task result to MCP server."""
         if not self.is_connected or not self.websocket:
             logger.warning("Not connected to MCP server, attempting reconnect...")
             success = await self._connect_with_retry()
             if not success:
                 logger.error("Failed to reconnect for task result")
-                return None
+                return False
 
         try:
-            # Create a future to wait for result
-            result_future = asyncio.Future()
-            callback_key = f"result_{task_id}"
+            await self._send_jsonrpc_notification("task_result", {
+                **task_result,
+                "agent_id": self.client_id,
+                "timestamp": datetime.now().isoformat()
+            })
             
-            # Store the future in a way that message handlers can access it
-            if not hasattr(self, 'result_futures'):
-                self.result_futures = {}
-            self.result_futures[callback_key] = result_future
-
-            logger.info(f"Waiting for task result: {task_id} (timeout: {timeout}s)")
-
-            try:
-                result = await asyncio.wait_for(result_future, timeout=timeout)
-                logger.info(f"Received task result for {task_id}")
-                return result
-            except asyncio.TimeoutError:
-                logger.warning(f"Timeout waiting for task result: {task_id}")
-                return None
-            finally:
-                if hasattr(self, 'result_futures'):
-                    self.result_futures.pop(callback_key, None)
-                self.active_requests.pop(task_id, None)
+            logger.info(f"Sent task result for task {task_result.get('task_id')}")
+            return True
 
         except Exception as e:
-            logger.error(f"Failed to wait for task result {task_id}: {e}")
-            return None
+            logger.error(f"Failed to send task result: {e}")
+            return False
 
     async def get_server_stats(self) -> Optional[Dict[str, Any]]:
         """Get server statistics with response handling."""
@@ -416,7 +405,7 @@ class MCPClient:
 
         try:
             result = await self._send_jsonrpc_request("status_request", {
-                "client_id": self.client_id,
+                "agent_id": self.client_id,
                 "timestamp": datetime.now().isoformat()
             })
             return result
@@ -432,7 +421,7 @@ class MCPClient:
             try:
                 if self.is_connected and self.websocket and not self.websocket.closed:
                     await self._send_jsonrpc_notification("heartbeat", {
-                        "client_id": self.client_id,
+                        "agent_id": self.client_id,
                         "status": "alive",
                         "timestamp": datetime.now().isoformat()
                     })
@@ -547,99 +536,33 @@ class MCPClient:
         
         self.pending_requests.pop(request_id, None)
 
-    # Message handlers for API Gateway
+    # Message handlers for Database Service
     async def _handle_registration_confirmation(self, params: Dict[str, Any]):
         """Handle registration confirmation from server."""
         server_id = params.get("server_id")
-        logger.info(f"API Gateway registration confirmed by server {server_id}")
+        logger.info(f"Database Service registration confirmed by server {server_id}")
         if "instructions" in params:
             logger.info(f"Received server instructions: {params['instructions']}")
 
-    async def _handle_task_result(self, params: Dict[str, Any]):
-        """Handle task result."""
+    async def _handle_task_request(self, params: Dict[str, Any]):
+        """Handle task request from MCP server."""
+        # This would be handled by the database service main handler
+        # For now, just log the request
         task_id = params.get("task_id")
-        status = params.get("status", "unknown")
-        
-        if not task_id:
-            logger.warning("Received task result without task_id")
-            return
-        
-        if not isinstance(task_id, str):
-            logger.warning(f"Invalid task_id type: {type(task_id)}")
-            return
-        
-        result_key = f"result_{task_id}"
-        
-        # Check if we have a future waiting for this result
-        if hasattr(self, 'result_futures') and result_key in self.result_futures:
-            future = self.result_futures[result_key]
-            if not future.done():
-                future.set_result(params)
-                logger.info(f"Delivered task result for {task_id}: {status}")
-        
-        self.active_requests.pop(task_id, None)
+        task_type = params.get("task_type") 
+        logger.info(f"Received task request: {task_type} (task_id: {task_id})")
 
-    async def _handle_status_response(self, params: Dict[str, Any]):
-        """Handle status response."""
-        task_id = params.get("task_id")
-        server_stats = params.get("data")
-        
-        logger.debug(f"Received status response for task {task_id}" if task_id else "Received server stats")
-
-    async def _handle_task_queued(self, params: Dict[str, Any]):
-        """Handle task queued confirmation."""
-        task_id = params.get("data", {}).get("task_id")
-        if task_id:
-            logger.info(f"Task {task_id} queued successfully")
-
-    async def _handle_task_rejected(self, params: Dict[str, Any]):
-        """Handle task rejection."""
-        task_id = params.get("data", {}).get("task_id") or params.get("task_id")
-        error = params.get("data", {}).get("error") or params.get("error", "Unknown error")
-        
-        if not task_id or not isinstance(task_id, str):
-            logger.warning("Received task rejection without valid task_id")
-            return
-        
-        logger.error(f"Task {task_id} rejected: {error}")
-        
-        result_key = f"result_{task_id}"
-        if hasattr(self, 'result_futures') and result_key in self.result_futures:
-            future = self.result_futures[result_key]
-            if not future.done():
-                future.set_result({
-                    "status": "rejected", 
-                    "error": error,
-                    "task_id": task_id
-                })
-        
-        self.active_requests.pop(task_id, None)
-
-    async def _handle_error_message(self, params: Dict[str, Any]):
-        """Handle error messages from server."""
-        message = params.get("message", "Unknown error")
-        task_id = params.get("task_id")
-        
-        logger.error(f"Received error from server: {message}" + 
-                    (f" for task {task_id}" if task_id else ""))
-        
-        if task_id and isinstance(task_id, str):
-            result_key = f"result_{task_id}"
-            if hasattr(self, 'result_futures') and result_key in self.result_futures:
-                future = self.result_futures[result_key]
-                if not future.done():
-                    future.set_result({
-                        "status": "error",
-                        "error": message,
-                        "task_id": task_id
-                    })
-            
-            self.active_requests.pop(task_id, None)
+    async def _handle_database_update(self, params: Dict[str, Any]):
+        """Handle database update request from MCP server."""
+        # This would be handled by the database service main handler
+        # For now, just log the request
+        command = params.get("command")
+        logger.info(f"Received database update request: {command}")
 
     async def _handle_heartbeat(self, params: Dict[str, Any]):
         """Handle heartbeat request."""
         await self._send_jsonrpc_notification("heartbeat_ack", {
-            "client_id": self.client_id,
+            "agent_id": self.client_id,
             "status": "alive",
             "timestamp": datetime.now().isoformat()
         })
@@ -647,7 +570,7 @@ class MCPClient:
     async def _handle_ping(self, params: Dict[str, Any]):
         """Handle ping request."""
         await self._send_jsonrpc_notification("pong", {
-            "client_id": self.client_id,
+            "agent_id": self.client_id,
             "timestamp": datetime.now().isoformat()
         })
 
@@ -680,25 +603,17 @@ class MCPClient:
         """Clean up expired requests."""
         while self.running:
             try:
+                # Clean up expired pending requests
                 current_time = datetime.now()
-                expired = [
-                    task_id for task_id, req in self.active_requests.items()
-                    if (current_time - req["submitted_at"]).total_seconds() > self.request_timeout
-                ]
+                expired_requests = []
                 
-                for task_id in expired:
-                    logger.warning(f"Request {task_id} timed out")
-                    result_key = f"result_{task_id}"
-                    if hasattr(self, 'result_futures') and result_key in self.result_futures:
-                        future = self.result_futures[result_key]
-                        if not future.done():
-                            future.set_result({
-                                "status": "timeout",
-                                "error": "Request timed out",
-                                "task_id": task_id
-                            })
-                        self.result_futures.pop(result_key, None)
-                    self.active_requests.pop(task_id, None)
+                for request_id, future in list(self.pending_requests.items()):
+                    if future.done():
+                        expired_requests.append(request_id)
+                
+                for request_id in expired_requests:
+                    self.pending_requests.pop(request_id, None)
+                    logger.debug(f"Cleaned up completed request: {request_id}")
                 
                 await asyncio.sleep(60)
                 
@@ -724,12 +639,12 @@ class MCPClient:
             "host": self.host,
             "port": self.port,
             "client_id": self.client_id,
+            "service_type": "database",
             "is_connected": self.is_connected,
             "running": self.running,
             "websocket_available": self.websocket is not None,
             "last_connection_attempt": self.last_connection_attempt.isoformat() if self.last_connection_attempt else None,
             "connection_attempts": self.connection_attempts,
-            "active_requests": len(self.active_requests),
             "pending_requests": len(self.pending_requests)
         }
 
@@ -740,8 +655,8 @@ class MCPClient:
             "connected": self.is_connected,
             "running": self.running,
             "client_id": self.client_id,
+            "service_type": "database",
             "server_url": f"ws://{self.host}:{self.port}",
-            "active_requests": len(self.active_requests),
             "pending_requests": len(self.pending_requests),
             "timestamp": datetime.now().isoformat()
         }

@@ -58,3 +58,83 @@ services:
     # Remove read-only constraints for development
     read_only: false
     tmpfs: []
+
+  # Database Service development configuration
+  database-service:
+    build:
+      context: ./services/database
+      target: development
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT_MODE=true
+      - WATCHFILES_FORCE_POLLING=1
+      - HEALTH_CHECK_INTERVAL=10
+      - MAINTENANCE_INTERVAL=1800
+    volumes:
+      # Mount source code for development
+      - ./services/database/database_service.py:/app/database_service.py:ro
+      - ./services/database/database_tools.py:/app/database_tools.py:ro
+      - ./services/database/mcp_client.py:/app/mcp_client.py:ro
+      - ./services/database/start-dev.sh:/app/start-dev.sh:ro
+    # Remove read-only constraints for development
+    read_only: false
+    tmpfs: []
+
+  # Memory Service development configuration
+  memory-service:
+    build:
+      context: ./services/memory
+      target: development
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT_MODE=true
+      - WATCHFILES_FORCE_POLLING=1
+      - MEMORY_DB_PATH=/tmp/memory_dev.db
+      - HEALTH_CHECK_INTERVAL=10
+    volumes:
+      # Mount source code for development
+      - ./services/memory/src:/app/src:ro
+      - ./services/memory/start-dev.sh:/app/start-dev.sh:ro
+    # Remove read-only constraints for development
+    read_only: false
+    tmpfs: []
+
+  # Auth Service development configuration
+  auth-service:
+    build:
+      context: ./services/auth-service
+      target: development
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT_MODE=true
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - AUTH_DB_PATH=/tmp/auth_dev.db
+    volumes:
+      # Mount source code for development
+      - ./services/auth-service/src:/app/src:ro
+      - ./services/auth-service/start-dev.sh:/app/start-dev.sh:ro
+    # Remove read-only constraints for development
+    read_only: false
+    tmpfs: []
+
+  # Network Service development configuration
+  network-service:
+    build:
+      context: ./services/network
+      target: development
+    command: ["tini", "-s", "-g", "--", "./start-dev.sh"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEVELOPMENT_MODE=true
+      - WATCHFILES_FORCE_POLLING=1
+    volumes:
+      # Mount source code for development
+      - ./services/network/src:/app/src:ro
+      - ./services/network/config:/app/config:ro
+      - ./services/network/start-dev.sh:/app/start-dev.sh:ro
+    # Remove read-only constraints for development
+    read_only: false
+    tmpfs: []

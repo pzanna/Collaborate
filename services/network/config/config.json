@@ -1,82 +1,49 @@
 {
   "service": {
-    "name": "network-agent",
-    "type": "network",
+    "name": "network",
     "version": "1.0.0",
+    "description": "Eunice network service",
+    "environment": "development"
+  },
+  "server": {
     "host": "0.0.0.0",
-    "port": 8004
+    "port": 8000,
+    "debug": false
+  },
+  "database": {
+    "url": "postgresql://eunice:eunice@localhost:5432/eunice",
+    "echo": false,
+    "pool_size": 10,
+    "max_overflow": 20
   },
   "mcp": {
-    "server_url": "ws://mcp-server:9000",
-    "reconnect_attempts": 5,
-    "reconnect_delay": 5,
-    "ping_interval": 30,
-    "ping_timeout": 10
-  },
-  "google_search": {
-    "api_endpoint": "https://www.googleapis.com/customsearch/v1",
-    "api_key": "",
-    "search_engine_id": "",
-    "default_page_size": 10,
-    "max_results": 100,
+    "server_url": "ws://mcp-server:8081",
     "timeout": 30,
-    "cache_size": 100,
-    "max_requests_per_day": 100,
-    "max_requests_per_minute": 10
+    "retry_attempts": 3
   },
-  "ai_models": [
-    {
-      "provider": "openai",
-      "api_endpoint": "https://api.openai.com/v1/chat/completions",
-      "api_key": "",
-      "timeout": 60,
-      "cache_size": 50,
-      "max_requests_per_day": 1000,
-      "max_requests_per_minute": 60
-    }
-  ],
-  "literature_dbs": [
-    {
-      "provider": "pubmed",
-      "api_endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-      "api_key": "",
-      "timeout": 30,
-      "cache_size": 100,
-      "max_requests_per_day": 1000,
-      "max_requests_per_second": 3
-    },
-    {
-      "provider": "core",
-      "api_endpoint": "https://api.core.ac.uk/v3/search/works",
-      "api_key": "",
-      "timeout": 30,
-      "cache_size": 100,
-      "max_requests_per_day": 1000,
-      "max_requests_per_second": 10
-    },
-    {
-      "provider": "openalex",
-      "api_endpoint": "https://api.openalex.org/works",
-      "api_key": "",
-      "timeout": 30,
-      "cache_size": 100,
-      "max_requests_per_day": 1000,
-      "max_requests_per_second": 10
-    }
-  ],
-  "capabilities": [
-    "google_search",
-    "web_search",
-    "multi_page_search",
-    "search_capabilities",
-    "ai_model_openai",
-    "literature_search_pubmed",
-    "literature_search_core",
-    "literature_search_openalex",
-    "search_result_parsing"
-  ],
   "logging": {
-    "level": "DEBUG",
-    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    "level": "INFO",
+    "file": "/app/logs/service.log",
+    "max_file_size": "100MB",
+    "backup_count": 5
+  },
+  "health_check": {
+    "enabled": true,
+    "interval": 30,
+    "timeout": 10
+  },
+  "security": {
+    "cors_origins": [
+      "*"
+    ],
+    "cors_methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE"
+    ],
+    "cors_headers": [
+      "*"
+    ]
   }
 }

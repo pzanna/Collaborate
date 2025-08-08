@@ -1,58 +1,49 @@
 {
-  "service_name": "research_manager",
-  "service_host": "0.0.0.0",
-  "service_port": 8002,
-  "mcp_server_url": "ws://mcp-server:9000",
-  "max_concurrent_tasks": 5,
-  "task_timeout": 600,
-  "response_timeout": 300,
+  "service": {
+    "name": "research_manager",
+    "version": "1.0.0",
+    "description": "Eunice research-manager service",
+    "environment": "development"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false
+  },
+  "database": {
+    "url": "postgresql://eunice:eunice@localhost:5432/eunice",
+    "echo": false,
+    "pool_size": 10,
+    "max_overflow": 20
+  },
+  "mcp": {
+    "server_url": "ws://mcp-server:8081",
+    "timeout": 30,
+    "retry_attempts": 3
+  },
   "logging": {
     "level": "INFO",
-    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    "file": "/app/logs/service.log",
+    "max_file_size": "100MB",
+    "backup_count": 5
   },
-  "research_settings": {
-    "max_retries": 2,
-    "default_single_agent_cost_threshold": 0.5,
-    "enable_parallel_execution": true,
-    "cost_approval_threshold": 0.5,
-    "context_cleanup_delay": 3600
+  "health_check": {
+    "enabled": true,
+    "interval": 30,
+    "timeout": 10
   },
-  "agent_coordination": {
-    "planning_agent": {
-      "type": "planning",
-      "capabilities": [
-        "plan_research",
-        "manage_research_tasks",
-        "coordinate_agents",
-        "analyze_information",
-        "synthesize_results"
-      ],
-      "timeout": 300
-    },
-    "literature_agent": {
-      "type": "literature",
-      "capabilities": ["search_literature"],
-      "timeout": 300
-    },
-    "screening_agent": {
-      "type": "literature",
-      "capabilities": ["review_documents"],
-      "timeout": 300
-    },
-    "executor_agent": {
-      "type": "executor",
-      "capabilities": ["execute_research", "process_data"],
-      "timeout": 300
-    },
-    "synthesis_agent": {
-      "type": "synthesis",
-      "capabilities": ["execute_research", "process_data"],
-      "timeout": 300
-    },
-    "memory_agent": {
-      "type": "memory",
-      "capabilities": ["store_information", "retrieve_context"],
-      "timeout": 300
-    }
+  "security": {
+    "cors_origins": [
+      "*"
+    ],
+    "cors_methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE"
+    ],
+    "cors_headers": [
+      "*"
+    ]
   }
 }

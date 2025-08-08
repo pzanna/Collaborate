@@ -1,8 +1,8 @@
-# Network Agent Container - SECURITY HARDENED with Alpine
+# {{ service_name }} Service - SECURITY HARDENED with Alpine
 FROM python:3.12-alpine AS base
 
 # Security: Set build arguments for better control
-ARG SERVICE_PORT=8004
+ARG SERVICE_PORT={{ service_port }}
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
@@ -14,13 +14,13 @@ RUN apk update && apk upgrade && \
     curl \
     ca-certificates \
     tini \
-    bash \
+    libffi-dev \
     && rm -rf /var/cache/apk/* \
     && rm -rf /tmp/*
 
 # Security: Create dedicated non-root user with minimal privileges
-RUN addgroup -g ${GROUP_ID} -S network && \
-    adduser -u ${USER_ID} -S network -G network -h /app -s /sbin/nologin
+RUN addgroup -g ${GROUP_ID} -S {{ service_user }} && \
+    adduser -u ${USER_ID} -S {{ service_user }} -G {{ service_user }} -h /app -s /sbin/nologin
 
 # Set secure working directory
 WORKDIR /app
@@ -39,52 +39,61 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
-COPY start.sh ./
-COPY start-dev.sh ./
-
-# Note: health_check.py is already in src/ directory
+COPY start.sh ./start.sh
+COPY start-dev.sh ./start-dev.sh
 
 # Security: Set strict file permissions and ownership
-RUN chown -R network:network /app && \
+RUN chown -R {{ service_user }}:{{ service_user }} /app && \
     chmod -R 750 /app && \
-    chmod 750 /app/start-dev.sh && \
-    chmod 640 /app/src/*.py /app/config/*.json 2>/dev/null || true && \
+    chmod +x /app/start.sh /app/start-dev.sh && \
     find /app -type d -exec chmod 750 {} \; && \
-    find /app -type f -exec chmod 640 {} \; && \
-    chmod 750 /app/start-dev.sh
+    find /app -name "*.py" -exec chmod 640 {} \; && \
+    find /app -name "*.json" -exec chmod 640 {} \;
 
-# Security: Create writable temp directory for application
-RUN mkdir -p /app/tmp && \
-    chown network:network /app/tmp && \
-    chmod 750 /app/tmp
+# Security: Create secure data directory with proper permissions
+RUN mkdir -p /app/data /app/logs && \
+    chown -R {{ service_user }}:{{ service_user }} /app/data /app/logs && \
+    chmod 750 /app/data /app/logs
 
-# Switch to non-root user
-USER network
+# Set secure environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONNOUSERSITE=1
+ENV PYTHONPATH=/app/src
 
-# Expose port
-EXPOSE 8004
-
-# Development stage
+# Development target
 FROM base AS development
 
-# Install development dependencies for file watching
-USER root
-RUN pip install --no-cache-dir watchfiles
-USER network
+# Install development dependencies
+RUN pip install --no-cache-dir watchfiles pytest pytest-asyncio pytest-cov
 
-# Development command with file watching
+# Switch to non-root user
+USER {{ service_user }}
+
+# Expose service port
+EXPOSE ${SERVICE_PORT}
+
+# Development entry point
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["./start-dev.sh"]
 
-# Production stage (default)
+# Production target
 FROM base AS production
+
+# Security: Remove build dependencies to minimize attack surface
+RUN apk del gcc musl-dev libffi-dev && \
+    rm -rf /var/cache/apk/* /tmp/*
+
+# Switch to non-root user
+USER {{ service_user }}
+
+# Expose service port
+EXPOSE ${SERVICE_PORT}
 
 # Security: Enhanced health check with timeout
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8004/health || exit 1
-
-# Expose port
-EXPOSE 8004
+    CMD curl -f http://localhost:${SERVICE_PORT}/health || exit 1
 
 # Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["./start-dev.sh"]
+CMD ["./start.sh"]

@@ -1,38 +1,52 @@
 #!/bin/bash
 
-# Network Agent Service Development Startup Script
-# This script starts the containerized Network Agent with file watching for development
+# {{ service_name }} Service Development Startup Script
+# This script starts the {{ service_name }} service with file watching for development
 
 set -e
 
-echo "Starting Network Agent Service in Development Mode..."
+echo "🚀 Starting {{ service_name }} Service in development mode..."
+echo "📁 Working directory: $(pwd)"
 
-# Set default values if not provided
-export SERVICE_HOST=${SERVICE_HOST:-"0.0.0.0"}
-export SERVICE_PORT=${SERVICE_PORT:-"8004"}
-export MCP_SERVER_URL=${MCP_SERVER_URL:-"ws://mcp-server:9000"}
-export AGENT_TYPE=${AGENT_TYPE:-"network"}
-export LOG_LEVEL=${LOG_LEVEL:-"INFO"}
+# Check if watchfiles is available
+python3 -c "import watchfiles; print('✅ watchfiles is available')" 2>/dev/null || {
+    echo "❌ watchfiles not found. Installing..."
+    pip install watchfiles
+}
 
-echo "Configuration:"
-echo "  Service Host: ${SERVICE_HOST}"
-echo "  Service Port: ${SERVICE_PORT}"
-echo "  MCP Server URL: ${MCP_SERVER_URL}"
-echo "  Agent Type: ${AGENT_TYPE}"
-echo "  Log Level: ${LOG_LEVEL}"
-echo "  Development Mode: ENABLED"
+# Load environment variables if .env file exists
+if [ -f .env ]; then
+    echo "📝 Loading environment variables from .env"
+    export $(cat .env | grep -v '^#' | xargs)
+fi
 
-# Check if watchfiles is available (should be pre-installed)
-echo "Checking watchfiles availability..."
-if ! python -c "import watchfiles" 2>/dev/null; then
-    echo "ERROR: watchfiles not found. This should be pre-installed in requirements.txt"
+# Set development environment variables
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
+export SERVICE_NAME="${SERVICE_NAME:-{{ service_name }}}"
+export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
+export SERVICE_PORT="${SERVICE_PORT:-{{ service_port }}}"
+export LOG_LEVEL="${LOG_LEVEL:-DEBUG}"
+export DEVELOPMENT_MODE="${DEVELOPMENT_MODE:-true}"
+export WATCHFILES_FORCE_POLLING="${WATCHFILES_FORCE_POLLING:-1}"
+
+echo "🔍 File watching enabled for development"
+echo "🔧 Service: ${SERVICE_NAME}"
+echo "🌐 Host: ${SERVICE_HOST}"
+echo "🔌 Port: ${SERVICE_PORT}"
+echo "📊 Log Level: ${LOG_LEVEL}"
+echo "🛠️ Development Mode: ${DEVELOPMENT_MODE}"
+
+# Health check
+echo "🏥 Performing startup health checks..."
+
+# Check if config file exists
+if [ ! -f "config/config.json" ]; then
+    echo "❌ Configuration file config/config.json not found"
     exit 1
 fi
-echo "watchfiles is available"
 
-# Change to source directory
-cd /app
+echo "✅ All health checks passed"
+echo "🔍 Starting {{ service_name }} service with file watching..."
 
-# Start the Network Agent service with file watching
-echo "Starting Network Agent Service with file watching..."
-exec watchfiles --filter python 'python -m src.network_service' /app/src
+# Start with file watching using watchfiles
+exec python3 -m watchfiles src.main.main --args src/main.py

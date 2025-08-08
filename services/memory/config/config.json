@@ -1,44 +1,49 @@
 {
-  "agent_type": "memory",
-  "service_host": "0.0.0.0",
-  "service_port": 8009,
-  "mcp_server_url": "ws://mcp-server:9000",
-  "capabilities": [
-    "store_memory",
-    "retrieve_memory",
-    "search_memory",
-    "update_memory",
-    "delete_memory",
-    "add_knowledge",
-    "query_knowledge",
-    "find_connections",
-    "consolidate_memory",
-    "store_structured_memory",
-    "query_structured_memory"
-  ],
-  "memory_settings": {
-    "max_memory_size": 10000,
-    "importance_threshold": 0.3,
-    "consolidation_interval": 3600,
-    "memory_db_path": "/tmp/memory_agent_data/memory.db"
+  "service": {
+    "name": "memory",
+    "version": "1.0.0",
+    "description": "Eunice memory service",
+    "environment": "development"
   },
-  "knowledge_graph_settings": {
-    "max_graph_nodes": 5000,
-    "max_graph_edges": 10000,
-    "edge_decay_rate": 0.95
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false
   },
-  "cache_settings": {
-    "memory_cache_size": 100,
-    "knowledge_cache_nodes": 1000,
-    "knowledge_cache_edges": 2000
+  "database": {
+    "url": "postgresql://eunice:eunice@localhost:5432/eunice",
+    "echo": false,
+    "pool_size": 10,
+    "max_overflow": 20
   },
-  "database_settings": {
-    "connection_timeout": 30,
-    "enable_wal_mode": true,
-    "vacuum_interval": 86400
+  "mcp": {
+    "server_url": "ws://mcp-server:8081",
+    "timeout": 30,
+    "retry_attempts": 3
   },
   "logging": {
     "level": "INFO",
-    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    "file": "/app/logs/service.log",
+    "max_file_size": "100MB",
+    "backup_count": 5
+  },
+  "health_check": {
+    "enabled": true,
+    "interval": 30,
+    "timeout": 10
+  },
+  "security": {
+    "cors_origins": [
+      "*"
+    ],
+    "cors_methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE"
+    ],
+    "cors_headers": [
+      "*"
+    ]
   }
 }

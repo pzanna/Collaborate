@@ -12,6 +12,7 @@ Trigger: User
 API: /v2/projects
 Input: { "name": "string", "description": "string", "metadata": {}}
 Database table: projects
+Unit test: None
 
 ### Update Project
 Function name: update_project
@@ -20,6 +21,7 @@ Trigger: User
 API: /v2/projects/{project_id}
 Input: { "project_id": "string", "name": "string", "description": "string", "status": "string", "metadata": {}}
 Database table: projects
+Unit test: None
 
 ### Delete Project
 Function name: delete_project
@@ -28,6 +30,7 @@ Trigger: User
 API: /v2/projects/{project_id}
 Input: { "project_id": "string"}
 Database table: projects
+Unit test: None
 
 ### List Projects
 Function name: list_projects
@@ -36,6 +39,7 @@ Trigger: User
 API: /v2/projects
 Input: { "status": "string (optional)", "limit": "number (optional)"}
 Database table: projects
+Unit test: None
 
 ### Get Project
 Function name: get_project
@@ -44,6 +48,7 @@ Trigger: User
 API: /v2/projects/{project_id}
 Input: { "project_id": "string"}
 Database table: projects
+Unit test: None
 
 ### Get Project Statistics
 Function name: get_project_stats
@@ -52,6 +57,7 @@ Trigger: User
 API: /v2/projects/{project_id}/stats
 Input: { "project_id": "string"}
 Database table: projects (aggregated data)
+Unit test: None
 
 ### Get Project Hierarchy
 Function name: get_project_hierarchy
@@ -60,6 +66,7 @@ Trigger: User
 API: /v2/projects/{project_id}/hierarchy
 Input: { "project_id": "string"}
 Database table: Multiple (projects, research_topics, research_plans, tasks)
+Unit test: None
 
 ## Research Topic Functions
 
@@ -70,6 +77,7 @@ Trigger: User
 API: /v2/projects/{project_id}/topics
 Input: { "project_id": "string", "name": "string", "description": "string", "metadata": {}}
 Database table: research_topics
+Unit test: None
 
 ### Update Research Topic
 Function name: update_research_topic
@@ -78,6 +86,7 @@ Trigger: User
 API: /v2/topics/{topic_id}
 Input: { "topic_id": "string", "name": "string", "description": "string", "status": "string", "metadata": {}}
 Database table: research_topics
+Unit test: None
 
 ### Delete Research Topic
 Function name: delete_research_topic
@@ -86,6 +95,7 @@ Trigger: User
 API: /v2/topics/{topic_id}
 Input: { "topic_id": "string"}
 Database table: research_topics
+Unit test: None
 
 ### List Research Topics
 Function name: list_research_topics
@@ -94,6 +104,7 @@ Trigger: User
 API: /v2/projects/{project_id}/topics
 Input: { "project_id": "string", "status": "string (optional)"}
 Database table: research_topics
+Unit test: None
 
 ### Get Research Topic
 Function name: get_research_topic
@@ -102,6 +113,7 @@ Trigger: User
 API: /v2/topics/{topic_id}
 Input: { "topic_id": "string"}
 Database table: research_topics
+Unit test: None
 
 ### Get Research Topic by Project
 Function name: get_research_topic_by_project
@@ -110,6 +122,7 @@ Trigger: User
 API: /v2/projects/{project_id}/topics/{topic_id}
 Input: { "project_id": "string", "topic_id": "string"}
 Database table: research_topics
+Unit test: None
 
 ### Get Research Topic Statistics
 Function name: get_topic_stats
@@ -118,6 +131,7 @@ Trigger: User
 API: /v2/topics/{topic_id}/stats
 Input: { "topic_id": "string"}
 Database table: research_topics (aggregated data)
+Unit test: None
 
 ## Research Plan Functions
 
@@ -128,6 +142,7 @@ Trigger: User
 API: /v2/topics/{topic_id}/plans
 Input: { "topic_id": "string"}
 Database table: research_plans
+Unit test: None
 
 ### Approve Research Plan
 Function name: approve_research_plan
@@ -136,6 +151,7 @@ Trigger: User
 API: /v2/plans/{plan_id}/approve
 Input: { "plan_id": "string"}
 Database table: research_plans
+Unit test: None
 
 ### Update Research Plan
 Function name: update_research_plan
@@ -144,6 +160,7 @@ Trigger: User
 API: /v2/plans/{plan_id}
 Input: { "plan_id": "string", "name": "string", "description": "string", "plan_type": "string", "status": "string", "plan_structure": {}, "initial_literature_results": {}, "reviewed_literature_results": {}, "metadata": {}}
 Database table: research_plans
+Unit test: None
 
 ### Delete Research Plan
 Function name: delete_research_plan
@@ -152,6 +169,7 @@ Trigger: User
 API: /v2/plans/{plan_id}
 Input: { "plan_id": "string"}
 Database table: research_plans
+Unit test: None
 
 ### List Research Plans
 Function name: list_research_plans
@@ -160,6 +178,7 @@ Trigger: User
 API: /v2/topics/{topic_id}/plans
 Input: { "topic_id": "string"}
 Database table: research_plans
+Unit test: None
 
 ### Get Research Plan
 Function name: get_research_plan
@@ -168,6 +187,7 @@ Trigger: User
 API: /v2/plans/{plan_id}
 Input: { "plan_id": "string"}
 Database table: research_plans
+Unit test: None
 
 ### Get Research Plan Statistics
 Function name: get_plan_stats
@@ -176,6 +196,7 @@ Trigger: User
 API: /v2/plans/{plan_id}/stats
 Input: { "plan_id": "string"}
 Database table: research_plans (aggregated data)
+Unit test: None
 
 ### Generate AI Research Plan
 Function name: generate_ai_research_plan
@@ -186,6 +207,7 @@ Input: { "topic_id": "string"}
 Database table: research_plans
 AI Prompt: create_research_plan.json
 Prompt fields: research_topics({name}, {description})
+Unit test: None
 
 ## Task Functions
 
@@ -196,6 +218,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "plan_id": "string", "name": "string", "description": "string", "task_type": "string", "task_order": "number", "metadata": {}}
 Database table: tasks
+Unit test: None
 
 ### Update Task
 Function name: update_task
@@ -204,6 +227,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "task_id": "string", "name": "string", "description": "string", "task_type": "string", "task_order": "number", "status": "string", "metadata": {}}
 Database table: tasks
+Unit test: None
 
 ### Delete Task
 Function name: delete_task
@@ -212,6 +236,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "task_id": "string"}
 Database table: tasks
+Unit test: None
 
 ## Research Task Functions
 
@@ -222,6 +247,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "plan_id": "string", "name": "string", "description": "string", "task_type": "string", "task_order": "number", "stage": "string", "metadata": {}}
 Database table: research_tasks
+Unit test: None
 
 ### Update Research Task
 Function name: update_research_task
@@ -230,6 +256,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "task_id": "string", "name": "string", "description": "string", "task_type": "string", "task_order": "number", "status": "string", "stage": "string", "metadata": {}}
 Database table: research_tasks
+Unit test: None
 
 ### Delete Research Task
 Function name: delete_research_task
@@ -246,6 +273,7 @@ Trigger: User
 API: /v2/topics/{topic_id}/execute
 Input: { "topic_id": "string", "task_type": "string", "depth": "string"}
 Database table: Multiple (coordinated execution)
+Unit test: None
 
 ### Get Execution Progress
 Function name: get_execution_progress
@@ -254,6 +282,7 @@ Trigger: User
 API: /v2/executions/{execution_id}/progress
 Input: { "execution_id": "string"}
 Database table: execution_tracking (or in-memory tracking)
+Unit test: None
 
 ## Literature Record Functions
 
@@ -264,6 +293,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "project_id": "string", "title": "string", "authors": [], "doi": "string", "external_id": "string", "year": "number", "journal": "string", "abstract": "string", "url": "string", "citation_count": "number", "source": "string", "publication_type": "string", "mesh_terms": [], "categories": [], "metadata": {}}
 Database table: literature_records
+Unit test: None
 
 ### Update Literature Record
 Function name: update_literature_record
@@ -272,6 +302,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "record_id": "string", "title": "string", "authors": [], "doi": "string", "external_id": "string", "year": "number", "journal": "string", "abstract": "string", "url": "string", "citation_count": "number", "source": "string", "publication_type": "string", "mesh_terms": [], "categories": [], "metadata": {}}
 Database table: literature_records
+Unit test: None
 
 ### Delete Literature Record
 Function name: delete_literature_record
@@ -280,6 +311,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "record_id": "string"}
 Database table: literature_records
+Unit test: None
 
 ## Search Term Optimization Functions
 
@@ -290,6 +322,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "source_type": "string", "source_id": "string", "original_query": "string", "optimized_terms": [], "optimization_context": {}, "target_databases": [], "expires_at": "string", "metadata": {}}
 Database table: search_term_optimizations
+Unit test: None
 
 ### Update Search Term Optimization
 Function name: update_search_term_optimization
@@ -298,6 +331,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "optimization_id": "string", "original_query": "string", "optimized_terms": [], "optimization_context": {}, "target_databases": [], "expires_at": "string", "metadata": {}}
 Database table: search_term_optimizations
+Unit test: None
 
 ### Delete Search Term Optimization
 Function name: delete_search_term_optimization
@@ -306,6 +340,7 @@ Trigger: User
 API: MCP Direct (via database service)
 Input: { "optimization_id": "string"}
 Database table: search_term_optimizations
+Unit test: None
 
 ## System Health Functions
 
@@ -316,6 +351,7 @@ Trigger: System/User
 API: /health
 Input: {}
 Database table: None (service status)
+Unit test: None
 
 ### System Status
 Function name: system_status
@@ -324,6 +360,7 @@ Trigger: System/User
 API: /status
 Input: {}
 Database table: None (service status)
+Unit test: None
 
 ### System Metrics
 Function name: system_metrics
@@ -332,6 +369,8 @@ Trigger: System/User
 API: /metrics
 Input: {}
 Database table: None (runtime metrics)
+Unit test: None
+
 
 ## 🧠 Example: Task Flow – "Generate AI Research Plan"
 

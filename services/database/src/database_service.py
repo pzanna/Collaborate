@@ -86,7 +86,6 @@ class DatabaseService:
             logger.info("Initializing MCP Client...")
             success = await self.mcp_client.connect()
             if success:
-                await self.register_with_mcp()
                 self._setup_custom_handlers()
                 logger.info("✅ MCP Client initialized and connected")
             else:
@@ -145,12 +144,11 @@ class DatabaseService:
                 result = json.loads(result_str)
                 
                 # Send result back via MCP
-                await self.mcp_client._send_jsonrpc_notification("task_result", {
+                await self.mcp_client.send_task_result({
                     "task_id": task_id,
                     "status": "completed" if result["status"] == "success" else "error",
                     "result": result,
                     "context_id": context_id,
-                    "timestamp": datetime.utcnow().isoformat(),
                     "error": result.get("error", "Unknown error") if result["status"] != "success" else None
                 })
                 
@@ -159,53 +157,15 @@ class DatabaseService:
             except Exception as e:
                 logger.error(f"Error handling task request: {e}")
                 # Send error result
-                await self.mcp_client._send_jsonrpc_notification("task_result", {
+                await self.mcp_client.send_task_result({
                     "task_id": message.get("task_id"),
                     "status": "error",
                     "error": str(e),
-                    "context_id": message.get("context_id"),
-                    "timestamp": datetime.utcnow().isoformat()
+                    "context_id": message.get("context_id")
                 })
         
         self.mcp_client.add_message_handler("database_update", handle_database_update)
         self.mcp_client.add_message_handler("task_request", handle_task_request)
-    
-    async def register_with_mcp(self):
-        """Register this service with the MCP server."""
-        try:
-            await self.mcp_client._send_jsonrpc_notification("agent_register", {
-                "agent_id": self.mcp_client.client_id,
-                "agent_type": "database",
-                "capabilities": [
-                    "create_project",
-                    "update_project",
-                    "delete_project",
-                    "create_research_topic",
-                    "update_research_topic", 
-                    "delete_research_topic",
-                    "create_research_plan",
-                    "update_research_plan",
-                    "delete_research_plan",
-                    "create_task",
-                    "update_task",
-                    "delete_task",
-                    "create_research_task",
-                    "update_research_task",
-                    "delete_research_task",
-                    "create_literature_record",
-                    "update_literature_record",
-                    "delete_literature_record",
-                    "create_search_term_optimization",
-                    "update_search_term_optimization",
-                    "delete_search_term_optimization"
-                ],
-                "timestamp": datetime.utcnow().isoformat()
-            })
-            
-            logger.info("Registered as Database Service with MCP server")
-            
-        except Exception as e:
-            logger.error(f"Failed to register with MCP: {e}")
     
     async def verify_schema(self):
         """Verify that all required tables exist."""
@@ -303,9 +263,8 @@ class DatabaseService:
             
             # Report maintenance completion to MCP
             if self.mcp_client.is_connected:
-                await self.mcp_client._send_jsonrpc_notification("maintenance_completed", {
+                await self.mcp_client.send_maintenance_report({
                     "status": "success",
-                    "client_id": self.mcp_client.client_id,
                     "timestamp": datetime.utcnow().isoformat()
                 })
             
@@ -313,10 +272,9 @@ class DatabaseService:
             logger.error(f"❌ Database maintenance failed: {e}")
             # Report failure to MCP
             if self.mcp_client.is_connected:
-                await self.mcp_client._send_jsonrpc_notification("maintenance_completed", {
+                await self.mcp_client.send_maintenance_report({
                     "status": "failed", 
                     "error": str(e),
-                    "client_id": self.mcp_client.client_id,
                     "timestamp": datetime.utcnow().isoformat()
                 })
     
@@ -328,11 +286,7 @@ class DatabaseService:
                 
                 # Report health to MCP
                 if self.mcp_client.is_connected:
-                    await self.mcp_client._send_jsonrpc_notification("status_response", {
-                        **health,
-                        "client_id": self.mcp_client.client_id,
-                        "timestamp": datetime.utcnow().isoformat()
-                    })
+                    await self.mcp_client.send_status_update(health)
                 
                 # Log health status
                 status = health["status"]

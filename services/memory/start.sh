@@ -1,30 +1,51 @@
 #!/bin/bash
 
-# Memory Agent Service Startup Script
+# {{ service_name }} Service Production Startup Script
+# This script starts the {{ service_name }} service in production mode
 
 set -e
 
-echo "Starting Memory Agent Service..."
+echo "🚀 Starting {{ service_name }} Service in production mode..."
+echo "📁 Working directory: $(pwd)"
 
-# Set environment variables
-export PYTHONPATH="/app:$PYTHONPATH"
-export AGENT_TYPE="memory"
-export SERVICE_PORT=8009
+# Load environment variables if .env file exists
+if [ -f .env ]; then
+    echo "📝 Loading environment variables from .env"
+    export $(cat .env | grep -v '^#' | xargs)
+fi
 
-# Create data directory if it doesn't exist
-mkdir -p /tmp/memory_agent_data
+# Set default environment variables
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
+export SERVICE_NAME="${SERVICE_NAME:-{{ service_name }}}"
+export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
+export SERVICE_PORT="${SERVICE_PORT:-{{ service_port }}}"
+export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
-# Wait for MCP server to be available
-echo "Waiting for MCP server..."
-for i in {1..30}; do
-    if nc -z mcp-server 9000; then
-        echo "MCP server is ready!"
-        break
-    fi
-    echo "Waiting for MCP server... ($i/30)"
-    sleep 2
-done
+echo "🔧 Service: ${SERVICE_NAME}"
+echo "🌐 Host: ${SERVICE_HOST}"
+echo "🔌 Port: ${SERVICE_PORT}"
+echo "📊 Log Level: ${LOG_LEVEL}"
 
-# Start the Memory Agent Service
-echo "Starting Memory Agent Service on port 8009..."
-exec python src/memory_service.py
+# Health check
+echo "🏥 Performing startup health checks..."
+
+# Check if required environment variables are set
+if [ -z "$SERVICE_NAME" ]; then
+    echo "❌ SERVICE_NAME environment variable is not set"
+    exit 1
+fi
+
+# Check if config file exists
+if [ ! -f "config/config.json" ]; then
+    echo "❌ Configuration file config/config.json not found"
+    exit 1
+fi
+
+# Check Python dependencies
+python3 -c "import sys; print(f'✅ Python {sys.version}')"
+
+echo "✅ All health checks passed"
+echo "🎯 Starting {{ service_name }} service..."
+
+# Start the service
+exec python3 src/main.py

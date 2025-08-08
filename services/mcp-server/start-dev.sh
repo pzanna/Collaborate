@@ -1,35 +1,52 @@
-#!/bin/sh
+#!/bin/bash
 
-# MCP Server Development Startup Script
-# This script starts the containerized MCP Server with file watching for development
+# {{ service_name }} Service Development Startup Script
+# This script starts the {{ service_name }} service with file watching for development
 
 set -e
 
-echo "Starting MCP Server in Development Mode..."
+echo "🚀 Starting {{ service_name }} Service in development mode..."
+echo "📁 Working directory: $(pwd)"
 
-# Set default values if not provided
-export HOST=${HOST:-"0.0.0.0"}
-export PORT=${PORT:-"9000"}
-export LOG_LEVEL=${LOG_LEVEL:-"INFO"}
-
-echo "Configuration:"
-echo "  Host: ${HOST}"
-echo "  Port: ${PORT}"
-echo "  Log Level: ${LOG_LEVEL}"
-echo "  Development Mode: ENABLED"
-
-# Check if watchfiles is available (should be pre-installed)
-echo "Checking watchfiles availability..."
-if ! python -c "import watchfiles" 2>/dev/null; then
-    echo "ERROR: watchfiles not found. Installing..."
+# Check if watchfiles is available
+python3 -c "import watchfiles; print('✅ watchfiles is available')" 2>/dev/null || {
+    echo "❌ watchfiles not found. Installing..."
     pip install watchfiles
+}
+
+# Load environment variables if .env file exists
+if [ -f .env ]; then
+    echo "📝 Loading environment variables from .env"
+    export $(cat .env | grep -v '^#' | xargs)
 fi
-echo "watchfiles is available"
 
-# Change to app directory
-cd /app
+# Set development environment variables
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
+export SERVICE_NAME="${SERVICE_NAME:-{{ service_name }}}"
+export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
+export SERVICE_PORT="${SERVICE_PORT:-{{ service_port }}}"
+export LOG_LEVEL="${LOG_LEVEL:-DEBUG}"
+export DEVELOPMENT_MODE="${DEVELOPMENT_MODE:-true}"
+export WATCHFILES_FORCE_POLLING="${WATCHFILES_FORCE_POLLING:-1}"
 
-# Start the MCP Server with file watching
-# Watch only specific files to avoid permission issues
-echo "Starting MCP Server with file watching..."
-exec watchfiles 'python mcp_server.py' /app/mcp_server.py /app/config.py
+echo "🔍 File watching enabled for development"
+echo "🔧 Service: ${SERVICE_NAME}"
+echo "🌐 Host: ${SERVICE_HOST}"
+echo "🔌 Port: ${SERVICE_PORT}"
+echo "📊 Log Level: ${LOG_LEVEL}"
+echo "🛠️ Development Mode: ${DEVELOPMENT_MODE}"
+
+# Health check
+echo "🏥 Performing startup health checks..."
+
+# Check if config file exists
+if [ ! -f "config/config.json" ]; then
+    echo "❌ Configuration file config/config.json not found"
+    exit 1
+fi
+
+echo "✅ All health checks passed"
+echo "🔍 Starting {{ service_name }} service with file watching..."
+
+# Start with file watching using watchfiles
+exec python3 -m watchfiles src.main.main --args src/main.py

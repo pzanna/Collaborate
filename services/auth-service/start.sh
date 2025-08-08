@@ -1,15 +1,51 @@
 #!/bin/bash
 
-# Eunice Authentication Service Startup Script
+# {{ service_name }} Service Production Startup Script
+# This script starts the {{ service_name }} service in production mode
 
 set -e
 
-echo "Starting Eunice Authentication Service..."
+echo "🚀 Starting {{ service_name }} Service in production mode..."
+echo "📁 Working directory: $(pwd)"
 
-# Set default environment variables if not provided
-export HOST=${HOST:-0.0.0.0}
-export PORT=${PORT:-8013}
-export DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@eunice-postgres:5432/eunice}
+# Load environment variables if .env file exists
+if [ -f .env ]; then
+    echo "📝 Loading environment variables from .env"
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
+# Set default environment variables
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
+export SERVICE_NAME="${SERVICE_NAME:-{{ service_name }}}"
+export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
+export SERVICE_PORT="${SERVICE_PORT:-{{ service_port }}}"
+export LOG_LEVEL="${LOG_LEVEL:-INFO}"
+
+echo "🔧 Service: ${SERVICE_NAME}"
+echo "🌐 Host: ${SERVICE_HOST}"
+echo "🔌 Port: ${SERVICE_PORT}"
+echo "📊 Log Level: ${LOG_LEVEL}"
+
+# Health check
+echo "🏥 Performing startup health checks..."
+
+# Check if required environment variables are set
+if [ -z "$SERVICE_NAME" ]; then
+    echo "❌ SERVICE_NAME environment variable is not set"
+    exit 1
+fi
+
+# Check if config file exists
+if [ ! -f "config/config.json" ]; then
+    echo "❌ Configuration file config/config.json not found"
+    exit 1
+fi
+
+# Check Python dependencies
+python3 -c "import sys; print(f'✅ Python {sys.version}')"
+
+echo "✅ All health checks passed"
+echo "🎯 Starting {{ service_name }} service..."
 
 # Start the service
-exec python -m uvicorn src.main:app --host $HOST --port $PORT --reload
+exec python3 src/main.py
