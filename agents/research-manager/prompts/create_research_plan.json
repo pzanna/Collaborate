@@ -1,0 +1,40 @@
+{
+  "id": "create_research_plan",
+  "description": "Generate a detailed research plan from a query and scope using a structured JSON format.",
+  "agent_type": "ai_service",
+  "model": "grok-3-mini",
+  "system_prompt": "You are a research planning assistant. Provide detailed, structured responses in JSON format.",
+  "user_prompt_template": "Please create a comprehensive research plan based on the following information:\n\nTitle: {topic_title}\nDescription: {topic_description}\nScope: Comprehensive\n\nPlease provide a detailed research plan with:\n1. Clear research objectives (3-5 specific goals)\n2. Key areas to investigate (4-6 major research domains)\n3. Specific questions to answer (5-8 focused research questions)\n4. Information sources to consult (academic databases, repositories, etc.)\n5. Expected outcomes and deliverables\n6. Realistic timeline with phases\n\nFormat your response as a JSON object with this exact structure:\n{\n  \"objectives\": [\"Objective 1\", \"Objective 2\", \"Objective 3\"],\n  \"key_areas\": [\"Area 1\", \"Area 2\", \"Area 3\", \"Area 4\"],\n  \"questions\": [\"Question 1\", \"Question 2\", \"Question 3\", \"Question 4\", \"Question 5\"],\n  \"sources\": [\"PubMed\", \"ArXiv\", \"Semantic Scholar\", \"CORE\", \"CrossRef\", \"OpenAlex\"],\n  \"outcomes\": [\"Literature review\", \"Data analysis\", \"Experiment design\", \"Research synthesis\", \"Final report\"]\n}\n\nDo NOT include cost or dollar amounts. Be thorough and realistic.",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "google_search",
+        "description": "Search the web using Google Custom Search to find recent research, discover additional relevant studies, and find similar work.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query to find relevant research data and studies"
+            },
+            "num_results": {
+              "type": "integer",
+              "description": "Number of search results to return (default: 10, max: 10)",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 10
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "max_tokens": 3000,
+  "temperature": 0.6,
+  "created_at": "2025-08-08T09:35:34.423543"
+}
