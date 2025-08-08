@@ -29,10 +29,10 @@ This is the development roadmap for the Eunice Research Platform, tracking progr
 - [✅] Standardized task execution across coordinated agents
 
 [✅] Platform redesign to be AI prompt driven.
-[✅] Implement frontend API calls for direct database read and write.
-    - ✅ `create_project`, `update_project`, `delete_project`
-    - ✅ `create_research_topic`, `update_research_topic`, `delete_research_topic`
-    - ✅ `update_research_plan`, `delete_research_plan`, `approve_research_plan`
+[❌] Implement frontend API calls for direct database read and write.
+    - ❌ `create_project`, `update_project`, `delete_project`
+    - ❌ `create_research_topic`, `update_research_topic`, `delete_research_topic`
+    - ❌ `update_research_plan`, `delete_research_plan`, `approve_research_plan`
 [🔶] Unit test all functional API calls on the API Gateway. (Only basic health/config tests exist - missing API endpoint tests)    
 
 [✅] Authentication function for all APIs.

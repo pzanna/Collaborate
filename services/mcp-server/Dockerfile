@@ -19,8 +19,8 @@ RUN apk update && apk upgrade && \
     && rm -rf /tmp/*
 
 # Security: Create dedicated non-root user with minimal privileges
-RUN addgroup -g ${GROUP_ID} -S {{ service_user }} && \
-    adduser -u ${USER_ID} -S {{ service_user }} -G {{ service_user }} -h /app -s /sbin/nologin
+RUN addgroup -g ${GROUP_ID} -S mcpuser && \
+    adduser -u ${USER_ID} -S mcpuser -G mcpuser -h /app -s /sbin/nologin
 
 # Set secure working directory
 WORKDIR /app
@@ -43,7 +43,7 @@ COPY start.sh ./start.sh
 COPY start-dev.sh ./start-dev.sh
 
 # Security: Set strict file permissions and ownership
-RUN chown -R {{ service_user }}:{{ service_user }} /app && \
+RUN chown -R mcpuser:mcpuser /app && \
     chmod -R 750 /app && \
     chmod +x /app/start.sh /app/start-dev.sh && \
     find /app -type d -exec chmod 750 {} \; && \
@@ -52,7 +52,7 @@ RUN chown -R {{ service_user }}:{{ service_user }} /app && \
 
 # Security: Create secure data directory with proper permissions
 RUN mkdir -p /app/data /app/logs && \
-    chown -R {{ service_user }}:{{ service_user }} /app/data /app/logs && \
+    chown -R mcpuser:mcpuser /app/data /app/logs && \
     chmod 750 /app/data /app/logs
 
 # Set secure environment variables
@@ -85,14 +85,14 @@ RUN apk del gcc musl-dev libffi-dev && \
     rm -rf /var/cache/apk/* /tmp/*
 
 # Switch to non-root user
-USER {{ service_user }}
+USER mcpuser
 
 # Expose service port
-EXPOSE ${SERVICE_PORT}
+EXPOSE 9000
 
 # Security: Enhanced health check with timeout
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${SERVICE_PORT}/health || exit 1
+    CMD curl -f http://localhost:9000/health || exit 1
 
 # Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]

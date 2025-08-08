@@ -567,3 +567,44 @@ class MCPCommunicator:
             health_status["last_error"] = "MCP server not connected"
             
         return health_status
+
+    async def close(self):
+        """Close the MCP connection and cleanup resources."""
+        logger.info("Closing MCP communicator...")
+        self.should_run = False
+        
+        # Cancel pending requests
+        for request_id, future in self.pending_requests.items():
+            if not future.done():
+                future.cancel()
+        self.pending_requests.clear()
+        
+        # Close websocket connection
+        if self.websocket:
+            try:
+                await self.websocket.close()
+            except Exception as e:
+                logger.error(f"Error closing websocket: {e}")
+            self.websocket = None
+        
+        self.mcp_connected = False
+        logger.info("MCP communicator closed")
+
+    async def send_response(self, task_data: Dict[str, Any], result: Dict[str, Any]):
+        """Send a response back to the requester."""
+        try:
+            if not self.mcp_connected:
+                logger.warning("Cannot send response - MCP not connected")
+                return
+            
+            response = {
+                "jsonrpc": "2.0",
+                "id": task_data.get("id", str(uuid.uuid4())),
+                "result": result
+            }
+            
+            await self.websocket.send(json.dumps(response))
+            logger.debug(f"Sent response for task {task_data.get('id')}")
+            
+        except Exception as e:
+            logger.error(f"Error sending response: {e}")

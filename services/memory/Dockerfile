@@ -1,8 +1,8 @@
-# {{ service_name }} Service - SECURITY HARDENED with Alpine
+# memory-service Service - SECURITY HARDENED with Alpine
 FROM python:3.12-alpine AS base
 
 # Security: Set build arguments for better control
-ARG SERVICE_PORT={{ service_port }}
+ARG SERVICE_PORT=8009
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
@@ -19,8 +19,8 @@ RUN apk update && apk upgrade && \
     && rm -rf /tmp/*
 
 # Security: Create dedicated non-root user with minimal privileges
-RUN addgroup -g ${GROUP_ID} -S {{ service_user }} && \
-    adduser -u ${USER_ID} -S {{ service_user }} -G {{ service_user }} -h /app -s /sbin/nologin
+RUN addgroup -g ${GROUP_ID} -S memuser && \
+    adduser -u ${USER_ID} -S memuser -G memuser -h /app -s /sbin/nologin
 
 # Set secure working directory
 WORKDIR /app
@@ -43,7 +43,7 @@ COPY start.sh ./start.sh
 COPY start-dev.sh ./start-dev.sh
 
 # Security: Set strict file permissions and ownership
-RUN chown -R {{ service_user }}:{{ service_user }} /app && \
+RUN chown -R memuser:memuser /app && \
     chmod -R 750 /app && \
     chmod +x /app/start.sh /app/start-dev.sh && \
     find /app -type d -exec chmod 750 {} \; && \
@@ -52,7 +52,7 @@ RUN chown -R {{ service_user }}:{{ service_user }} /app && \
 
 # Security: Create secure data directory with proper permissions
 RUN mkdir -p /app/data /app/logs && \
-    chown -R {{ service_user }}:{{ service_user }} /app/data /app/logs && \
+    chown -R memuser:memuser /app/data /app/logs && \
     chmod 750 /app/data /app/logs
 
 # Set secure environment variables
@@ -68,7 +68,7 @@ FROM base AS development
 RUN pip install --no-cache-dir watchfiles pytest pytest-asyncio pytest-cov
 
 # Switch to non-root user
-USER {{ service_user }}
+USER memuser
 
 # Expose service port
 EXPOSE ${SERVICE_PORT}
@@ -85,7 +85,7 @@ RUN apk del gcc musl-dev libffi-dev && \
     rm -rf /var/cache/apk/* /tmp/*
 
 # Switch to non-root user
-USER {{ service_user }}
+USER memuser
 
 # Expose service port
 EXPOSE ${SERVICE_PORT}

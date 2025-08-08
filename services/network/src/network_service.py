@@ -15,7 +15,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import uvicorn
 from fastapi import FastAPI
@@ -71,6 +71,15 @@ async def lifespan(app: FastAPI):
         with open(config_path, 'r') as f:
             raw_config = json.load(f)
         
+        # Initialize missing configuration sections with defaults
+        if "google_search" not in raw_config:
+            raw_config["google_search"] = {}
+        if "ai_models" not in raw_config:
+            raw_config["ai_models"] = []
+        if "literature_dbs" not in raw_config:
+            raw_config["literature_dbs"] = []
+        
+        # Set API keys from environment variables
         raw_config["google_search"]["api_key"] = os.getenv("GOOGLE_API_KEY") or raw_config.get("google_search", {}).get("api_key")
         raw_config["google_search"]["search_engine_id"] = os.getenv("GOOGLE_SEARCH_ENGINE_ID") or raw_config.get("google_search", {}).get("search_engine_id")
         for ai_model in raw_config.get("ai_models", []):

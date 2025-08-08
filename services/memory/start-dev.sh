@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/bin/sh
 
-# {{ service_name }} Service Development Startup Script
-# This script starts the {{ service_name }} service with file watching for development
+# memory Service Development Startup Script
+# This script starts the memory service with file watching for development
 
 set -e
 
-echo "🚀 Starting {{ service_name }} Service in development mode..."
+echo "🚀 Starting memory Service in development mode..."
 echo "📁 Working directory: $(pwd)"
 
 # Check if watchfiles is available
@@ -22,9 +22,9 @@ fi
 
 # Set development environment variables
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
-export SERVICE_NAME="${SERVICE_NAME:-{{ service_name }}}"
+export SERVICE_NAME="${SERVICE_NAME:-memory}"
 export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
-export SERVICE_PORT="${SERVICE_PORT:-{{ service_port }}}"
+export SERVICE_PORT="${SERVICE_PORT:-8009}"
 export LOG_LEVEL="${LOG_LEVEL:-DEBUG}"
 export DEVELOPMENT_MODE="${DEVELOPMENT_MODE:-true}"
 export WATCHFILES_FORCE_POLLING="${WATCHFILES_FORCE_POLLING:-1}"
@@ -46,7 +46,7 @@ if [ ! -f "config/config.json" ]; then
 fi
 
 echo "✅ All health checks passed"
-echo "🔍 Starting {{ service_name }} service with file watching..."
+echo "🔍 Starting memory service with file watching..."
 
 # Start with file watching using watchfiles
 exec python3 -m watchfiles src.main.main --args src/main.py

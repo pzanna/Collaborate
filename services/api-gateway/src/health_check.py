@@ -15,7 +15,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .config import Config
+from config import Config
 from .models import HealthStatus
 
 
@@ -61,10 +61,10 @@ class HealthCheck:
             checks["disk"] = await self._check_disk()
             
             # Dependency checks
-            if hasattr(self.config, 'database') and self.config.database.url:
+            if hasattr(self.config, 'DATABASE_URL') and self.config.DATABASE_URL:
                 checks["database"] = await self._check_database()
             
-            if hasattr(self.config, 'mcp') and self.config.mcp.server_url:
+            if hasattr(self.config, 'MCP_SERVER_URL') and self.config.MCP_SERVER_URL:
                 checks["mcp_server"] = await self._check_mcp_server()
             
             # Custom service-specific checks
@@ -88,8 +88,8 @@ class HealthCheck:
             return HealthStatus(
                 status=overall_status,
                 timestamp=self.last_check_time,
-                service=self.config.service.name,
-                version=self.config.service.version,
+                service=getattr(self.config, 'SERVICE_NAME', 'api-gateway'),
+                version=getattr(self.config, 'SERVICE_VERSION', '1.0.0'),
                 checks=checks,
                 metrics=metrics
             )
@@ -99,8 +99,8 @@ class HealthCheck:
             return HealthStatus(
                 status="unhealthy",
                 timestamp=self.last_check_time or datetime.utcnow(),
-                service=self.config.service.name,
-                version=self.config.service.version,
+                service=getattr(self.config, 'SERVICE_NAME', 'api-gateway'),
+                version=getattr(self.config, 'SERVICE_VERSION', '1.0.0'),
                 checks={"error": str(e)},
                 metrics={}
             )
@@ -185,12 +185,15 @@ class HealthCheck:
     async def _check_database(self) -> Dict[str, Any]:
         """Check database connectivity."""
         try:
+            # Get database URL from config, with fallback
+            db_url = getattr(self.config, 'DATABASE_URL', 'postgresql://postgres:password@localhost:5432/eunice')
+            
             # Implement database health check here
             # This is a placeholder - replace with actual database check
             
             # Example for PostgreSQL:
             # import asyncpg
-            # conn = await asyncpg.connect(self.config.database.url)
+            # conn = await asyncpg.connect(db_url)
             # await conn.fetchval("SELECT 1")
             # await conn.close()
             
@@ -206,18 +209,21 @@ class HealthCheck:
     async def _check_mcp_server(self) -> Dict[str, Any]:
         """Check MCP server connectivity."""
         try:
+            # Get MCP server URL from config, with fallback
+            mcp_url = getattr(self.config, 'MCP_SERVER_URL', 'ws://localhost:9000')
+            
             # Implement MCP server health check here
             # This is a placeholder - replace with actual MCP check
             
             # Example:
             # import websockets
-            # async with websockets.connect(self.config.mcp.server_url) as websocket:
+            # async with websockets.connect(mcp_url) as websocket:
             #     await websocket.ping()
             
             return {
                 "status": "healthy",
                 "message": "MCP server connection successful",
-                "server_url": self.config.mcp.server_url
+                "server_url": mcp_url
             }
         except Exception as e:
             logger.error(f"MCP server health check failed: {e}")
@@ -313,10 +319,10 @@ class HealthCheck:
 
 if __name__ == "__main__":
     # Test health check functionality
-    from .config import get_config
+    from config import Config
     
     async def test_health_check():
-        config = get_config()
+        config = Config()
         health_check = HealthCheck(config)
         
         print("Testing health check...")

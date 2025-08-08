@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/bin/sh
 
-# {{ service_name }} Service Production Startup Script
-# This script starts the {{ service_name }} service in production mode
+# memory Service Production Startup Script
+# This script starts the memory service in production mode
 
 set -e
 
-echo "🚀 Starting {{ service_name }} Service in production mode..."
+echo "🚀 Starting memory Service in production mode..."
 echo "📁 Working directory: $(pwd)"
 
 # Load environment variables if .env file exists
@@ -16,9 +16,9 @@ fi
 
 # Set default environment variables
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
-export SERVICE_NAME="${SERVICE_NAME:-{{ service_name }}}"
+export SERVICE_NAME="${SERVICE_NAME:-memory}"
 export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
-export SERVICE_PORT="${SERVICE_PORT:-{{ service_port }}}"
+export SERVICE_PORT="${SERVICE_PORT:-8009}"
 export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
 echo "🔧 Service: ${SERVICE_NAME}"
@@ -45,7 +45,7 @@ fi
 python3 -c "import sys; print(f'✅ Python {sys.version}')"
 
 echo "✅ All health checks passed"
-echo "🎯 Starting {{ service_name }} service..."
+echo "🎯 Starting memory service..."
 
 # Start the service
-exec python3 src/main.py
+exec python3 -m src.memory_service

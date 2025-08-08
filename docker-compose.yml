@@ -6,7 +6,9 @@ services:
 
   # 1. API Gateway Service (Port 8001) - Only HTTP endpoint for clients
   api-gateway:
-    build: ./services/api-gateway
+    build:
+      context: ./services/api-gateway
+      target: production
     container_name: eunice-api-gateway
     ports:
       - "8001:8001"
@@ -35,7 +37,9 @@ services:
 
   # 2. MCP Server Service (Port 9000) - Central communication hub
   mcp-server:
-    build: ./services/mcp-server
+    build:
+      context: ./services/mcp-server
+      target: production
     container_name: eunice-mcp-server
     ports:
       - "9000:9000"
@@ -55,9 +59,11 @@ services:
 
   # Agent Services
 
-  # Research Manager Agent - Orchestrator agent with prompt logic
+  # Research Manager Agent (Port 8010) - Research coordination
   research-manager-agent:
-    build: ./agents/research-manager
+    build:
+      context: ./agents/research-manager
+      target: production
     container_name: eunice-research-manager
     ports:
       - "8002:8002"
@@ -84,9 +90,11 @@ services:
 
   # Supporting Services
 
-  # Database Service - Database management and tools
+  # 4. Database Service (Port 8000) - Database interface service
   database-service:
-    build: ./services/database
+    build:
+      context: ./services/database
+      target: production
     container_name: eunice-database-service
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
@@ -102,9 +110,11 @@ services:
       - postgres
     restart: unless-stopped
 
-  # Network Service - Web/API tool calls for LLMs, search, etc
+  # 6. Network Service (Port 8010) - Handles network operations and connections
   network-service:
-    build: ./services/network
+    build:
+      context: ./services/network
+      target: production
     container_name: eunice-network-service
     environment:
       - MCP_SERVER_URL=ws://mcp-server:9000
@@ -120,9 +130,11 @@ services:
       - mcp-server
     restart: unless-stopped
 
-  # Memory Service - Memory and context tracking
+  # 5. Memory Service (Port 8009) - Handles memory and cache operations
   memory-service:
-    build: ./services/memory
+    build:
+      context: ./services/memory
+      target: production
     container_name: eunice-memory-service
     ports:
       - "8009:8009"
@@ -146,9 +158,11 @@ services:
       retries: 3
       start_period: 15s
 
-  # Authentication Service - JWT & RBAC
+  # 3. Auth Service (Port 8013) - User authentication and access control
   auth-service:
-    build: ./services/auth-service
+    build:
+      context: ./services/auth-service
+      target: production
     container_name: eunice-auth-service
     ports:
       - "8013:8013"

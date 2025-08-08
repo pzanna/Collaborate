@@ -48,8 +48,8 @@ class TestHealthCheck:
             
             assert isinstance(status, HealthStatus)
             assert status.status == "healthy"
-            assert status.service == test_config.service.name
-            assert status.version == test_config.service.version
+            assert status.service == "api-gateway"  # Default value we set
+            assert status.version == "1.0.0"  # Default value we set
             assert "uptime" in status.checks
             assert "memory" in status.checks
             assert "cpu" in status.checks

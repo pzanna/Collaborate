@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
-from src.config import Config, get_config, load_config_file
+from config import Config
 
 
 class TestConfig:

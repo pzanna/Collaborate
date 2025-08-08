@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # {{ service_name }} Service Development Startup Script
 # This script starts the {{ service_name }} service with file watching for development

@@ -17,6 +17,7 @@ ARCHITECTURE COMPLIANCE:
 import asyncio
 import json
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -107,11 +108,15 @@ async def main():
         # Initialize service
         research_manager_service = ResearchManagerService(config)
         
+        # Get host and port from environment variables
+        service_host = os.getenv("SERVICE_HOST", "0.0.0.0")
+        service_port = int(os.getenv("SERVICE_PORT", "8002"))
+        
         # Start FastAPI health check server in background
         config_uvicorn = uvicorn.Config(
             app,
-            host=config["service_host"],
-            port=config["service_port"],
+            host=service_host,
+            port=service_port,
             log_level="info"
         )
         server = uvicorn.Server(config_uvicorn)

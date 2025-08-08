@@ -17,6 +17,7 @@ ARCHITECTURE COMPLIANCE:
 import asyncio
 import json
 import logging
+import os
 import sqlite3
 import sys
 import tempfile
@@ -1177,16 +1178,20 @@ async def main():
         # Initialize service
         memory_service = MemoryService(config)
         
+        # Get host and port from environment variables
+        service_host = os.getenv("SERVICE_HOST", "0.0.0.0")
+        service_port = int(os.getenv("SERVICE_PORT", "8009"))
+        
         # Start FastAPI health check server in background
         config_uvicorn = uvicorn.Config(
             app,
-            host=config["service_host"],
-            port=config["service_port"],
+            host=service_host,
+            port=service_port,
             log_level="info"
         )
         server = uvicorn.Server(config_uvicorn)
         
-        logger.info("🚨 ARCHITECTURE COMPLIANCE: Memory ")
+        logger.info("🚨 ARCHITECTURE COMPLIANCE: Memory Service")
         logger.info("✅ ONLY health check API exposed")
         logger.info("✅ All business operations via MCP protocol exclusively")
         
@@ -1197,9 +1202,9 @@ async def main():
         )
         
     except KeyboardInterrupt:
-        logger.info("Memory  shutdown requested")
+        logger.info("Memory Service shutdown requested")
     except Exception as e:
-        logger.error(f"Memory  failed: {e}")
+        logger.error(f"Memory Service failed: {e}")
         sys.exit(1)
     finally:
         if memory_service:

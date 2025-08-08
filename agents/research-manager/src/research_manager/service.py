@@ -12,9 +12,7 @@ from typing import Any, Callable, Dict, List
 
 from .models import ResearchContext
 from .mcp_communicator import MCPCommunicator
-from .task_handlers import TaskHandlers
-from .task_processor import TaskProcessor
-from .workflow_orchestrator import WorkflowOrchestrator
+from .task_handlers import TaskHandlers, TaskProcessor, WorkflowOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +125,7 @@ class ResearchManagerService:
                 
                 # Process the task
                 logger.info("Processing research task...")
-                result = await self.task_processor.process_research_task(task_data)
+                result = await self.task_processor.process_task(task_data)
                 logger.info(f"Task processing result: {result}")
                 
                 # Send result back to MCP server

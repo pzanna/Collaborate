@@ -137,7 +137,7 @@ class PaginationParams(BaseModel):
     page: int = Field(default=1, ge=1, description="Page number (1-based)")
     page_size: int = Field(default=20, ge=1, le=100, description="Number of items per page")
     sort_by: Optional[str] = Field(None, description="Field to sort by")
-    sort_order: str = Field(default="asc", regex="^(asc|desc)$", description="Sort order")
+    sort_order: str = Field(default="asc", pattern="^(asc|desc)$", description="Sort order")
 
 
 class PaginatedResponse(BaseModel):
