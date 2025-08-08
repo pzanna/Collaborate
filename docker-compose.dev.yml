@@ -13,10 +13,8 @@ services:
     volumes:
       # Mount source code for development
       - ./api-gateway/src:/app/src:ro
-      - ./api-gateway/native_database_client.py:/app/native_database_client.py:ro
+      - ./api-gateway/config:/app/config:ro
       - ./api-gateway/main.py:/app/main.py:ro
-      - ./api-gateway/config.py:/app/config.py:ro
-      - ./api-gateway/mcp_client.py:/app/mcp_client.py:ro
     # Remove read-only constraints for development
     read_only: false
     tmpfs: []

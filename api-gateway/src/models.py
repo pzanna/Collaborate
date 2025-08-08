@@ -44,24 +44,6 @@ class SuccessResponse(BaseModel):
     data: Optional[Dict[str, Any]] = Field(None, description="Response data")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-
-# MCP-related models
-class MCPMessage(BaseModel):
-    """MCP message model."""
-    id: str = Field(..., description="Message ID")
-    method: str = Field(..., description="MCP method")
-    params: Dict[str, Any] = Field(default_factory=dict, description="Method parameters")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-
-class MCPResponse(BaseModel):
-    """MCP response model."""
-    id: str = Field(..., description="Message ID")
-    result: Optional[Dict[str, Any]] = Field(None, description="Response result")
-    error: Optional[Dict[str, Any]] = Field(None, description="Error information")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-
 class TaskRequest(BaseModel):
     """Generic task request model."""
     task_id: str = Field(..., description="Unique task identifier")
@@ -157,8 +139,6 @@ __all__ = [
     "HealthStatus",
     "ErrorResponse",
     "SuccessResponse",
-    "MCPMessage",
-    "MCPResponse",
     "TaskRequest",
     "TaskResponse",
     "ServiceConfigModel",

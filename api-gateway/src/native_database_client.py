@@ -175,11 +175,16 @@ class NativeDatabaseClient:
                 projects = []
                 for row in rows:
                     metadata = row['metadata'] or {}
+                    # Handle metadata parsing - database may return string or dict
                     if isinstance(metadata, str):
                         try:
                             metadata = json.loads(metadata)
-                        except:
+                        except (json.JSONDecodeError, TypeError):
+                            logger.warning(f"Failed to parse metadata JSON for project {row['id']}: {metadata}")
                             metadata = {}
+                    elif not isinstance(metadata, dict):
+                        logger.warning(f"Unexpected metadata type for project {row['id']}: {type(metadata)}")
+                        metadata = {}
                     
                     projects.append({
                         "id": str(row['id']),
@@ -222,15 +227,17 @@ class NativeDatabaseClient:
                 
                 metadata = row['metadata'] or {}
                 logger.info(f"Retrieved metadata: {metadata}, type: {type(metadata)}")
+                # Handle metadata parsing - database may return string or dict
                 if isinstance(metadata, str):
                     try:
                         metadata = json.loads(metadata)
                         logger.info(f"Parsed metadata: {metadata}")
-                    except Exception as e:
+                    except (json.JSONDecodeError, TypeError) as e:
                         logger.error(f"Failed to parse metadata JSON: {e}, raw metadata: {metadata}")
                         metadata = {}
-                else:
-                    logger.info(f"Metadata is not a string, type: {type(metadata)}")
+                elif not isinstance(metadata, dict):
+                    logger.warning(f"Unexpected metadata type: {type(metadata)}, raw: {metadata}")
+                    metadata = {}
                 logger.info(f"Final metadata: {metadata}, type: {type(metadata)}")
                 
                 return {
@@ -372,12 +379,17 @@ class NativeDatabaseClient:
                 
                 plans = []
                 for row in rows:
+                    # Parse metadata safely
                     metadata = row['metadata'] or {}
                     if isinstance(metadata, str):
                         try:
                             metadata = json.loads(metadata)
-                        except:
+                        except (json.JSONDecodeError, TypeError):
+                            logger.warning(f"Failed to parse metadata JSON for plan {row['id']}: {metadata}")
                             metadata = {}
+                    elif not isinstance(metadata, dict):
+                        logger.warning(f"Unexpected metadata type for plan {row['id']}: {type(metadata)}")
+                        metadata = {}
                     
                     # Parse plan_structure from database
                     plan_structure = row.get('plan_structure')
@@ -475,12 +487,17 @@ class NativeDatabaseClient:
                 row = await conn.fetchrow(query, plan_id)
                 
                 if row:
+                    # Parse metadata safely
                     metadata = row['metadata'] or {}
                     if isinstance(metadata, str):
                         try:
                             metadata = json.loads(metadata)
-                        except:
+                        except (json.JSONDecodeError, TypeError):
+                            logger.warning(f"Failed to parse metadata JSON for plan {plan_id}: {metadata}")
                             metadata = {}
+                    elif not isinstance(metadata, dict):
+                        logger.warning(f"Unexpected metadata type for plan {plan_id}: {type(metadata)}")
+                        metadata = {}
                     
                     # Parse plan_structure from database
                     plan_structure = row.get('plan_structure')
@@ -587,12 +604,19 @@ class NativeDatabaseClient:
                 
                 tasks = []
                 for row in rows:
-                    # Parse metadata if available
+                    # Parse metadata if available safely
                     metadata = {}
                     if row.get('metadata'):
                         try:
-                            metadata = json.loads(row['metadata']) if isinstance(row['metadata'], str) else row['metadata']
+                            if isinstance(row['metadata'], str):
+                                metadata = json.loads(row['metadata'])
+                            elif isinstance(row['metadata'], dict):
+                                metadata = row['metadata']
+                            else:
+                                logger.warning(f"Unexpected metadata type for task {row['id']}: {type(row['metadata'])}")
+                                metadata = {}
                         except (json.JSONDecodeError, TypeError):
+                            logger.warning(f"Failed to parse metadata JSON for task {row['id']}: {row['metadata']}")
                             metadata = {}
                     
                     tasks.append({

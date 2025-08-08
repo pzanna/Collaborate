@@ -32,11 +32,6 @@ class SimpleConfig:
                 "pool_size": 10,
                 "max_overflow": 20
             },
-            "mcp": {
-                "server_url": "ws://mcp-server:8081",
-                "timeout": 30,
-                "retry_attempts": 3
-            },
             "logging": {
                 "level": "INFO",
                 "file": "/app/logs/service.log",
@@ -92,11 +87,6 @@ class SimpleConfig:
     def database(self):
         """Get database configuration."""
         return ConfigSection(self.config_data.get("database", {}))
-    
-    @property
-    def mcp(self):
-        """Get MCP configuration."""
-        return ConfigSection(self.config_data.get("mcp", {}))
     
     @property
     def logging(self):

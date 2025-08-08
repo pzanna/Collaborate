@@ -58,14 +58,6 @@ class DatabaseConfig(BaseModel):
     max_overflow: int = 20
 
 
-class MCPConfig(BaseModel):
-    """Configuration for MCP settings."""
-    
-    server_url: str = Field(default_factory=lambda: os.getenv("MCP_SERVER_URL", "ws://mcp-server:8081"))
-    timeout: int = 30
-    retry_attempts: int = 3
-
-
 class SecurityConfig(BaseModel):
     """Configuration for security settings."""
     
@@ -131,22 +123,7 @@ class CoordinationConfig(BaseModel):
     engagement_boost: float = 0.2
 
 
-class MCPServerConfig(BaseModel):
-    """Configuration for MCP server."""
 
-    host: str = "127.0.0.1"
-    port: int = 9000
-    task_timeout: int = 300
-    retry_attempts: int = 3
-    log_level: str = Field(
-        default_factory=lambda: os.getenv("EUNICE_LOG_LEVEL", "INFO")
-    )
-    enable_task_logging: bool = True
-    task_log_file: str = Field(
-        default_factory=lambda: os.path.join(
-            os.getenv("EUNICE_LOG_PATH", "logs"), "mcp_tasks.log"
-        )
-    )
 
 
 class AgentConfig(BaseModel):
@@ -201,7 +178,6 @@ class Config(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     coordination: CoordinationConfig = Field(default_factory=CoordinationConfig)
-    mcp_server: MCPServerConfig = Field(default_factory=MCPServerConfig)
     agents: Dict[str, AgentConfig] = Field(default_factory=dict)
     research_tasks: ResearchTasksConfig = Field(default_factory=ResearchTasksConfig)
     research_manager: ResearchManagerConfig = Field(
@@ -215,7 +191,6 @@ class APIGatewayConfig(BaseModel):
     service: ServiceConfig = Field(default_factory=ServiceConfig)
     server: ServerConfig = Field(default_factory=ServerConfig) 
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
-    mcp: MCPConfig = Field(default_factory=MCPConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     health_check: HealthCheckConfig = Field(default_factory=HealthCheckConfig)
@@ -296,31 +271,8 @@ class ConfigManager:
                 config_data["logging"]["level"] = log_level
                 config_data["logging"]["ai_api_log_level"] = log_level
 
-            # Update MCP server log settings
-            if "mcp_server" not in config_data:
-                config_data["mcp_server"] = {}
-
-            if log_path:
-                config_data["mcp_server"]["task_log_file"] = os.path.join(
-                    log_path, "mcp_tasks.log"
-                )
-
-            if log_level:
-                config_data["mcp_server"]["log_level"] = log_level
-
         # Server configuration overrides
         host = os.getenv("EUNICE_HOST")
-        mcp_port = os.getenv("EUNICE_MCP_PORT")
-
-        if host or mcp_port:
-            if "mcp_server" not in config_data:
-                config_data["mcp_server"] = {}
-
-            if host:
-                config_data["mcp_server"]["host"] = host
-
-            if mcp_port:
-                config_data["mcp_server"]["port"] = int(mcp_port)
 
     def save_config(self) -> None:
         """Save current configuration to file."""
@@ -368,21 +320,6 @@ class ConfigManager:
         for key, value in kwargs.items():
             if hasattr(self.config.ai_providers[provider], key):
                 setattr(self.config.ai_providers[provider], key, value)
-
-    def get_mcp_config(self) -> Dict[str, Any]:
-        """Get MCP server configuration."""
-        if hasattr(self.config, "mcp_server") and self.config.mcp_server:
-            return (
-                self.config.mcp_server
-                if isinstance(self.config.mcp_server, dict)
-                else self.config.mcp_server.dict()
-            )
-        return {
-            "host": "localhost",
-            "port": 9000,
-            "max_connections": 50,
-            "heartbeat_interval": 30,
-        }
 
     def get_research_config(self) -> Dict[str, Any]:
         """Get research task configuration."""
@@ -465,25 +402,6 @@ class ConfigManager:
                         getattr(logging, logging_config.ai_api_log_level.upper())
                     )
                     client_logger.propagate = False
-
-            # Set up MCP task logging if enabled
-            if (
-                hasattr(self.config, "mcp_server")
-                and self.config.mcp_server.enable_task_logging
-            ):
-                task_log_path = Path(self.config.mcp_server.task_log_file)
-                task_log_path.parent.mkdir(exist_ok=True)
-                mcp_logger = logging.getLogger("mcp_tasks")
-                mcp_logger.handlers.clear()
-                mcp_handler = logging.FileHandler(self.config.mcp_server.task_log_file)
-                mcp_handler.setFormatter(
-                    logging.Formatter("%(asctime)s - %(levelname)s-%(message)s")
-                )
-                mcp_logger.addHandler(mcp_handler)
-                mcp_logger.setLevel(
-                    getattr(logging, self.config.mcp_server.log_level.upper())
-                )
-                mcp_logger.propagate = False
 
             logging.getLogger(__name__).info(
                 "Logging configuration set up successfully"

@@ -31,9 +31,7 @@ except ImportError as e:
     awatch = None  # type: ignore
     WATCHFILES_AVAILABLE = False
 
-from mcp_client import MCPClient
-import database_tools
-import json
+
 
 # Configure logging
 logging.basicConfig(
@@ -62,7 +60,6 @@ class DatabaseService:
         self.db_url = DATABASE_URL
         self.engine: Optional[Any] = None
         self.running = False
-        self.mcp_client = MCPClient()
         
     async def initialize(self):
         """Initialize database connections and verify schema."""
@@ -82,90 +79,9 @@ class DatabaseService:
             
             logger.info("✅ Database Service initialized successfully")
             
-            # Initialize MCP Client
-            logger.info("Initializing MCP Client...")
-            success = await self.mcp_client.connect()
-            if success:
-                self._setup_custom_handlers()
-                logger.info("✅ MCP Client initialized and connected")
-            else:
-                logger.error("❌ Failed to connect to MCP server")
-                raise Exception("MCP connection failed")
-            
         except Exception as e:
             logger.error(f"❌ Database Service initialization failed: {e}")
             raise
-    
-    def _setup_custom_handlers(self):
-        async def handle_database_update(message: Dict[str, Any]):
-            try:
-                command = message.get("command")
-                data = message.get("data", {})
-                if not command:
-                    raise ValueError("No command in database_update message")
-                
-                result_str = await database_tools.database_write(command, json.dumps(data))
-                result = json.loads(result_str)
-                
-                # Send acknowledgment back via MCP
-                await self.mcp_client._send_jsonrpc_notification("database_update_ack", {
-                    "status": result["status"],
-                    "message_id": message.get("message_id"),  # Correlate with original
-                    "result": result,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-                
-                logger.info(f"Processed database_update: {command} - {result['status']}")
-            except Exception as e:
-                logger.error(f"Error handling database_update: {e}")
-                # Send error ack
-                await self.mcp_client._send_jsonrpc_notification("database_update_ack", {
-                    "status": "error",
-                    "message_id": message.get("message_id"),
-                    "error": str(e),
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-
-        async def handle_task_request(message: Dict[str, Any]):
-            """Handle task requests from MCP server."""
-            try:
-                task_id = message.get("task_id")
-                task_type = message.get("task_type")
-                data = message.get("data", {})
-                context_id = message.get("context_id")
-                
-                if not task_id or not task_type:
-                    raise ValueError("Missing task_id or task_type in task request")
-                
-                logger.info(f"Processing database task: {task_type} (task_id: {task_id})")
-                
-                # Execute the database operation
-                result_str = await database_tools.database_write(task_type, json.dumps(data))
-                result = json.loads(result_str)
-                
-                # Send result back via MCP
-                await self.mcp_client.send_task_result({
-                    "task_id": task_id,
-                    "status": "completed" if result["status"] == "success" else "error",
-                    "result": result,
-                    "context_id": context_id,
-                    "error": result.get("error", "Unknown error") if result["status"] != "success" else None
-                })
-                
-                logger.info(f"Completed database task: {task_type} - {result['status']}")
-                
-            except Exception as e:
-                logger.error(f"Error handling task request: {e}")
-                # Send error result
-                await self.mcp_client.send_task_result({
-                    "task_id": message.get("task_id"),
-                    "status": "error",
-                    "error": str(e),
-                    "context_id": message.get("context_id")
-                })
-        
-        self.mcp_client.add_message_handler("database_update", handle_database_update)
-        self.mcp_client.add_message_handler("task_request", handle_task_request)
     
     async def verify_schema(self):
         """Verify that all required tables exist."""
@@ -261,32 +177,14 @@ class DatabaseService:
             
             logger.info("✅ Database maintenance completed")
             
-            # Report maintenance completion to MCP
-            if self.mcp_client.is_connected:
-                await self.mcp_client.send_maintenance_report({
-                    "status": "success",
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-            
         except Exception as e:
             logger.error(f"❌ Database maintenance failed: {e}")
-            # Report failure to MCP
-            if self.mcp_client.is_connected:
-                await self.mcp_client.send_maintenance_report({
-                    "status": "failed", 
-                    "error": str(e),
-                    "timestamp": datetime.utcnow().isoformat()
-                })
     
     async def run_health_monitor(self):
         """Background task for continuous health monitoring."""
         while self.running:
             try:
                 health = await self.health_check()
-                
-                # Report health to MCP
-                if self.mcp_client.is_connected:
-                    await self.mcp_client.send_status_update(health)
                 
                 # Log health status
                 status = health["status"]
@@ -331,8 +229,6 @@ class DatabaseService:
             maintenance_task.cancel()
             
             await asyncio.gather(health_task, maintenance_task, return_exceptions=True)
-            
-            await self.mcp_client.disconnect()
             
             logger.info("✅ Database Service stopped gracefully")
             

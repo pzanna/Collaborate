@@ -23,15 +23,6 @@ class ServiceConfig(BaseModel):
     port: int = Field(default=8000, env="SERVICE_PORT")
     debug: bool = Field(default=False, env="DEBUG")
 
-
-class MCPConfig(BaseModel):
-    """MCP client configuration."""
-    server_url: str = Field(default="ws://mcp-server:9000", env="MCP_SERVER_URL")
-    timeout: int = Field(default=30, env="MCP_TIMEOUT")
-    retry_attempts: int = Field(default=3, env="MCP_RETRY_ATTEMPTS")
-    retry_delay: int = Field(default=5, env="MCP_RETRY_DELAY")
-
-
 class DatabaseConfig(BaseModel):
     """Database configuration."""
     url: str = Field(default="postgresql://postgres:password@postgres:5432/eunice", env="DATABASE_URL")
@@ -48,14 +39,6 @@ class LoggingConfig(BaseModel):
     log_file: str = "/app/logs/network.log"
 
 
-class HealthCheckConfig(BaseModel):
-    """Health check configuration."""
-    enabled: bool = Field(default=True, env="HEALTH_CHECK_ENABLED")
-    interval: int = Field(default=30, env="HEALTH_CHECK_INTERVAL")
-    timeout: int = Field(default=5, env="HEALTH_CHECK_TIMEOUT")
-    endpoint: str = "/health"
-
-
 class SecurityConfig(BaseModel):
     """Security configuration."""
     cors_enabled: bool = Field(default=True, env="CORS_ENABLED")
@@ -68,10 +51,8 @@ class SecurityConfig(BaseModel):
 class Config(BaseModel):
     """Main configuration class that combines all configuration sections."""
     service: ServiceConfig = Field(default_factory=ServiceConfig)
-    mcp: MCPConfig = Field(default_factory=MCPConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    health_check: HealthCheckConfig = Field(default_factory=HealthCheckConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     capabilities: List[str] = Field(default=["health_check", "metrics", "logging"])
     service_specific: Dict[str, Any] = Field(default_factory=dict)
@@ -109,12 +90,6 @@ def load_config_from_env() -> Dict[str, Any]:
         env_config.setdefault("service", {})["port"] = int(os.getenv("SERVICE_PORT"))
     if os.getenv("DEBUG"):
         env_config.setdefault("service", {})["debug"] = os.getenv("DEBUG").lower() == "true"
-    
-    # MCP configuration
-    if os.getenv("MCP_SERVER_URL"):
-        env_config.setdefault("mcp", {})["server_url"] = os.getenv("MCP_SERVER_URL")
-    if os.getenv("MCP_TIMEOUT"):
-        env_config.setdefault("mcp", {})["timeout"] = int(os.getenv("MCP_TIMEOUT"))
     
     # Database configuration
     if os.getenv("DATABASE_URL"):

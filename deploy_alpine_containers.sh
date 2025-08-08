@@ -16,7 +16,7 @@
 #
 # Containers Built:
 #   - Research Agents: planning, screening, memory, executor, literature, database
-#   - Platform Services: MCP server, API gateway, auth service, AI service, database service
+#   - Platform Services: API gateway, auth service, AI service, database service
 #   - Research Manager: coordination and workflow management
 #
 # Build Features:
@@ -66,16 +66,11 @@ BUILD_ARGS="--no-cache --pull"
 
 # Services to build - using arrays for better compatibility
 SERVICES=(
-    "planning-agent:agents/planning"
-    "screening-agent:agents/screening" 
     "memory-service:services/memory"
-    "executor-agent:agents/executor"
-    "literature-agent:agents/literature"
     "database-agent:agents/database"
     "research-manager-agent:agents/research-manager"
     "api-gateway:services/api-gateway"
     "auth-service:services/auth-service"
-    "mcp-server:services/mcp-server"
     "ai-service:services/ai-service"
     "database-service:services/database"
 )

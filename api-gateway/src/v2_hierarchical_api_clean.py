@@ -1080,54 +1080,6 @@ async def execute_research_task(
 
 
 # =============================================================================
-# TASK ENDPOINTS  
-# =============================================================================
-
-@v2_router.get("/plans/{plan_id}/tasks", response_model=List[Dict[str, Any]])
-async def list_tasks(
-    plan_id: str = Path(..., description="Plan ID"),
-    status: Optional[str] = Query(None, description="Filter by task status"),
-    db=Depends(get_database),
-):
-    """List all tasks for a research plan."""
-    try:
-        # First check if plan exists
-        existing_plan = await db.get_research_plan(plan_id)
-        if not existing_plan:
-            raise HTTPException(status_code=404, detail="Research plan not found")
-
-        # Get tasks for the plan using database client
-        tasks = await db.get_tasks(plan_id, status_filter=status)
-        
-        return tasks
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@v2_router.get("/tasks/{task_id}", response_model=Dict[str, Any])
-async def get_task(
-    task_id: str = Path(..., description="Task ID"),
-    db=Depends(get_database),
-):
-    """Get a specific task."""
-    try:
-        # Get task using database client
-        task = await db.get_task(task_id)
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found")
-
-        return task
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
 # ENHANCED STATISTICS ENDPOINTS  
 # =============================================================================
 

@@ -47,11 +47,11 @@ COPY . .
 # Security: Set strict file permissions and ownership
 RUN chown -R apigateway:apigateway /app && \
     chmod -R 750 /app && \
-    chmod 750 /app/start.sh /app/start-dev.sh && \
+    chmod 750 /app/start.sh /app/start-dev.sh /app/start-prod.sh && \
     chmod 640 /app/*.py 2>/dev/null || true && \
     find /app -type d -exec chmod 750 {} \; && \
     find /app -type f -exec chmod 640 {} \; && \
-    chmod 750 /app/start.sh /app/start-dev.sh
+    chmod 750 /app/start.sh /app/start-dev.sh /app/start-prod.sh
 
 # Security: Create writable temp directory for application
 RUN mkdir -p /app/tmp && \
@@ -70,7 +70,7 @@ FROM base AS production
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["./start.sh"]
+CMD ["./start-prod.sh"]
 
 # Development stage
 FROM base AS development

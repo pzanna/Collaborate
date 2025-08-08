@@ -147,9 +147,9 @@ if ! docker compose -f "$COMPOSE_FILE" exec postgres pg_isready -U postgres | gr
 fi
 print_status "PostgreSQL is healthy"
 
-# Start core services and executor/memory agents
-print_info "Starting core services and executor/memory agents..."
-docker compose -f "$COMPOSE_FILE" up -d mcp-server database-service auth-service executor-agent memory-service
+# Start core services and memory agents
+print_info "Starting core services and memory agents..."
+docker compose -f "$COMPOSE_FILE" up -d database-service auth-service memory-service
 
 # Wait for core services
 sleep 15
@@ -211,18 +211,10 @@ done
 # Application service endpoints
 print_info "Checking application services..."
 SERVICES=(
-    "MCP Server:http://localhost:9000/health"
-    "AI Service:http://localhost:8010/health"
     "Auth Service:http://localhost:8013/health"
     "API Gateway:http://localhost:8001/health"
-    "Planning Agent:http://localhost:8007/health"
     "Research Manager:http://localhost:8002/health"
-    "Literature Agent:http://localhost:8003/health"
-    "Screening Agent:http://localhost:8004/health"
-    "Synthesis Agent:http://localhost:8005/health"
-    "Writer Agent:http://localhost:8006/health"
     "Database Agent:http://localhost:8011/health"
-    "Executor Agent:http://localhost:8008/health"
     "Memory Agent:http://localhost:8009/health"
     "Docker Socket Proxy:http://localhost:2375/_ping"
 )
@@ -272,18 +264,11 @@ if [ "$ALL_HEALTHY" = true ]; then
     print_info "🔗 Backend API endpoints:"
     echo "  • API Gateway: http://localhost:8001"
     echo "  • Auth Service: http://localhost:8013"
-    echo "  • MCP Server: http://localhost:9000"
     echo "  • AI Service: http://localhost:8010"
     echo
     print_info "🤖 Research Agents:"
-    echo "  • Planning Agent: http://localhost:8007"
     echo "  • Research Manager: http://localhost:8002"
-    echo "  • Literature Agent: http://localhost:8003"
-    echo "  • Screening Agent: http://localhost:8004"
-    echo "  • Synthesis Agent: http://localhost:8005"
-    echo "  • Writer Agent: http://localhost:8006"
     echo "  • Database Agent: http://localhost:8011"
-    echo "  • Executor Agent: http://localhost:8008"
     echo "  • Memory Agent: http://localhost:8009"
     echo
     print_info "🔒 Security Infrastructure:"
@@ -317,9 +302,8 @@ else
     print_info "🐛 Service-specific logs:"
     echo "  • Frontend (nginx): docker compose -f $COMPOSE_FILE logs nginx"
     echo "  • API Gateway: docker compose -f $COMPOSE_FILE logs api-gateway"
-    echo "  • MCP Server: docker compose -f $COMPOSE_FILE logs mcp-server"
     echo "  • AI Service: docker compose -f $COMPOSE_FILE logs ai-service"
-    echo "  • Planning Agent: docker compose -f $COMPOSE_FILE logs planning-agent"
+    echo "  • Memory Agent: docker compose -f $COMPOSE_FILE logs memory-agent"
     echo
     print_info "🌐 Frontend troubleshooting:"
     echo "  • Rebuild frontend: cd frontend && npm run build"

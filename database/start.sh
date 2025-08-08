@@ -35,17 +35,13 @@ if [ -z "$SERVICE_NAME" ]; then
     exit 1
 fi
 
-# Check if config file exists
+# Check if config file exists (optional since we have defaults)
 if [ ! -f "config/config.json" ]; then
-    echo "❌ Configuration file config/config.json not found"
-    exit 1
+    echo "⚠️  Configuration file config/config.json not found - using defaults"
 fi
-
-# Check Python dependencies
-python3 -c "import sys; print(f'✅ Python {sys.version}')"
 
 echo "✅ All health checks passed"
 echo "🎯 Starting database service..."
 
 # Start the service
-exec python3 -m src.database_service
+exec python3 src/main.py

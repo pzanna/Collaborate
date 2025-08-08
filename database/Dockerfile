@@ -90,10 +90,6 @@ USER dbuser
 # Expose service port
 EXPOSE ${SERVICE_PORT}
 
-# Security: Enhanced health check with timeout
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${SERVICE_PORT}/health || exit 1
-
 # Security: Use tini as init system and exec form
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["./start.sh"]

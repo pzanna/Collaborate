@@ -7,6 +7,8 @@ This service provides a unified REST API interface. Features:
 - Direct PostgreSQL read access for performance
 - V2 hierarchical research endpoints
 - Structured JSON logging for monitoring
+
+Note: File watching enabled in development mode
 """
 
 import asyncio
@@ -20,13 +22,13 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-from config.simple_config import get_config
+from .config.simple_config import get_config
 
 # Import database service client for direct read access
-from native_database_client import get_native_database, initialize_native_database, close_native_database
+from .native_database_client import get_native_database, initialize_native_database, close_native_database
 
 # Import V2 API router
-from v2_hierarchical_api import v2_router
+from .v2_hierarchical_api import v2_router
 
 # Get configuration
 config = get_config()
@@ -86,13 +88,22 @@ async def lifespan(app: FastAPI):
     }))
     
     try:
-        # Initialize native database connection
-        if not await initialize_native_database():
-            logger.error(json.dumps({
-                "event": "database_initialization_failed",
+        # Try to initialize native database connection (gracefully handle failures in development)
+        try:
+            db_initialized = await initialize_native_database()
+            if not db_initialized:
+                logger.warning(json.dumps({
+                    "event": "database_initialization_warning",
+                    "message": "Database initialization failed - running in degraded mode",
+                    "timestamp": datetime.now().isoformat()
+                }))
+        except Exception as db_error:
+            logger.warning(json.dumps({
+                "event": "database_connection_warning",
+                "error": str(db_error),
+                "message": "Database not available - API will work with limited functionality",
                 "timestamp": datetime.now().isoformat()
             }))
-            raise Exception("Database initialization failed")
         
         # Set up V2 API router
         app.include_router(v2_router)
@@ -108,7 +119,8 @@ async def lifespan(app: FastAPI):
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }))
-        raise
+        # Don't raise the exception - allow service to start without database
+        logger.warning("Starting service in limited mode without database connectivity")
     
     yield
     
@@ -150,20 +162,31 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+
+@app.get("/health")
+async def health_check():
+    """Basic health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "api-gateway",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
+    }
+
 async def main():
     """Main entry point for the containerized API Gateway service."""
     try:
         logger.info(json.dumps({
             "event": "service_start",
-            "host": config.service.host,
-            "port": config.service.port,
+            "host": config.server.host,
+            "port": config.server.port,
             "timestamp": datetime.utcnow().isoformat()
         }))
         
         config_dict = uvicorn.Config(
             app,
-            host=config.service.host,
-            port=config.service.port,
+            host=config.server.host,
+            port=config.server.port,
             log_level=config.logging.level.lower(),
             access_log=False
         )

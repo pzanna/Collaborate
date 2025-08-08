@@ -19,8 +19,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import uvicorn
 
-from .external_api_service import ExternalAPIService
-
 # Import watchfiles with fallback
 try:
     from watchfiles import awatch
@@ -41,8 +39,7 @@ for handler in logger.handlers:
 
 
 def main():
-    logger.info("Starting Network Agent Service (External APIs)")
-    logger.info("ARCHITECTURE COMPLIANCE: Only health check API exposed")
+    logger.info("Starting Network Agent Service")
     
     host = os.getenv("SERVICE_HOST", "0.0.0.0")
     port = int(os.getenv("SERVICE_PORT", "8004"))

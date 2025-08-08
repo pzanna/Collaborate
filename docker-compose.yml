@@ -4,17 +4,17 @@
 services:
   # Core Services
 
-  # API Gateway Service (Port 8000) - Only HTTP endpoint for clients
+  # API Gateway Service (Port 8001) - Only HTTP endpoint for clients
   api-gateway:
     build:
       context: ./api-gateway
       target: production
     container_name: eunice-api-gateway
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - HOST=0.0.0.0
-      - PORT=8000
+      - PORT=8001
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eunice
       - LOG_LEVEL=INFO
       - PYTHONDONTWRITEBYTECODE=1

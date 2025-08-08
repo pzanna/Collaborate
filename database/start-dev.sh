@@ -39,14 +39,13 @@ echo "🛠️ Development Mode: ${DEVELOPMENT_MODE}"
 # Health check
 echo "🏥 Performing startup health checks..."
 
-# Check if config file exists
+# Check if config file exists (optional since we have defaults)
 if [ ! -f "config/config.json" ]; then
-    echo "❌ Configuration file config/config.json not found"
-    exit 1
+    echo "⚠️  Configuration file config/config.json not found - using defaults"
 fi
 
 echo "✅ All health checks passed"
 echo "🔍 Starting database service with file watching..."
 
 # Start with file watching using watchfiles
-exec python3 -m watchfiles src.main.main --args src/main.py
+exec watchfiles --filter python 'python3 src/main.py' src/
