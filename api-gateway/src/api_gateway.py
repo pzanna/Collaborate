@@ -85,25 +85,48 @@ def get_database():
 
 async def test_mcp_connection():
     """Test MCP server connection without creating persistent connections."""
+        # Basic connectivity check using direct HTTP calls to avoid session issues
+    import aiohttp
+    import asyncio as aio
+    server_id = "database"
+    server_url = "http://database-service:8010/mcp/"
     try:
-        # Use a timeout to prevent hanging if MCP server is not available
-        import asyncio
-        async with asyncio.timeout(5.0):
-    # Connect to a streamable HTTP server
-            async with streamablehttp_client("http://localhost:8000/mcp") as (
-                read_stream,
-                write_stream,
-                _,
-            ):
-                # Create a session using the client streams
-                async with ClientSession(read_stream, write_stream) as session:
-                    # Initialize the connection
-                    await session.initialize()
-                    # List available tools
-                    tools = await session.list_tools()
-                    print(f"Available tools: {[tool.name for tool in tools.tools]}")
-                    return True
-                
+        # Make direct HTTP call to list tools
+        logger.info("Checking health of server %s at %s", server_id, server_url)
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream"
+            }
+            data = {
+                "jsonrpc": "2.0",
+                "id": "1",
+                "method": "tools/list",
+                "params": {}
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=5.0)
+            async with session.post(server_url, json=data, headers=headers, timeout=timeout) as response:
+                logger.info("Received response from server %s: %s", server_id, response.status)
+                if response.status == 200:
+                    # Handle streamable HTTP response
+                    content = await response.text()
+                    
+                    # Parse event-stream format
+                    server_tools = []
+                    if content.startswith("event: message"):
+                        lines = content.split('\n')
+                        for line in lines:
+                            if line.startswith("data: "):
+                                import json
+                                try:
+                                    json_data = json.loads(line[6:])  # Remove "data: " prefix
+                                    if "result" in json_data and "tools" in json_data["result"]:
+                                        server_tools = [tool["name"] for tool in json_data["result"]["tools"]]
+                                        logger.info("MCP server %s tools: %s", server_id, server_tools)
+                                except:
+                                    pass
+        
     except Exception as e:
         logger.warning(json.dumps({
             "event": "mcp_connection_test_failed",
@@ -217,14 +240,14 @@ async def test_mcp_connection_endpoint():
             return {
                 "status": "success",
                 "message": "MCP connection successful",
-                "mcp_server": "http://database-service:8000/mcp",
+                "mcp_server": "http://database-service:8010/mcp/",
                 "timestamp": datetime.now().isoformat()
             }
         else:
             return {
                 "status": "failed", 
                 "message": "MCP connection failed",
-                "mcp_server": "http://database-service:8000/mcp",
+                "mcp_server": "http://database-service:8010/mcp",
                 "timestamp": datetime.now().isoformat()
             }
     except Exception as e:

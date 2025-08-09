@@ -21,7 +21,6 @@ import json
 import logging
 import os
 from typing import Any, Dict, List, Optional
-
 from mcp.server.fastmcp import FastMCP
 
 # Import the database tools
@@ -34,12 +33,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create the MCP server
-mcp = FastMCP("StatefulServer")
+mcp = FastMCP(name="database", stateless_http=True)
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@postgres:5432/eunice")
-
 
 @mcp.tool()
 async def create_project(
@@ -548,11 +545,22 @@ async def delete_search_term_optimization(id: str) -> Dict[str, Any]:
 
 def main():
     """Main entry point for the MCP server."""
+    import os
+    
     logger.info("Starting Database MCP Server...")
     
-    # Run the server with default transport
-    # The MCP SDK version supports different transports than FastMCP 2.0
-    logger.info("Starting MCP server with default transport")
+    # Get host and port from environment variables
+    host = os.getenv("SERVICE_HOST", "0.0.0.0")
+    port = int(os.getenv("SERVICE_PORT", "8010"))
+    
+    logger.info(f"Starting MCP server on {host}:{port}/mcp")
+    
+    # Configure the server settings
+    mcp.settings.host = host
+    mcp.settings.port = port
+    mcp.settings.streamable_http_path = "/mcp"
+    
+    # Run the server with streamable-http transport
     mcp.run(transport="streamable-http")
 
 

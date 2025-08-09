@@ -18,7 +18,7 @@ fi
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 export SERVICE_NAME="${SERVICE_NAME:-database}"
 export SERVICE_HOST="${SERVICE_HOST:-0.0.0.0}"
-export SERVICE_PORT="${SERVICE_PORT:-8000}"
+export SERVICE_PORT="${SERVICE_PORT:-8010}"
 export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
 echo "🔧 Service: ${SERVICE_NAME}"

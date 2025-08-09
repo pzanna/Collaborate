@@ -31,5 +31,10 @@
     "cors_origins": ["*"],
     "cors_methods": ["GET", "POST", "PUT", "DELETE"],
     "cors_headers": ["*"]
+  },
+  "MCP_CFG_JSON": {
+    "servers": {
+      "db": { "transport": "http", "url": "http://database:8010/mcp" }
+    }
   }
 }
