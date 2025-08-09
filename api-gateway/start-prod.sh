@@ -23,4 +23,4 @@ cd /app
 
 # Start the API Gateway directly
 echo "Starting API Gateway..."
-exec python main.py
+exec python src/api_gateway.py

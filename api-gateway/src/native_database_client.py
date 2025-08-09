@@ -80,8 +80,13 @@ class NativeDatabaseClient:
             )
             
             # Test the connection
-            async with self.pool.acquire() as conn:
-                await conn.fetchval("SELECT 1")
+            if self.pool is not None:
+                async with self.pool.acquire() as conn:
+                    await conn.fetchval("SELECT 1")
+            else:
+                logger.error("Failed to create asyncpg pool: pool is None")
+                self._initialized = False
+                return False
             
             self._initialized = True
             logger.info(f"Native database connection pool initialized successfully "

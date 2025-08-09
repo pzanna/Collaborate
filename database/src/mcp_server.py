@@ -35,7 +35,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Create the MCP server
-mcp = FastMCP("Database Service")
+mcp = FastMCP("StatefulServer")
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@postgres:5432/eunice")
@@ -553,7 +553,7 @@ def main():
     # Run the server with default transport
     # The MCP SDK version supports different transports than FastMCP 2.0
     logger.info("Starting MCP server with default transport")
-    mcp.run()
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":

@@ -31,4 +31,4 @@ cd /app
 
 # Start the API Gateway with file watching
 echo "Starting API Gateway with file watching..."
-exec watchfiles --filter python 'python main.py' .
+exec watchfiles --filter python 'python src/api_gateway.py' .

@@ -22,13 +22,17 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config.simple_config import get_config
+from config import get_config
 
 # Import database service client for direct read access
-from .native_database_client import get_native_database, initialize_native_database, close_native_database
+from native_database_client import get_native_database, initialize_native_database, close_native_database
 
 # Import V2 API router
-from .v2_hierarchical_api import v2_router
+from v2_hierarchical_api import v2_router
+
+# Import MCP client for direct read access
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 
 # Get configuration
 config = get_config()
@@ -46,7 +50,7 @@ logging.basicConfig(
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "level": record.levelname,
             "service": "api-gateway",
             "message": record.getMessage(),
@@ -73,11 +77,41 @@ def get_database():
             logger.error(json.dumps({
                 "event": "database_initialization_failed",
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now().isoformat()
             }))
             raise HTTPException(status_code=503, detail="Database service not available")
     return native_database_client
 
+
+async def test_mcp_connection():
+    """Test MCP server connection without creating persistent connections."""
+    try:
+        # Use a timeout to prevent hanging if MCP server is not available
+        import asyncio
+        async with asyncio.timeout(5.0):
+    # Connect to a streamable HTTP server
+            async with streamablehttp_client("http://localhost:8000/mcp") as (
+                read_stream,
+                write_stream,
+                _,
+            ):
+                # Create a session using the client streams
+                async with ClientSession(read_stream, write_stream) as session:
+                    # Initialize the connection
+                    await session.initialize()
+                    # List available tools
+                    tools = await session.list_tools()
+                    print(f"Available tools: {[tool.name for tool in tools.tools]}")
+                    return True
+                
+    except Exception as e:
+        logger.warning(json.dumps({
+            "event": "mcp_connection_test_failed",
+            "error": str(e),
+            "message": "MCP server not available - continuing without MCP functionality",
+            "timestamp": datetime.now().isoformat()
+        }))
+        return False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -169,9 +203,37 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "api-gateway",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         "version": "1.0.0"
     }
+
+
+@app.get("/test/mcp-connection")
+async def test_mcp_connection_endpoint():
+    """Test MCP server connection endpoint."""
+    try:
+        connection_successful = await test_mcp_connection()
+        if connection_successful:
+            return {
+                "status": "success",
+                "message": "MCP connection successful",
+                "mcp_server": "http://database-service:8000/mcp",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "failed", 
+                "message": "MCP connection failed",
+                "mcp_server": "http://database-service:8000/mcp",
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        logger.error(json.dumps({
+            "event": "mcp_test_endpoint_error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }))
+        raise HTTPException(status_code=500, detail=f"MCP test failed: {str(e)}")
 
 async def main():
     """Main entry point for the containerized API Gateway service."""
@@ -180,7 +242,7 @@ async def main():
             "event": "service_start",
             "host": config.server.host,
             "port": config.server.port,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }))
         
         config_dict = uvicorn.Config(
@@ -191,6 +253,9 @@ async def main():
             access_log=False
         )
         
+        # Test MCP connection during startup (non-blocking)
+        await test_mcp_connection()
+
         server = uvicorn.Server(config_dict)
         await server.serve()
         
@@ -198,7 +263,7 @@ async def main():
         logger.error(json.dumps({
             "event": "service_error",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }))
         sys.exit(1)
 
@@ -210,13 +275,13 @@ def sync_main():
     except KeyboardInterrupt:
         logger.info(json.dumps({
             "event": "service_stopped_by_user", 
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }))
     except Exception as e:
         logger.error(json.dumps({
             "event": "service_start_failed",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }))
         sys.exit(1)
 

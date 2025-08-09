@@ -33,7 +33,7 @@ class SimpleConfig:
                 "max_overflow": 20
             },
             "logging": {
-                "level": "INFO",
+                "level": "DEBUG",
                 "file": "/app/logs/service.log",
                 "max_file_size": "100MB",
                 "backup_count": 5
