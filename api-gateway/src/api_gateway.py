@@ -123,7 +123,7 @@ async def test_mcp_connection():
                                     json_data = json.loads(line[6:])  # Remove "data: " prefix
                                     if "result" in json_data and "tools" in json_data["result"]:
                                         server_tools = [tool["name"] for tool in json_data["result"]["tools"]]
-                                        logger.info("MCP server %s tools: %s", server_id, server_tools)
+                                        return server_tools
                                 except:
                                     pass
         
@@ -223,6 +223,9 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """Basic health check endpoint."""
+    server_tools = await test_mcp_connection()
+    logger.info("MCP server tools: %s", server_tools)
+    
     return {
         "status": "healthy",
         "service": "api-gateway",
@@ -275,9 +278,6 @@ async def main():
             log_level=config.logging.level.lower(),
             access_log=False
         )
-        
-        # Test MCP connection during startup (non-blocking)
-        await test_mcp_connection()
 
         server = uvicorn.Server(config_dict)
         await server.serve()
